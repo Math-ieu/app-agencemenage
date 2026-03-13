@@ -1,15 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { logout as apiLogout } from '../api/client';
-
-interface User {
-  id: number;
-  email: string;
-  first_name: string;
-  last_name: string;
-  role: string;
-  full_name: string;
-}
+import { User } from '../types';
 
 interface AuthState {
   user: User | null;
