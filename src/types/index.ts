@@ -45,6 +45,7 @@ export interface Demande {
   statut: string;
   statut_besoin: string;
   date_intervention: string;
+  heure_intervention?: string;
   nb_heures: number;
   frequency: 'une_fois' | 'abonnement';
   neighborhood_city: string;
@@ -61,5 +62,6 @@ export interface Demande {
   prochaine_alerte_cao?: string;
   note_commerciale?: string;
   note_operationnelle?: string;
+  formulaire_data?: any;
   created_at: string;
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Users, UserCheck, History,
-  DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight
+  DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X
 } from 'lucide-react';
 import { useAuthStore, useNotificationStore } from '../../store/auth';
 import logoUrl from '../../assets/LOGO-AGENCE-MENAGE.webp';
@@ -21,6 +21,7 @@ const navItems = [
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { user, logout } = useAuthStore();
   const { pendingCount } = useNotificationStore();
   const navigate = useNavigate();
@@ -32,25 +33,45 @@ export default function AppLayout() {
 
   return (
     <div className="app-shell">
+      {/* Mobile top navigation */}
+      <div className="mobile-header">
+        <button className="mobile-menu-btn" onClick={() => setMobileOpen(true)}>
+          <Menu size={24} />
+        </button>
+        <div className="mobile-header-logo">
+          <img src={logoUrl} alt="Agence Ménage" style={{ maxHeight: '40px' }} />
+        </div>
+        <div style={{ width: 24 }}></div> {/* Spacer for alignment */}
+      </div>
+
+      {/* Overlay for mobile sidebar */}
+      {mobileOpen && (
+        <div className="sidebar-backdrop" onClick={() => setMobileOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''} ${mobileOpen ? 'sidebar-mobile-open' : ''}`}>
         <div className="sidebar-header">
           {!collapsed && (
             <div className="logo" style={{ display: 'flex', alignItems: 'center' }}>
               <img src={logoUrl} alt="Agence Ménage" style={{ maxHeight: '80px', width: 'auto', marginLeft: '-15px' }} />
             </div>
           )}
-          <button className="collapse-btn" onClick={() => setCollapsed(!collapsed)}>
+          <button className="collapse-btn desktop-only" onClick={() => setCollapsed(!collapsed)}>
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+          <button className="collapse-btn mobile-only" onClick={() => setMobileOpen(false)}>
+            <X size={18} />
           </button>
         </div>
 
         <nav className="sidebar-nav">
           {navItems.map(({ to, icon: Icon, label, badge }) => (
-            <NavLink
+              <NavLink
               key={to}
               to={to}
               end={to === '/'}
+              onClick={() => setMobileOpen(false)}
               className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}
               title={collapsed ? label : undefined}
             >

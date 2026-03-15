@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getDemandes, validerDemande, annulerDemande, nrpDemande } from '../api/client';
+import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande } from '../api/client';
 import { useNotificationStore } from '../store/auth';
 import {
   Search, Plus, ChevronDown, ChevronUp, RefreshCw,
@@ -15,7 +15,7 @@ export default function DemandesEnAttente() {
   const [segment, setSegment] = useState('');
   const [prestation, setPrestation] = useState('');
   const [expandedCards, setExpandedCards] = useState<Record<number, string | null>>({});
-  
+
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [activeSegment, setActiveSegment] = useState<'particulier' | 'entreprise' | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -24,6 +24,41 @@ export default function DemandesEnAttente() {
   const [whatsappPhone, setWhatsappPhone] = useState('');
   const [syncWhatsApp, setSyncWhatsApp] = useState(true);
   const [formSubmitted, setFormSubmitted] = useState(false);
+
+  // Nouveaux états pour le formulaire
+  const [formData, setFormData] = useState({
+    nom: '',
+    ville: 'Casablanca',
+    quartier: '',
+    adresse: '',
+    date: '',
+    heure: '',
+    preference_horaire: '',
+    type_habitation: '',
+    frequence: '',
+    nb_intervenants: 1,
+    surface: 50,
+    details_pieces: '',
+    duree: 4,
+    produits: false,
+    torchons: false,
+    montant: '',
+    mode_paiement: '',
+    statut_paiement: 'non_paye',
+    notes: '',
+    // Champs spécifiques Grand Ménage
+    // Champs spécifiques Placement & Gestion
+    service_type: 'flexible',
+    structure_type: '',
+    nb_personnel: 1,
+    // Champs spécifiques Auxiliaire de vie
+    lieu_garde: 'domicile',
+    age_personne: '',
+    sexe_personne: '',
+    mobilite: '',
+    situation_medicale: '',
+    nb_jours: 1
+  });
 
   const { setPendingCount } = useNotificationStore();
 
@@ -50,7 +85,7 @@ export default function DemandesEnAttente() {
     try {
       const { data } = await getDemandes({ statut: 'en_attente' });
       const results: Demande[] = data.results || data;
-      
+
       const filtered = results.filter(d => {
         const matchesSearch = !search || d.client_name.toLowerCase().includes(search.toLowerCase()) || d.client_phone.includes(search);
         const matchesSegment = !segment || d.segment === segment;
@@ -91,8 +126,47 @@ export default function DemandesEnAttente() {
 
   const openCreateModal = (service: string) => {
     setSelectedService(service);
+    setFormData(prev => ({ ...prev, type_habitation: '', frequence: '', montant: '', note: '' }));
     setShowCreateModal(true);
     setShowNewMenu(false);
+  };
+
+  const handleCreateDemande = async () => {
+    setFormSubmitted(true);
+    const form = document.getElementById('create-request-form') as HTMLFormElement;
+    if (!form?.checkValidity()) return;
+
+    try {
+      const payload = {
+        client_name: formData.nom,
+        client_phone: directPhone,
+        service: selectedService,
+        segment: activeSegment,
+        date_intervention: formData.date,
+        heure_intervention: formData.heure,
+        nb_heures: formData.duree,
+        prix: formData.montant,
+        mode_paiement: formData.mode_paiement,
+        statut_paiement: formData.statut_paiement,
+        frequency: formData.frequence === 'ponctuel' ? 'oneshot' : 'abonnement',
+        frequency_label: formData.frequence,
+        neighborhood_city: `${formData.quartier}, ${formData.ville}`,
+        formulaire_data: {
+          ...formData,
+          whatsapp_phone: whatsappPhone,
+          sync_whatsapp: syncWhatsApp
+        }
+      };
+
+      await createDemande(payload);
+      setShowCreateModal(false);
+      setFormSubmitted(false);
+      fetchDemandes();
+      alert('Demande créée avec succès !');
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors de la création de la demande.');
+    }
   };
 
   return (
@@ -106,15 +180,15 @@ export default function DemandesEnAttente() {
           <button className="btn btn-secondary" onClick={fetchDemandes} title="Rafraîchir">
             <RefreshCw size={18} />
           </button>
-          
+
           <div className="dropdown-container" onClick={e => e.stopPropagation()}>
             <button className="btn btn-primary" onClick={() => setShowNewMenu(!showNewMenu)}>
               <Plus size={18} /> Nouveau
             </button>
-            
+
             {showNewMenu && (
               <div className="nested-menu">
-                <div 
+                <div
                   className="menu-group"
                   onMouseEnter={() => setActiveSegment('particulier')}
                 >
@@ -133,7 +207,7 @@ export default function DemandesEnAttente() {
                   )}
                 </div>
 
-                <div 
+                <div
                   className="menu-group"
                   onMouseEnter={() => setActiveSegment('entreprise')}
                 >
@@ -160,9 +234,9 @@ export default function DemandesEnAttente() {
       <div className="dashboard-toolbar">
         <div className="search-box">
           <Search size={18} className="search-icon" />
-          <input 
-            type="text" 
-            placeholder="Rechercher par nom, numéro..." 
+          <input
+            type="text"
+            placeholder="Rechercher par nom, numéro..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -191,85 +265,170 @@ export default function DemandesEnAttente() {
       ) : (
         <div className="pending-grid">
           {demandes.map((d) => (
-            <div key={d.id} className="pending-card">
-              <div className="pending-card-header">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
+            <div key={d.id} className="pending-card-container">
+              {/* DESKTOP VERSION */}
+              <div className="pending-card desktop-card">
+                <div className="pending-card-header">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
+                        {d.segment === 'particulier' ? 'SPP' : 'SPE'}
+                      </span>
+                      <span className="text-muted text-xs"># {d.id}</span>
+                    </div>
+                    <h3 className="fw-bold">Nom : <span className="text-main">{d.client_name}</span></h3>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm fw-medium">Téléphone : <span className="text-main">{d.client_phone}</span></p>
+                    <p className="text-sm fw-medium">WhatsApp : <span className="text-main">{d.client_phone}</span></p>
+                  </div>
+                </div>
+
+                <div className="pending-card-body">
+                  <div className="accordion">
+                    <div className="accordion-header" onClick={() => toggleSection(d.id, 'details')}>
+                      <span>Détails de la prestation</span>
+                      {expandedCards[d.id] === 'details' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                    {expandedCards[d.id] === 'details' && (
+                      <div className="accordion-content">
+                        <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value">{d.service}</span></div>
+                        <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">{d.formulaire_data?.type_habitation || d.formulaire_data?.structure_type || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency}</span></div>
+                        <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.nb_heures ? `${d.nb_heures}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—')}</span></div>
+                        <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || 1}</span></div>
+                        {d.service.includes('Auxiliaire') ? (
+                          <>
+                            <div className="detail-item"><span className="detail-label">Âge / Sexe :</span> <span className="detail-value">{d.formulaire_data?.age_personne || '—'} ans / {d.formulaire_data?.sexe_personne || '—'}</span></div>
+                            <div className="detail-item"><span className="detail-label">Mobilité :</span> <span className="detail-value">{d.formulaire_data?.mobilite || '—'}</span></div>
+                            <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Médical :</span> <span className="detail-value">{d.formulaire_data?.situation_medicale || '—'}</span></div>
+                          </>
+                        ) : (
+                          <div className="detail-item"><span className="detail-label">Surface :</span> <span className="detail-value">{d.formulaire_data?.surface || '—'} m²</span></div>
+                        )}
+                        <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Services opt. :</span> <span className="detail-value">
+                          {[
+                            d.formulaire_data?.produits && 'Produits',
+                            d.formulaire_data?.torchons && 'Torchons'
+                          ].filter(Boolean).join(', ') || 'Aucun'}
+                        </span></div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="accordion">
+                    <div className="accordion-header" onClick={() => toggleSection(d.id, 'lieux')}>
+                      <span>Lieux</span>
+                      {expandedCards[d.id] === 'lieux' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                    {expandedCards[d.id] === 'lieux' && (
+                      <div className="accordion-content">
+                        <div className="detail-item"><span className="detail-label">Date :</span> <span className="detail-value">{d.date_intervention}</span></div>
+                        <div className="detail-item"><span className="detail-label">Heure :</span> <span className="detail-value">{d.heure_intervention || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Ville :</span> <span className="detail-value">{d.formulaire_data?.ville || 'Casablanca'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Quartier :</span> <span className="detail-value">{d.neighborhood_city || '—'}</span></div>
+                        <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Adresse :</span> <span className="detail-value">{d.formulaire_data?.adresse || '—'}</span></div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="accordion">
+                    <div className="accordion-header" onClick={() => toggleSection(d.id, 'notes')}>
+                      <span>Notes et précision</span>
+                      {expandedCards[d.id] === 'notes' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                    {expandedCards[d.id] === 'notes' && (
+                      <div className="accordion-content" style={{ gridTemplateColumns: '1fr' }}>
+                        <p className="text-sm text-muted italic">Aucune note</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pending-footer">
+                  <p className="text-sm">
+                    <span className="fw-bold">Montant : {d.prix} MAD</span>
+                    <span className="text-muted ml-2">({d.is_devis ? 'Devis' : 'Réservation'})</span>
+                  </p>
+                  <p className="text-sm fw-medium">Mode : {d.mode_paiement}</p>
+                </div>
+
+                <div className="pending-actions">
+                  <button className="btn btn-nrp" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
+                  <button className="btn btn-cancel" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
+                  <button className="btn btn-validate" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
+                  <button className="btn btn-edit" title="Modifier">
+                    <Edit size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* MOBILE VERSION */}
+              <div className="pending-card mobile-card">
+                <div className="mobile-card-header">
+                  <div className="flex justify-between items-start mb-3">
                     <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
                       {d.segment === 'particulier' ? 'SPP' : 'SPE'}
                     </span>
-                    <span className="text-muted text-xs"># {d.id}</span>
+                    <span className="text-muted text-xs fw-bold">#{d.id}</span>
                   </div>
-                  <h3 className="fw-bold">Nom : <span className="text-main">{d.client_name}</span></h3>
+                  <h3 className="mobile-client-name">{d.client_name}</h3>
+                  <div className="mobile-contact-info">
+                    <a href={`tel:${d.client_phone}`} className="mobile-contact-link">📞 {d.client_phone}</a>
+                    <a href={`https://wa.me/${d.client_phone.replace(/\+/g, '')}`} target="_blank" rel="noreferrer" className="mobile-contact-link mobile-wa-link">📱 WhatsApp</a>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm fw-medium">Téléphone : <span className="text-main">{d.client_phone}</span></p>
-                  <p className="text-sm fw-medium">WhatsApp : <span className="text-main">{d.client_phone}</span></p>
-                </div>
-              </div>
 
-              <div className="pending-card-body">
-                <div className="accordion">
-                  <div className="accordion-header" onClick={() => toggleSection(d.id, 'details')}>
-                    <span>Détails de la prestation</span>
-                    {expandedCards[d.id] === 'details' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                <div className="mobile-card-body">
+                  <div className="mobile-detail-row">
+                    <span className="mobile-detail-label">Service</span>
+                    <span className="mobile-detail-value fw-bold text-primary">{d.service}</span>
                   </div>
-                  {expandedCards[d.id] === 'details' && (
-                    <div className="accordion-content">
-                      <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value">{d.service}</span></div>
-                      <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">—</span></div>
-                      <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency}</span></div>
-                      <div className="detail-item"><span className="detail-label">Durée :</span> <span className="detail-value">{d.nb_heures}h</span></div>
-                      <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">1</span></div>
-                      <div className="detail-item"><span className="detail-label">Services opt. :</span> <span className="detail-value">—</span></div>
+                  {d.formulaire_data?.surface && (
+                    <div className="mobile-detail-row">
+                      <span className="mobile-detail-label">Surface</span>
+                      <span className="mobile-detail-value">{d.formulaire_data.surface} m²</span>
                     </div>
                   )}
-                </div>
 
-                <div className="accordion">
-                  <div className="accordion-header" onClick={() => toggleSection(d.id, 'lieux')}>
-                    <span>Lieux</span>
-                    {expandedCards[d.id] === 'lieux' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </div>
-                  {expandedCards[d.id] === 'lieux' && (
-                    <div className="accordion-content">
-                      <div className="detail-item"><span className="detail-label">Date :</span> <span className="detail-value">{d.date_intervention}</span></div>
-                      <div className="detail-item"><span className="detail-label">Heure :</span> <span className="detail-value">—</span></div>
-                      <div className="detail-item"><span className="detail-label">Ville :</span> <span className="detail-value">Casablanca</span></div>
-                      <div className="detail-item"><span className="detail-label">Quartier :</span> <span className="detail-value">{d.neighborhood_city || '—'}</span></div>
-                      <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Adresse :</span> <span className="detail-value">—</span></div>
+                  {d.formulaire_data?.structure_type && (
+                    <div className="mobile-detail-row">
+                      <span className="mobile-detail-label">Structure</span>
+                      <span className="mobile-detail-value">{d.formulaire_data.structure_type}</span>
                     </div>
                   )}
-                </div>
-
-                <div className="accordion">
-                  <div className="accordion-header" onClick={() => toggleSection(d.id, 'notes')}>
-                    <span>Notes et précision</span>
-                    {expandedCards[d.id] === 'notes' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </div>
-                  {expandedCards[d.id] === 'notes' && (
-                    <div className="accordion-content" style={{ gridTemplateColumns: '1fr' }}>
-                      <p className="text-sm text-muted italic">Aucune note</p>
+                  {d.service.includes('Auxiliaire') && (
+                    <div className="mobile-detail-row">
+                      <span className="mobile-detail-label">Profil</span>
+                      <span className="mobile-detail-value">{d.formulaire_data?.age_personne} ans ({d.formulaire_data?.sexe_personne})</span>
                     </div>
                   )}
+                  <div className="mobile-detail-row">
+                    <span className="mobile-detail-label">Date</span>
+                    <span className="mobile-detail-value">{d.date_intervention} {d.heure_intervention}</span>
+                  </div>
+                  <div className="mobile-detail-row">
+                    <span className="mobile-detail-label">Lieu</span>
+                    <span className="mobile-detail-value">{d.neighborhood_city || 'Casablanca'}</span>
+                  </div>
+                  <div className="mobile-detail-row mobile-price-row">
+                    <span className="mobile-detail-label">Montant</span>
+                    <span className="mobile-detail-value fw-bold">{d.prix} MAD <span className="text-xs text-muted fw-normal">({d.mode_paiement})</span></span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="pending-footer">
-                <p className="text-sm">
-                  <span className="fw-bold">Montant : {d.prix} MAD</span> 
-                  <span className="text-muted ml-2">({d.is_devis ? 'Devis' : 'Réservation'})</span>
-                </p>
-                <p className="text-sm fw-medium">Mode : {d.mode_paiement}</p>
-              </div>
-
-              <div className="pending-actions">
-                <button className="btn btn-nrp" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
-                <button className="btn btn-cancel" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
-                <button className="btn btn-validate" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
-                <button className="btn btn-edit" title="Modifier">
-                  <Edit size={16} />
-                </button>
+                <div className="mobile-card-actions">
+                  <button className="btn btn-validate btn-full mb-2" onClick={() => handleAction(d.id, 'valider')}>
+                    <CheckCircle size={18} /> Valider
+                  </button>
+                  <div className="flex gap-2">
+                    <button className="btn btn-nrp flex-1" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
+                    <button className="btn btn-cancel flex-1" onClick={() => handleAction(d.id, 'annuler')}>Annuler</button>
+                    <button className="btn btn-edit flex-none px-3" title="Modifier">
+                      <Edit size={16} />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
@@ -299,16 +458,22 @@ export default function DemandesEnAttente() {
                 </div>
                 <div className="form-group">
                   <label className="label-teal">Nom *</label>
-                  <input type="text" required placeholder="Ex: Jean Dupont" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Jean Dupont"
+                    value={formData.nom}
+                    onChange={e => setFormData({ ...formData, nom: e.target.value })}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="label-teal">Tél. direct *</label>
                   <div className="flex gap-2">
                     <input type="text" defaultValue="+212" className="phone-prefix" required />
-                    <input 
-                      type="text" 
-                      className="flex-1 phone-number" 
-                      placeholder="6 12 00 00 00" 
+                    <input
+                      type="text"
+                      className="flex-1 phone-number"
+                      placeholder="6 12 00 00 00"
                       value={directPhone}
                       required
                       onChange={(e) => {
@@ -326,10 +491,10 @@ export default function DemandesEnAttente() {
                   </div>
                   <div className="flex gap-2">
                     <input type="text" defaultValue="+212" className="phone-prefix" required disabled={syncWhatsApp} />
-                    <input 
-                      type="text" 
-                      className="flex-1 phone-number" 
-                      placeholder="6 12 00 00 00" 
+                    <input
+                      type="text"
+                      className="flex-1 phone-number"
+                      placeholder="6 12 00 00 00"
                       value={whatsappPhone}
                       required
                       onChange={(e) => setWhatsappPhone(e.target.value)}
@@ -340,13 +505,19 @@ export default function DemandesEnAttente() {
 
                 <div className="form-group">
                   <label className="label-teal">Ville *</label>
-                  <input type="text" defaultValue="Casablanca" className="phone-number" required />
+                  <input
+                    type="text"
+                    className="phone-number"
+                    required
+                    value={formData.ville}
+                    onChange={e => setFormData({ ...formData, ville: e.target.value })}
+                  />
                 </div>
 
                 <div className="form-group full-width" style={{ marginTop: '-5px', marginBottom: '10px' }}>
                   <label className="custom-checkbox-container">
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       checked={syncWhatsApp}
                       onChange={(e) => {
                         const checked = e.target.checked;
@@ -361,7 +532,12 @@ export default function DemandesEnAttente() {
 
                 <div className="form-group">
                   <label className="label-teal">Quartier *</label>
-                  <select className="phone-number" required>
+                  <select
+                    className="phone-number"
+                    required
+                    value={formData.quartier}
+                    onChange={e => setFormData({ ...formData, quartier: e.target.value })}
+                  >
                     <option value="">Sélectionner</option>
                     <option value="Maârif">Maârif</option>
                     <option value="Gauthier">Gauthier</option>
@@ -402,35 +578,59 @@ export default function DemandesEnAttente() {
                 </div>
                 <div className="form-group">
                   <label className="label-teal">Adresse *</label>
-                  <input type="text" className="phone-number" required />
+                  <input
+                    type="text"
+                    className="phone-number"
+                    required
+                    value={formData.adresse}
+                    onChange={e => setFormData({ ...formData, adresse: e.target.value })}
+                  />
                 </div>
-                
+
                 <div className="form-section full-width">
                   <h3>Détails du service</h3>
                 </div>
                 <div className="form-group">
                   <label>Date d'intervention *</label>
-                  <input type="date" required />
+                  <input
+                    type="date"
+                    required
+                    value={formData.date}
+                    onChange={e => setFormData({ ...formData, date: e.target.value })}
+                  />
                 </div>
                 <div className="form-group">
                   <label>Heure *</label>
-                  <input type="time" required />
+                  <input
+                    type="time"
+                    required
+                    value={formData.heure}
+                    onChange={e => setFormData({ ...formData, heure: e.target.value })}
+                  />
                 </div>
                 <div className="form-group">
                   <label>Préférence horaire *</label>
-                  <select required>
+                  <select
+                    required
+                    value={formData.preference_horaire}
+                    onChange={e => setFormData({ ...formData, preference_horaire: e.target.value })}
+                  >
                     <option value="">Choisir...</option>
                     <option value="matin">Matin (08h - 12h)</option>
                     <option value="apres_midi">Après-midi (14h - 18h)</option>
                   </select>
                 </div>
-                
+
                 {/* Champs dynamiques selon le service */}
-                {(selectedService.includes('Ménage') || selectedService.includes('Nettoyage')) && (
+                {(selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage')) && (
                   <>
                     <div className="form-group">
                       <label>Type d'habitation *</label>
-                      <select required>
+                      <select
+                        required
+                        value={formData.type_habitation}
+                        onChange={e => setFormData({ ...formData, type_habitation: e.target.value })}
+                      >
                         <option value="">Choisir...</option>
                         <option value="Studio">Studio</option>
                         <option value="Appartement">Appartement</option>
@@ -443,7 +643,11 @@ export default function DemandesEnAttente() {
 
                     <div className="form-group">
                       <label>Fréquence *</label>
-                      <select required>
+                      <select
+                        required
+                        value={formData.frequence}
+                        onChange={e => setFormData({ ...formData, frequence: e.target.value })}
+                      >
                         <option value="">Choisir...</option>
                         <option value="ponctuel">Une fois</option>
                         <option value="1/sem">Abonnement - 1 fois / semaine</option>
@@ -455,24 +659,48 @@ export default function DemandesEnAttente() {
 
                     <div className="form-group">
                       <label>Nb intervenants</label>
-                      <input type="number" defaultValue={1} min={1} />
+                      <input
+                        type="number"
+                        min={1}
+                        value={formData.nb_intervenants}
+                        onChange={e => setFormData({ ...formData, nb_intervenants: parseInt(e.target.value) })}
+                      />
                     </div>
 
-                    {(selectedService.includes('Grand') || selectedService.includes('chantier') || selectedService.includes('sinistre') || selectedService.includes('déménagement') || selectedService.includes('bureau')) && (
-                      <div className="form-group">
-                        <label>Surface (m²)</label>
-                        <input type="number" defaultValue={50} min={10} />
-                      </div>
-                    )}
-                    
-                    <div className="form-group full-width">
-                      <label>Détails des pièces (Cuisine, SDB, Salons...)</label>
-                      <textarea rows={2} placeholder="Ex: 1 Cuisine, 2 SDB, 1 Salon..."></textarea>
-                    </div>
+                    {(selectedService.toLowerCase().includes('grand') ||
+                      selectedService.toLowerCase().includes('chantier') ||
+                      selectedService.toLowerCase().includes('sinistre') ||
+                      selectedService.toLowerCase().includes('déménagement') ||
+                      selectedService.toLowerCase().includes('bureau')) && (
+                        <div className="form-group">
+                          <label>Surface (m²)</label>
+                          <input
+                            type="number"
+                            min={10}
+                            value={formData.surface}
+                            onChange={e => setFormData({ ...formData, surface: parseInt(e.target.value) })}
+                          />
+                        </div>
+                      )}
 
                     <div className="form-group">
-                      <label>Durée recommandée (Heures)</label>
-                      <input type="number" defaultValue={4} min={4} />
+                      <label>Durée (Heures)</label>
+                      <input
+                        type="number"
+                        min={4}
+                        value={formData.duree}
+                        onChange={e => setFormData({ ...formData, duree: parseInt(e.target.value) })}
+                      />
+                    </div>
+
+                    <div className="form-group full-width">
+                      <label>Détails des pièces (Cuisine, SDB, Salons...)</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Ex: 1 Cuisine, 2 SDB, 1 Salon..."
+                        value={formData.details_pieces}
+                        onChange={e => setFormData({ ...formData, details_pieces: e.target.value })}
+                      ></textarea>
                     </div>
 
                     <div className="form-section">
@@ -483,18 +711,26 @@ export default function DemandesEnAttente() {
                           <span>Produits de nettoyage (+90 MAD)</span>
                         </div>
                         <label className="toggle-switch">
-                          <input type="checkbox" />
+                          <input
+                            type="checkbox"
+                            checked={formData.produits}
+                            onChange={e => setFormData({ ...formData, produits: e.target.checked })}
+                          />
                           <span className="toggle-slider"></span>
                         </label>
                       </div>
-                      
+
                       <div className="optional-service-card">
                         <div className="optional-service-info">
                           <span className="text-2xl">🧹</span>
                           <span>Torchons et serpillères (+40 MAD)</span>
                         </div>
                         <label className="toggle-switch">
-                          <input type="checkbox" />
+                          <input
+                            type="checkbox"
+                            checked={formData.torchons}
+                            onChange={e => setFormData({ ...formData, torchons: e.target.checked })}
+                          />
                           <span className="toggle-slider"></span>
                         </label>
                       </div>
@@ -508,18 +744,36 @@ export default function DemandesEnAttente() {
                       <label>Type de service</label>
                       <div className="flex gap-4 flex-wrap mt-1">
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="radio" name="placementServiceType" value="flexible" className="w-4 h-4 text-primary" defaultChecked />
+                          <input
+                            type="radio"
+                            name="placementServiceType"
+                            value="flexible"
+                            className="w-4 h-4 text-primary"
+                            checked={formData.service_type === 'flexible'}
+                            onChange={e => setFormData({ ...formData, service_type: e.target.value })}
+                          />
                           <span className="text-sm font-medium">Service ménage flexible</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="radio" name="placementServiceType" value="premium" className="w-4 h-4 text-primary" />
+                          <input
+                            type="radio"
+                            name="placementServiceType"
+                            value="premium"
+                            className="w-4 h-4 text-primary"
+                            checked={formData.service_type === 'premium'}
+                            onChange={e => setFormData({ ...formData, service_type: e.target.value })}
+                          />
                           <span className="text-sm font-medium">Service ménage Premium</span>
                         </label>
                       </div>
                     </div>
                     <div className="form-group">
                       <label>Type de structure *</label>
-                      <select required>
+                      <select
+                        required
+                        value={formData.structure_type}
+                        onChange={e => setFormData({ ...formData, structure_type: e.target.value })}
+                      >
                         <option value="">Sélectionner...</option>
                         <option value="bureaux">Bureaux</option>
                         <option value="magasin">Magasin/Boutique</option>
@@ -532,7 +786,11 @@ export default function DemandesEnAttente() {
                     </div>
                     <div className="form-group">
                       <label>Fréquence *</label>
-                      <select required>
+                      <select
+                        required
+                        value={formData.frequence}
+                        onChange={e => setFormData({ ...formData, frequence: e.target.value })}
+                      >
                         <option value="">Sélectionner...</option>
                         <option value="ponctuel">Une fois</option>
                         <option value="1/sem">Abonnement - 1 fois / semaine</option>
@@ -544,7 +802,13 @@ export default function DemandesEnAttente() {
                     </div>
                     <div className="form-group">
                       <label>Nombre de personnel *</label>
-                      <input type="number" defaultValue={1} min={1} required />
+                      <input
+                        type="number"
+                        min={1}
+                        required
+                        value={formData.nb_personnel}
+                        onChange={e => setFormData({ ...formData, nb_personnel: parseInt(e.target.value) || 1 })}
+                      />
                     </div>
                   </>
                 )}
@@ -555,22 +819,47 @@ export default function DemandesEnAttente() {
                       <label>Lieu de la garde</label>
                       <div className="flex gap-4 flex-wrap mt-1">
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="radio" name="careLocation" value="domicile" className="w-4 h-4 text-primary" defaultChecked />
+                          <input
+                            type="radio"
+                            name="careLocation"
+                            value="domicile"
+                            className="w-4 h-4 text-primary"
+                            checked={formData.lieu_garde === 'domicile'}
+                            onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
+                          />
                           <span className="text-sm font-medium">Domicile</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="radio" name="careLocation" value="clinique" className="w-4 h-4 text-primary" />
+                          <input
+                            type="radio"
+                            name="careLocation"
+                            value="clinique"
+                            className="w-4 h-4 text-primary"
+                            checked={formData.lieu_garde === 'clinique'}
+                            onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
+                          />
                           <span className="text-sm font-medium">Clinique</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="radio" name="careLocation" value="hopital" className="w-4 h-4 text-primary" />
+                          <input
+                            type="radio"
+                            name="careLocation"
+                            value="hopital"
+                            className="w-4 h-4 text-primary"
+                            checked={formData.lieu_garde === 'hopital'}
+                            onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
+                          />
                           <span className="text-sm font-medium">Hôpital</span>
                         </label>
                       </div>
                     </div>
                     <div className="form-group">
                       <label>Fréquence *</label>
-                      <select required>
+                      <select
+                        required
+                        value={formData.frequence}
+                        onChange={e => setFormData({ ...formData, frequence: e.target.value })}
+                      >
                         <option value="">Sélectionner...</option>
                         <option value="ponctuel">Une fois - Tranche 24h</option>
                         <option value="1/sem">Abonnement - 1 fois / semaine</option>
@@ -579,7 +868,13 @@ export default function DemandesEnAttente() {
                     </div>
                     <div className="form-group">
                       <label>Nombre de jours *</label>
-                      <input type="number" defaultValue={1} min={1} required />
+                      <input
+                        type="number"
+                        min={1}
+                        required
+                        value={formData.nb_jours}
+                        onChange={e => setFormData({ ...formData, nb_jours: parseInt(e.target.value) || 1 })}
+                      />
                     </div>
 
                     <div className="form-section full-width">
@@ -587,11 +882,21 @@ export default function DemandesEnAttente() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <div className="form-group">
                           <label>Âge *</label>
-                          <input type="number" placeholder="Ans" required />
+                          <input
+                            type="number"
+                            placeholder="Ans"
+                            required
+                            value={formData.age_personne}
+                            onChange={e => setFormData({ ...formData, age_personne: e.target.value })}
+                          />
                         </div>
                         <div className="form-group">
                           <label>Sexe *</label>
-                          <select required>
+                          <select
+                            required
+                            value={formData.sexe_personne}
+                            onChange={e => setFormData({ ...formData, sexe_personne: e.target.value })}
+                          >
                             <option value="">Sélectionner...</option>
                             <option value="femme">Femme</option>
                             <option value="homme">Homme</option>
@@ -599,7 +904,11 @@ export default function DemandesEnAttente() {
                         </div>
                         <div className="form-group">
                           <label>Mobilité *</label>
-                          <select required>
+                          <select
+                            required
+                            value={formData.mobilite}
+                            onChange={e => setFormData({ ...formData, mobilite: e.target.value })}
+                          >
                             <option value="">Sélectionner...</option>
                             <option value="adulte">Adulte</option>
                             <option value="agee">Personne Agée</option>
@@ -610,7 +919,13 @@ export default function DemandesEnAttente() {
                         </div>
                         <div className="form-group">
                           <label>Pathologie / Situation médicale *</label>
-                          <textarea rows={2} placeholder="Précisez la situation..." required></textarea>
+                          <textarea
+                            rows={2}
+                            placeholder="Précisez la situation..."
+                            required
+                            value={formData.situation_medicale}
+                            onChange={e => setFormData({ ...formData, situation_medicale: e.target.value })}
+                          ></textarea>
                         </div>
                       </div>
                     </div>
@@ -618,17 +933,26 @@ export default function DemandesEnAttente() {
                 )}
 
 
-
                 <div className="form-section">
                   <h3 style={{ color: '#547d7c' }}>Tarification & Paiement</h3>
                 </div>
                 <div className="form-group">
                   <label>Montant total (MAD) *</label>
-                  <input type="number" placeholder="0.00" required />
+                  <input
+                    type="number"
+                    placeholder="0.00"
+                    required
+                    value={formData.montant}
+                    onChange={e => setFormData({ ...formData, montant: e.target.value })}
+                  />
                 </div>
                 <div className="form-group">
                   <label>Mode de paiement *</label>
-                  <select required>
+                  <select
+                    required
+                    value={formData.mode_paiement}
+                    onChange={e => setFormData({ ...formData, mode_paiement: e.target.value })}
+                  >
                     <option value="">Choisir...</option>
                     <option value="especes">Espèces sur place</option>
                     <option value="virement">Virement bancaire</option>
@@ -637,7 +961,10 @@ export default function DemandesEnAttente() {
                 </div>
                 <div className="form-group">
                   <label>Statut de paiement</label>
-                  <select defaultValue="non_paye">
+                  <select
+                    value={formData.statut_paiement}
+                    onChange={e => setFormData({ ...formData, statut_paiement: e.target.value })}
+                  >
                     <option value="non_paye">Non payé</option>
                     <option value="paye">Paiement total</option>
                     <option value="acompte">Acompte versé</option>
@@ -645,23 +972,18 @@ export default function DemandesEnAttente() {
                 </div>
                 <div className="form-group full-width">
                   <label>Notes client</label>
-                  <textarea rows={3} placeholder="Notes ou précisions additionnelles..."></textarea>
+                  <textarea
+                    rows={3}
+                    placeholder="Notes ou précisions additionnelles..."
+                    value={formData.notes}
+                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                  ></textarea>
                 </div>
               </form>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Annuler</button>
-              <button className="btn btn-primary" onClick={() => { 
-                const form = document.getElementById('create-request-form') as HTMLFormElement;
-                setFormSubmitted(true);
-                if (form?.checkValidity()) {
-                  alert('Demande créée !'); 
-                  setShowCreateModal(false);
-                  setFormSubmitted(false);
-                } else {
-                  // The CSS will show red borders
-                }
-              }}>
+              <button className="btn btn-primary" onClick={handleCreateDemande}>
                 Ajouter la demande
               </button>
             </div>
