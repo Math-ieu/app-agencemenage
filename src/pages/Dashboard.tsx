@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { 
-  RefreshCw, ClipboardCheck, Building2, 
-  Search, List, Grid, MoreHorizontal, Edit2, 
+  RefreshCw, ClipboardCheck, Building2, Clock,
+  Search, List, Grid, MoreHorizontal, Edit2,  
   User as UserIcon, Calendar, Clock3,
   CheckCircle, 
   Settings, UserCheck, 
@@ -44,13 +44,15 @@ export default function Dashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Pour le tableau de bord, on récupère tout ce qui est validé (statut != en_attente)
       const response = await getDemandes(); 
       const data = response.data;
-      const results: Demande[] = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
+      const allResults: Demande[] = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
+      
+      const enAttenteList = allResults.filter(d => d.statut === 'en_attente');
+      const results = allResults.filter(d => d.statut !== 'en_attente');
       setDemandes(results);
       
-      const enCours = results.filter(d => d.statut_besoin === 'en_cours');
+      const enCours = results.filter(d => d.statut === 'en_cours');
       const spp = results.filter(d => d.segment === 'particulier');
       const spe = results.filter(d => d.segment === 'entreprise');
 
@@ -59,7 +61,7 @@ export default function Dashboard() {
         en_cours: enCours.length,
         particulier: spp.length,
         entreprise: spe.length,
-        en_attente: 0,
+        en_attente: enAttenteList.length,
       });
     } catch (err) {
       console.error(err);
@@ -168,10 +170,10 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="stat-card" style={{ backgroundColor: '#d9c532', color: 'white' }}>
-          <div className="stat-icon" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><CheckCircle size={22} /></div>
+          <div className="stat-icon" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><Clock size={22} /></div>
           <div>
-            <p className="stat-value">{stats.total - stats.en_cours}</p>
-            <p className="stat-label">Terminés / Autres</p>
+            <p className="stat-value">{stats.en_attente}</p>
+            <p className="stat-label">En attente</p>
           </div>
         </div>
       </div>
