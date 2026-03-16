@@ -53,14 +53,13 @@ export default function Dashboard() {
       const enCours = results.filter(d => d.statut_besoin === 'en_cours');
       const spp = results.filter(d => d.segment === 'particulier');
       const spe = results.filter(d => d.segment === 'entreprise');
-      const enAttente = results.filter(d => d.statut_besoin === 'en_attente');
 
       setStats({
         total: results.length,
         en_cours: enCours.length,
         particulier: spp.length,
         entreprise: spe.length,
-        en_attente: enAttente.length,
+        en_attente: 0,
       });
     } catch (err) {
       console.error(err);
@@ -169,10 +168,10 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="stat-card" style={{ backgroundColor: '#d9c532', color: 'white' }}>
-          <div className="stat-icon" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><Clock size={22} /></div>
+          <div className="stat-icon" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><CheckCircle size={22} /></div>
           <div>
-            <p className="stat-value">{stats.en_attente}</p>
-            <p className="stat-label">En attente</p>
+            <p className="stat-value">{stats.total - stats.en_cours}</p>
+            <p className="stat-label">Terminés / Autres</p>
           </div>
         </div>
       </div>
@@ -307,8 +306,8 @@ export default function Dashboard() {
                       <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</td>
                       <td>{d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '—'}</td>
                       <td>
-                        <span className={`badge ${d.statut_besoin === 'en_cours' ? 'badge-blue' : d.statut_besoin === 'termine' ? 'badge-green' : 'badge-orange'}`}>
-                          {d.statut_besoin === 'en_cours' ? 'En cours' : d.statut_besoin === 'termine' ? 'Terminé' : 'En attente'}
+                        <span className={`badge ${d.statut === 'en_cours' ? 'badge-blue' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`}>
+                          {d.statut === 'en_cours' ? 'En cours' : d.statut === 'termine' ? 'Terminé' : 'En attente'}
                         </span>
                       </td>
                       <td>{d.client_name || d.formulaire_data?.nom || '—'}</td>
@@ -437,6 +436,9 @@ export default function Dashboard() {
                   <div className="card-header">
                     <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
                       {d.segment === 'particulier' ? 'SPP' : 'SPE'}
+                    </span>
+                    <span className={`badge ${d.statut === 'en_cours' ? 'badge-blue' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`} style={{marginLeft: 'auto', marginRight: '10px'}}>
+                      {d.statut === 'en_cours' ? 'En cours' : d.statut === 'termine' ? 'Terminé' : 'En attente'}
                     </span>
                     <button className="icon-btn"><MoreHorizontal size={18} /></button>
                   </div>
