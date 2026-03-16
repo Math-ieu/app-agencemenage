@@ -5,7 +5,7 @@ import {
   DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X
 } from 'lucide-react';
 import { useAuthStore, useNotificationStore } from '../../store/auth';
-import logoUrl from '../../assets/LOGO-AGENCE-MENAGE.webp';
+import logoUrl from '../../assets/LOGO-AGENCE-MENAGE.png';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Tableau de bord' },

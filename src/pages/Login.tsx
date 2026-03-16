@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { login } from '../api/client';
 import { Eye, EyeOff, Loader2, Mail, Lock } from 'lucide-react';
-import logoUrl from '../assets/LOGO-AGENCE-MENAGE.webp';
+import logoUrl from '../assets/LOGO-AGENCE-MENAGE.png';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');

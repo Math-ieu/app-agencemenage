@@ -137,6 +137,7 @@ export default function DemandesEnAttente() {
     if (!form?.checkValidity()) return;
 
     try {
+      const frequencyValue = formData.frequence === 'ponctuel' ? 'oneshot' : 'abonnement';
       const payload = {
         client_name: formData.nom,
         client_phone: directPhone,
@@ -144,17 +145,38 @@ export default function DemandesEnAttente() {
         segment: activeSegment,
         date_intervention: formData.date,
         heure_intervention: formData.heure,
-        nb_heures: formData.duree,
-        prix: formData.montant,
+        prix: formData.montant || null,
         mode_paiement: formData.mode_paiement,
         statut_paiement: formData.statut_paiement,
-        frequency: formData.frequence === 'ponctuel' ? 'oneshot' : 'abonnement',
+        frequency: frequencyValue,
         frequency_label: formData.frequence,
-        neighborhood_city: `${formData.quartier}, ${formData.ville}`,
         formulaire_data: {
-          ...formData,
+          nom: formData.nom,
+          ville: formData.ville,
+          quartier: formData.quartier,
+          adresse: formData.adresse,
+          preference_horaire: formData.preference_horaire,
+          type_habitation: formData.type_habitation,
+          surface: formData.surface,
+          duree: formData.duree,
+          nb_intervenants: formData.nb_intervenants,
+          details_pieces: formData.details_pieces,
+          produits: formData.produits,
+          torchons: formData.torchons,
+          // Placement & gestion
+          structure_type: formData.structure_type,
+          service_type: formData.service_type,
+          nb_personnel: formData.nb_personnel,
+          // Auxiliaire de vie
+          lieu_garde: formData.lieu_garde,
+          age_personne: formData.age_personne,
+          sexe_personne: formData.sexe_personne,
+          mobilite: formData.mobilite,
+          situation_medicale: formData.situation_medicale,
+          nb_jours: formData.nb_jours,
+          // Contact
           whatsapp_phone: whatsappPhone,
-          sync_whatsapp: syncWhatsApp
+          notes: formData.notes,
         }
       };
 
@@ -294,22 +316,25 @@ export default function DemandesEnAttente() {
                       <div className="accordion-content">
                         <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value">{d.service}</span></div>
                         <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">{d.formulaire_data?.type_habitation || d.formulaire_data?.structure_type || '—'}</span></div>
-                        <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency}</span></div>
-                        <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.nb_heures ? `${d.nb_heures}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—')}</span></div>
-                        <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || 1}</span></div>
+                        <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency_label || d.frequency || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.formulaire_data?.duree ? `${d.formulaire_data.duree}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—')}</span></div>
+                        <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || '—'}</span></div>
                         {d.service.includes('Auxiliaire') ? (
                           <>
-                            <div className="detail-item"><span className="detail-label">Âge / Sexe :</span> <span className="detail-value">{d.formulaire_data?.age_personne || '—'} ans / {d.formulaire_data?.sexe_personne || '—'}</span></div>
+                            <div className="detail-item"><span className="detail-label">Âge / Sexe :</span> <span className="detail-value">{d.formulaire_data?.age_personne ? `${d.formulaire_data.age_personne} ans` : '—'} / {d.formulaire_data?.sexe_personne || '—'}</span></div>
                             <div className="detail-item"><span className="detail-label">Mobilité :</span> <span className="detail-value">{d.formulaire_data?.mobilite || '—'}</span></div>
                             <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Médical :</span> <span className="detail-value">{d.formulaire_data?.situation_medicale || '—'}</span></div>
                           </>
                         ) : (
-                          <div className="detail-item"><span className="detail-label">Surface :</span> <span className="detail-value">{d.formulaire_data?.surface || '—'} m²</span></div>
+                          <div className="detail-item"><span className="detail-label">Surface :</span> <span className="detail-value">{d.formulaire_data?.surface ? `${d.formulaire_data.surface} m²` : '—'}</span></div>
+                        )}
+                        {d.formulaire_data?.details_pieces && (
+                          <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Pièces :</span> <span className="detail-value">{d.formulaire_data.details_pieces}</span></div>
                         )}
                         <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Services opt. :</span> <span className="detail-value">
                           {[
-                            d.formulaire_data?.produits && 'Produits',
-                            d.formulaire_data?.torchons && 'Torchons'
+                            d.formulaire_data?.produits && 'Produits (+90 MAD)',
+                            d.formulaire_data?.torchons && 'Torchons (+40 MAD)'
                           ].filter(Boolean).join(', ') || 'Aucun'}
                         </span></div>
                       </div>
@@ -323,10 +348,11 @@ export default function DemandesEnAttente() {
                     </div>
                     {expandedCards[d.id] === 'lieux' && (
                       <div className="accordion-content">
-                        <div className="detail-item"><span className="detail-label">Date :</span> <span className="detail-value">{d.date_intervention}</span></div>
+                        <div className="detail-item"><span className="detail-label">Date :</span> <span className="detail-value">{d.date_intervention || '—'}</span></div>
                         <div className="detail-item"><span className="detail-label">Heure :</span> <span className="detail-value">{d.heure_intervention || '—'}</span></div>
-                        <div className="detail-item"><span className="detail-label">Ville :</span> <span className="detail-value">{d.formulaire_data?.ville || 'Casablanca'}</span></div>
-                        <div className="detail-item"><span className="detail-label">Quartier :</span> <span className="detail-value">{d.neighborhood_city || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Ville :</span> <span className="detail-value">{d.formulaire_data?.ville || d.client_city || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Quartier :</span> <span className="detail-value">{d.formulaire_data?.quartier || d.client_neighborhood || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Préférence horaire :</span> <span className="detail-value">{d.formulaire_data?.preference_horaire ? (d.formulaire_data.preference_horaire === 'matin' ? 'Matin (08h–12h)' : 'Après-midi (14h–18h)') : '—'}</span></div>
                         <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Adresse :</span> <span className="detail-value">{d.formulaire_data?.adresse || '—'}</span></div>
                       </div>
                     )}
@@ -339,7 +365,10 @@ export default function DemandesEnAttente() {
                     </div>
                     {expandedCards[d.id] === 'notes' && (
                       <div className="accordion-content" style={{ gridTemplateColumns: '1fr' }}>
-                        <p className="text-sm text-muted italic">Aucune note</p>
+                        {d.formulaire_data?.notes
+                          ? <p className="text-sm">{d.formulaire_data.notes}</p>
+                          : <p className="text-sm text-muted italic">Aucune note</p>
+                        }
                       </div>
                     )}
                   </div>
@@ -347,10 +376,10 @@ export default function DemandesEnAttente() {
 
                 <div className="pending-footer">
                   <p className="text-sm">
-                    <span className="fw-bold">Montant : {d.prix} MAD</span>
+                    <span className="fw-bold">Montant : {d.is_devis ? 'Sur devis' : (d.prix ? `${d.prix} MAD` : '—')}</span>
                     <span className="text-muted ml-2">({d.is_devis ? 'Devis' : 'Réservation'})</span>
                   </p>
-                  <p className="text-sm fw-medium">Mode : {d.mode_paiement}</p>
+                  <p className="text-sm fw-medium">Mode : {d.mode_paiement || '—'}</p>
                 </div>
 
                 <div className="pending-actions">
@@ -409,11 +438,16 @@ export default function DemandesEnAttente() {
                   </div>
                   <div className="mobile-detail-row">
                     <span className="mobile-detail-label">Lieu</span>
-                    <span className="mobile-detail-value">{d.neighborhood_city || 'Casablanca'}</span>
+                    <span className="mobile-detail-value">
+                      {[d.formulaire_data?.quartier || d.client_neighborhood, d.formulaire_data?.ville || d.client_city].filter(Boolean).join(', ') || '—'}
+                    </span>
                   </div>
                   <div className="mobile-detail-row mobile-price-row">
                     <span className="mobile-detail-label">Montant</span>
-                    <span className="mobile-detail-value fw-bold">{d.prix} MAD <span className="text-xs text-muted fw-normal">({d.mode_paiement})</span></span>
+                    <span className="mobile-detail-value fw-bold">
+                      {d.is_devis ? 'Sur devis' : (d.prix ? `${d.prix} MAD` : '—')}
+                      {!d.is_devis && d.mode_paiement && <span className="text-xs text-muted fw-normal"> ({d.mode_paiement})</span>}
+                    </span>
                   </div>
                 </div>
 
@@ -658,38 +692,35 @@ export default function DemandesEnAttente() {
                     </div>
 
                     <div className="form-group">
-                      <label>Nb intervenants</label>
+                      <label>Nb intervenants *</label>
                       <input
                         type="number"
                         min={1}
+                        required
                         value={formData.nb_intervenants}
-                        onChange={e => setFormData({ ...formData, nb_intervenants: parseInt(e.target.value) })}
+                        onChange={e => setFormData({ ...formData, nb_intervenants: parseInt(e.target.value) || 1 })}
                       />
                     </div>
 
-                    {(selectedService.toLowerCase().includes('grand') ||
-                      selectedService.toLowerCase().includes('chantier') ||
-                      selectedService.toLowerCase().includes('sinistre') ||
-                      selectedService.toLowerCase().includes('déménagement') ||
-                      selectedService.toLowerCase().includes('bureau')) && (
-                        <div className="form-group">
-                          <label>Surface (m²)</label>
-                          <input
-                            type="number"
-                            min={10}
-                            value={formData.surface}
-                            onChange={e => setFormData({ ...formData, surface: parseInt(e.target.value) })}
-                          />
-                        </div>
-                      )}
-
                     <div className="form-group">
-                      <label>Durée (Heures)</label>
+                      <label>Surface (m²) *</label>
                       <input
                         type="number"
-                        min={4}
+                        min={1}
+                        required
+                        value={formData.surface}
+                        onChange={e => setFormData({ ...formData, surface: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Durée (Heures) *</label>
+                      <input
+                        type="number"
+                        min={1}
+                        required
                         value={formData.duree}
-                        onChange={e => setFormData({ ...formData, duree: parseInt(e.target.value) })}
+                        onChange={e => setFormData({ ...formData, duree: parseInt(e.target.value) || 1 })}
                       />
                     </div>
 
