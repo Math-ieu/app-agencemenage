@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande } from '../api/client';
+import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande } from '../api/client';
 import { useNotificationStore } from '../store/auth';
+import { useToastStore } from '../store/toast';
 import {
   Search, Plus, ChevronDown, ChevronUp, RefreshCw,
   CheckCircle, Edit, XCircle,
@@ -24,6 +25,7 @@ export default function DemandesEnAttente() {
   const [whatsappPhone, setWhatsappPhone] = useState('');
   const [syncWhatsApp, setSyncWhatsApp] = useState(true);
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [editingDemande, setEditingDemande] = useState<Demande | null>(null);
 
   // Nouveaux états pour le formulaire
   const [formData, setFormData] = useState({
@@ -61,6 +63,7 @@ export default function DemandesEnAttente() {
   });
 
   const { setPendingCount } = useNotificationStore();
+  const { addToast } = useToastStore();
 
   const SERVICES = {
     particulier: [
@@ -83,11 +86,14 @@ export default function DemandesEnAttente() {
   const fetchDemandes = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await getDemandes({ statut: 'en_attente' });
-      const results: Demande[] = data.results || data;
+      const response = await getDemandes({ statut: 'en_attente' });
+      const data = response.data;
+      const results = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
 
-      const filtered = results.filter(d => {
-        const matchesSearch = !search || d.client_name.toLowerCase().includes(search.toLowerCase()) || d.client_phone.includes(search);
+      const filtered = results.filter((d: any) => {
+        const clientName = d.client_name || d.formulaire_data?.nom || '';
+        const clientPhone = d.client_phone || d.formulaire_data?.whatsapp_phone || '';
+        const matchesSearch = !search || clientName.toLowerCase().includes(search.toLowerCase()) || clientPhone.includes(search);
         const matchesSegment = !segment || d.segment === segment;
         const matchesService = !prestation || d.service === prestation;
         return matchesSearch && matchesSegment && matchesService;
@@ -95,6 +101,9 @@ export default function DemandesEnAttente() {
 
       setDemandes(filtered);
       setPendingCount(filtered.length);
+    } catch (err) {
+      console.error('Erreur fetchDemandes:', err);
+      addToast('Erreur lors du chargement des demandes', 'error');
     } finally {
       setLoading(false);
     }
@@ -111,24 +120,84 @@ export default function DemandesEnAttente() {
 
   const handleAction = async (id: number, action: 'valider' | 'nrp' | 'annuler') => {
     try {
-      if (action === 'valider') await validerDemande(id);
-      else if (action === 'nrp') await nrpDemande(id);
+      if (action === 'valider') {
+        await validerDemande(id);
+        addToast('Demande validée !', 'success');
+      }
+      else if (action === 'nrp') {
+        await nrpDemande(id);
+        addToast('Statut NRP enregistré', 'info');
+      }
       else if (action === 'annuler') {
         const reason = prompt('Motif d\'annulation :');
         if (reason === null) return;
         await annulerDemande(id, reason);
+        addToast('Demande annulée', 'error');
       }
-      fetchDemandes();
+      await fetchDemandes();
     } catch (err) {
       console.error(err);
+      addToast('Une erreur est survenue lors de l\'action.', 'error');
     }
   };
 
   const openCreateModal = (service: string) => {
     setSelectedService(service);
-    setFormData(prev => ({ ...prev, type_habitation: '', frequence: '', montant: '', note: '' }));
+    setEditingDemande(null);
+    setDirectPhone('');
+    setWhatsappPhone('');
+    setFormData({
+      nom: '', ville: 'Casablanca', quartier: '', adresse: '', date: '', heure: '',
+      preference_horaire: '', type_habitation: '', frequence: '', nb_intervenants: 1,
+      surface: 50, details_pieces: '', duree: 4, produits: false, torchons: false,
+      montant: '', mode_paiement: '', statut_paiement: 'non_paye', notes: '',
+      service_type: 'flexible', structure_type: '', nb_personnel: 1,
+      lieu_garde: 'domicile', age_personne: '', sexe_personne: '',
+      mobilite: '', situation_medicale: '', nb_jours: 1
+    });
     setShowCreateModal(true);
     setShowNewMenu(false);
+  };
+
+  const openEditModal = (d: Demande) => {
+    setEditingDemande(d);
+    setSelectedService(d.service);
+    setActiveSegment(d.segment);
+    setDirectPhone(d.client_phone);
+    setWhatsappPhone(d.formulaire_data?.whatsapp_phone || d.client_phone);
+    setSyncWhatsApp(!d.formulaire_data?.whatsapp_phone || d.formulaire_data?.whatsapp_phone === d.client_phone);
+    
+    setFormData({
+      nom: d.client_name,
+      ville: d.formulaire_data?.ville || d.client_city || 'Casablanca',
+      quartier: d.formulaire_data?.quartier || d.client_neighborhood || '',
+      adresse: d.formulaire_data?.adresse || '',
+      date: d.date_intervention || '',
+      heure: d.heure_intervention || '',
+      preference_horaire: d.formulaire_data?.preference_horaire || '',
+      type_habitation: d.formulaire_data?.type_habitation || '',
+      frequence: d.frequency_label || (d.frequency === 'oneshot' ? 'ponctuel' : 'mensuel'),
+      nb_intervenants: d.formulaire_data?.nb_intervenants || 1,
+      surface: d.formulaire_data?.surface || 50,
+      details_pieces: d.formulaire_data?.details_pieces || '',
+      duree: d.formulaire_data?.duree || 4,
+      produits: d.formulaire_data?.produits || false,
+      torchons: d.formulaire_data?.torchons || false,
+      montant: d.prix?.toString() || '',
+      mode_paiement: d.mode_paiement || '',
+      statut_paiement: d.statut_paiement || 'non_paye',
+      notes: d.formulaire_data?.notes || '',
+      service_type: d.formulaire_data?.service_type || 'flexible',
+      structure_type: d.formulaire_data?.structure_type || '',
+      nb_personnel: d.formulaire_data?.nb_personnel || 1,
+      lieu_garde: d.formulaire_data?.lieu_garde || 'domicile',
+      age_personne: d.formulaire_data?.age_personne || '',
+      sexe_personne: d.formulaire_data?.sexe_personne || '',
+      mobilite: d.formulaire_data?.mobilite || '',
+      situation_medicale: d.formulaire_data?.situation_medicale || '',
+      nb_jours: d.formulaire_data?.nb_jours || 1
+    });
+    setShowCreateModal(true);
   };
 
   const handleCreateDemande = async () => {
@@ -180,14 +249,22 @@ export default function DemandesEnAttente() {
         }
       };
 
-      await createDemande(payload);
+      if (editingDemande) {
+        await updateDemande(editingDemande.id, payload);
+        addToast('Demande mise à jour !', 'success');
+      } else {
+        await createDemande(payload);
+        addToast('Demande créée avec succès !', 'success');
+      }
+      
       setShowCreateModal(false);
       setFormSubmitted(false);
-      fetchDemandes();
-      alert('Demande créée avec succès !');
+      
+      // S'assurer que le refresh est immédiat
+      await fetchDemandes();
     } catch (err) {
       console.error(err);
-      alert('Erreur lors de la création de la demande.');
+      addToast('Erreur lors de l\'enregistrement.', 'error');
     }
   };
 
@@ -272,7 +349,7 @@ export default function DemandesEnAttente() {
 
         <select className="filter-select" value={prestation} onChange={(e) => setPrestation(e.target.value)}>
           <option value="">Toutes les prestations</option>
-          {SERVICES.particulier.concat(SERVICES.entreprise).map(s => (
+          {Array.from(new Set([...SERVICES.particulier, ...SERVICES.entreprise])).map(s => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
@@ -298,11 +375,11 @@ export default function DemandesEnAttente() {
                       </span>
                       <span className="text-muted text-xs"># {d.id}</span>
                     </div>
-                    <h3 className="fw-bold">Nom : <span className="text-main">{d.client_name}</span></h3>
+                    <h3 className="fw-bold">Nom : <span className="text-main">{d.client_name || d.formulaire_data?.nom || 'Non renseigné'}</span></h3>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm fw-medium">Téléphone : <span className="text-main">{d.client_phone}</span></p>
-                    <p className="text-sm fw-medium">WhatsApp : <span className="text-main">{d.client_phone}</span></p>
+                    <p className="text-sm fw-medium">Téléphone : <span className="text-main">{d.client_phone || d.formulaire_data?.whatsapp_phone || 'Non renseigné'}</span></p>
+                    <p className="text-sm fw-medium">WhatsApp : <span className="text-main">{d.client_whatsapp || d.formulaire_data?.whatsapp_phone || d.client_phone}</span></p>
                   </div>
                 </div>
 
@@ -329,7 +406,7 @@ export default function DemandesEnAttente() {
                           <div className="detail-item"><span className="detail-label">Surface :</span> <span className="detail-value">{d.formulaire_data?.surface ? `${d.formulaire_data.surface} m²` : '—'}</span></div>
                         )}
                         {d.formulaire_data?.details_pieces && (
-                          <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Pièces :</span> <span className="detail-value">{d.formulaire_data.details_pieces}</span></div>
+                          <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Pièces :</span> <span className="detail-value">{d.formulaire_data?.details_pieces || '—'}</span></div>
                         )}
                         <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Services opt. :</span> <span className="detail-value">
                           {[
@@ -366,7 +443,7 @@ export default function DemandesEnAttente() {
                     {expandedCards[d.id] === 'notes' && (
                       <div className="accordion-content" style={{ gridTemplateColumns: '1fr' }}>
                         {d.formulaire_data?.notes
-                          ? <p className="text-sm">{d.formulaire_data.notes}</p>
+                          ? <p className="text-sm">{d.formulaire_data?.notes || '—'}</p>
                           : <p className="text-sm text-muted italic">Aucune note</p>
                         }
                       </div>
@@ -386,7 +463,7 @@ export default function DemandesEnAttente() {
                   <button className="btn btn-nrp" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
                   <button className="btn btn-cancel" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
                   <button className="btn btn-validate" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
-                  <button className="btn btn-edit" title="Modifier">
+                  <button className="btn btn-edit" title="Modifier" onClick={() => openEditModal(d)}>
                     <Edit size={16} />
                   </button>
                 </div>
@@ -401,10 +478,10 @@ export default function DemandesEnAttente() {
                     </span>
                     <span className="text-muted text-xs fw-bold">#{d.id}</span>
                   </div>
-                  <h3 className="mobile-client-name">{d.client_name}</h3>
+                  <h3 className="mobile-client-name">{d.client_name || d.formulaire_data?.nom || 'Nom inconnu'}</h3>
                   <div className="mobile-contact-info">
-                    <a href={`tel:${d.client_phone}`} className="mobile-contact-link">📞 {d.client_phone}</a>
-                    <a href={`https://wa.me/${d.client_phone.replace(/\+/g, '')}`} target="_blank" rel="noreferrer" className="mobile-contact-link mobile-wa-link">📱 WhatsApp</a>
+                    <a href={`tel:${d.client_phone || d.formulaire_data?.whatsapp_phone || ''}`} className="mobile-contact-link">📞 {d.client_phone || d.formulaire_data?.whatsapp_phone || 'Non renseigné'}</a>
+                    <a href={`https://wa.me/${(d.client_whatsapp || d.formulaire_data?.whatsapp_phone || d.client_phone || '').replace(/\+/g, '')}`} target="_blank" rel="noreferrer" className="mobile-contact-link mobile-wa-link">📱 WhatsApp</a>
                   </div>
                 </div>
 
@@ -416,14 +493,14 @@ export default function DemandesEnAttente() {
                   {d.formulaire_data?.surface && (
                     <div className="mobile-detail-row">
                       <span className="mobile-detail-label">Surface</span>
-                      <span className="mobile-detail-value">{d.formulaire_data.surface} m²</span>
+                      <span className="mobile-detail-value">{d.formulaire_data?.surface || '—'} m²</span>
                     </div>
                   )}
 
                   {d.formulaire_data?.structure_type && (
                     <div className="mobile-detail-row">
                       <span className="mobile-detail-label">Structure</span>
-                      <span className="mobile-detail-value">{d.formulaire_data.structure_type}</span>
+                      <span className="mobile-detail-value">{d.formulaire_data?.structure_type || '—'}</span>
                     </div>
                   )}
                   {d.service.includes('Auxiliaire') && (
@@ -458,7 +535,7 @@ export default function DemandesEnAttente() {
                   <div className="flex gap-2">
                     <button className="btn btn-nrp flex-1" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
                     <button className="btn btn-cancel flex-1" onClick={() => handleAction(d.id, 'annuler')}>Annuler</button>
-                    <button className="btn btn-edit flex-none px-3" title="Modifier">
+                    <button className="btn btn-edit flex-none px-3" title="Modifier" onClick={() => openEditModal(d)}>
                       <Edit size={16} />
                     </button>
                   </div>
@@ -482,7 +559,7 @@ export default function DemandesEnAttente() {
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="text-xl fw-bold">Nouvelle demande : {selectedService}</h2>
+              <h2 className="text-xl fw-bold">{editingDemande ? 'Modifier' : 'Nouvelle'} demande : {selectedService}</h2>
               <button className="btn-close" onClick={() => setShowCreateModal(false)}><XCircle size={24} /></button>
             </div>
             <div className="modal-body">
@@ -985,9 +1062,10 @@ export default function DemandesEnAttente() {
                     onChange={e => setFormData({ ...formData, mode_paiement: e.target.value })}
                   >
                     <option value="">Choisir...</option>
-                    <option value="especes">Espèces sur place</option>
-                    <option value="virement">Virement bancaire</option>
-                    <option value="tpe">Paiement par TPE</option>
+                    <option value="virement">Virement</option>
+                    <option value="cheque">Par chèque</option>
+                    <option value="agence">À l'agence</option>
+                    <option value="sur_place">Sur place</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -997,8 +1075,9 @@ export default function DemandesEnAttente() {
                     onChange={e => setFormData({ ...formData, statut_paiement: e.target.value })}
                   >
                     <option value="non_paye">Non payé</option>
-                    <option value="paye">Paiement total</option>
                     <option value="acompte">Acompte versé</option>
+                    <option value="partiel">Paiement partiel</option>
+                    <option value="integral">Paiement intégral</option>
                   </select>
                 </div>
                 <div className="form-group full-width">

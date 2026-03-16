@@ -2033,6 +2033,43 @@ body {
   to { opacity: 1; transform: translateX(0); }
 }
 
+@media (max-width: 640px) {
+  .nested-menu {
+    position: fixed;
+    top: auto;
+    bottom: 20px;
+    right: 20px;
+    left: 20px;
+    min-width: 0;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  .submenu {
+    position: static;
+    box-shadow: none;
+    border: none;
+    border-top: 1px solid var(--border-color);
+    border-radius: 0;
+    margin: 0.5rem -0.5rem -0.5rem -0.5rem;
+    padding: 0.25rem 0.5rem 0.5rem 1.5rem;
+    width: calc(100% + 1rem);
+    background: var(--bg-main);
+  }
+
+  .menu-group-item.active {
+    border-radius: 8px 8px 0 0;
+  }
+
+  .menu-group-item svg {
+    transition: transform 0.2s;
+  }
+
+  .menu-group-item.active svg {
+    transform: rotate(0deg) !important;
+  }
+}
+
 /* Modal Styles for Creation Form */
 .modal-overlay {
   position: fixed;
@@ -2380,3 +2417,87 @@ form.submitted input:invalid:focus {
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.1);
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Toasts
+ * ──────────────────────────────────────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  min-width: 300px;
+  max-width: 450px;
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  animation: slideInRight 0.3s ease-out;
+  border-left: 4px solid #e2e8f0;
+}
+
+.toast-success {
+  border-left-color: var(--green);
+}
+
+.toast-error {
+  border-left-color: var(--red);
+}
+
+.toast-info {
+  border-left-color: var(--blue);
+}
+
+.toast-icon {
+  flex-shrink: 0;
+}
+
+.toast-success .toast-icon { color: var(--green); }
+.toast-error .toast-icon { color: var(--red); }
+.toast-info .toast-icon { color: var(--blue); }
+
+.toast-message {
+  flex-grow: 1;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.toast-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.toast-close:hover {
+  background: #f1f5f9;
+  color: var(--text-main);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}

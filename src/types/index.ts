@@ -60,7 +60,9 @@ export interface Demande {
   tarif_total?: number;
   reste_a_payer?: number;
   mode_paiement: string;
+  mode_paiement_label?: string;
   statut_paiement: string;
+  statut_paiement_label?: string;
   profils_envoyes?: Agent[];
   cao: boolean;
   prochaine_alerte_cao?: string;

@@ -4,6 +4,7 @@ import { useAuthStore } from './store/auth';
 // Layout & Auth
 import AppLayout from './components/layout/AppLayout';
 import Login from './pages/Login';
+import { ToastContainer } from './components/common/Toast';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -26,6 +27,7 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         <Route path="/login" element={<Login />} />
 

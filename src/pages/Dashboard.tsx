@@ -1,13 +1,15 @@
 import { useEffect, useState, useMemo } from 'react';
-import { getDemandes } from '../api/client';
 import { 
   RefreshCw, ClipboardCheck, Clock, Building2, 
   Search, List, Grid, MoreHorizontal, Edit2, 
   User as UserIcon, Calendar, Clock3,
-  FileText, PenTool, CheckCircle, RotateCcw, 
-  AlertCircle, Check, Trash2
+  CheckCircle, 
+  Settings, UserCheck, 
+  XCircle, CreditCard, MessageSquare
 } from 'lucide-react';
 import { Demande } from '../types';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO } from '../api/client';
+import { useToastStore } from '../store/toast';
 
 interface DashboardStats {
   total: number;
@@ -32,15 +34,20 @@ export default function Dashboard() {
   const [prestationFilter, setPrestationFilter] = useState('toutes');
   const [dateRange] = useState({ start: '', end: '' });
   const [selectedDemande, setSelectedDemande] = useState<Demande | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState<any>({});
   const [showDetail, setShowDetail] = useState(false);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const [activeMoreMenu, setActiveMoreMenu] = useState<number | null>(null);
+  const { addToast } = useToastStore();
 
   const fetchData = async () => {
     setLoading(true);
     try {
       // Pour le tableau de bord, on récupère tout ce qui est validé (statut != en_attente)
-      const { data } = await getDemandes(); 
-      const results: Demande[] = data.results || data;
+      const response = await getDemandes(); 
+      const data = response.data;
+      const results: Demande[] = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
       setDemandes(results);
       
       const enCours = results.filter(d => d.statut_besoin === 'en_cours');
@@ -55,9 +62,43 @@ export default function Dashboard() {
         entreprise: spe.length,
         en_attente: enAttente.length,
       });
+    } catch (err) {
+      console.error(err);
+      addToast('Erreur lors du chargement des données', 'error');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUpdate = async () => {
+    if (!selectedDemande) return;
+    try {
+      await updateDemande(selectedDemande.id, {
+        ...editFormData,
+        prix: parseFloat(editFormData.prix) || 0,
+      });
+      setIsEditing(false);
+      setShowDetail(false);
+      await fetchData();
+      addToast('Mise à jour effectuée avec succès !', 'success');
+    } catch (err) {
+      console.error(err);
+      addToast('Erreur lors de la mise à jour.', 'error');
+    }
+  };
+
+  const openDetail = (d: Demande) => {
+    setSelectedDemande(d);
+    setIsEditing(false);
+    setEditFormData({
+      prix: d.prix,
+      mode_paiement: d.mode_paiement,
+      statut_paiement: d.statut_paiement,
+      nb_heures: d.nb_heures,
+      date_intervention: d.date_intervention,
+      note_commerciale: d.note_commerciale,
+    });
+    setShowDetail(true);
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -69,7 +110,10 @@ export default function Dashboard() {
       if (activeTab === 'besoins' && d.frequency === 'abonnement') return false;
 
       // Recherche
-      if (search && !d.client_name.toLowerCase().includes(search.toLowerCase()) && !d.service.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search) {
+        const clientName = d.client_name || d.formulaire_data?.nom || '';
+         if (!clientName.toLowerCase().includes(search.toLowerCase()) && !d.service.toLowerCase().includes(search.toLowerCase())) return false;
+      }
 
       // Filtre Service (SPP/SPE)
       if (serviceFilter !== 'tous') {
@@ -231,39 +275,46 @@ export default function Dashboard() {
                       <td className="relative">
                         <button 
                           className="btn btn-action"
-                          onClick={() => setActiveMenu(activeMenu === d.id ? null : d.id)}
+                          onClick={() => {
+                            setActiveMenu(activeMenu === d.id ? null : d.id);
+                            setActiveMoreMenu(null);
+                          }}
                         >
-                          <Edit2 size={14} />
+                          <Settings size={14} />
                           Actions
                         </button>
                         
                         {activeMenu === d.id && (
                           <div className="action-menu">
-                            <button className="menu-item" onClick={() => { setSelectedDemande(d); setShowDetail(true); setActiveMenu(null); }}>
+                            <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
-                            <button className="menu-item"><FileText size={14} /> Note commerciale</button>
-                            <button className="menu-item"><PenTool size={14} /> Note opérationnelle</button>
-                            <div className="menu-divider" />
-                            <button className="menu-item text-green"><CheckCircle size={14} /> Prestation effectuée</button>
-                            <button className="menu-item text-blue"><RotateCcw size={14} /> Facturation en cours</button>
-                            <button className="menu-item text-orange"><AlertCircle size={14} /> Facturation partielle</button>
-                            <button className="menu-item text-green"><Check size={14} /> Payé</button>
-                            <div className="menu-divider" />
-                            <button className="menu-item text-red"><Trash2 size={14} /> Supprimer</button>
+                            <button className="menu-item" onClick={async () => {
+                              if (confirm('Confirmer cette opération ?')) {
+                                await confirmerCAO(d.id);
+                                fetchData();
+                              }
+                            }}>
+                              <CheckCircle size={14} /> Confirmation Opé
+                            </button>
+                            <button className="menu-item">
+                              <UserCheck size={14} /> Compte Client
+                            </button>
                           </div>
                         )}
                       </td>
                       <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
-                      <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : '—'}</td>
-                      <td>{d.nb_heures || '—'}</td>
+                      <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</td>
+                      <td>{d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '—'}</td>
                       <td>
                         <span className={`badge ${d.statut_besoin === 'en_cours' ? 'badge-blue' : d.statut_besoin === 'termine' ? 'badge-green' : 'badge-orange'}`}>
                           {d.statut_besoin === 'en_cours' ? 'En cours' : d.statut_besoin === 'termine' ? 'Terminé' : 'En attente'}
                         </span>
                       </td>
-                      <td>{d.client_name}</td>
-                      <td>{d.neighborhood_city || '—'}</td>
+                      <td>{d.client_name || d.formulaire_data?.nom || '—'}</td>
+                      <td>
+                        {[d.formulaire_data?.quartier || d.client_neighborhood, d.formulaire_data?.ville || d.client_city].filter(Boolean).join(', ') || d.neighborhood_city || '—'}
+                      </td>
                       <td>{d.frequency === 'abonnement' ? 'Abonnement' : 'Une fois'}</td>
                       <td>
                         <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
@@ -278,25 +329,25 @@ export default function Dashboard() {
                       </td>
                       <td>
                         <div className="price-info">
-                          <p className="price-main">{d.prix} MAD</p>
+                          <p className="price-main">{typeof d.prix === 'number' ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD</p>
                           <p className="price-sub">{d.is_devis ? 'Prix/devis' : 'Prix/réservation'}</p>
                         </div>
                       </td>
-                      <td>{d.mode_paiement}</td>
+                      <td>{d.mode_paiement_label || d.mode_paiement || '—'}</td>
                       <td>
-                        <span className={`badge ${d.statut_paiement === 'paye' ? 'badge-green' : d.statut_paiement === 'partiel' ? 'badge-orange' : 'badge-red'}`}>
-                          {d.statut_paiement === 'paye' ? 'Payé' : d.statut_paiement === 'partiel' ? 'Avance versée' : 'Non payé'}
+                        <span className={`badge ${['paye', 'integral'].includes(d.statut_paiement) ? 'badge-green' : d.statut_paiement === 'partiel' ? 'badge-orange' : 'badge-red'}`}>
+                          {d.statut_paiement_label || d.statut_paiement || 'Non payé'}
                         </span>
                       </td>
                       <td>
-                        {d.reste_a_payer > 0 ? (
-                          <span className="text-red fw-bold">{d.reste_a_payer} MAD</span>
+                        {(d.reste_a_payer ?? 0) > 0 ? (
+                          <span className="text-red fw-bold">{(d.reste_a_payer ?? 0).toLocaleString('fr-FR')} MAD</span>
                         ) : '—'}
                       </td>
                       <td>
-                        {d.profils_envoyes?.length > 0 ? (
+                        {(d.profils_envoyes?.length ?? 0) > 0 ? (
                           <div className="avatar-group">
-                            {d.profils_envoyes.map(p => (
+                            {d.profils_envoyes?.map(p => (
                               <span key={p.id} className="avatar-sm" title={p.full_name}>{p.full_name[0]}</span>
                             ))}
                           </div>
@@ -309,10 +360,70 @@ export default function Dashboard() {
                           <span className="badge badge-red animate-pulse">Non</span>
                         )}
                       </td>
-                      <td>
-                        <button className="icon-btn">
+                      <td className="relative">
+                        <button 
+                          className="icon-btn"
+                          onClick={() => {
+                            setActiveMoreMenu(activeMoreMenu === d.id ? null : d.id);
+                            setActiveMenu(null);
+                          }}
+                        >
                           <MoreHorizontal size={18} />
                         </button>
+
+                        {activeMoreMenu === d.id && (
+                          <div className="action-menu" style={{ right: 0, left: 'auto', top: '100%' }}>
+                            <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
+                              <Edit2 size={14} /> Éditer le besoin
+                            </button>
+                            <button className="menu-item">
+                              <MessageSquare size={14} /> Note commerciale
+                            </button>
+                            <button className="menu-item">
+                              <MessageSquare size={14} /> Note opérationnelle
+                            </button>
+                            <div className="menu-divider" />
+                            <button className="menu-item text-blue" onClick={async () => {
+                              await updateDemande(d.id, { statut: 'termine' });
+                              fetchData();
+                            }}>
+                              <CheckCircle size={14} /> Prestation effectuée
+                            </button>
+                            <button className="menu-item text-green" onClick={async () => {
+                              await updateDemande(d.id, { statut_paiement: 'acompte' });
+                              fetchData();
+                            }}>
+                              <CreditCard size={14} /> Facturation en cours
+                            </button>
+                            <button className="menu-item text-orange" onClick={async () => {
+                              await updateDemande(d.id, { statut_paiement: 'partiel' });
+                              fetchData();
+                            }}>
+                              <CreditCard size={14} /> Facturation partielle
+                            </button>
+                            <button className="menu-item text-green" onClick={async () => {
+                              await updateDemande(d.id, { statut_paiement: 'integral' });
+                              fetchData();
+                            }}>
+                              <CheckCircle size={14} /> Payé
+                            </button>
+                            <div className="menu-divider" />
+                            <button className="menu-item text-red" onClick={async () => {
+                              const reason = prompt('Motif d\'annulation :');
+                              if (reason === null) return;
+                              await annulerDemande(d.id, reason);
+                              fetchData();
+                            }}>
+                              <XCircle size={14} /> Rejeté / Annulé
+                            </button>
+                            <button className="menu-item text-red" onClick={async () => {
+                              await updateDemande(d.id, { statut_paiement: 'annule' });
+                              fetchData();
+                            }}>
+                              <XCircle size={14} /> Facturation annulée
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -330,16 +441,16 @@ export default function Dashboard() {
                     <button className="icon-btn"><MoreHorizontal size={18} /></button>
                   </div>
                   <div className="card-body">
-                    <h3 className="client-name">{d.client_name}</h3>
+                    <h3 className="client-name">{d.client_name || d.formulaire_data?.nom || '—'}</h3>
                     <p className="service-type">{d.service}</p>
                     <div className="card-info">
                       <div className="info-item">
                         <Calendar size={14} />
-                        <span>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : '—'}</span>
+                        <span>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</span>
                       </div>
                       <div className="info-item">
                         <Clock3 size={14} />
-                        <span>{d.nb_heures}h</span>
+                        <span>{d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '—'}h</span>
                       </div>
                     </div>
                     <div className="card-footer">
@@ -372,15 +483,15 @@ export default function Dashboard() {
         <div className="modal-overlay" onClick={() => setShowDetail(false)}>
           <div className="modal-content detail-sheet" onClick={e => e.stopPropagation()}>
             <div className="sheet-header">
-              <h2>Détails du besoin: {selectedDemande.client_name}</h2>
+              <h2>Détails du besoin: {selectedDemande.client_name || selectedDemande.formulaire_data?.nom || '—'}</h2>
               <button className="icon-btn" onClick={() => setShowDetail(false)}>✕</button>
             </div>
             <div className="sheet-body">
               <div className="detail-section">
                 <h3>Informations Client</h3>
                 <div className="detail-grid">
-                  <div className="detail-item"><span>Nom:</span> {selectedDemande.client_name}</div>
-                  <div className="detail-item"><span>Téléphone:</span> {selectedDemande.client_phone}</div>
+                  <div className="detail-item"><span>Nom:</span> {selectedDemande.client_name || selectedDemande.formulaire_data?.nom || '—'}</div>
+                  <div className="detail-item"><span>Téléphone:</span> {selectedDemande.client_phone || selectedDemande.formulaire_data?.whatsapp_phone || '—'}</div>
                   <div className="detail-item"><span>Email:</span> {selectedDemande.client_details?.email || '—'}</div>
                   <div className="detail-item"><span>Ville:</span> {selectedDemande.neighborhood_city}</div>
                   <div className="detail-item"><span>Segment:</span> {selectedDemande.segment.toUpperCase()}</div>
@@ -401,23 +512,54 @@ export default function Dashboard() {
               <div className="detail-section">
                 <h3>Paiement & Statut</h3>
                 <div className="detail-grid">
-                  <div className="detail-item"><span>Total:</span> {selectedDemande.prix} MAD</div>
-                  <div className="detail-item"><span>Mode:</span> {selectedDemande.mode_paiement}</div>
-                  <div className="detail-item"><span>Statut:</span> {selectedDemande.statut_paiement}</div>
+                  <div className="detail-item">
+                    <span>Total:</span>
+                    {isEditing ? (
+                      <input type="number" value={editFormData.prix} onChange={e => setEditFormData({...editFormData, prix: e.target.value})} className="edit-input" />
+                    ) : `${selectedDemande.prix} MAD`}
+                  </div>
+                  <div className="detail-item">
+                    <span>Mode:</span>
+                    {isEditing ? (
+                      <select value={editFormData.mode_paiement} onChange={e => setEditFormData({...editFormData, mode_paiement: e.target.value})} className="edit-input">
+                        <option value="virement">Virement</option>
+                        <option value="cheque">Par chèque</option>
+                        <option value="agence">À l'agence</option>
+                        <option value="sur_place">Sur place</option>
+                      </select>
+                    ) : selectedDemande.mode_paiement_label || selectedDemande.mode_paiement}
+                  </div>
+                  <div className="detail-item">
+                    <span>Statut:</span>
+                    {isEditing ? (
+                      <select value={editFormData.statut_paiement} onChange={e => setEditFormData({...editFormData, statut_paiement: e.target.value})} className="edit-input">
+                        <option value="non_paye">Non payé</option>
+                        <option value="acompte">Acompte versé</option>
+                        <option value="partiel">Paiement partiel</option>
+                        <option value="integral">Paiement intégral</option>
+                      </select>
+                    ) : selectedDemande.statut_paiement_label || selectedDemande.statut_paiement}
+                  </div>
                   <div className="detail-item"><span>CAO:</span> {selectedDemande.cao ? 'Confirmé' : 'Non confirmé'}</div>
                 </div>
               </div>
 
-              {selectedDemande.note_commerciale && (
+              {isEditing || selectedDemande.note_commerciale ? (
                 <div className="detail-section">
                   <h3>Note Commerciale</h3>
-                  <p className="note-text">{selectedDemande.note_commerciale}</p>
+                  {isEditing ? (
+                    <textarea value={editFormData.note_commerciale} onChange={e => setEditFormData({...editFormData, note_commerciale: e.target.value})} className="edit-textarea" />
+                  ) : <p className="note-text">{selectedDemande.note_commerciale}</p>}
                 </div>
-              )}
+              ) : null}
             </div>
             <div className="sheet-footer">
               <button className="btn btn-secondary" onClick={() => setShowDetail(false)}>Fermer</button>
-              <button className="btn btn-primary">Enregistrer les modifications</button>
+              {isEditing ? (
+                <button className="btn btn-primary" onClick={handleUpdate}>Enregistrer les modifications</button>
+              ) : (
+                <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Modifier</button>
+              )}
             </div>
           </div>
         </div>
