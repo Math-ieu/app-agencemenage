@@ -72,6 +72,7 @@ export default function DemandesEnAttente() {
       "Ménage Air BnB",
       "Nettoyage post-déménagement",
       "Ménage fin de chantier",
+      "Aide à domicile",
       "Auxiliaire de vie",
       "Ménage post-sinistre"
     ],
@@ -698,345 +699,362 @@ export default function DemandesEnAttente() {
                   />
                 </div>
 
-                <div className="form-section full-width">
-                  <h3>Détails du service</h3>
-                </div>
-                <div className="form-group">
-                  <label>Date d'intervention *</label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.date}
-                    onChange={e => setFormData({ ...formData, date: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Heure *</label>
-                  <input
-                    type="time"
-                    required
-                    value={formData.heure}
-                    onChange={e => setFormData({ ...formData, heure: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Préférence horaire *</label>
-                  <select
-                    required
-                    value={formData.preference_horaire}
-                    onChange={e => setFormData({ ...formData, preference_horaire: e.target.value })}
-                  >
-                    <option value="">Choisir...</option>
-                    <option value="matin">Matin (08h - 12h)</option>
-                    <option value="apres_midi">Après-midi (14h - 18h)</option>
-                  </select>
-                </div>
-
-                {/* Champs dynamiques selon le service */}
-                {(selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage')) && (
+                {/* Conditional Rendering for Custom Services */}
+                {(selectedService === 'Auxiliaire de vie' || selectedService === 'Placement & gestion') ? (
+                  <div className="form-section full-width mt-4">
+                    <div className="custom-service-box">
+                      <h3 className="custom-service-title">Service sur mesure — {selectedService}</h3>
+                      <p className="custom-service-text">
+                        {selectedService === 'Placement & gestion' 
+                          ? "Un chargé de clientèle prendra contact avec l'entreprise pour établir une offre personnalisée."
+                          : "Un assistant social et garde-malade prendront contact avec le client pour valider les points essentiels."
+                        }
+                      </p>
+                    </div>
+                  </div>
+                ) : (
                   <>
-                    <div className="form-group">
-                      <label>Type d'habitation *</label>
-                      <select
-                        required
-                        value={formData.type_habitation}
-                        onChange={e => setFormData({ ...formData, type_habitation: e.target.value })}
-                      >
-                        <option value="">Choisir...</option>
-                        <option value="Studio">Studio</option>
-                        <option value="Appartement">Appartement</option>
-                        <option value="Duplex">Duplex</option>
-                        <option value="Villa">Villa</option>
-                        <option value="Maison">Maison</option>
-                        <option value="Bureau">Bureau</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Fréquence *</label>
-                      <select
-                        required
-                        value={formData.frequence}
-                        onChange={e => setFormData({ ...formData, frequence: e.target.value })}
-                      >
-                        <option value="">Choisir...</option>
-                        <option value="ponctuel">Une fois</option>
-                        <option value="1/sem">Abonnement - 1 fois / semaine</option>
-                        <option value="2/sem">Abonnement - 2 fois / semaine</option>
-                        <option value="3/sem">Abonnement - 3 fois / semaine</option>
-                        <option value="1/mois">Abonnement - 1 fois / mois</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Nb intervenants *</label>
-                      <input
-                        type="number"
-                        min={1}
-                        required
-                        value={formData.nb_intervenants}
-                        onChange={e => setFormData({ ...formData, nb_intervenants: parseInt(e.target.value) || 1 })}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Surface (m²) *</label>
-                      <input
-                        type="number"
-                        min={1}
-                        required
-                        value={formData.surface}
-                        onChange={e => setFormData({ ...formData, surface: parseInt(e.target.value) || 0 })}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Durée (Heures) *</label>
-                      <input
-                        type="number"
-                        min={1}
-                        required
-                        value={formData.duree}
-                        onChange={e => setFormData({ ...formData, duree: parseInt(e.target.value) || 1 })}
-                      />
-                    </div>
-
-                    <div className="form-group full-width">
-                      <label>Détails des pièces (Cuisine, SDB, Salons...)</label>
-                      <textarea
-                        rows={2}
-                        placeholder="Ex: 1 Cuisine, 2 SDB, 1 Salon..."
-                        value={formData.details_pieces}
-                        onChange={e => setFormData({ ...formData, details_pieces: e.target.value })}
-                      ></textarea>
-                    </div>
-
-                    <div className="form-section">
-                      <h3>Services Optionnels</h3>
-                      <div className="optional-service-card">
-                        <div className="optional-service-info">
-                          <span className="text-2xl">🧴</span>
-                          <span>Produits de nettoyage (+90 MAD)</span>
-                        </div>
-                        <label className="toggle-switch">
-                          <input
-                            type="checkbox"
-                            checked={formData.produits}
-                            onChange={e => setFormData({ ...formData, produits: e.target.checked })}
-                          />
-                          <span className="toggle-slider"></span>
-                        </label>
-                      </div>
-
-                      <div className="optional-service-card">
-                        <div className="optional-service-info">
-                          <span className="text-2xl">🧹</span>
-                          <span>Torchons et serpillères (+40 MAD)</span>
-                        </div>
-                        <label className="toggle-switch">
-                          <input
-                            type="checkbox"
-                            checked={formData.torchons}
-                            onChange={e => setFormData({ ...formData, torchons: e.target.checked })}
-                          />
-                          <span className="toggle-slider"></span>
-                        </label>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {selectedService === "Placement & gestion" && (
-                  <>
-                    <div className="form-group full-width">
-                      <label>Type de service</label>
-                      <div className="flex gap-4 flex-wrap mt-1">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="placementServiceType"
-                            value="flexible"
-                            className="w-4 h-4 text-primary"
-                            checked={formData.service_type === 'flexible'}
-                            onChange={e => setFormData({ ...formData, service_type: e.target.value })}
-                          />
-                          <span className="text-sm font-medium">Service ménage flexible</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="placementServiceType"
-                            value="premium"
-                            className="w-4 h-4 text-primary"
-                            checked={formData.service_type === 'premium'}
-                            onChange={e => setFormData({ ...formData, service_type: e.target.value })}
-                          />
-                          <span className="text-sm font-medium">Service ménage Premium</span>
-                        </label>
-                      </div>
-                    </div>
-                    <div className="form-group">
-                      <label>Type de structure *</label>
-                      <select
-                        required
-                        value={formData.structure_type}
-                        onChange={e => setFormData({ ...formData, structure_type: e.target.value })}
-                      >
-                        <option value="">Sélectionner...</option>
-                        <option value="bureaux">Bureaux</option>
-                        <option value="magasin">Magasin/Boutique</option>
-                        <option value="restaurant">Restaurant/Café</option>
-                        <option value="clinique">Clinique / Hôpital</option>
-                        <option value="hotel">Hôtel / Riad</option>
-                        <option value="residence">Immeuble/Résidence/Luxe</option>
-                        <option value="entrepot">Entrepôt</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Fréquence *</label>
-                      <select
-                        required
-                        value={formData.frequence}
-                        onChange={e => setFormData({ ...formData, frequence: e.target.value })}
-                      >
-                        <option value="">Sélectionner...</option>
-                        <option value="ponctuel">Une fois</option>
-                        <option value="1/sem">Abonnement - 1 fois / semaine</option>
-                        <option value="2/sem">Abonnement - 2 fois / semaine</option>
-                        <option value="3/sem">Abonnement - 3 fois / semaine</option>
-                        <option value="1/mois">Abonnement - 1 fois / mois</option>
-                        <option value="quotidien">Abonnement - Quotidien</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Nombre de personnel *</label>
-                      <input
-                        type="number"
-                        min={1}
-                        required
-                        value={formData.nb_personnel}
-                        onChange={e => setFormData({ ...formData, nb_personnel: parseInt(e.target.value) || 1 })}
-                      />
-                    </div>
-                  </>
-                )}
-
-                {(selectedService.includes('Auxiliaire') || selectedService.includes('Garde malade') || selectedService.includes('Garde d\'enfant')) && (
-                  <>
-                    <div className="form-group full-width">
-                      <label>Lieu de la garde</label>
-                      <div className="flex gap-4 flex-wrap mt-1">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="careLocation"
-                            value="domicile"
-                            className="w-4 h-4 text-primary"
-                            checked={formData.lieu_garde === 'domicile'}
-                            onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
-                          />
-                          <span className="text-sm font-medium">Domicile</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="careLocation"
-                            value="clinique"
-                            className="w-4 h-4 text-primary"
-                            checked={formData.lieu_garde === 'clinique'}
-                            onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
-                          />
-                          <span className="text-sm font-medium">Clinique</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="careLocation"
-                            value="hopital"
-                            className="w-4 h-4 text-primary"
-                            checked={formData.lieu_garde === 'hopital'}
-                            onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
-                          />
-                          <span className="text-sm font-medium">Hôpital</span>
-                        </label>
-                      </div>
-                    </div>
-                    <div className="form-group">
-                      <label>Fréquence *</label>
-                      <select
-                        required
-                        value={formData.frequence}
-                        onChange={e => setFormData({ ...formData, frequence: e.target.value })}
-                      >
-                        <option value="">Sélectionner...</option>
-                        <option value="ponctuel">Une fois - Tranche 24h</option>
-                        <option value="1/sem">Abonnement - 1 fois / semaine</option>
-                        <option value="quotidien">Abonnement - Quotidien</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Nombre de jours *</label>
-                      <input
-                        type="number"
-                        min={1}
-                        required
-                        value={formData.nb_jours}
-                        onChange={e => setFormData({ ...formData, nb_jours: parseInt(e.target.value) || 1 })}
-                      />
-                    </div>
-
                     <div className="form-section full-width">
-                      <h3>Profil de la personne aidée</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <h3>Détails du service</h3>
+                    </div>
+                    <div className="form-group">
+                      <label>Date d'intervention *</label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.date}
+                        onChange={e => setFormData({ ...formData, date: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Heure *</label>
+                      <input
+                        type="time"
+                        required
+                        value={formData.heure}
+                        onChange={e => setFormData({ ...formData, heure: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Préférence horaire *</label>
+                      <select
+                        required
+                        value={formData.preference_horaire}
+                        onChange={e => setFormData({ ...formData, preference_horaire: e.target.value })}
+                      >
+                        <option value="">Choisir...</option>
+                        <option value="matin">Matin (08h - 12h)</option>
+                        <option value="apres_midi">Après-midi (14h - 18h)</option>
+                      </select>
+                    </div>
+
+                    {/* Champs dynamiques selon le service */}
+                    {(selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage')) && (
+                      <>
                         <div className="form-group">
-                          <label>Âge *</label>
+                          <label>Type d'habitation *</label>
+                          <select
+                            required
+                            value={formData.type_habitation}
+                            onChange={e => setFormData({ ...formData, type_habitation: e.target.value })}
+                          >
+                            <option value="">Choisir...</option>
+                            <option value="Studio">Studio</option>
+                            <option value="Appartement">Appartement</option>
+                            <option value="Duplex">Duplex</option>
+                            <option value="Villa">Villa</option>
+                            <option value="Maison">Maison</option>
+                            <option value="Bureau">Bureau</option>
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <label>Fréquence *</label>
+                          <select
+                            required
+                            value={formData.frequence}
+                            onChange={e => setFormData({ ...formData, frequence: e.target.value })}
+                          >
+                            <option value="">Choisir...</option>
+                            <option value="ponctuel">Une fois</option>
+                            <option value="1/sem">Abonnement - 1 fois / semaine</option>
+                            <option value="2/sem">Abonnement - 2 fois / semaine</option>
+                            <option value="3/sem">Abonnement - 3 fois / semaine</option>
+                            <option value="1/mois">Abonnement - 1 fois / mois</option>
+                          </select>
+                        </div>
+
+                        <div className="form-group">
+                          <label>Nb intervenants *</label>
                           <input
                             type="number"
-                            placeholder="Ans"
+                            min={1}
                             required
-                            value={formData.age_personne}
-                            onChange={e => setFormData({ ...formData, age_personne: e.target.value })}
+                            value={formData.nb_intervenants}
+                            onChange={e => setFormData({ ...formData, nb_intervenants: parseInt(e.target.value) || 1 })}
                           />
                         </div>
+
                         <div className="form-group">
-                          <label>Sexe *</label>
-                          <select
+                          <label>Surface (m²) *</label>
+                          <input
+                            type="number"
+                            min={1}
                             required
-                            value={formData.sexe_personne}
-                            onChange={e => setFormData({ ...formData, sexe_personne: e.target.value })}
-                          >
-                            <option value="">Sélectionner...</option>
-                            <option value="femme">Femme</option>
-                            <option value="homme">Homme</option>
-                          </select>
+                            value={formData.surface}
+                            onChange={e => setFormData({ ...formData, surface: parseInt(e.target.value) || 0 })}
+                          />
                         </div>
+
                         <div className="form-group">
-                          <label>Mobilité *</label>
-                          <select
+                          <label>Durée (Heures) *</label>
+                          <input
+                            type="number"
+                            min={1}
                             required
-                            value={formData.mobilite}
-                            onChange={e => setFormData({ ...formData, mobilite: e.target.value })}
-                          >
-                            <option value="">Sélectionner...</option>
-                            <option value="adulte">Adulte</option>
-                            <option value="agee">Personne Agée</option>
-                            <option value="autonome">Autonome</option>
-                            <option value="besoin_aide">Besoin d'aide</option>
-                            <option value="alitee">Alité(e)</option>
-                          </select>
+                            value={formData.duree}
+                            onChange={e => setFormData({ ...formData, duree: parseInt(e.target.value) || 1 })}
+                          />
                         </div>
-                        <div className="form-group">
-                          <label>Pathologie / Situation médicale *</label>
+
+                        <div className="form-group full-width">
+                          <label>Détails des pièces (Cuisine, SDB, Salons...)</label>
                           <textarea
                             rows={2}
-                            placeholder="Précisez la situation..."
-                            required
-                            value={formData.situation_medicale}
-                            onChange={e => setFormData({ ...formData, situation_medicale: e.target.value })}
+                            placeholder="Ex: 1 Cuisine, 2 SDB, 1 Salon..."
+                            value={formData.details_pieces}
+                            onChange={e => setFormData({ ...formData, details_pieces: e.target.value })}
                           ></textarea>
                         </div>
-                      </div>
-                    </div>
+
+                        <div className="form-section">
+                          <h3>Services Optionnels</h3>
+                          <div className="optional-service-card">
+                            <div className="optional-service-info">
+                              <span className="text-2xl">🧴</span>
+                              <span>Produits de nettoyage (+90 MAD)</span>
+                            </div>
+                            <label className="toggle-switch">
+                              <input
+                                type="checkbox"
+                                checked={formData.produits}
+                                onChange={e => setFormData({ ...formData, produits: e.target.checked })}
+                              />
+                              <span className="toggle-slider"></span>
+                            </label>
+                          </div>
+
+                          <div className="optional-service-card">
+                            <div className="optional-service-info">
+                              <span className="text-2xl">🧹</span>
+                              <span>Torchons et serpillères (+40 MAD)</span>
+                            </div>
+                            <label className="toggle-switch">
+                              <input
+                                type="checkbox"
+                                checked={formData.torchons}
+                                onChange={e => setFormData({ ...formData, torchons: e.target.checked })}
+                              />
+                              <span className="toggle-slider"></span>
+                            </label>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {selectedService === "Placement & gestion" && (
+                      <>
+                        <div className="form-group full-width">
+                          <label>Type de service</label>
+                          <div className="flex gap-4 flex-wrap mt-1">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="placementServiceType"
+                                value="flexible"
+                                className="w-4 h-4 text-primary"
+                                checked={formData.service_type === 'flexible'}
+                                onChange={e => setFormData({ ...formData, service_type: e.target.value })}
+                              />
+                              <span className="text-sm font-medium">Service ménage flexible</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="placementServiceType"
+                                value="premium"
+                                className="w-4 h-4 text-primary"
+                                checked={formData.service_type === 'premium'}
+                                onChange={e => setFormData({ ...formData, service_type: e.target.value })}
+                              />
+                              <span className="text-sm font-medium">Service ménage Premium</span>
+                            </label>
+                          </div>
+                        </div>
+                        <div className="form-group">
+                          <label>Type de structure *</label>
+                          <select
+                            required
+                            value={formData.structure_type}
+                            onChange={e => setFormData({ ...formData, structure_type: e.target.value })}
+                          >
+                            <option value="">Sélectionner...</option>
+                            <option value="bureaux">Bureaux</option>
+                            <option value="magasin">Magasin/Boutique</option>
+                            <option value="restaurant">Restaurant/Café</option>
+                            <option value="clinique">Clinique / Hôpital</option>
+                            <option value="hotel">Hôtel / Riad</option>
+                            <option value="residence">Immeuble/Résidence/Luxe</option>
+                            <option value="entrepot">Entrepôt</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Fréquence *</label>
+                          <select
+                            required
+                            value={formData.frequence}
+                            onChange={e => setFormData({ ...formData, frequence: e.target.value })}
+                          >
+                            <option value="">Sélectionner...</option>
+                            <option value="ponctuel">Une fois</option>
+                            <option value="1/sem">Abonnement - 1 fois / semaine</option>
+                            <option value="2/sem">Abonnement - 2 fois / semaine</option>
+                            <option value="3/sem">Abonnement - 3 fois / semaine</option>
+                            <option value="1/mois">Abonnement - 1 fois / mois</option>
+                            <option value="quotidien">Abonnement - Quotidien</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Nombre de personnel *</label>
+                          <input
+                            type="number"
+                            min={1}
+                            required
+                            value={formData.nb_personnel}
+                            onChange={e => setFormData({ ...formData, nb_personnel: parseInt(e.target.value) || 1 })}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {(selectedService.includes('Auxiliaire') || selectedService.includes('Garde malade') || selectedService.includes('Garde d\'enfant')) && (
+                      <>
+                        <div className="form-group full-width">
+                          <label>Lieu de la garde</label>
+                          <div className="flex gap-4 flex-wrap mt-1">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="careLocation"
+                                value="domicile"
+                                className="w-4 h-4 text-primary"
+                                checked={formData.lieu_garde === 'domicile'}
+                                onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
+                              />
+                              <span className="text-sm font-medium">Domicile</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="careLocation"
+                                value="clinique"
+                                className="w-4 h-4 text-primary"
+                                checked={formData.lieu_garde === 'clinique'}
+                                onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
+                              />
+                              <span className="text-sm font-medium">Clinique</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="careLocation"
+                                value="hopital"
+                                className="w-4 h-4 text-primary"
+                                checked={formData.lieu_garde === 'hopital'}
+                                onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
+                              />
+                              <span className="text-sm font-medium">Hôpital</span>
+                            </label>
+                          </div>
+                        </div>
+                        <div className="form-group">
+                          <label>Fréquence *</label>
+                          <select
+                            required
+                            value={formData.frequence}
+                            onChange={e => setFormData({ ...formData, frequence: e.target.value })}
+                          >
+                            <option value="">Sélectionner...</option>
+                            <option value="ponctuel">Une fois - Tranche 24h</option>
+                            <option value="1/sem">Abonnement - 1 fois / semaine</option>
+                            <option value="quotidien">Abonnement - Quotidien</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Nombre de jours *</label>
+                          <input
+                            type="number"
+                            min={1}
+                            required
+                            value={formData.nb_jours}
+                            onChange={e => setFormData({ ...formData, nb_jours: parseInt(e.target.value) || 1 })}
+                          />
+                        </div>
+
+                        <div className="form-section full-width">
+                          <h3>Profil de la personne aidée</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div className="form-group">
+                              <label>Âge *</label>
+                              <input
+                                type="number"
+                                placeholder="Ans"
+                                required
+                                value={formData.age_personne}
+                                onChange={e => setFormData({ ...formData, age_personne: e.target.value })}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label>Sexe *</label>
+                              <select
+                                required
+                                value={formData.sexe_personne}
+                                onChange={e => setFormData({ ...formData, sexe_personne: e.target.value })}
+                              >
+                                <option value="">Sélectionner...</option>
+                                <option value="femme">Femme</option>
+                                <option value="homme">Homme</option>
+                              </select>
+                            </div>
+                            <div className="form-group">
+                              <label>Mobilité *</label>
+                              <select
+                                required
+                                value={formData.mobilite}
+                                onChange={e => setFormData({ ...formData, mobilite: e.target.value })}
+                              >
+                                <option value="">Sélectionner...</option>
+                                <option value="adulte">Adulte</option>
+                                <option value="agee">Personne Agée</option>
+                                <option value="autonome">Autonome</option>
+                                <option value="besoin_aide">Besoin d'aide</option>
+                                <option value="alitee">Alité(e)</option>
+                              </select>
+                            </div>
+                            <div className="form-group">
+                              <label>Pathologie / Situation médicale *</label>
+                              <textarea
+                                rows={2}
+                                placeholder="Précisez la situation..."
+                                required
+                                value={formData.situation_medicale}
+                                onChange={e => setFormData({ ...formData, situation_medicale: e.target.value })}
+                              ></textarea>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 

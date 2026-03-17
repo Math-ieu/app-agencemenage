@@ -5,7 +5,10 @@ import {
   User as UserIcon, Calendar, Clock3,
   CheckCircle, 
   Settings, UserCheck, 
-  XCircle, CreditCard, MessageSquare
+  XCircle, CreditCard, MessageSquare,
+  ChevronLeft,
+  FileText,
+  Save
 } from 'lucide-react';
 import { Demande } from '../types';
 import { getDemandes, updateDemande, annulerDemande, confirmerCAO } from '../api/client';
@@ -20,6 +23,25 @@ interface DashboardStats {
 }
 
 
+
+const SERVICES_LIST = {
+  particulier: [
+    "Ménage standard",
+    "Grand ménage",
+    "Ménage Air BnB",
+    "Nettoyage post-déménagement",
+    "Ménage fin de chantier",
+    "Aide à domicile",
+    "Auxiliaire de vie",
+    "Ménage post-sinistre"
+  ],
+  entreprise: [
+    "Ménage bureaux",
+    "Nettoyage fin de chantier",
+    "Placement & gestion",
+    "Ménage post-sinistre"
+  ]
+};
 
 export default function Dashboard() {
   const [demandes, setDemandes] = useState<Demande[]>([]);
@@ -74,14 +96,33 @@ export default function Dashboard() {
   const handleUpdate = async () => {
     if (!selectedDemande) return;
     try {
-      await updateDemande(selectedDemande.id, {
+      const updateData: any = {
         ...editFormData,
         prix: parseFloat(editFormData.prix) || 0,
-      });
+        nb_heures: parseInt(editFormData.nb_heures) || 0,
+      };
+
+      if (selectedDemande.formulaire_data) {
+        updateData.formulaire_data = {
+          ...selectedDemande.formulaire_data,
+          type_habitation: editFormData.type_habitation,
+          nb_intervenants: editFormData.nb_intervenants,
+          produits: editFormData.avec_produit,
+          torchons: editFormData.avec_torchons,
+        };
+      }
+
+      updateData.avec_produit = editFormData.avec_produit;
+
+      await updateDemande(selectedDemande.id, updateData);
       setIsEditing(false);
       setShowDetail(false);
       await fetchData();
       addToast('Mise à jour effectuée avec succès !', 'success');
+      
+      if (editFormData.envoyer_whatsapp) {
+        addToast('Demande de régénération et envoi WhatsApp transmise.', 'info');
+      }
     } catch (err) {
       console.error(err);
       addToast('Erreur lors de la mise à jour.', 'error');
@@ -97,7 +138,25 @@ export default function Dashboard() {
       statut_paiement: d.statut_paiement,
       nb_heures: d.nb_heures,
       date_intervention: d.date_intervention,
-      note_commerciale: d.note_commerciale,
+      heure_intervention: d.heure_intervention || '',
+      note_commerciale: d.note_commerciale || '',
+      note_operationnelle: d.note_operationnelle || '',
+      service: d.service,
+      segment: d.segment,
+      frequency: d.frequency,
+      client_name: d.client_name || d.formulaire_data?.nom || '',
+      client_phone: d.client_phone || d.formulaire_data?.whatsapp_phone || '',
+      client_whatsapp: d.client_whatsapp || d.formulaire_data?.whatsapp_phone || '',
+      client_email: d.client_details?.email || '',
+      neighborhood: d.neighborhood_city || 'Casablanca',
+      is_devis: d.is_devis,
+      statut: d.statut,
+      type_habitation: d.formulaire_data?.type_habitation || '',
+      nb_intervenants: d.formulaire_data?.nb_intervenants || ((d.nb_heures || 0) > 0 ? 1 : 0),
+      avec_produit: d.avec_produit || false,
+      avec_torchons: d.formulaire_data?.torchons || false,
+      regenerer_devis: false,
+      envoyer_whatsapp: false
     });
     setShowDetail(true);
   };
@@ -486,84 +545,314 @@ export default function Dashboard() {
       {showDetail && selectedDemande && (
         <div className="modal-overlay" onClick={() => setShowDetail(false)}>
           <div className="modal-content detail-sheet" onClick={e => e.stopPropagation()}>
-            <div className="sheet-header">
-              <h2>Détails du besoin: {selectedDemande.client_name || selectedDemande.formulaire_data?.nom || '—'}</h2>
+            <div className="sheet-header py-4">
+              <div className="form-header-compact">
+                <button className="back-btn-circle" onClick={() => setShowDetail(false)}>
+                  <ChevronLeft size={20} className="text-primary" />
+                </button>
+                <div>
+                  <h2 className="text-xl fw-bold">Éditer le besoin — # {selectedDemande.id}</h2>
+                  <p className="text-sm text-muted">Formulaire : {selectedDemande.service}</p>
+                </div>
+              </div>
               <button className="icon-btn" onClick={() => setShowDetail(false)}>✕</button>
             </div>
-            <div className="sheet-body">
-              <div className="detail-section">
-                <h3>Informations Client</h3>
-                <div className="detail-grid">
-                  <div className="detail-item"><span>Nom:</span> {selectedDemande.client_name || selectedDemande.formulaire_data?.nom || '—'}</div>
-                  <div className="detail-item"><span>Téléphone:</span> {selectedDemande.client_phone || selectedDemande.formulaire_data?.whatsapp_phone || '—'}</div>
-                  <div className="detail-item"><span>Email:</span> {selectedDemande.client_details?.email || '—'}</div>
-                  <div className="detail-item"><span>Ville:</span> {selectedDemande.neighborhood_city}</div>
-                  <div className="detail-item"><span>Segment:</span> {selectedDemande.segment.toUpperCase()}</div>
-                </div>
-              </div>
-              
-              <div className="detail-section">
-                <h3>Détails Prestation</h3>
-                <div className="detail-grid">
-                  <div className="detail-item"><span>Service:</span> {selectedDemande.service}</div>
-                  <div className="detail-item"><span>Date:</span> {selectedDemande.date_intervention}</div>
-                  <div className="detail-item"><span>Heures:</span> {selectedDemande.nb_heures}h</div>
-                  <div className="detail-item"><span>Fréquence:</span> {selectedDemande.frequency}</div>
-                  <div className="detail-item"><span>Avec produit:</span> {selectedDemande.avec_produit ? `Oui (${selectedDemande.tarif_produit} MAD)` : 'Non'}</div>
-                </div>
-              </div>
-
-              <div className="detail-section">
-                <h3>Paiement & Statut</h3>
-                <div className="detail-grid">
-                  <div className="detail-item">
-                    <span>Total:</span>
-                    {isEditing ? (
-                      <input type="number" value={editFormData.prix} onChange={e => setEditFormData({...editFormData, prix: e.target.value})} className="edit-input" />
-                    ) : `${selectedDemande.prix} MAD`}
-                  </div>
-                  <div className="detail-item">
-                    <span>Mode:</span>
-                    {isEditing ? (
+            <div className="sheet-body px-6">
+              {isEditing ? (
+                <div className="edit-form-full">
+                  {/* Row 1: Espace agence */}
+                  <div className="form-grid-4 gap-4 mb-6">
+                    <div className="form-group">
+                      <label>Statut du besoin</label>
+                      <select 
+                        value={editFormData.statut} 
+                        onChange={e => setEditFormData({...editFormData, statut: e.target.value})} 
+                        className="edit-input"
+                        style={{fontWeight: 'bold', color: editFormData.statut === 'en_cours' ? '#10b981' : (editFormData.statut === 'en_attente' ? '#f59e0b' : '#334155')}}
+                      >
+                        <option value="en_attente">En attente</option>
+                        <option value="en_cours">En cours</option>
+                        <option value="termine">Terminé</option>
+                        <option value="annule">Annulé</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Segment</label>
+                      <select 
+                        value={editFormData.segment} 
+                        onChange={e => {
+                          const newSegment = e.target.value as keyof typeof SERVICES_LIST;
+                          const currentService = editFormData.service;
+                          const availableServices = SERVICES_LIST[newSegment] || [];
+                          const isValid = availableServices.includes(currentService);
+                          setEditFormData({
+                            ...editFormData, 
+                            segment: newSegment,
+                            service: isValid ? currentService : (availableServices[0] || '')
+                          });
+                        }} 
+                        className="edit-input"
+                      >
+                        <option value="particulier">Particulier</option>
+                        <option value="entreprise">Entreprise</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Type de service</label>
+                      <select 
+                        value={editFormData.service} 
+                        onChange={e => setEditFormData({...editFormData, service: e.target.value})} 
+                        className="edit-input"
+                      >
+                        {(SERVICES_LIST[editFormData.segment as keyof typeof SERVICES_LIST] || []).map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Mode de paiement</label>
                       <select value={editFormData.mode_paiement} onChange={e => setEditFormData({...editFormData, mode_paiement: e.target.value})} className="edit-input">
                         <option value="virement">Virement</option>
                         <option value="cheque">Par chèque</option>
                         <option value="agence">À l'agence</option>
                         <option value="sur_place">Sur place</option>
                       </select>
-                    ) : selectedDemande.mode_paiement_label || selectedDemande.mode_paiement}
+                    </div>
                   </div>
-                  <div className="detail-item">
-                    <span>Statut:</span>
-                    {isEditing ? (
-                      <select value={editFormData.statut_paiement} onChange={e => setEditFormData({...editFormData, statut_paiement: e.target.value})} className="edit-input">
-                        <option value="non_paye">Non payé</option>
-                        <option value="acompte">Acompte versé</option>
-                        <option value="partiel">Paiement partiel</option>
-                        <option value="integral">Paiement intégral</option>
-                      </select>
-                    ) : selectedDemande.statut_paiement_label || selectedDemande.statut_paiement}
-                  </div>
-                  <div className="detail-item"><span>CAO:</span> {selectedDemande.cao ? 'Confirmé' : 'Non confirmé'}</div>
-                </div>
-              </div>
 
-              {isEditing || selectedDemande.note_commerciale ? (
-                <div className="detail-section">
-                  <h3>Note Commerciale</h3>
-                  {isEditing ? (
-                    <textarea value={editFormData.note_commerciale} onChange={e => setEditFormData({...editFormData, note_commerciale: e.target.value})} className="edit-textarea" />
-                  ) : <p className="note-text">{selectedDemande.note_commerciale}</p>}
+                  {/* Conditional Rendering for Custom Services */}
+                  {(editFormData.service === 'Auxiliaire de vie' || editFormData.service === 'Placement & gestion') ? (
+                    <div className="custom-service-box">
+                      <h3 className="custom-service-title">Service sur mesure — {editFormData.service}</h3>
+                      <p className="custom-service-text">
+                        {editFormData.service === 'Placement & gestion' 
+                          ? "Un chargé de clientèle prendra contact avec l'entreprise pour établir une offre personnalisée."
+                          : "Un assistant social et garde-malade prendront contact avec le client pour valider les points essentiels."
+                        }
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Standard Service Details */}
+                      <div className="form-grid-2 gap-4 mb-4">
+                        <div className="form-group">
+                          <label>Type d'habitation</label>
+                          <select 
+                            value={editFormData.type_habitation} 
+                            onChange={e => setEditFormData({...editFormData, type_habitation: e.target.value})} 
+                            className="edit-input"
+                          >
+                            <option value="">Choisir...</option>
+                            <option value="Studio">Studio</option>
+                            <option value="Appartement">Appartement</option>
+                            <option value="Duplex">Duplex</option>
+                            <option value="Villa">Villa</option>
+                            <option value="Maison">Maison</option>
+                            <option value="Bureau">Bureau</option>
+                            <option value="Magasin">Magasin</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Fréquence</label>
+                          <select value={editFormData.frequency} onChange={e => setEditFormData({...editFormData, frequency: e.target.value})} className="edit-input">
+                            <option value="oneshot">Une seule fois</option>
+                            <option value="abonnement">Abonnement</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="form-grid-2 gap-4 mb-4">
+                        <div className="form-group">
+                          <label>Durée (heures)</label>
+                          <input type="number" value={editFormData.nb_heures} onChange={e => setEditFormData({...editFormData, nb_heures: e.target.value})} className="edit-input" />
+                        </div>
+                        <div className="form-group">
+                          <label>Nb intervenants</label>
+                          <input 
+                            type="number" 
+                            value={editFormData.nb_intervenants} 
+                            onChange={e => setEditFormData({...editFormData, nb_intervenants: parseInt(e.target.value) || 0})} 
+                            className="edit-input" 
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-grid-2 gap-4 mb-4">
+                        <div className="form-group">
+                          <label>Date d'intervention</label>
+                          <input type="date" value={editFormData.date_intervention} onChange={e => setEditFormData({...editFormData, date_intervention: e.target.value})} className="edit-input" />
+                        </div>
+                        <div className="form-group">
+                          <label>Heure</label>
+                          <input type="time" value={editFormData.heure_intervention} onChange={e => setEditFormData({...editFormData, heure_intervention: e.target.value})} className="edit-input" />
+                        </div>
+                      </div>
+
+                      <div className="detail-section mt-6">
+                        <h3 className="text-sm fw-bold text-muted mb-4 uppercase">Services optionnels</h3>
+                        <div className="form-grid-2">
+                           <div className="flex items-center gap-3">
+                              <label className="switch">
+                                <input type="checkbox" checked={editFormData.avec_produit} onChange={e => setEditFormData({...editFormData, avec_produit: e.target.checked})} />
+                                <span className="slider round"></span>
+                              </label>
+                              <span className="text-sm">Produit ménager (+ 90 MAD)</span>
+                           </div>
+                           <div className="flex items-center gap-3">
+                              <label className="switch">
+                                <input type="checkbox" checked={editFormData.avec_torchons} onChange={e => setEditFormData({...editFormData, avec_torchons: e.target.checked})} />
+                                <span className="slider round"></span>
+                              </label>
+                              <span className="text-sm">Torchons et serpillières (+ 40 MAD)</span>
+                           </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="detail-section mt-6 border-t pt-6">
+                    <h3 className="text-sm fw-bold text-muted mb-4 uppercase">Informations client</h3>
+                    <div className="form-grid-2 gap-4">
+                      <div className="form-group">
+                        <label>Nom</label>
+                        <input type="text" value={editFormData.client_name} onChange={e => setEditFormData({...editFormData, client_name: e.target.value})} className="edit-input" />
+                      </div>
+                      <div className="form-group">
+                        <label>Tél. direct</label>
+                        <input type="text" value={editFormData.client_phone} onChange={e => setEditFormData({...editFormData, client_phone: e.target.value})} className="edit-input" />
+                      </div>
+                      <div className="form-group">
+                        <label>Tél. WhatsApp</label>
+                        <input type="text" value={editFormData.client_whatsapp || editFormData.client_phone} onChange={e => setEditFormData({...editFormData, client_whatsapp: e.target.value})} className="edit-input" />
+                      </div>
+                      <div className="form-group">
+                        <label>Ville</label>
+                        <input type="text" value={editFormData.neighborhood} onChange={e => setEditFormData({...editFormData, neighborhood: e.target.value})} className="edit-input" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="detail-section mt-6 border-t pt-6">
+                    <h3 className="text-sm fw-bold text-muted mb-4 uppercase">Tarification</h3>
+                    <div className="form-grid-2 gap-4">
+                      <div className="form-group">
+                        <label>Montant total (MAD)</label>
+                        <input type="number" value={editFormData.prix} onChange={e => setEditFormData({...editFormData, prix: e.target.value})} className="edit-input" />
+                        <span className="text-xs text-muted">Candidat : {editFormData.prix * 0.5} MAD</span>
+                      </div>
+                      <div className="form-group">
+                        <label>Statut de paiement</label>
+                        <select value={editFormData.statut_paiement} onChange={e => setEditFormData({...editFormData, statut_paiement: e.target.value})} className="edit-input">
+                          <option value="non_paye">Non payé</option>
+                          <option value="acompte">Acompte versé</option>
+                          <option value="partiel">Paiement partiel</option>
+                          <option value="integral">Paiement intégral</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="detail-section mt-6 border-t pt-6">
+                    <h3 className="text-sm fw-bold text-muted mb-4 uppercase">Notes client</h3>
+                    <div className="form-group">
+                      <textarea value={editFormData.note_commerciale} onChange={e => setEditFormData({...editFormData, note_commerciale: e.target.value})} className="edit-textarea" rows={4} />
+                    </div>
+                  </div>
+
+                  <div className="edit-footer-extra">
+                    <div className="whatsapp-toggle-card">
+                      <div className="flex items-center gap-4">
+                        <label className="switch">
+                          <input type="checkbox" checked={editFormData.envoyer_whatsapp} onChange={e => setEditFormData({...editFormData, envoyer_whatsapp: e.target.checked, regenerer_devis: e.target.checked})} />
+                          <span className="slider round"></span>
+                        </label>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2 text-teal-dark fw-bold">
+                            <MessageSquare size={18} />
+                            Régénérer le devis et renvoyer au client via WhatsApp
+                          </div>
+                          <p className="text-xs text-muted">Le devis sera régénéré et envoyé automatiquement au numéro WhatsApp du client.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              ) : null}
-            </div>
-            <div className="sheet-footer">
-              <button className="btn btn-secondary" onClick={() => setShowDetail(false)}>Fermer</button>
-              {isEditing ? (
-                <button className="btn btn-primary" onClick={handleUpdate}>Enregistrer les modifications</button>
               ) : (
-                <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Modifier</button>
+                <>
+                  <div className="detail-section">
+                    <h3>Informations Client</h3>
+                    <div className="detail-grid">
+                      <div className="detail-item"><span>Nom:</span> {selectedDemande.client_name || selectedDemande.formulaire_data?.nom || '—'}</div>
+                      <div className="detail-item"><span>Téléphone:</span> {selectedDemande.client_phone || selectedDemande.formulaire_data?.whatsapp_phone || '—'}</div>
+                      <div className="detail-item"><span>Email:</span> {selectedDemande.client_details?.email || '—'}</div>
+                      <div className="detail-item"><span>Ville:</span> {selectedDemande.neighborhood_city}</div>
+                      <div className="detail-item"><span>Segment:</span> {selectedDemande.segment.toUpperCase()}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="detail-section">
+                    <h3>Détails Prestation</h3>
+                    <div className="detail-grid">
+                      <div className="detail-item"><span>Service:</span> {selectedDemande.service}</div>
+                      <div className="detail-item"><span>Date:</span> {selectedDemande.date_intervention}</div>
+                      <div className="detail-item"><span>Heures:</span> {selectedDemande.nb_heures}h</div>
+                      <div className="detail-item"><span>Fréquence:</span> {selectedDemande.frequency}</div>
+                      <div className="detail-item"><span>Avec produit:</span> {selectedDemande.avec_produit ? `Oui (${selectedDemande.tarif_produit} MAD)` : 'Non'}</div>
+                    </div>
+                  </div>
+
+                  <div className="detail-section">
+                    <h3>Paiement & Statut</h3>
+                    <div className="detail-grid">
+                      <div className="detail-item"><span>Total:</span> {selectedDemande.prix} MAD</div>
+                      <div className="detail-item"><span>Mode:</span> {selectedDemande.mode_paiement_label || selectedDemande.mode_paiement}</div>
+                      <div className="detail-item"><span>Statut:</span> {selectedDemande.statut_paiement_label || selectedDemande.statut_paiement}</div>
+                      <div className="detail-item"><span>CAO:</span> {selectedDemande.cao ? 'Confirmé' : 'Non confirmé'}</div>
+                    </div>
+                  </div>
+
+                  {(selectedDemande.note_commerciale || selectedDemande.note_operationnelle) && (
+                    <div className="detail-section">
+                      <h3>Notes</h3>
+                      {selectedDemande.note_commerciale && (
+                        <div className="mb-2">
+                          <p className="fw-bold text-xs text-muted mb-1">Note commerciale:</p>
+                          <p className="note-text">{selectedDemande.note_commerciale}</p>
+                        </div>
+                      )}
+                      {selectedDemande.note_operationnelle && (
+                        <div>
+                          <p className="fw-bold text-xs text-muted mb-1">Note opérationnelle:</p>
+                          <p className="note-text">{selectedDemande.note_operationnelle}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
+            </div>
+            <div className="sheet-footer flex justify-between bg-gray-50 border-t p-6">
+              <div className="flex gap-2">
+                {isEditing ? (
+                  <button className="btn btn-secondary flex items-center gap-2 border bg-white" onClick={() => addToast('Fonctionnalité de génération de devis à venir', 'info')}>
+                    <FileText size={18} /> Générer devis
+                  </button>
+                ) : (
+                  <button className="btn btn-secondary" onClick={() => setShowDetail(false)}>Fermer</button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {isEditing ? (
+                  <>
+                    <button className="btn btn-outline bg-white px-6" onClick={() => setIsEditing(false)}>✕ Annuler</button>
+                    <button className="btn btn-primary flex items-center gap-2 px-8" onClick={handleUpdate} style={{backgroundColor: '#175e5c'}}>
+                      <Save size={18} /> Enregistrer
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Modifier</button>
+                )}
+              </div>
             </div>
           </div>
         </div>
