@@ -233,6 +233,26 @@ body {
   width: 100%;
 }
 
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  background-color: rgba(248, 250, 252, 0.9);
+  color: var(--text-main);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Badges
  * ──────────────────────────────────────────────────────────────────────────── */
@@ -1111,6 +1131,11 @@ body {
   border-bottom: none;
 }
 
+.data-table tbody tr {
+  background-color: #fffaf0;
+  transition: all 0.2s;
+}
+
 .data-table tbody tr:hover {
   background-color: rgba(248, 250, 252, 0.8);
 }
@@ -1452,7 +1477,7 @@ body {
 /* Grid View */
 .demandes-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
   gap: 1.5rem;
   margin-top: 1rem;
 }
@@ -1461,13 +1486,21 @@ body {
   background: white;
   border-radius: 12px;
   border: 1px solid var(--border-color);
-  padding: 1.25rem;
-  transition: transform 0.2s, box-shadow 0.2s;
+  padding: 1rem;
+  transition: all 0.2s;
 }
 
 .demande-card-detail:hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.table-row-matching {
+  background-color: #fffaf0;
+}
+
+.table-row-matching:hover {
+  background-color: rgba(248, 250, 252, 0.8);
 }
 
 .card-header {

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { 
   RefreshCw, ClipboardCheck, Building2, Clock,
-  Search, List, Grid, MoreHorizontal, Edit2,  
+  Search, List, Grid, MoreHorizontal, MoreVertical, Edit2,  
   User as UserIcon, Calendar, Clock3,
   CheckCircle, 
   Settings, UserCheck, 
@@ -428,7 +428,7 @@ export default function Dashboard() {
                             setActiveMenu(null);
                           }}
                         >
-                          <MoreHorizontal size={18} />
+                          <MoreVertical size={18} />
                         </button>
 
                         {activeMoreMenu === d.id && (
@@ -493,34 +493,157 @@ export default function Dashboard() {
           ) : (
             <div className="demandes-grid">
               {filtered.map((d) => (
-                <div key={d.id} className="demande-card-detail">
-                  <div className="card-header">
-                    <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
-                      {d.segment === 'particulier' ? 'SPP' : 'SPE'}
-                    </span>
-                    <span className={`badge ${d.statut === 'en_cours' ? 'badge-blue' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`} style={{marginLeft: 'auto', marginRight: '10px'}}>
-                      {d.statut === 'en_cours' ? 'En cours' : d.statut === 'termine' ? 'Terminé' : 'En attente'}
-                    </span>
-                    <button className="icon-btn"><MoreHorizontal size={18} /></button>
-                  </div>
-                  <div className="card-body">
-                    <h3 className="client-name">{d.client_name || d.formulaire_data?.nom || '—'}</h3>
-                    <p className="service-type">{d.service}</p>
-                    <div className="card-info">
-                      <div className="info-item">
-                        <Calendar size={14} />
-                        <span>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</span>
-                      </div>
-                      <div className="info-item">
-                        <Clock3 size={14} />
-                        <span>{d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '—'}h</span>
+                <div key={d.id} className={`demande-card-detail table-row-matching ${!d.cao && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000 ? 'row-alert' : ''}`}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                    <h3 className="client-name" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                      {d.client_name || d.formulaire_data?.nom || '—'}
+                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className={`badge ${d.segment === 'particulier' ? 'badge-teal' : 'badge-lime'}`}>
+                        {d.segment === 'particulier' ? 'SPP' : 'SPE'}
+                      </span>
+                      <div className="relative">
+                        <button 
+                          className="icon-btn"
+                          onClick={() => {
+                            setActiveMoreMenu(activeMoreMenu === d.id ? null : d.id);
+                            setActiveMenu(null);
+                          }}
+                        >
+                          <MoreVertical size={18} />
+                        </button>
+                        
+                        {activeMoreMenu === d.id && (
+                          <div className="action-menu" style={{ right: 0, left: 'auto', top: '100%', zIndex: 50 }}>
+                            <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
+                              <Edit2 size={14} /> Éditer le besoin
+                            </button>
+                            <button className="menu-item">
+                              <MessageSquare size={14} /> Note commerciale
+                            </button>
+                            <button className="menu-item">
+                              <MessageSquare size={14} /> Note opérationnelle
+                            </button>
+                            <div className="menu-divider" />
+                            <button className="menu-item text-blue" onClick={async () => {
+                              await updateDemande(d.id, { statut: 'termine' });
+                              fetchData();
+                            }}>
+                              <CheckCircle size={14} /> Prestation effectuée
+                            </button>
+                            <button className="menu-item text-green" onClick={async () => {
+                              await updateDemande(d.id, { statut_paiement: 'acompte' });
+                              fetchData();
+                            }}>
+                              <CreditCard size={14} /> Facturation en cours
+                            </button>
+                            <button className="menu-item text-orange" onClick={async () => {
+                              await updateDemande(d.id, { statut_paiement: 'partiel' });
+                              fetchData();
+                            }}>
+                              <CreditCard size={14} /> Facturation partielle
+                            </button>
+                            <button className="menu-item text-green" onClick={async () => {
+                              await updateDemande(d.id, { statut_paiement: 'integral' });
+                              fetchData();
+                            }}>
+                              <CheckCircle size={14} /> Payé
+                            </button>
+                            <div className="menu-divider" />
+                            <button className="menu-item text-red" onClick={async () => {
+                              const reason = prompt('Motif d\'annulation :');
+                              if (reason === null) return;
+                              await annulerDemande(d.id, reason);
+                              fetchData();
+                            }}>
+                              <XCircle size={14} /> Rejeté / Annulé
+                            </button>
+                            <button className="menu-item text-red" onClick={async () => {
+                              await updateDemande(d.id, { statut_paiement: 'annule' });
+                              fetchData();
+                            }}>
+                              <XCircle size={14} /> Facturation annulée
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="card-footer">
-                      <div className="price-tag">{d.prix} MAD</div>
-                      <span className={`badge ${d.cao ? 'badge-green' : 'badge-red'}`}>
-                        CAO: {d.cao ? 'Oui' : 'Non'}
+                  </div>
+
+                  <div style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '8px', fontWeight: '500' }}>
+                    # {d.id} · {d.service}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px', fontSize: '0.875rem', marginBottom: '8px' }}>
+                    <div>
+                      <span style={{ color: '#64748b', marginRight: '4px' }}>Date :</span> 
+                      <span style={{ fontWeight: '500' }}>
+                        {d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}
                       </span>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b', marginRight: '4px' }}>Heures :</span> 
+                      <span style={{ fontWeight: '500' }}>
+                        {d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b', marginRight: '4px' }}>Lieu :</span> 
+                      <span style={{ fontWeight: '500' }}>
+                        {[d.formulaire_data?.quartier || d.client_neighborhood, d.formulaire_data?.ville || d.client_city].filter(Boolean).join(', ') || d.neighborhood_city || '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b', marginRight: '4px' }}>Tarif :</span> 
+                      <span style={{ fontWeight: '600' }}>
+                        {typeof d.prix === 'number' && d.prix > 0 ? `${d.prix.toLocaleString('fr-FR')} MAD` : (d.prix && d.prix !== '0' ? `${d.prix} MAD` : '—')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                    <span className={`badge ${d.statut === 'en_cours' ? 'badge-gray-blue' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`} style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px' }}>
+                      {d.statut === 'en_cours' ? 'En cours' : d.statut === 'termine' ? 'Terminé' : 'En attente'}
+                    </span>
+                    {d.avec_produit && (
+                      <span className="badge" style={{ backgroundColor: '#f1f5f9', color: '#10b981', padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px', fontWeight: 'bold' }}>
+                        + Produit
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '12px', display: 'flex', justifyContent: 'flex-start' }}>
+                    <div className="relative">
+                      <button 
+                        className="btn"
+                        style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', borderRadius: '8px', padding: '6px 12px', fontSize: '0.875rem' }}
+                        onClick={() => {
+                          setActiveMenu(activeMenu === d.id ? null : d.id);
+                          setActiveMoreMenu(null);
+                        }}
+                      >
+                        <Settings size={14} />
+                        Actions
+                      </button>
+                      
+                      {activeMenu === d.id && (
+                        <div className="action-menu shadow-lg border" style={{ right: 'auto', left: 0, bottom: '100%', top: 'auto', marginBottom: '8px', zIndex: 50 }}>
+                          <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
+                            <Edit2 size={14} /> Éditer le besoin
+                          </button>
+                          <button className="menu-item" onClick={async () => {
+                            if (confirm('Confirmer cette opération ?')) {
+                              await confirmerCAO(d.id);
+                              fetchData();
+                            }
+                          }}>
+                            <CheckCircle size={14} /> Confirmation Opé
+                          </button>
+                          <button className="menu-item">
+                            <UserCheck size={14} /> Compte Client
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
