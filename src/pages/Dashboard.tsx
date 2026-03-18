@@ -499,7 +499,7 @@ export default function Dashboard() {
                       {d.client_name || d.formulaire_data?.nom || '—'}
                     </h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className={`badge ${d.segment === 'particulier' ? 'badge-teal' : 'badge-lime'}`}>
+                      <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
                         {d.segment === 'particulier' ? 'SPP' : 'SPE'}
                       </span>
                       <div className="relative">
@@ -602,7 +602,7 @@ export default function Dashboard() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                    <span className={`badge ${d.statut === 'en_cours' ? 'badge-gray-blue' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`} style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px' }}>
+                    <span className={`badge ${d.statut === 'en_cours' ? 'badge-blue' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`} style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px' }}>
                       {d.statut === 'en_cours' ? 'En cours' : d.statut === 'termine' ? 'Terminé' : 'En attente'}
                     </span>
                     {d.avec_produit && (

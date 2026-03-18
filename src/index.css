@@ -270,36 +270,43 @@ body {
 .badge-green {
   background: #dcfce7;
   color: #166534;
+  border: 1px solid #bbf7d0;
 }
 
 .badge-red {
   background: #fee2e2;
   color: #991b1b;
+  border: 1px solid #fecaca;
 }
 
 .badge-orange {
   background: #fef3c7;
   color: #92400e;
+  border: 1px solid #fde68a;
 }
 
 .badge-blue {
   background: #dbeafe;
   color: #1e40af;
+  border: 1px solid #bfdbfe;
 }
 
 .badge-purple {
   background: #f3e8ff;
   color: #6b21a8;
+  border: 1px solid #e9d5ff;
 }
 
 .badge-teal {
   background: #ccfbf1;
   color: #115e59;
+  border: 1px solid #99f6e4;
 }
 
 .badge-gray {
   background: #f1f5f9;
   color: #475569;
+  border: 1px solid #e2e8f0;
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
