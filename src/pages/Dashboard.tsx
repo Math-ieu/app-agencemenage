@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { 
   RefreshCw, ClipboardCheck, Building2, Clock,
-  Search, List, Grid, MoreHorizontal, MoreVertical, Edit2,  
-  User as UserIcon, Calendar, Clock3,
+  Search, List, Grid, MoreVertical, Edit2,  
+  User as UserIcon,
   CheckCircle, 
   Settings, UserCheck, 
   XCircle, CreditCard, MessageSquare,
@@ -250,9 +250,9 @@ export default function Dashboard() {
         </div>
 
         <select className="filter-select" value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)}>
-          <option value="tous">Tous les services</option>
-          <option value="spp">Services Particuliers (SPP)</option>
-          <option value="spe">Services Entreprises (SPE)</option>
+          <option value="tous">Tous segments</option>
+          <option value="spp">Segment Particuliers (SPP)</option>
+          <option value="spe">Segment Entreprises (SPE)</option>
         </select>
 
         <select className="filter-select" value={prestationFilter} onChange={(e) => setPrestationFilter(e.target.value)}>
