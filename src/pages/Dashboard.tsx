@@ -1,18 +1,22 @@
 import { useEffect, useState, useMemo } from 'react';
-import { 
+import {
   RefreshCw, ClipboardCheck, Building2, Clock,
-  Search, List, Grid, MoreVertical, Edit2,  
+  Search, List, Grid, MoreVertical, Edit2,
   User as UserIcon,
-  CheckCircle, 
-  Settings, UserCheck, 
+  CheckCircle,
+  Settings, UserCheck,
   XCircle, CreditCard, MessageSquare,
   ChevronLeft,
   FileText,
-  Save
+  Save,
+  Download,
+  Eye,
+  UserPlus
 } from 'lucide-react';
-import { Demande } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO } from '../api/client';
+import { Demande, User } from '../types';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande } from '../api/client';
 import { useToastStore } from '../store/toast';
+import { useAuthStore } from '../store/auth';
 
 interface DashboardStats {
   total: number;
@@ -49,7 +53,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'besoins' | 'abonnements'>('besoins');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  
+
   // Filtres
   const [search, setSearch] = useState('');
   const [serviceFilter, setServiceFilter] = useState('tous');
@@ -58,6 +62,27 @@ export default function Dashboard() {
   const [selectedDemande, setSelectedDemande] = useState<Demande | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
+
+  const { user } = useAuthStore();
+  const [commerciaux, setCommerciaux] = useState<User[]>([]);
+  const [activeAffectMenu, setActiveAffectMenu] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (user?.role === 'admin' || user?.role === 'responsable_commercial') {
+      getUsers({ role: 'commercial' }).then(res => setCommerciaux(res.data?.results || res.data)).catch(console.error);
+    }
+  }, [user]);
+
+  const handleAffecter = async (demandeId: number, commercialId: number) => {
+    try {
+      await affecterDemande(demandeId, commercialId);
+      addToast('Demande affectée avec succès', 'success');
+      fetchData();
+      setActiveAffectMenu(null);
+    } catch (err) {
+      addToast('Erreur lors de l\'affectation', 'error');
+    }
+  };
   const [showDetail, setShowDetail] = useState(false);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
   const [activeMoreMenu, setActiveMoreMenu] = useState<number | null>(null);
@@ -66,14 +91,14 @@ export default function Dashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await getDemandes(); 
+      const response = await getDemandes();
       const data = response.data;
       const allResults: Demande[] = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
-      
+
       const enAttenteList = allResults.filter(d => d.statut === 'en_attente');
       const results = allResults.filter(d => d.statut !== 'en_attente');
       setDemandes(results);
-      
+
       const enCours = results.filter(d => d.statut === 'en_cours');
       const spp = results.filter(d => d.segment === 'particulier');
       const spe = results.filter(d => d.segment === 'entreprise');
@@ -119,7 +144,7 @@ export default function Dashboard() {
       setShowDetail(false);
       await fetchData();
       addToast('Mise à jour effectuée avec succès !', 'success');
-      
+
       if (editFormData.envoyer_whatsapp) {
         addToast('Demande de régénération et envoi WhatsApp transmise.', 'info');
       }
@@ -172,7 +197,7 @@ export default function Dashboard() {
       // Recherche
       if (search) {
         const clientName = d.client_name || d.formulaire_data?.nom || '';
-         if (!clientName.toLowerCase().includes(search.toLowerCase()) && !d.service.toLowerCase().includes(search.toLowerCase())) return false;
+        if (!clientName.toLowerCase().includes(search.toLowerCase()) && !d.service.toLowerCase().includes(search.toLowerCase())) return false;
       }
 
       // Filtre Service (SPP/SPE)
@@ -241,9 +266,9 @@ export default function Dashboard() {
       <div className="dashboard-toolbar">
         <div className="search-box">
           <Search size={18} className="search-icon" />
-          <input 
-            type="text" 
-            placeholder="Rechercher..." 
+          <input
+            type="text"
+            placeholder="Rechercher..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -266,14 +291,14 @@ export default function Dashboard() {
         </select>
 
         <div className="view-toggles">
-          <button 
+          <button
             className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
             onClick={() => setViewMode('list')}
             title="Vue liste"
           >
             <List size={20} />
           </button>
-          <button 
+          <button
             className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
             onClick={() => setViewMode('grid')}
             title="Vue icônes"
@@ -333,7 +358,7 @@ export default function Dashboard() {
                   {filtered.map((d) => (
                     <tr key={d.id} className={!d.cao && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000 ? 'row-alert' : ''}>
                       <td className="relative">
-                        <button 
+                        <button
                           className="btn btn-action"
                           onClick={() => {
                             setActiveMenu(activeMenu === d.id ? null : d.id);
@@ -343,7 +368,7 @@ export default function Dashboard() {
                           <Settings size={14} />
                           Actions
                         </button>
-                        
+
                         {activeMenu === d.id && (
                           <div className="action-menu">
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
@@ -421,7 +446,7 @@ export default function Dashboard() {
                         )}
                       </td>
                       <td className="relative">
-                        <button 
+                        <button
                           className="icon-btn"
                           onClick={() => {
                             setActiveMoreMenu(activeMoreMenu === d.id ? null : d.id);
@@ -436,6 +461,24 @@ export default function Dashboard() {
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
+                            {(user?.role === 'admin' || user?.role === 'responsable_commercial') && d.statut === 'en_attente' && (
+                              <button className="menu-item text-purple-600" onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveAffectMenu(activeAffectMenu === d.id ? null : d.id);
+                              }}>
+                                <UserPlus size={14} /> Affecter la demande
+                              </button>
+                            )}
+                            {activeAffectMenu === d.id && commerciaux && commerciaux.length > 0 && (
+                              <div className="bg-gray-50 p-2 border-t mt-1 max-h-40 overflow-y-auto">
+                                <div className="text-xs fw-bold text-muted mb-2 px-2">SÉLECTIONNER UN COMMERCIAL</div>
+                                {commerciaux.map(comm => (
+                                  <button key={comm.id} className="menu-item text-sm" onClick={() => handleAffecter(d.id, comm.id)}>
+                                    {comm.full_name || `${comm.first_name} ${comm.last_name}`}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                             <button className="menu-item">
                               <MessageSquare size={14} /> Note commerciale
                             </button>
@@ -503,7 +546,7 @@ export default function Dashboard() {
                         {d.segment === 'particulier' ? 'SPP' : 'SPE'}
                       </span>
                       <div className="relative">
-                        <button 
+                        <button
                           className="icon-btn"
                           onClick={() => {
                             setActiveMoreMenu(activeMoreMenu === d.id ? null : d.id);
@@ -512,7 +555,7 @@ export default function Dashboard() {
                         >
                           <MoreVertical size={18} />
                         </button>
-                        
+
                         {activeMoreMenu === d.id && (
                           <div className="action-menu" style={{ right: 0, left: 'auto', top: '100%', zIndex: 50 }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
@@ -576,25 +619,25 @@ export default function Dashboard() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px', fontSize: '0.875rem', marginBottom: '8px' }}>
                     <div>
-                      <span style={{ color: '#64748b', marginRight: '4px' }}>Date :</span> 
+                      <span style={{ color: '#64748b', marginRight: '4px' }}>Date :</span>
                       <span style={{ fontWeight: '500' }}>
                         {d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}
                       </span>
                     </div>
                     <div>
-                      <span style={{ color: '#64748b', marginRight: '4px' }}>Heures :</span> 
+                      <span style={{ color: '#64748b', marginRight: '4px' }}>Heures :</span>
                       <span style={{ fontWeight: '500' }}>
                         {d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '—'}
                       </span>
                     </div>
                     <div>
-                      <span style={{ color: '#64748b', marginRight: '4px' }}>Lieu :</span> 
+                      <span style={{ color: '#64748b', marginRight: '4px' }}>Lieu :</span>
                       <span style={{ fontWeight: '500' }}>
                         {[d.formulaire_data?.quartier || d.client_neighborhood, d.formulaire_data?.ville || d.client_city].filter(Boolean).join(', ') || d.neighborhood_city || '—'}
                       </span>
                     </div>
                     <div>
-                      <span style={{ color: '#64748b', marginRight: '4px' }}>Tarif :</span> 
+                      <span style={{ color: '#64748b', marginRight: '4px' }}>Tarif :</span>
                       <span style={{ fontWeight: '600' }}>
                         {typeof d.prix === 'number' && d.prix > 0 ? `${d.prix.toLocaleString('fr-FR')} MAD` : (d.prix && d.prix !== '0' ? `${d.prix} MAD` : '—')}
                       </span>
@@ -614,7 +657,7 @@ export default function Dashboard() {
 
                   <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '12px', display: 'flex', justifyContent: 'flex-start' }}>
                     <div className="relative">
-                      <button 
+                      <button
                         className="btn"
                         style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', borderRadius: '8px', padding: '6px 12px', fontSize: '0.875rem' }}
                         onClick={() => {
@@ -625,12 +668,30 @@ export default function Dashboard() {
                         <Settings size={14} />
                         Actions
                       </button>
-                      
+
                       {activeMenu === d.id && (
                         <div className="action-menu shadow-lg border" style={{ right: 'auto', left: 0, bottom: '100%', top: 'auto', marginBottom: '8px', zIndex: 50 }}>
                           <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                             <Edit2 size={14} /> Éditer le besoin
                           </button>
+                          {(user?.role === 'admin' || user?.role === 'responsable_commercial') && d.statut === 'en_attente' && (
+                            <button className="menu-item text-purple-600" onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveAffectMenu(activeAffectMenu === d.id ? null : d.id);
+                            }}>
+                              <UserPlus size={14} /> Affecter la demande
+                            </button>
+                          )}
+                          {activeAffectMenu === d.id && commerciaux && commerciaux.length > 0 && (
+                            <div className="bg-gray-50 p-2 border-t mt-1 max-h-40 overflow-y-auto">
+                              <div className="text-xs fw-bold text-muted mb-2 px-2">SÉLECTIONNER UN COMMERCIAL</div>
+                              {commerciaux.map(comm => (
+                                <button key={comm.id} className="menu-item text-sm" onClick={() => handleAffecter(d.id, comm.id)}>
+                                  {comm.full_name || `${comm.first_name} ${comm.last_name}`}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                           <button className="menu-item" onClick={async () => {
                             if (confirm('Confirmer cette opération ?')) {
                               await confirmerCAO(d.id);
@@ -687,11 +748,11 @@ export default function Dashboard() {
                   <div className="form-grid-4 gap-4 mb-6">
                     <div className="form-group">
                       <label>Statut du besoin</label>
-                      <select 
-                        value={editFormData.statut} 
-                        onChange={e => setEditFormData({...editFormData, statut: e.target.value})} 
+                      <select
+                        value={editFormData.statut}
+                        onChange={e => setEditFormData({ ...editFormData, statut: e.target.value })}
                         className="edit-input"
-                        style={{fontWeight: 'bold', color: editFormData.statut === 'en_cours' ? '#10b981' : (editFormData.statut === 'en_attente' ? '#f59e0b' : '#334155')}}
+                        style={{ fontWeight: 'bold', color: editFormData.statut === 'en_cours' ? '#10b981' : (editFormData.statut === 'en_attente' ? '#f59e0b' : '#334155') }}
                       >
                         <option value="en_attente">En attente</option>
                         <option value="en_cours">En cours</option>
@@ -701,19 +762,19 @@ export default function Dashboard() {
                     </div>
                     <div className="form-group">
                       <label>Segment</label>
-                      <select 
-                        value={editFormData.segment} 
+                      <select
+                        value={editFormData.segment}
                         onChange={e => {
                           const newSegment = e.target.value as keyof typeof SERVICES_LIST;
                           const currentService = editFormData.service;
                           const availableServices = SERVICES_LIST[newSegment] || [];
                           const isValid = availableServices.includes(currentService);
                           setEditFormData({
-                            ...editFormData, 
+                            ...editFormData,
                             segment: newSegment,
                             service: isValid ? currentService : (availableServices[0] || '')
                           });
-                        }} 
+                        }}
                         className="edit-input"
                       >
                         <option value="particulier">Particulier</option>
@@ -722,9 +783,9 @@ export default function Dashboard() {
                     </div>
                     <div className="form-group">
                       <label>Type de service</label>
-                      <select 
-                        value={editFormData.service} 
-                        onChange={e => setEditFormData({...editFormData, service: e.target.value})} 
+                      <select
+                        value={editFormData.service}
+                        onChange={e => setEditFormData({ ...editFormData, service: e.target.value })}
                         className="edit-input"
                       >
                         {(SERVICES_LIST[editFormData.segment as keyof typeof SERVICES_LIST] || []).map(s => (
@@ -734,7 +795,7 @@ export default function Dashboard() {
                     </div>
                     <div className="form-group">
                       <label>Mode de paiement</label>
-                      <select value={editFormData.mode_paiement} onChange={e => setEditFormData({...editFormData, mode_paiement: e.target.value})} className="edit-input">
+                      <select value={editFormData.mode_paiement} onChange={e => setEditFormData({ ...editFormData, mode_paiement: e.target.value })} className="edit-input">
                         <option value="virement">Virement</option>
                         <option value="cheque">Par chèque</option>
                         <option value="agence">À l'agence</option>
@@ -748,7 +809,7 @@ export default function Dashboard() {
                     <div className="custom-service-box">
                       <h3 className="custom-service-title">Service sur mesure — {editFormData.service}</h3>
                       <p className="custom-service-text">
-                        {editFormData.service === 'Placement & gestion' 
+                        {editFormData.service === 'Placement & gestion'
                           ? "Un chargé de clientèle prendra contact avec l'entreprise pour établir une offre personnalisée."
                           : "Un assistant social et garde-malade prendront contact avec le client pour valider les points essentiels."
                         }
@@ -760,9 +821,9 @@ export default function Dashboard() {
                       <div className="form-grid-2 gap-4 mb-4">
                         <div className="form-group">
                           <label>Type d'habitation</label>
-                          <select 
-                            value={editFormData.type_habitation} 
-                            onChange={e => setEditFormData({...editFormData, type_habitation: e.target.value})} 
+                          <select
+                            value={editFormData.type_habitation}
+                            onChange={e => setEditFormData({ ...editFormData, type_habitation: e.target.value })}
                             className="edit-input"
                           >
                             <option value="">Choisir...</option>
@@ -777,7 +838,7 @@ export default function Dashboard() {
                         </div>
                         <div className="form-group">
                           <label>Fréquence</label>
-                          <select value={editFormData.frequency} onChange={e => setEditFormData({...editFormData, frequency: e.target.value})} className="edit-input">
+                          <select value={editFormData.frequency} onChange={e => setEditFormData({ ...editFormData, frequency: e.target.value })} className="edit-input">
                             <option value="oneshot">Une seule fois</option>
                             <option value="abonnement">Abonnement</option>
                           </select>
@@ -787,15 +848,15 @@ export default function Dashboard() {
                       <div className="form-grid-2 gap-4 mb-4">
                         <div className="form-group">
                           <label>Durée (heures)</label>
-                          <input type="number" value={editFormData.nb_heures} onChange={e => setEditFormData({...editFormData, nb_heures: e.target.value})} className="edit-input" />
+                          <input type="number" value={editFormData.nb_heures} onChange={e => setEditFormData({ ...editFormData, nb_heures: e.target.value })} className="edit-input" />
                         </div>
                         <div className="form-group">
                           <label>Nb intervenants</label>
-                          <input 
-                            type="number" 
-                            value={editFormData.nb_intervenants} 
-                            onChange={e => setEditFormData({...editFormData, nb_intervenants: parseInt(e.target.value) || 0})} 
-                            className="edit-input" 
+                          <input
+                            type="number"
+                            value={editFormData.nb_intervenants}
+                            onChange={e => setEditFormData({ ...editFormData, nb_intervenants: parseInt(e.target.value) || 0 })}
+                            className="edit-input"
                           />
                         </div>
                       </div>
@@ -803,31 +864,31 @@ export default function Dashboard() {
                       <div className="form-grid-2 gap-4 mb-4">
                         <div className="form-group">
                           <label>Date d'intervention</label>
-                          <input type="date" value={editFormData.date_intervention} onChange={e => setEditFormData({...editFormData, date_intervention: e.target.value})} className="edit-input" />
+                          <input type="date" value={editFormData.date_intervention} onChange={e => setEditFormData({ ...editFormData, date_intervention: e.target.value })} className="edit-input" />
                         </div>
                         <div className="form-group">
                           <label>Heure</label>
-                          <input type="time" value={editFormData.heure_intervention} onChange={e => setEditFormData({...editFormData, heure_intervention: e.target.value})} className="edit-input" />
+                          <input type="time" value={editFormData.heure_intervention} onChange={e => setEditFormData({ ...editFormData, heure_intervention: e.target.value })} className="edit-input" />
                         </div>
                       </div>
 
                       <div className="detail-section mt-6">
                         <h3 className="text-sm fw-bold text-muted mb-4 uppercase">Services optionnels</h3>
                         <div className="form-grid-2">
-                           <div className="flex items-center gap-3">
-                              <label className="switch">
-                                <input type="checkbox" checked={editFormData.avec_produit} onChange={e => setEditFormData({...editFormData, avec_produit: e.target.checked})} />
-                                <span className="slider round"></span>
-                              </label>
-                              <span className="text-sm">Produit ménager (+ 90 MAD)</span>
-                           </div>
-                           <div className="flex items-center gap-3">
-                              <label className="switch">
-                                <input type="checkbox" checked={editFormData.avec_torchons} onChange={e => setEditFormData({...editFormData, avec_torchons: e.target.checked})} />
-                                <span className="slider round"></span>
-                              </label>
-                              <span className="text-sm">Torchons et serpillières (+ 40 MAD)</span>
-                           </div>
+                          <div className="flex items-center gap-3">
+                            <label className="switch">
+                              <input type="checkbox" checked={editFormData.avec_produit} onChange={e => setEditFormData({ ...editFormData, avec_produit: e.target.checked })} />
+                              <span className="slider round"></span>
+                            </label>
+                            <span className="text-sm">Produit ménager (+ 90 MAD)</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <label className="switch">
+                              <input type="checkbox" checked={editFormData.avec_torchons} onChange={e => setEditFormData({ ...editFormData, avec_torchons: e.target.checked })} />
+                              <span className="slider round"></span>
+                            </label>
+                            <span className="text-sm">Torchons et serpillières (+ 40 MAD)</span>
+                          </div>
                         </div>
                       </div>
                     </>
@@ -838,19 +899,19 @@ export default function Dashboard() {
                     <div className="form-grid-2 gap-4">
                       <div className="form-group">
                         <label>Nom</label>
-                        <input type="text" value={editFormData.client_name} onChange={e => setEditFormData({...editFormData, client_name: e.target.value})} className="edit-input" />
+                        <input type="text" value={editFormData.client_name} onChange={e => setEditFormData({ ...editFormData, client_name: e.target.value })} className="edit-input" />
                       </div>
                       <div className="form-group">
                         <label>Tél. direct</label>
-                        <input type="text" value={editFormData.client_phone} onChange={e => setEditFormData({...editFormData, client_phone: e.target.value})} className="edit-input" />
+                        <input type="text" value={editFormData.client_phone} onChange={e => setEditFormData({ ...editFormData, client_phone: e.target.value })} className="edit-input" />
                       </div>
                       <div className="form-group">
                         <label>Tél. WhatsApp</label>
-                        <input type="text" value={editFormData.client_whatsapp || editFormData.client_phone} onChange={e => setEditFormData({...editFormData, client_whatsapp: e.target.value})} className="edit-input" />
+                        <input type="text" value={editFormData.client_whatsapp || editFormData.client_phone} onChange={e => setEditFormData({ ...editFormData, client_whatsapp: e.target.value })} className="edit-input" />
                       </div>
                       <div className="form-group">
                         <label>Ville</label>
-                        <input type="text" value={editFormData.neighborhood} onChange={e => setEditFormData({...editFormData, neighborhood: e.target.value})} className="edit-input" />
+                        <input type="text" value={editFormData.neighborhood} onChange={e => setEditFormData({ ...editFormData, neighborhood: e.target.value })} className="edit-input" />
                       </div>
                     </div>
                   </div>
@@ -860,12 +921,12 @@ export default function Dashboard() {
                     <div className="form-grid-2 gap-4">
                       <div className="form-group">
                         <label>Montant total (MAD)</label>
-                        <input type="number" value={editFormData.prix} onChange={e => setEditFormData({...editFormData, prix: e.target.value})} className="edit-input" />
+                        <input type="number" value={editFormData.prix} onChange={e => setEditFormData({ ...editFormData, prix: e.target.value })} className="edit-input" />
                         <span className="text-xs text-muted">Candidat : {editFormData.prix * 0.5} MAD</span>
                       </div>
                       <div className="form-group">
                         <label>Statut de paiement</label>
-                        <select value={editFormData.statut_paiement} onChange={e => setEditFormData({...editFormData, statut_paiement: e.target.value})} className="edit-input">
+                        <select value={editFormData.statut_paiement} onChange={e => setEditFormData({ ...editFormData, statut_paiement: e.target.value })} className="edit-input">
                           <option value="non_paye">Non payé</option>
                           <option value="acompte">Acompte versé</option>
                           <option value="partiel">Paiement partiel</option>
@@ -878,7 +939,7 @@ export default function Dashboard() {
                   <div className="detail-section mt-6 border-t pt-6">
                     <h3 className="text-sm fw-bold text-muted mb-4 uppercase">Notes client</h3>
                     <div className="form-group">
-                      <textarea value={editFormData.note_commerciale} onChange={e => setEditFormData({...editFormData, note_commerciale: e.target.value})} className="edit-textarea" rows={4} />
+                      <textarea value={editFormData.note_commerciale} onChange={e => setEditFormData({ ...editFormData, note_commerciale: e.target.value })} className="edit-textarea" rows={4} />
                     </div>
                   </div>
 
@@ -886,7 +947,7 @@ export default function Dashboard() {
                     <div className="whatsapp-toggle-card">
                       <div className="flex items-center gap-4">
                         <label className="switch">
-                          <input type="checkbox" checked={editFormData.envoyer_whatsapp} onChange={e => setEditFormData({...editFormData, envoyer_whatsapp: e.target.checked, regenerer_devis: e.target.checked})} />
+                          <input type="checkbox" checked={editFormData.envoyer_whatsapp} onChange={e => setEditFormData({ ...editFormData, envoyer_whatsapp: e.target.checked, regenerer_devis: e.target.checked })} />
                           <span className="slider round"></span>
                         </label>
                         <div className="flex flex-col">
@@ -912,7 +973,7 @@ export default function Dashboard() {
                       <div className="detail-item"><span>Segment:</span> {selectedDemande.segment.toUpperCase()}</div>
                     </div>
                   </div>
-                  
+
                   <div className="detail-section">
                     <h3>Détails Prestation</h3>
                     <div className="detail-grid">
@@ -951,31 +1012,67 @@ export default function Dashboard() {
                       )}
                     </div>
                   )}
+
+                  {selectedDemande.statut === 'en_attente' && (
+                    <div className="detail-section mt-6 border-t pt-6 mb-4">
+                      <h3 className="text-md fw-bold text-teal-dark mb-4" style={{ color: '#4b5563' }}>Historique des documents</h3>
+                      <p className="text-sm italic" style={{ color: '#6b7280' }}>Aucun document généré pour cette demande.</p>
+                      {/* Placeholder for future implementations: 
+                        <div className="flex items-center justify-between p-3 bg-gray-50 border rounded mt-3">
+                          <span className="text-sm">Devis_#1234.pdf</span>
+                          <div className="flex gap-2">
+                            <button className="icon-btn" title="Voir"><Eye size={16} /></button>
+                            <button className="icon-btn" title="Télécharger"><Download size={16} /></button>
+                          </div>
+                        </div>
+                      */}
+                    </div>
+                  )}
                 </>
               )}
             </div>
-            <div className="sheet-footer flex justify-between bg-gray-50 border-t p-6">
-              <div className="flex gap-2">
-                {isEditing ? (
-                  <button className="btn btn-secondary flex items-center gap-2 border bg-white" onClick={() => addToast('Fonctionnalité de génération de devis à venir', 'info')}>
-                    <FileText size={18} /> Générer devis
+            <div className="sheet-footer flex justify-between bg-white border-t p-6">
+              {selectedDemande.statut === 'en_attente' && isEditing ? (
+                <div className="flex justify-between w-full items-center">
+                  <button className="btn transition-all" style={{ border: '1px solid #e2e8f0', backgroundColor: 'transparent', color: '#0f766e', fontWeight: 500, padding: '8px 24px', borderRadius: '4px' }} onClick={() => setIsEditing(false)}>
+                    Annuler
                   </button>
-                ) : (
-                  <button className="btn btn-secondary" onClick={() => setShowDetail(false)}>Fermer</button>
-                )}
-              </div>
-              <div className="flex gap-2">
-                {isEditing ? (
-                  <>
-                    <button className="btn btn-outline bg-white px-6" onClick={() => setIsEditing(false)}>✕ Annuler</button>
-                    <button className="btn btn-primary flex items-center gap-2 px-8" onClick={handleUpdate} style={{backgroundColor: '#175e5c'}}>
-                      <Save size={18} /> Enregistrer
+                  <div className="flex gap-3">
+                    <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} onClick={() => {
+                      addToast(selectedDemande.is_devis ? 'Génération du devis en cours...' : 'Téléchargement PNG en cours...', 'info')
+                    }}>
+                      <Download size={16} /> {selectedDemande.is_devis ? 'Générer devis' : 'Télécharger PNG'}
                     </button>
-                  </>
-                ) : (
-                  <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Modifier</button>
-                )}
-              </div>
+                    <button className="btn flex items-center gap-2" style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '8px 24px', borderRadius: '4px', border: 'none' }} onClick={handleUpdate}>
+                      <Save size={16} /> Enregistrer
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    {isEditing ? (
+                      <button className="btn btn-secondary flex items-center gap-2 border bg-white" onClick={() => addToast('Fonctionnalité de génération de devis à venir', 'info')}>
+                        <FileText size={18} /> Générer devis
+                      </button>
+                    ) : (
+                      <button className="btn btn-secondary" onClick={() => setShowDetail(false)}>Fermer</button>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    {isEditing ? (
+                      <>
+                        <button className="btn btn-outline bg-white px-6" onClick={() => setIsEditing(false)}>✕ Annuler</button>
+                        <button className="btn btn-primary flex items-center gap-2 px-8" onClick={handleUpdate} style={{ backgroundColor: '#175e5c' }}>
+                          <Save size={18} /> Enregistrer
+                        </button>
+                      </>
+                    ) : (
+                      <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Modifier</button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

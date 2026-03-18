@@ -1,13 +1,25 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande } from '../api/client';
-import { useNotificationStore } from '../store/auth';
+import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers } from '../api/client';
+import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import {
   Search, Plus, ChevronDown, ChevronUp, RefreshCw,
-  CheckCircle, Edit, XCircle,
-  Calendar
+  CheckCircle, Edit, XCircle, UserPlus, FileText, Eye,
+  Calendar, Download, Save
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+import { FormulaireRecap } from '../components/FormulaireRecap';
+import { DevisPreview } from '../components/DevisPreview';
 import { Demande } from '../types';
+
+const isDevisRequired = (d: Demande | null) => {
+  if (!d) return false;
+  if (d.segment === 'entreprise') return true;
+  const devisParticuliers = ['Ménage Air BnB', 'Ménage post-sinistre', 'Auxiliaire de vie', 'Ménage fin chantier', 'Nettoyage fin de chantier'];
+  return devisParticuliers.includes(d.service);
+};
+
 
 export default function DemandesEnAttente() {
   const [demandes, setDemandes] = useState<Demande[]>([]);
@@ -62,8 +74,82 @@ export default function DemandesEnAttente() {
     nb_jours: 1
   });
 
+  const { user } = useAuthStore();
   const { setPendingCount } = useNotificationStore();
   const { addToast } = useToastStore();
+
+  const [commerciaux, setCommerciaux] = useState<any[]>([]);
+  const [activeAffectMenu, setActiveAffectMenu] = useState<number | null>(null);
+
+  const [showDevisModal, setShowDevisModal] = useState<Demande | null>(null);
+  const [showRecapModal, setShowRecapModal] = useState<Demande | null>(null);
+  const [historiqueDocs, setHistoriqueDocs] = useState<Record<number, Array<{ id: string, name: string, type: 'pdf' | 'png', url: string, date: string }>>>({});
+
+  // Fecth Commerciaux for Assignation
+  useEffect(() => {
+    if (user?.role === 'admin' || user?.role === 'responsable_commercial') {
+      getUsers({ role: 'commercial' }).then(res => {
+        setCommerciaux(Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : []));
+      }).catch(err => console.error('Erreur commerciaux:', err));
+    }
+  }, [user]);
+
+  const handleAffecter = async (demandeId: number, commercialId: number) => {
+    try {
+      await affecterDemande(demandeId, commercialId);
+      addToast('Demande affectée avec succès', 'success');
+      setActiveAffectMenu(null);
+      fetchDemandes();
+    } catch (err) {
+      addToast('Erreur lors de l\'affectation', 'error');
+    }
+  };
+
+  const handleDownloadPNG = async (targetId: string, filename: string, demandeId: number) => {
+    const element = document.getElementById(targetId);
+    if (!element) return;
+    try {
+      addToast('Génération du PNG...', 'info');
+      const canvas = await html2canvas(element, { scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = imgData;
+      link.download = filename;
+      link.click();
+      
+      const newDoc = { id: Date.now().toString(), name: filename, type: 'png' as const, url: imgData, date: new Date().toLocaleString('fr-FR') };
+      setHistoriqueDocs(prev => ({ ...prev, [demandeId]: [...(prev[demandeId] || []), newDoc] }));
+      addToast('Téléchargé avec succès', 'success');
+      setShowRecapModal(null);
+    } catch (error) {
+      addToast('Erreur lors de la génération PNG', 'error');
+    }
+  };
+
+  const handleDownloadPDF = async (targetId: string, filename: string, demandeId: number) => {
+    const element = document.getElementById(targetId);
+    if (!element) return;
+    try {
+      addToast('Génération du PDF...', 'info');
+      const canvas = await html2canvas(element, { scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(filename);
+      
+      const pdfBlobUrl = URL.createObjectURL(pdf.output('blob'));
+      const newDoc = { id: Date.now().toString(), name: filename, type: 'pdf' as const, url: pdfBlobUrl, date: new Date().toLocaleString('fr-FR') };
+      setHistoriqueDocs(prev => ({ ...prev, [demandeId]: [...(prev[demandeId] || []), newDoc] }));
+      
+      addToast('Devis généré avec succès', 'success');
+      setShowDevisModal(null);
+    } catch (error) {
+      addToast('Erreur lors de la génération PDF', 'error');
+    }
+  };
 
   const SERVICES = {
     particulier: [
@@ -379,6 +465,11 @@ export default function DemandesEnAttente() {
                     <h3 className="fw-bold">Nom : <span className="text-main">{d.client_name || d.formulaire_data?.nom || 'Non renseigné'}</span></h3>
                   </div>
                   <div className="text-right">
+                    {d.created_at && (
+                      <p className="text-xs text-slate-500 mb-2 font-mono tracking-widest">
+                        {new Date(d.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(' à', '')}
+                      </p>
+                    )}
                     <p className="text-sm fw-medium">Téléphone : <span className="text-main">{d.client_phone || d.formulaire_data?.whatsapp_phone || 'Non renseigné'}</span></p>
                     <p className="text-sm fw-medium">WhatsApp : <span className="text-main">{d.client_whatsapp || d.formulaire_data?.whatsapp_phone || d.client_phone}</span></p>
                   </div>
@@ -460,13 +551,21 @@ export default function DemandesEnAttente() {
                   <p className="text-sm fw-medium">Mode : {d.mode_paiement || '—'}</p>
                 </div>
 
-                <div className="pending-actions">
-                  <button className="btn btn-nrp" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
-                  <button className="btn btn-cancel" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
-                  <button className="btn btn-validate" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
-                  <button className="btn btn-edit" title="Modifier" onClick={() => openEditModal(d)}>
-                    <Edit size={16} />
+                <div className="border-t border-slate-100 pt-3 mt-3 flex gap-2">
+                  <button className="btn btn-nrp flex-1 break-words leading-tight px-1 py-2 text-sm text-center" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
+                  <button className="btn btn-cancel flex-1 break-words leading-tight px-1 py-2 text-sm text-center" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
+                  <button className="btn btn-validate flex-1 break-words leading-tight px-1 py-2 text-sm text-center" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
+                  <button className="btn btn-edit flex-1 flex justify-center items-center px-1 py-2 text-sm text-center" title="Modifier" onClick={() => openEditModal(d)}>
+                    Modifier
                   </button>
+                  
+                  {(user?.role === 'admin' || user?.role === 'responsable_commercial') && (
+                    <button className="btn transition-all flex-1 text-sm leading-tight px-1 py-2 text-center flex items-center justify-center break-words" 
+                            style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc' }}
+                            onClick={() => setActiveAffectMenu(d.id)}>
+                      Affecter
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -474,10 +573,17 @@ export default function DemandesEnAttente() {
               <div className="pending-card mobile-card">
                 <div className="mobile-card-header">
                   <div className="flex justify-between items-start mb-3">
-                    <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
-                      {d.segment === 'particulier' ? 'SPP' : 'SPE'}
-                    </span>
-                    <span className="text-muted text-xs fw-bold">#{d.id}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
+                        {d.segment === 'particulier' ? 'SPP' : 'SPE'}
+                      </span>
+                      <span className="text-muted text-xs">#{d.id}</span>
+                    </div>
+                    {d.created_at && (
+                      <span className="text-[10px] text-slate-400 font-mono tracking-wider">
+                        {new Date(d.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(' à', '')}
+                      </span>
+                    )}
                   </div>
                   <h3 className="mobile-client-name">{d.client_name || d.formulaire_data?.nom || 'Nom inconnu'}</h3>
                   <div className="mobile-contact-info">
@@ -539,6 +645,14 @@ export default function DemandesEnAttente() {
                     <button className="btn btn-edit flex-none px-3" title="Modifier" onClick={() => openEditModal(d)}>
                       <Edit size={16} />
                     </button>
+                    
+                    {(user?.role === 'admin' || user?.role === 'responsable_commercial') && (
+                      <button className="btn transition-all flex items-center justify-center p-2" 
+                              style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc', borderRadius: '4px' }}
+                              onClick={() => setActiveAffectMenu(d.id)}>
+                        <UserPlus size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1107,13 +1221,148 @@ export default function DemandesEnAttente() {
                     onChange={e => setFormData({ ...formData, notes: e.target.value })}
                   ></textarea>
                 </div>
+
+                {editingDemande && (
+                  <div className="form-section full-width mt-8 pt-4 mb-2">
+                    <h3 className="text-md fw-bold mb-4" style={{ color: '#4b5563' }}>Historique des documents</h3>
+                    
+                    {historiqueDocs[editingDemande.id]?.length > 0 ? (
+                      <div className="space-y-2 mt-2">
+                        {historiqueDocs[editingDemande.id].map(doc => (
+                          <div key={doc.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded text-sm w-full">
+                            <div className="flex items-center gap-3">
+                              {doc.type === 'pdf' ? <FileText size={18} className="text-red-500" /> : <div className="w-6 h-6 bg-teal-100 text-teal-700 rounded flex items-center justify-center font-bold text-[10px]">PNG</div>}
+                              <div>
+                                <p className="font-semibold text-slate-700">{doc.name}</p>
+                                <p className="text-xs text-slate-400">Généré le {doc.date}</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              {doc.type === 'pdf' && (
+                                <button type="button" className="p-1.5 hover:bg-white rounded border border-slate-300 text-slate-600 transition-colors" onClick={() => window.open(doc.url, '_blank')} title="Ouvrir"><Eye size={16} /></button>
+                              )}
+                              <a href={doc.url} download={doc.name} className="p-1.5 hover:bg-white rounded border border-slate-300 text-slate-600 transition-colors flex items-center" title="Télécharger"><Download size={16} /></a>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm italic" style={{ color: '#6b7280' }}>Aucun document généré pour cette demande.</p>
+                    )}
+                  </div>
+                )}
               </form>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Annuler</button>
-              <button className="btn btn-primary" onClick={handleCreateDemande}>
-                Ajouter la demande
+            
+            <div className={`modal-footer ${editingDemande ? 'border-t pt-6 bg-white' : ''}`}>
+              {editingDemande ? (
+                <div className="flex gap-3 w-full justify-end">
+                  <button className="btn transition-all flex items-center" style={{ border: '1px solid #e2e8f0', backgroundColor: 'transparent', color: '#0f766e', fontWeight: 500, padding: '8px 24px', borderRadius: '4px' }} type="button" onClick={() => setShowCreateModal(false)}>
+                    Annuler
+                  </button>
+                  <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} type="button" onClick={() => {
+                    const isDevis = isDevisRequired(editingDemande);
+                    if (isDevis) {
+                      setShowDevisModal(editingDemande);
+                    } else {
+                      setShowRecapModal(editingDemande);
+                    }
+                  }}>
+                    <Download size={16} /> {isDevisRequired(editingDemande) ? 'Générer devis' : 'Télécharger PNG'}
+                  </button>
+                  <button className="btn flex items-center gap-2" style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '8px 24px', borderRadius: '4px', border: 'none' }} type="button" onClick={handleCreateDemande}>
+                    <Save size={16} /> Enregistrer
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button className="btn btn-secondary" type="button" onClick={() => setShowCreateModal(false)}>Annuler</button>
+                  <button className="btn btn-primary" type="button" onClick={handleCreateDemande}>
+                    Ajouter la demande
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recap PNG Generation Modal */}
+      {showRecapModal && (
+        <div className="modal-overlay z-[100]" onClick={() => setShowRecapModal(null)}>
+          <div className="modal-content max-w-4xl" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-xl fw-bold">Visualisation du PNG Recap</h2>
+              <button className="btn-close" onClick={() => setShowRecapModal(null)}><XCircle size={24} /></button>
+            </div>
+            <div className="modal-body bg-slate-100 p-4 overflow-auto max-h-[70vh] flex justify-center relative">
+              <FormulaireRecap demande={showRecapModal} />
+            </div>
+            <div className="modal-footer border-t pt-4 bg-white flex justify-end gap-3">
+              <button className="btn btn-secondary" onClick={() => setShowRecapModal(null)}>Fermer</button>
+              <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} onClick={() => handleDownloadPNG('recap-container', `recap_${showRecapModal.id}.png`, showRecapModal.id)}>
+                <Download size={16} /> Télécharger l'image PNG
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Devis PDF Generation Modal */}
+      {showDevisModal && (
+        <div className="modal-overlay z-[100]" onClick={() => setShowDevisModal(null)}>
+          <div className="modal-content" style={{ maxWidth: '1200px', width: '95%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-xl fw-bold">Paramétrage et Génération du Devis</h2>
+              <button className="btn-close" onClick={() => setShowDevisModal(null)}><XCircle size={24} /></button>
+            </div>
+            <div className="modal-body bg-slate-100 p-4">
+              <DevisPreview demande={showDevisModal} />
+            </div>
+            <div className="modal-footer border-t pt-4 bg-white flex justify-end gap-3">
+              <button className="btn btn-secondary" onClick={() => setShowDevisModal(null)}>Fermer</button>
+              <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} onClick={() => handleDownloadPDF('devis-container', `devis_D-${showDevisModal.id.toString().padStart(5, '0')}.pdf`, showDevisModal.id)}>
+                <Download size={16} /> Générer le document PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'affectation d'un commercial */}
+      {activeAffectMenu !== null && (
+        <div className="modal-overlay z-[100]" onClick={() => setActiveAffectMenu(null)}>
+          <div className="modal-content max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <div className="modal-header border-b pb-3 mb-4">
+              <h2 className="text-xl font-bold text-teal-800">Assigner un commercial</h2>
+              <button className="btn-close text-slate-400 hover:text-slate-600" onClick={() => setActiveAffectMenu(null)}><XCircle size={24} /></button>
+            </div>
+            <div className="modal-body p-2 max-h-[60vh] overflow-y-auto">
+              {commerciaux.length > 0 ? (
+                <div className="grid gap-2">
+                  {commerciaux.map((c: any) => (
+                    <button key={c.id} 
+                            className="flex items-center gap-3 w-full p-3 text-left border rounded-lg hover:bg-teal-50 hover:border-teal-200 transition-colors group"
+                            onClick={() => handleAffecter(activeAffectMenu, c.id)}>
+                      <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold group-hover:bg-teal-200 shrink-0">
+                        {c.first_name?.[0] || c.full_name?.[0] || 'C'}
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-700 group-hover:text-teal-900">{c.first_name} {c.last_name || c.full_name}</div>
+                        <div className="text-xs text-slate-500">{c.email || 'Commercial'}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center p-8 text-slate-500">
+                  <UserPlus size={48} className="mx-auto text-slate-300 mb-4" />
+                  <p>Aucun commercial disponible.</p>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer border-t pt-4 mt-2 bg-white flex justify-end">
+              <button className="btn btn-secondary" onClick={() => setActiveAffectMenu(null)}>Annuler</button>
             </div>
           </div>
         </div>
