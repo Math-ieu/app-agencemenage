@@ -94,6 +94,21 @@ export const affecterDemande = (id: number, commercial_id: number) =>
 export const confirmerCAO = (id: number) =>
   apiClient.post(`/api/demandes/${id}/confirmer_cao/`);
 
+export const generateDocument = (id: number, type: 'devis' | 'png') =>
+  apiClient.post(`/api/demandes/${id}/generate_document/`, { type });
+
+/**
+ * Télécharge un document via l'endpoint sécurisé (authentifié).
+ * Ne passe jamais par le chemin physique du fichier.
+ * Retourne un blob URL utilisable dans un <iframe> ou <img>.
+ */
+export const fetchSecureDocBlob = async (downloadUrl: string): Promise<{ blobUrl: string; mimeType: string }> => {
+  const response = await apiClient.get(downloadUrl, { responseType: 'blob' });
+  const mimeType = response.headers['content-type'] || 'application/octet-stream';
+  const blobUrl = URL.createObjectURL(response.data);
+  return { blobUrl, mimeType };
+};
+
 // ─── Clients ─────────────────────────────────────────────────────────────────
 export const getClients = (params?: Record<string, string | number>) =>
   apiClient.get('/api/clients/', { params });
@@ -139,3 +154,17 @@ export const getFeedbacks = (params?: Record<string, string | number>) =>
 // ─── Users ───────────────────────────────────────────────────────────────────
 export const getUsers = (params?: Record<string, string | number>) =>
   apiClient.get('/api/users/', { params });
+
+// ─── Documents ───────────────────────────────────────────────────────────────
+export const uploadDocument = (demandeId: number, file: File | Blob, type: string, name: string) => {
+  const formData = new FormData();
+  formData.append('demande', demandeId.toString());
+  formData.append('fichier', file, name);
+  formData.append('type_document', type);
+  formData.append('nom', name);
+  return apiClient.post('/api/documents/', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+};

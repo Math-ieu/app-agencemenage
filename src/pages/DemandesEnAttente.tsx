@@ -1,16 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers } from '../api/client';
+import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import {
-  Search, Plus, ChevronDown, ChevronUp, RefreshCw,
-  CheckCircle, Edit, XCircle, UserPlus, FileText, Eye,
-  Calendar, Download, Save
+  RefreshCw, Search, XCircle,
+  Calendar,
+  FileText, Save, Download, Eye, Plus, ChevronDown, ChevronUp, CheckCircle, Edit, UserPlus, Send
 } from 'lucide-react';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
-import { FormulaireRecap } from '../components/FormulaireRecap';
-import { DevisPreview } from '../components/DevisPreview';
 import { Demande } from '../types';
 
 const isDevisRequired = (d: Demande | null) => {
@@ -81,9 +77,7 @@ export default function DemandesEnAttente() {
   const [commerciaux, setCommerciaux] = useState<any[]>([]);
   const [activeAffectMenu, setActiveAffectMenu] = useState<number | null>(null);
 
-  const [showDevisModal, setShowDevisModal] = useState<Demande | null>(null);
-  const [showRecapModal, setShowRecapModal] = useState<Demande | null>(null);
-  const [historiqueDocs, setHistoriqueDocs] = useState<Record<number, Array<{ id: string, name: string, type: 'pdf' | 'png', url: string, date: string }>>>({});
+  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string } | null>(null);
 
   // Fecth Commerciaux for Assignation
   useEffect(() => {
@@ -105,49 +99,20 @@ export default function DemandesEnAttente() {
     }
   };
 
-  const handleDownloadPNG = async (targetId: string, filename: string, demandeId: number) => {
-    const element = document.getElementById(targetId);
-    if (!element) return;
+  const handlePreviewDocument = async (demandeId: number, type: 'devis' | 'png') => {
     try {
-      addToast('Génération du PNG...', 'info');
-      const canvas = await html2canvas(element, { scale: 2 });
-      const imgData = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.href = imgData;
-      link.download = filename;
-      link.click();
-      
-      const newDoc = { id: Date.now().toString(), name: filename, type: 'png' as const, url: imgData, date: new Date().toLocaleString('fr-FR') };
-      setHistoriqueDocs(prev => ({ ...prev, [demandeId]: [...(prev[demandeId] || []), newDoc] }));
-      addToast('Téléchargé avec succès', 'success');
-      setShowRecapModal(null);
-    } catch (error) {
-      addToast('Erreur lors de la génération PNG', 'error');
-    }
-  };
+      addToast(`Génération du ${type === 'devis' ? 'devis' : 'récapitulatif'} sur le serveur...`, 'info');
+      const response = await generateDocument(demandeId, type);
+      const doc = response.data;
 
-  const handleDownloadPDF = async (targetId: string, filename: string, demandeId: number) => {
-    const element = document.getElementById(targetId);
-    if (!element) return;
-    try {
-      addToast('Génération du PDF...', 'info');
-      const canvas = await html2canvas(element, { scale: 2 });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(filename);
-      
-      const pdfBlobUrl = URL.createObjectURL(pdf.output('blob'));
-      const newDoc = { id: Date.now().toString(), name: filename, type: 'pdf' as const, url: pdfBlobUrl, date: new Date().toLocaleString('fr-FR') };
-      setHistoriqueDocs(prev => ({ ...prev, [demandeId]: [...(prev[demandeId] || []), newDoc] }));
-      
-      addToast('Devis généré avec succès', 'success');
-      setShowDevisModal(null);
+      // Utilise le download_url sécurisé — jamais le chemin physique
+      const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
+      setShowPreviewModal({ url: blobUrl, type: type === 'devis' ? 'devis' : 'png', name: doc.nom });
+      fetchDemandes(); // Refresh list to show generated file in history
+      addToast('Aperçu prêt', 'success');
     } catch (error) {
-      addToast('Erreur lors de la génération PDF', 'error');
+      console.error(error);
+      addToast('Erreur lors de la génération', 'error');
     }
   };
 
@@ -253,7 +218,7 @@ export default function DemandesEnAttente() {
     setDirectPhone(d.client_phone);
     setWhatsappPhone(d.formulaire_data?.whatsapp_phone || d.client_phone);
     setSyncWhatsApp(!d.formulaire_data?.whatsapp_phone || d.formulaire_data?.whatsapp_phone === d.client_phone);
-    
+
     setFormData({
       nom: d.client_name,
       ville: d.formulaire_data?.ville || d.client_city || 'Casablanca',
@@ -299,8 +264,8 @@ export default function DemandesEnAttente() {
         client_phone: directPhone,
         service: selectedService,
         segment: activeSegment,
-        date_intervention: formData.date,
-        heure_intervention: formData.heure,
+        date_intervention: formData.date || null,
+        heure_intervention: formData.heure || '',
         prix: formData.montant || null,
         mode_paiement: formData.mode_paiement,
         statut_paiement: formData.statut_paiement,
@@ -343,10 +308,10 @@ export default function DemandesEnAttente() {
         await createDemande(payload);
         addToast('Demande créée avec succès !', 'success');
       }
-      
+
       setShowCreateModal(false);
       setFormSubmitted(false);
-      
+
       // S'assurer que le refresh est immédiat
       await fetchDemandes();
     } catch (err) {
@@ -558,11 +523,11 @@ export default function DemandesEnAttente() {
                   <button className="btn btn-edit flex-1 flex justify-center items-center px-1 py-2 text-sm text-center" title="Modifier" onClick={() => openEditModal(d)}>
                     Modifier
                   </button>
-                  
+
                   {(user?.role === 'admin' || user?.role === 'responsable_commercial') && (
-                    <button className="btn transition-all flex-1 text-sm leading-tight px-1 py-2 text-center flex items-center justify-center break-words" 
-                            style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc' }}
-                            onClick={() => setActiveAffectMenu(d.id)}>
+                    <button className="btn transition-all flex-1 text-sm leading-tight px-1 py-2 text-center flex items-center justify-center break-words"
+                      style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc' }}
+                      onClick={() => setActiveAffectMenu(d.id)}>
                       Affecter
                     </button>
                   )}
@@ -645,11 +610,11 @@ export default function DemandesEnAttente() {
                     <button className="btn btn-edit flex-none px-3" title="Modifier" onClick={() => openEditModal(d)}>
                       <Edit size={16} />
                     </button>
-                    
+
                     {(user?.role === 'admin' || user?.role === 'responsable_commercial') && (
-                      <button className="btn transition-all flex items-center justify-center p-2" 
-                              style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc', borderRadius: '4px' }}
-                              onClick={() => setActiveAffectMenu(d.id)}>
+                      <button className="btn transition-all flex items-center justify-center p-2"
+                        style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc', borderRadius: '4px' }}
+                        onClick={() => setActiveAffectMenu(d.id)}>
                         <UserPlus size={16} />
                       </button>
                     )}
@@ -819,7 +784,7 @@ export default function DemandesEnAttente() {
                     <div className="custom-service-box">
                       <h3 className="custom-service-title">Service sur mesure — {selectedService}</h3>
                       <p className="custom-service-text">
-                        {selectedService === 'Placement & gestion' 
+                        {selectedService === 'Placement & gestion'
                           ? "Un chargé de clientèle prendra contact avec l'entreprise pour établir une offre personnalisée."
                           : "Un assistant social et garde-malade prendront contact avec le client pour valider les points essentiels."
                         }
@@ -1223,37 +1188,86 @@ export default function DemandesEnAttente() {
                 </div>
 
                 {editingDemande && (
-                  <div className="form-section full-width mt-8 pt-4 mb-2">
-                    <h3 className="text-md fw-bold mb-4" style={{ color: '#4b5563' }}>Historique des documents</h3>
-                    
-                    {historiqueDocs[editingDemande.id]?.length > 0 ? (
-                      <div className="space-y-2 mt-2">
-                        {historiqueDocs[editingDemande.id].map(doc => (
-                          <div key={doc.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded text-sm w-full">
-                            <div className="flex items-center gap-3">
-                              {doc.type === 'pdf' ? <FileText size={18} className="text-red-500" /> : <div className="w-6 h-6 bg-teal-100 text-teal-700 rounded flex items-center justify-center font-bold text-[10px]">PNG</div>}
-                              <div>
-                                <p className="font-semibold text-slate-700">{doc.name}</p>
-                                <p className="text-xs text-slate-400">Généré le {doc.date}</p>
+                <div className="form-section full-width mt-8 pt-4 mb-2">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <h3 style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>Historique des documents</h3>
+                      {editingDemande.documents && editingDemande.documents.length > 0 && (
+                        <span style={{ fontSize: 11, padding: '2px 10px', background: '#f0fdf4', color: '#0d9488', borderRadius: 999, border: '1px solid #ccfbf1', fontWeight: 600 }}>{editingDemande.documents.length} fichier{editingDemande.documents.length > 1 ? 's' : ''}</span>
+                      )}
+                    </div>
+
+                    {editingDemande.documents && editingDemande.documents.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {editingDemande.documents.map(doc => {
+                          const createdAt = doc.created_at ? new Date(doc.created_at.replace(' ', 'T')).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+                          const isDevis = doc.type_document === 'devis';
+                          const fileName = doc.nom || (isDevis ? 'Devis PDF' : 'Récapitulatif PNG');
+                          const handleOpen = async () => {
+                            if (!doc.download_url) { addToast('Fichier non disponible', 'error'); return; }
+                            try {
+                              addToast('Chargement du document...', 'info');
+                              const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
+                              setShowPreviewModal({ url: blobUrl, type: isDevis ? 'devis' : 'png', name: fileName });
+                            } catch (e) { console.error(e); addToast('Erreur lors du chargement', 'error'); }
+                          };
+                          const handleDownload = async () => {
+                            if (!doc.download_url) { addToast('Fichier non disponible', 'error'); return; }
+                            try {
+                              const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
+                              const a = document.createElement('a');
+                              a.href = blobUrl;
+                              a.download = fileName;
+                              a.click();
+                              URL.revokeObjectURL(blobUrl);
+                            } catch (e) { console.error(e); addToast('Erreur lors du téléchargement', 'error'); }
+                          };
+                          return (
+                            <div key={doc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#f9fafb', gap: 12, transition: 'background 0.15s' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#f0fdf4')}
+                              onMouseLeave={e => (e.currentTarget.style.background = '#f9fafb')}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: isDevis ? '#fee2e2' : '#ccfbf1' }}>
+                                  <FileText size={18} style={{ color: isDevis ? '#ef4444' : '#0d9488' }} />
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <p style={{ fontWeight: 600, fontSize: 13, color: '#1e293b', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{fileName}</p>
+                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: isDevis ? '#fee2e2' : '#ccfbf1', color: isDevis ? '#ef4444' : '#0d9488', letterSpacing: '0.05em', textTransform: 'uppercase' as const, flexShrink: 0 }}>{isDevis ? 'PDF' : 'PNG'}</span>
+                                  </div>
+                                  <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0 0' }}>Généré le {createdAt}</p>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                                <button onClick={handleOpen} title="Aperçu"
+                                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px solid #d1d5db', background: 'white', color: '#0d9488', cursor: 'pointer', transition: 'all 0.15s' }}
+                                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f0fdf4'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#0d9488'; }}
+                                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'white'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db'; }}
+                                >
+                                  <Eye size={15} />
+                                </button>
+                                <button onClick={handleDownload} title="Télécharger"
+                                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px solid #d1d5db', background: 'white', color: '#475569', cursor: 'pointer', transition: 'all 0.15s' }}
+                                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f8fafc'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#94a3b8'; }}
+                                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'white'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db'; }}
+                                >
+                                  <Download size={15} />
+                                </button>
                               </div>
                             </div>
-                            <div className="flex gap-2">
-                              {doc.type === 'pdf' && (
-                                <button type="button" className="p-1.5 hover:bg-white rounded border border-slate-300 text-slate-600 transition-colors" onClick={() => window.open(doc.url, '_blank')} title="Ouvrir"><Eye size={16} /></button>
-                              )}
-                              <a href={doc.url} download={doc.name} className="p-1.5 hover:bg-white rounded border border-slate-300 text-slate-600 transition-colors flex items-center" title="Télécharger"><Download size={16} /></a>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
-                      <p className="text-sm italic" style={{ color: '#6b7280' }}>Aucun document généré pour cette demande.</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 14px', borderRadius: 8, border: '1px dashed #e5e7eb', background: '#fafafa' }}>
+                        <FileText size={18} style={{ color: '#d1d5db', flexShrink: 0 }} />
+                        <p style={{ fontSize: 13, color: '#9ca3af', margin: 0, fontStyle: 'italic' }}>Aucun document généré pour cette demande.</p>
+                      </div>
                     )}
                   </div>
                 )}
               </form>
             </div>
-            
+
             <div className={`modal-footer ${editingDemande ? 'border-t pt-6 bg-white' : ''}`}>
               {editingDemande ? (
                 <div className="flex gap-3 w-full justify-end">
@@ -1262,13 +1276,9 @@ export default function DemandesEnAttente() {
                   </button>
                   <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} type="button" onClick={() => {
                     const isDevis = isDevisRequired(editingDemande);
-                    if (isDevis) {
-                      setShowDevisModal(editingDemande);
-                    } else {
-                      setShowRecapModal(editingDemande);
-                    }
+                    handlePreviewDocument(editingDemande.id, isDevis ? 'devis' : 'png');
                   }}>
-                    <Download size={16} /> {isDevisRequired(editingDemande) ? 'Générer devis' : 'Télécharger PNG'}
+                    <Eye size={16} /> Aperçu du {isDevisRequired(editingDemande) ? 'Devis' : 'Récapitulatif'}
                   </button>
                   <button className="btn flex items-center gap-2" style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '8px 24px', borderRadius: '4px', border: 'none' }} type="button" onClick={handleCreateDemande}>
                     <Save size={16} /> Enregistrer
@@ -1287,42 +1297,39 @@ export default function DemandesEnAttente() {
         </div>
       )}
 
-      {/* Recap PNG Generation Modal */}
-      {showRecapModal && (
-        <div className="modal-overlay z-[100]" onClick={() => setShowRecapModal(null)}>
-          <div className="modal-content max-w-4xl" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="text-xl fw-bold">Visualisation du PNG Recap</h2>
-              <button className="btn-close" onClick={() => setShowRecapModal(null)}><XCircle size={24} /></button>
+      {/* Unified Preview Modal */}
+      {showPreviewModal && (
+        <div className="modal-overlay z-[100]" onClick={() => setShowPreviewModal(null)}>
+          <div className="modal-content max-w-[1200px]" onClick={e => e.stopPropagation()} style={{ width: '95%', height: '90vh', display: 'flex', flexDirection: 'column', backgroundColor: 'white', borderRadius: '8px', padding: '24px' }}>
+            <div className="modal-header border-b-0 pb-2 mb-4 flex justify-between items-center">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-teal-900">
+                <Eye size={24} className="text-teal-700" /> Aperçu — {showPreviewModal.type === 'devis' ? 'Devis' : 'Récapitulatif'}
+              </h2>
+              <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowPreviewModal(null)}><XCircle size={20} /></button>
             </div>
-            <div className="modal-body bg-slate-100 p-4 overflow-auto max-h-[70vh] flex justify-center relative">
-              <FormulaireRecap demande={showRecapModal} />
+            
+            <div className="modal-body bg-slate-800 rounded-md border border-slate-700 shadow-inner" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+               {showPreviewModal.type === 'devis' ? (
+                 <iframe src={showPreviewModal.url} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Apercu" />
+               ) : (
+                 <div style={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '24px', backgroundColor: '#ffffff' }}>
+                   <img src={showPreviewModal.url} alt="Recapitulatif" style={{ maxWidth: '100%', width: 'auto', height: 'auto', objectFit: 'contain', boxShadow: '0 4px 24px rgba(0,0,0,0.15)', borderRadius: '8px', display: 'block' }} />
+                 </div>
+               )}
             </div>
-            <div className="modal-footer border-t pt-4 bg-white flex justify-end gap-3">
-              <button className="btn btn-secondary" onClick={() => setShowRecapModal(null)}>Fermer</button>
-              <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} onClick={() => handleDownloadPNG('recap-container', `recap_${showRecapModal.id}.png`, showRecapModal.id)}>
-                <Download size={16} /> Télécharger l'image PNG
+            
+            <div className="modal-footer border-t-0 pt-0 mt-6 bg-white flex justify-center sm:justify-end gap-3 flex-wrap">
+              <button className="btn transition-all" style={{ border: '1px solid #e2e8f0', backgroundColor: 'transparent', color: '#475569', fontWeight: 500, padding: '10px 24px', borderRadius: '6px' }} onClick={() => setShowPreviewModal(null)}>
+                Fermer
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Devis PDF Generation Modal */}
-      {showDevisModal && (
-        <div className="modal-overlay z-[100]" onClick={() => setShowDevisModal(null)}>
-          <div className="modal-content" style={{ maxWidth: '1200px', width: '95%' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="text-xl fw-bold">Paramétrage et Génération du Devis</h2>
-              <button className="btn-close" onClick={() => setShowDevisModal(null)}><XCircle size={24} /></button>
-            </div>
-            <div className="modal-body bg-slate-100 p-4">
-              <DevisPreview demande={showDevisModal} />
-            </div>
-            <div className="modal-footer border-t pt-4 bg-white flex justify-end gap-3">
-              <button className="btn btn-secondary" onClick={() => setShowDevisModal(null)}>Fermer</button>
-              <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} onClick={() => handleDownloadPDF('devis-container', `devis_D-${showDevisModal.id.toString().padStart(5, '0')}.pdf`, showDevisModal.id)}>
-                <Download size={16} /> Générer le document PDF
+              <a href={showPreviewModal.url} download={showPreviewModal.name} target="_blank" rel="noreferrer" className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }}>
+                <Download size={18} /> Télécharger
+              </a>
+              <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }} onClick={() => {
+                const addToast = useToastStore.getState().addToast;
+                addToast("Fonction d'envoi en cours de développement", "info");
+              }}>
+                <Send size={18} /> Envoyer au client
               </button>
             </div>
           </div>
@@ -1341,9 +1348,9 @@ export default function DemandesEnAttente() {
               {commerciaux.length > 0 ? (
                 <div className="grid gap-2">
                   {commerciaux.map((c: any) => (
-                    <button key={c.id} 
-                            className="flex items-center gap-3 w-full p-3 text-left border rounded-lg hover:bg-teal-50 hover:border-teal-200 transition-colors group"
-                            onClick={() => handleAffecter(activeAffectMenu, c.id)}>
+                    <button key={c.id}
+                      className="flex items-center gap-3 w-full p-3 text-left border rounded-lg hover:bg-teal-50 hover:border-teal-200 transition-colors group"
+                      onClick={() => handleAffecter(activeAffectMenu, c.id)}>
                       <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold group-hover:bg-teal-200 shrink-0">
                         {c.first_name?.[0] || c.full_name?.[0] || 'C'}
                       </div>

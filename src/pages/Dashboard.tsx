@@ -10,12 +10,23 @@ import {
   FileText,
   Save,
   Download,
-  UserPlus
+  UserPlus,
+  Eye,
+  Send
 } from 'lucide-react';
+
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
+
+// Services qui nécessitent un devis PDF (les autres ont un récapitulatif PNG)
+const isDevisRequired = (d: Demande | null): boolean => {
+  if (!d) return false;
+  if (d.segment === 'entreprise') return true;
+  const devisParticuliers = ['Ménage Air BnB', 'Ménage post-sinistre', 'Auxiliaire de vie', 'Ménage fin chantier', 'Nettoyage fin de chantier'];
+  return devisParticuliers.includes(d.service);
+};
 
 interface DashboardStats {
   total: number;
@@ -61,7 +72,11 @@ export default function Dashboard() {
   const [selectedDemande, setSelectedDemande] = useState<Demande | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
+  
+  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string } | null>(null);
 
+
+  const { addToast } = useToastStore();
   const { user } = useAuthStore();
   const [commerciaux, setCommerciaux] = useState<User[]>([]);
   const [activeAffectMenu, setActiveAffectMenu] = useState<number | null>(null);
@@ -82,10 +97,37 @@ export default function Dashboard() {
       addToast('Erreur lors de l\'affectation', 'error');
     }
   };
+
+  const handlePreviewDocument = async (type: 'devis' | 'png') => {
+    if (!selectedDemande) return;
+    try {
+      addToast(`Génération du ${type === 'devis' ? 'devis' : 'récapitulatif'} sur le serveur...`, 'info');
+      const response = await generateDocument(selectedDemande.id, type);
+      const doc = response.data;
+
+      // Utilise le download_url sécurisé — jamais le chemin physique
+      const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
+      setShowPreviewModal({ url: blobUrl, type, name: doc.nom });
+
+      // Refresh demandes and sync selectedDemande so the history updates
+      const refreshed = await getDemandes();
+      const allResults: Demande[] = Array.isArray(refreshed.data?.results)
+        ? refreshed.data.results
+        : (Array.isArray(refreshed.data) ? refreshed.data : []);
+      const updatedDemande = allResults.find(d => d.id === selectedDemande.id);
+      if (updatedDemande) setSelectedDemande(updatedDemande);
+      fetchData();
+
+      addToast('Aperçu prêt', 'success');
+    } catch (error) {
+      console.error(error);
+      addToast('Erreur lors de la génération', 'error');
+    }
+  };
+
   const [showDetail, setShowDetail] = useState(false);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
   const [activeMoreMenu, setActiveMoreMenu] = useState<number | null>(null);
-  const { addToast } = useToastStore();
 
   const fetchData = async () => {
     setLoading(true);
@@ -124,6 +166,8 @@ export default function Dashboard() {
         ...editFormData,
         prix: parseFloat(editFormData.prix) || 0,
         nb_heures: parseInt(editFormData.nb_heures) || 0,
+        date_intervention: editFormData.date_intervention || null,
+        heure_intervention: editFormData.heure_intervention || '',
       };
 
       if (selectedDemande.formulaire_data) {
@@ -1012,21 +1056,81 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {selectedDemande.statut === 'en_attente' && (
-                    <div className="detail-section mt-6 border-t pt-6 mb-4">
-                      <h3 className="text-md fw-bold text-teal-dark mb-4" style={{ color: '#4b5563' }}>Historique des documents</h3>
-                      <p className="text-sm italic" style={{ color: '#6b7280' }}>Aucun document généré pour cette demande.</p>
-                      {/* Placeholder for future implementations: 
-                        <div className="flex items-center justify-between p-3 bg-gray-50 border rounded mt-3">
-                          <span className="text-sm">Devis_#1234.pdf</span>
-                          <div className="flex gap-2">
-                            <button className="icon-btn" title="Voir"><Eye size={16} /></button>
-                            <button className="icon-btn" title="Télécharger"><Download size={16} /></button>
-                          </div>
-                        </div>
-                      */}
+                  <div className="detail-section mt-6 border-t pt-6 mb-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: '#6b7280', letterSpacing: '0.08em' }}>Historique des documents</h3>
+                      {selectedDemande.documents && selectedDemande.documents.length > 0 && (
+                        <span className="text-xs px-2 py-0.5 bg-teal-50 text-teal-700 rounded-full border border-teal-100 font-medium">{selectedDemande.documents.length} fichier{selectedDemande.documents.length > 1 ? 's' : ''}</span>
+                      )}
                     </div>
-                  )}
+                    {selectedDemande.documents && selectedDemande.documents.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedDemande.documents.map((doc: any) => {
+                          const createdAt = doc.created_at ? new Date(doc.created_at.replace(' ', 'T')).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+                          const isDevis = doc.type_document === 'devis';
+                          const fileName = doc.nom || (isDevis ? 'Devis PDF' : 'Récapitulatif PNG');
+                          const handleOpen = async () => {
+                            if (!doc.download_url) return;
+                            try {
+                              addToast('Chargement du document...', 'info');
+                              const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
+                              setShowPreviewModal({ url: blobUrl, type: isDevis ? 'devis' : 'png', name: fileName });
+                            } catch { addToast('Erreur lors du chargement', 'error'); }
+                          };
+                          const handleDownload = async () => {
+                            if (!doc.download_url) return;
+                            try {
+                              const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
+                              const a = document.createElement('a');
+                              a.href = blobUrl;
+                              a.download = fileName;
+                              a.click();
+                              URL.revokeObjectURL(blobUrl);
+                            } catch { addToast('Erreur lors du téléchargement', 'error'); }
+                          };
+                          return (
+                            <div key={doc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e5e7eb', background: '#f9fafb', gap: '12px', transition: 'background 0.15s' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#f0fdf4')}
+                              onMouseLeave={e => (e.currentTarget.style.background = '#f9fafb')}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: isDevis ? '#fee2e2' : '#ccfbf1' }}>
+                                  {isDevis ? <FileText size={18} style={{ color: '#ef4444' }} /> : <FileText size={18} style={{ color: '#0d9488' }} />}
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <p style={{ fontWeight: 600, fontSize: 13, color: '#1e293b', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>{fileName}</p>
+                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: isDevis ? '#fee2e2' : '#ccfbf1', color: isDevis ? '#ef4444' : '#0d9488', letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0 }}>{isDevis ? 'PDF' : 'PNG'}</span>
+                                  </div>
+                                  <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0 0' }}>Généré le {createdAt}</p>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                                <button onClick={handleOpen} title="Aperçu"
+                                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px solid #d1d5db', background: 'white', color: '#0d9488', cursor: 'pointer', transition: 'all 0.15s' }}
+                                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f0fdf4'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#0d9488'; }}
+                                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'white'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db'; }}
+                                >
+                                  <Eye size={15} />
+                                </button>
+                                <button onClick={handleDownload} title="Télécharger"
+                                  style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px solid #d1d5db', background: 'white', color: '#475569', cursor: 'pointer', transition: 'all 0.15s' }}
+                                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f8fafc'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#94a3b8'; }}
+                                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'white'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db'; }}
+                                >
+                                  <Download size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 14px', borderRadius: 8, border: '1px dashed #e5e7eb', background: '#fafafa' }}>
+                        <FileText size={18} style={{ color: '#d1d5db', flexShrink: 0 }} />
+                        <p style={{ fontSize: 13, color: '#9ca3af', margin: 0, fontStyle: 'italic' }}>Aucun document généré pour cette demande.</p>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -1037,11 +1141,9 @@ export default function Dashboard() {
                     Annuler
                   </button>
                   <div className="flex gap-3">
-                    <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} onClick={() => {
-                      addToast(selectedDemande.is_devis ? 'Génération du devis en cours...' : 'Téléchargement PNG en cours...', 'info')
-                    }}>
-                      <Download size={16} /> {selectedDemande.is_devis ? 'Générer devis' : 'Télécharger PNG'}
-                    </button>
+                   <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} onClick={() => handlePreviewDocument(isDevisRequired(selectedDemande) ? 'devis' : 'png')}>
+                    <Eye size={16} /> Aperçu du {isDevisRequired(selectedDemande) ? 'Devis' : 'Récapitulatif'}
+                  </button>
                     <button className="btn flex items-center gap-2" style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '8px 24px', borderRadius: '4px', border: 'none' }} onClick={handleUpdate}>
                       <Save size={16} /> Enregistrer
                     </button>
@@ -1051,8 +1153,8 @@ export default function Dashboard() {
                 <>
                   <div className="flex gap-2">
                     {isEditing ? (
-                      <button className="btn btn-secondary flex items-center gap-2 border bg-white" onClick={() => addToast('Fonctionnalité de génération de devis à venir', 'info')}>
-                        <FileText size={18} /> Générer devis
+                      <button className="btn btn-secondary flex items-center gap-2 border bg-white" onClick={() => handlePreviewDocument(isDevisRequired(selectedDemande) ? 'devis' : 'png')}>
+                        <Eye size={18} /> Aperçu du {isDevisRequired(selectedDemande) ? 'Devis' : 'Récapitulatif'}
                       </button>
                     ) : (
                       <button className="btn btn-secondary" onClick={() => setShowDetail(false)}>Fermer</button>
@@ -1076,6 +1178,45 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      {/* Unified Preview Modal */}
+      {showPreviewModal && (
+        <div className="modal-overlay z-[100]" onClick={() => setShowPreviewModal(null)}>
+          <div className="modal-content max-w-[1200px]" onClick={e => e.stopPropagation()} style={{ width: '95%', height: '90vh', display: 'flex', flexDirection: 'column', backgroundColor: 'white', borderRadius: '8px', padding: '24px' }}>
+            <div className="modal-header border-b-0 pb-2 mb-4 flex justify-between items-center">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-teal-900">
+                <Eye size={24} className="text-teal-700" /> Aperçu — {showPreviewModal.type === 'devis' ? 'Devis' : 'Récapitulatif'}
+              </h2>
+              <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowPreviewModal(null)}><XCircle size={20} /></button>
+            </div>
+            
+            <div className="modal-body bg-slate-800 rounded-md border border-slate-700 shadow-inner" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+               {showPreviewModal.type === 'devis' ? (
+                 <iframe src={showPreviewModal.url} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Apercu" />
+               ) : (
+                 <div style={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '24px', backgroundColor: '#ffffff' }}>
+                   <img src={showPreviewModal.url} alt="Recapitulatif" style={{ maxWidth: '100%', width: 'auto', height: 'auto', objectFit: 'contain', boxShadow: '0 4px 24px rgba(0,0,0,0.15)', borderRadius: '8px', display: 'block' }} />
+                 </div>
+               )}
+            </div>
+            
+            <div className="modal-footer border-t-0 pt-0 mt-6 bg-white flex justify-center sm:justify-end gap-3 flex-wrap">
+              <button className="btn transition-all" style={{ border: '1px solid #e2e8f0', backgroundColor: 'transparent', color: '#475569', fontWeight: 500, padding: '10px 24px', borderRadius: '6px' }} onClick={() => setShowPreviewModal(null)}>
+                Fermer
+              </button>
+              <a href={showPreviewModal.url} download={showPreviewModal.name} target="_blank" rel="noreferrer" className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }}>
+                <Download size={18} /> Télécharger
+              </a>
+              <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }} onClick={() => {
+                const addToast = useToastStore.getState().addToast;
+                addToast("Fonction d'envoi en cours de développement", "info");
+              }}>
+                <Send size={18} /> Envoyer au client
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

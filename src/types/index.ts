@@ -69,5 +69,15 @@ export interface Demande {
   note_commerciale?: string;
   note_operationnelle?: string;
   formulaire_data?: Record<string, any>;
+  documents?: Document[];
   created_at: string;
+}
+
+export interface Document {
+  id: number;
+  demande: number;
+  type_document: string;
+  nom: string;
+  created_at: string;
+  download_url: string | null;
 }
