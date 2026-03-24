@@ -2757,3 +2757,80 @@ input:checked + .slider:before {
 .status-dot.active {
   background: #10b981;
 }
+
+/* Redesigned Edit Form Sections */
+.form-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 1rem;
+  transition: all 0.2s ease;
+  color: white;
+  font-weight: 500;
+}
+
+.form-section-header .section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.form-section-header.demande {
+  background-color: #0d9488; /* Teal-600 */
+}
+
+.form-section-header.demande:hover {
+  background-color: #0f766e; /* Teal-700 */
+}
+
+.form-section-header.agence {
+  background-color: #ef4444; /* Red-500 (Salmon-ish in screenshot) */
+  opacity: 0.8;
+  cursor: default; /* Not collapsible in screenshot? */
+}
+
+/* User's screenshot shows a slightly different salmon color, let's try to match it */
+.form-section-header.agence {
+  background-color: #f06a4d; /* More salmon/orange */
+}
+
+.form-section-content {
+  padding: 0.5rem 0.25rem 1.5rem 0.25rem;
+}
+
+.section-divider {
+  height: 1px;
+  background-color: #e5e7eb;
+  margin: 1.5rem 0;
+}
+
+.contact-section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+/* Specific styling for the Dashboard Edit Form inputs */
+.edit-form-full .form-group label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.edit-input, .edit-textarea {
+  border: 1px solid #d1d5db;
+  color: #1f2937;
+}
+
+.edit-input:focus, .edit-textarea:focus {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.1);
+}

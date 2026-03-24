@@ -50,6 +50,7 @@ export interface Demande {
   date_intervention: string;
   heure_intervention?: string;
   nb_heures?: number;
+  preference_horaire?: string;
   frequency: string;
   frequency_label?: string;
   neighborhood_city?: string;
@@ -66,8 +67,8 @@ export interface Demande {
   profils_envoyes?: Agent[];
   cao: boolean;
   prochaine_alerte_cao?: string;
-  note_commerciale?: string;
-  note_operationnelle?: string;
+  note_commercial?: string;
+  note_operationnel?: string;
   formulaire_data?: Record<string, any>;
   documents?: Document[];
   created_at: string;

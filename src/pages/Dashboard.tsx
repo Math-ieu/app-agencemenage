@@ -6,8 +6,8 @@ import {
   CheckCircle,
   Settings, UserCheck,
   XCircle, CreditCard, MessageSquare,
-  ChevronLeft,
-  FileText,
+  ChevronLeft, ChevronUp, ChevronDown,
+  FileText, ClipboardList,
   Save,
   Download,
   UserPlus,
@@ -71,6 +71,7 @@ export default function Dashboard() {
   const [dateRange] = useState({ start: '', end: '' });
   const [selectedDemande, setSelectedDemande] = useState<Demande | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
   
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string } | null>(null);
@@ -168,6 +169,9 @@ export default function Dashboard() {
         nb_heures: parseInt(editFormData.nb_heures) || 0,
         date_intervention: editFormData.date_intervention || null,
         heure_intervention: editFormData.heure_intervention || '',
+        note_commercial: editFormData.note_commercial || '',
+        note_operationnel: editFormData.note_operationnel || '',
+        preference_horaire: editFormData.preference_horaire || '',
       };
 
       if (selectedDemande.formulaire_data) {
@@ -177,14 +181,25 @@ export default function Dashboard() {
           nb_intervenants: editFormData.nb_intervenants,
           produits: editFormData.avec_produit,
           torchons: editFormData.avec_torchons,
+          duree: parseInt(editFormData.nb_heures as string) || 0,
+          surface: parseInt(editFormData.surface as string) || 0,
+          ville: editFormData.ville,
+          quartier: editFormData.quartier,
+          adresse: editFormData.adresse,
+          preference_horaire: editFormData.preference_horaire,
+          notes: editFormData.note_client,
         };
       }
 
       updateData.avec_produit = editFormData.avec_produit;
 
-      await updateDemande(selectedDemande.id, updateData);
-      setIsEditing(false);
-      setShowDetail(false);
+      const response = await updateDemande(selectedDemande.id, updateData);
+      
+      // Mettre à jour selectedDemande pour que les modifications suivantes soient basées sur les nouvelles données
+      if (response.data) {
+        setSelectedDemande(response.data);
+      }
+      
       await fetchData();
       addToast('Mise à jour effectuée avec succès !', 'success');
 
@@ -204,11 +219,12 @@ export default function Dashboard() {
       prix: d.prix,
       mode_paiement: d.mode_paiement,
       statut_paiement: d.statut_paiement,
-      nb_heures: d.nb_heures,
+      nb_heures: d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '',
       date_intervention: d.date_intervention,
       heure_intervention: d.heure_intervention || '',
-      note_commerciale: d.note_commerciale || '',
-      note_operationnelle: d.note_operationnelle || '',
+      note_commercial: d.note_commercial || '',
+      note_operationnel: d.note_operationnel || '',
+      note_client: d.formulaire_data?.notes || d.formulaire_data?.message || '',
       service: d.service,
       segment: d.segment,
       frequency: d.frequency,
@@ -220,12 +236,18 @@ export default function Dashboard() {
       is_devis: d.is_devis,
       statut: d.statut,
       type_habitation: d.formulaire_data?.type_habitation || '',
+      surface: d.formulaire_data?.surface || 0,
+      ville: d.formulaire_data?.ville || '',
+      quartier: d.formulaire_data?.quartier || '',
+      adresse: d.formulaire_data?.adresse || '',
+      preference_horaire: d.formulaire_data?.preference_horaire || '',
       nb_intervenants: d.formulaire_data?.nb_intervenants || ((d.nb_heures || 0) > 0 ? 1 : 0),
       avec_produit: d.avec_produit || false,
       avec_torchons: d.formulaire_data?.torchons || false,
       regenerer_devis: false,
       envoyer_whatsapp: false
     });
+    setIsFormExpanded(false);
     setShowDetail(true);
   };
 
@@ -787,218 +809,247 @@ export default function Dashboard() {
             <div className="sheet-body px-6">
               {isEditing ? (
                 <div className="edit-form-full">
-                  {/* Row 1: Espace agence */}
-                  <div className="form-grid-4 gap-4 mb-6">
-                    <div className="form-group">
-                      <label>Statut du besoin</label>
-                      <select
-                        value={editFormData.statut}
-                        onChange={e => setEditFormData({ ...editFormData, statut: e.target.value })}
-                        className="edit-input"
-                        style={{ fontWeight: 'bold', color: editFormData.statut === 'en_cours' ? '#10b981' : (editFormData.statut === 'en_attente' ? '#f59e0b' : '#334155') }}
-                      >
-                        <option value="en_attente">En attente</option>
-                        <option value="en_cours">En cours</option>
-                        <option value="termine">Terminé</option>
-                        <option value="annule">Annulé</option>
-                      </select>
+                  {/* Formulaire de la demande Section (Collapsible) */}
+                  <div className="form-collapsible-section">
+                    <div 
+                      className="form-section-header demande" 
+                      onClick={() => setIsFormExpanded(!isFormExpanded)}
+                    >
+                      <div className="section-title">
+                        <ClipboardList size={18} />
+                        <span>Formulaire de la demande</span>
+                      </div>
+                      {isFormExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </div>
-                    <div className="form-group">
-                      <label>Segment</label>
-                      <select
-                        value={editFormData.segment}
-                        onChange={e => {
-                          const newSegment = e.target.value as keyof typeof SERVICES_LIST;
-                          const currentService = editFormData.service;
-                          const availableServices = SERVICES_LIST[newSegment] || [];
-                          const isValid = availableServices.includes(currentService);
-                          setEditFormData({
-                            ...editFormData,
-                            segment: newSegment,
-                            service: isValid ? currentService : (availableServices[0] || '')
-                          });
-                        }}
-                        className="edit-input"
-                      >
-                        <option value="particulier">Particulier</option>
-                        <option value="entreprise">Entreprise</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Type de service</label>
-                      <select
-                        value={editFormData.service}
-                        onChange={e => setEditFormData({ ...editFormData, service: e.target.value })}
-                        className="edit-input"
-                      >
-                        {(SERVICES_LIST[editFormData.segment as keyof typeof SERVICES_LIST] || []).map(s => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Mode de paiement</label>
-                      <select value={editFormData.mode_paiement} onChange={e => setEditFormData({ ...editFormData, mode_paiement: e.target.value })} className="edit-input">
-                        <option value="virement">Virement</option>
-                        <option value="cheque">Par chèque</option>
-                        <option value="agence">À l'agence</option>
-                        <option value="sur_place">Sur place</option>
-                      </select>
-                    </div>
-                  </div>
+                    
+                    {isFormExpanded && (
+                      <div className="form-section-content">
+                        <div className="form-grid-2 gap-4 mb-4">
+                          <div className="form-group">
+                            <label>Type d'habitation</label>
+                            <select
+                              value={editFormData.type_habitation}
+                              onChange={e => setEditFormData({ ...editFormData, type_habitation: e.target.value })}
+                              className="edit-input"
+                            >
+                              <option value="">Choisir...</option>
+                              <option value="Studio">Studio</option>
+                              <option value="Appartement">Appartement</option>
+                              <option value="Duplex">Duplex</option>
+                              <option value="Villa">Villa</option>
+                              <option value="Maison">Maison</option>
+                              <option value="Bureau">Bureau</option>
+                              <option value="Magasin">Magasin</option>
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label>Superficie (m²)</label>
+                            <input 
+                              type="number" 
+                              placeholder="ex: 50"
+                              value={editFormData.surface} 
+                              onChange={e => setEditFormData({ ...editFormData, surface: parseInt(e.target.value) || 0 })} 
+                              className="edit-input" 
+                            />
+                          </div>
+                        </div>
 
-                  {/* Conditional Rendering for Custom Services */}
-                  {(editFormData.service === 'Auxiliaire de vie' || editFormData.service === 'Placement & gestion') ? (
-                    <div className="custom-service-box">
-                      <h3 className="custom-service-title">Service sur mesure — {editFormData.service}</h3>
-                      <p className="custom-service-text">
-                        {editFormData.service === 'Placement & gestion'
-                          ? "Un chargé de clientèle prendra contact avec l'entreprise pour établir une offre personnalisée."
-                          : "Un assistant social et garde-malade prendront contact avec le client pour valider les points essentiels."
-                        }
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Standard Service Details */}
-                      <div className="form-grid-2 gap-4 mb-4">
-                        <div className="form-group">
-                          <label>Type d'habitation</label>
-                          <select
-                            value={editFormData.type_habitation}
-                            onChange={e => setEditFormData({ ...editFormData, type_habitation: e.target.value })}
+                        <div className="form-grid-2 gap-4 mb-4">
+                          <div className="form-group">
+                            <label>Date d'intervention</label>
+                            <input type="date" value={editFormData.date_intervention} onChange={e => setEditFormData({ ...editFormData, date_intervention: e.target.value })} className="edit-input" />
+                          </div>
+                          <div className="form-group">
+                            <label>Heure</label>
+                            <input type="time" value={editFormData.heure_intervention} onChange={e => setEditFormData({ ...editFormData, heure_intervention: e.target.value })} className="edit-input" />
+                          </div>
+                        </div>
+
+                        <div className="form-group mb-6">
+                          <label>Préférence horaire</label>
+                          <select 
+                            value={editFormData.preference_horaire} 
+                            onChange={e => setEditFormData({ ...editFormData, preference_horaire: e.target.value })} 
                             className="edit-input"
                           >
                             <option value="">Choisir...</option>
-                            <option value="Studio">Studio</option>
-                            <option value="Appartement">Appartement</option>
-                            <option value="Duplex">Duplex</option>
-                            <option value="Villa">Villa</option>
-                            <option value="Maison">Maison</option>
-                            <option value="Bureau">Bureau</option>
-                            <option value="Magasin">Magasin</option>
+                            <option value="matin">Matin (08h - 12h)</option>
+                            <option value="apres_midi">Après-midi (14h - 18h)</option>
+                            <option value="soir">Soir (après 18h)</option>
+                          </select>
+                        </div>
+
+                        <div className="section-divider"></div>
+                        <h4 className="contact-section-title">Informations contact</h4>
+
+                        <div className="form-grid-2 gap-4 mb-4">
+                          <div className="form-group">
+                            <label>Nom</label>
+                            <input type="text" value={editFormData.client_name} onChange={e => setEditFormData({ ...editFormData, client_name: e.target.value })} className="edit-input" />
+                          </div>
+                          <div className="form-group">
+                            <label>Tél. direct</label>
+                            <input type="text" value={editFormData.client_phone} onChange={e => setEditFormData({ ...editFormData, client_phone: e.target.value })} className="edit-input" />
+                          </div>
+                        </div>
+
+                        <div className="form-grid-2 gap-4 mb-4">
+                          <div className="form-group">
+                            <label>Tél. WhatsApp</label>
+                            <input type="text" value={editFormData.client_whatsapp} onChange={e => setEditFormData({ ...editFormData, client_whatsapp: e.target.value })} className="edit-input" />
+                          </div>
+                          <div className="form-group">
+                            <label>Ville</label>
+                            <input type="text" value={editFormData.ville} onChange={e => setEditFormData({ ...editFormData, ville: e.target.value })} className="edit-input" />
+                          </div>
+                        </div>
+
+                        <div className="form-group mb-4">
+                          <label>Quartier</label>
+                          <input type="text" value={editFormData.quartier} onChange={e => setEditFormData({ ...editFormData, quartier: e.target.value })} className="edit-input" />
+                        </div>
+
+                        <div className="form-group mb-6">
+                          <label>Adresse</label>
+                          <input type="text" value={editFormData.adresse} onChange={e => setEditFormData({ ...editFormData, adresse: e.target.value })} className="edit-input" />
+                        </div>
+
+                        <div className="section-divider"></div>
+                        <h4 className="contact-section-title">Notes client</h4>
+                        <div className="form-group">
+                          <textarea 
+                            value={editFormData.note_client || ''} 
+                            onChange={e => setEditFormData({ ...editFormData, note_client: e.target.value })} 
+                            className="edit-textarea" 
+                            rows={3} 
+                            placeholder="Notes du client..."
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Espace agence Section */}
+                  <div className="espace-agence-container">
+                    <div className="form-section-header agence">
+                      <div className="section-title">
+                        <Building2 size={18} />
+                        <span>Espace agence</span>
+                      </div>
+                    </div>
+
+                    <div className="form-section-content">
+                      <div className="form-grid-3 gap-4 mb-4">
+                        <div className="form-group">
+                          <label>Statut du besoin</label>
+                          <select
+                            value={editFormData.statut}
+                            onChange={e => setEditFormData({ ...editFormData, statut: e.target.value })}
+                            className="edit-input font-bold"
+                            style={{ color: editFormData.statut === 'en_cours' ? '#10b981' : (editFormData.statut === 'en_attente' ? '#f59e0b' : '#334155') }}
+                          >
+                            <option value="en_attente">En attente</option>
+                            <option value="en_cours">En cours</option>
+                            <option value="termine">Terminé</option>
+                            <option value="annule">Annulé</option>
                           </select>
                         </div>
                         <div className="form-group">
-                          <label>Fréquence</label>
-                          <select value={editFormData.frequency} onChange={e => setEditFormData({ ...editFormData, frequency: e.target.value })} className="edit-input">
-                            <option value="oneshot">Une seule fois</option>
-                            <option value="abonnement">Abonnement</option>
+                          <label>Segment</label>
+                          <select
+                            value={editFormData.segment}
+                            onChange={e => {
+                              const newSegment = e.target.value as keyof typeof SERVICES_LIST;
+                              const currentService = editFormData.service;
+                              const availableServices = SERVICES_LIST[newSegment] || [];
+                              const isValid = availableServices.includes(currentService);
+                              setEditFormData({
+                                ...editFormData,
+                                segment: newSegment,
+                                service: isValid ? currentService : (availableServices[0] || '')
+                              });
+                            }}
+                            className="edit-input"
+                          >
+                            <option value="particulier">Particulier</option>
+                            <option value="entreprise">Entreprise</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Type de service</label>
+                          <select
+                            value={editFormData.service}
+                            onChange={e => setEditFormData({ ...editFormData, service: e.target.value })}
+                            className="edit-input"
+                          >
+                            {(SERVICES_LIST[editFormData.segment as keyof typeof SERVICES_LIST] || []).map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
 
-                      <div className="form-grid-2 gap-4 mb-4">
+                      <div className="form-grid-3 gap-4 mb-6">
                         <div className="form-group">
-                          <label>Durée (heures)</label>
-                          <input type="number" value={editFormData.nb_heures} onChange={e => setEditFormData({ ...editFormData, nb_heures: e.target.value })} className="edit-input" />
+                          <label>Mode de paiement</label>
+                          <select value={editFormData.mode_paiement} onChange={e => setEditFormData({ ...editFormData, mode_paiement: e.target.value })} className="edit-input">
+                            <option value="virement">Virement</option>
+                            <option value="cheque">Par chèque</option>
+                            <option value="agence">À l'agence</option>
+                            <option value="sur_place">Sur place</option>
+                          </select>
                         </div>
                         <div className="form-group">
-                          <label>Nb intervenants</label>
-                          <input
-                            type="number"
-                            value={editFormData.nb_intervenants}
-                            onChange={e => setEditFormData({ ...editFormData, nb_intervenants: parseInt(e.target.value) || 0 })}
-                            className="edit-input"
+                          <label>Montant total (MAD)</label>
+                          <input type="number" value={editFormData.prix} onChange={e => setEditFormData({ ...editFormData, prix: e.target.value })} className="edit-input" />
+                        </div>
+                        <div className="form-group">
+                          <label>Statut de paiement</label>
+                          <select value={editFormData.statut_paiement} onChange={e => setEditFormData({ ...editFormData, statut_paiement: e.target.value })} className="edit-input">
+                            <option value="non_paye">Non payé</option>
+                            <option value="acompte">Acompte versé</option>
+                            <option value="partiel">Paiement partiel</option>
+                            <option value="integral">Paiement intégral</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="form-grid-2 gap-4 mb-6">
+                        <div className="form-group">
+                          <label>Note commerciale</label>
+                          <textarea 
+                            value={editFormData.note_commercial} 
+                            onChange={e => setEditFormData({ ...editFormData, note_commercial: e.target.value })} 
+                            className="edit-textarea" 
+                            rows={4} 
+                            placeholder="Notes du commercial..."
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Note opération</label>
+                          <textarea 
+                            value={editFormData.note_operationnel} 
+                            onChange={e => setEditFormData({ ...editFormData, note_operationnel: e.target.value })} 
+                            className="edit-textarea" 
+                            rows={4} 
+                            placeholder="Notes opérationnelles..."
                           />
                         </div>
                       </div>
 
-                      <div className="form-grid-2 gap-4 mb-4">
-                        <div className="form-group">
-                          <label>Date d'intervention</label>
-                          <input type="date" value={editFormData.date_intervention} onChange={e => setEditFormData({ ...editFormData, date_intervention: e.target.value })} className="edit-input" />
-                        </div>
-                        <div className="form-group">
-                          <label>Heure</label>
-                          <input type="time" value={editFormData.heure_intervention} onChange={e => setEditFormData({ ...editFormData, heure_intervention: e.target.value })} className="edit-input" />
-                        </div>
-                      </div>
-
-                      <div className="detail-section mt-6">
-                        <h3 className="text-sm fw-bold text-muted mb-4 uppercase">Services optionnels</h3>
-                        <div className="form-grid-2">
-                          <div className="flex items-center gap-3">
-                            <label className="switch">
-                              <input type="checkbox" checked={editFormData.avec_produit} onChange={e => setEditFormData({ ...editFormData, avec_produit: e.target.checked })} />
-                              <span className="slider round"></span>
-                            </label>
-                            <span className="text-sm">Produit ménager (+ 90 MAD)</span>
+                      <div className="whatsapp-toggle-card">
+                        <div className="flex items-center gap-4">
+                          <label className="switch">
+                            <input type="checkbox" checked={editFormData.envoyer_whatsapp} onChange={e => setEditFormData({ ...editFormData, envoyer_whatsapp: e.target.checked, regenerer_devis: e.target.checked })} />
+                            <span className="slider round"></span>
+                          </label>
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2 text-teal-dark fw-bold">
+                              <MessageSquare size={18} />
+                              Régénérer le devis et renvoyer au client via WhatsApp
+                            </div>
+                            <p className="text-xs text-muted">Le devis sera régénéré et envoyé automatiquement au numéro WhatsApp du client.</p>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <label className="switch">
-                              <input type="checkbox" checked={editFormData.avec_torchons} onChange={e => setEditFormData({ ...editFormData, avec_torchons: e.target.checked })} />
-                              <span className="slider round"></span>
-                            </label>
-                            <span className="text-sm">Torchons et serpillières (+ 40 MAD)</span>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  <div className="detail-section mt-6 border-t pt-6">
-                    <h3 className="text-sm fw-bold text-muted mb-4 uppercase">Informations client</h3>
-                    <div className="form-grid-2 gap-4">
-                      <div className="form-group">
-                        <label>Nom</label>
-                        <input type="text" value={editFormData.client_name} onChange={e => setEditFormData({ ...editFormData, client_name: e.target.value })} className="edit-input" />
-                      </div>
-                      <div className="form-group">
-                        <label>Tél. direct</label>
-                        <input type="text" value={editFormData.client_phone} onChange={e => setEditFormData({ ...editFormData, client_phone: e.target.value })} className="edit-input" />
-                      </div>
-                      <div className="form-group">
-                        <label>Tél. WhatsApp</label>
-                        <input type="text" value={editFormData.client_whatsapp || editFormData.client_phone} onChange={e => setEditFormData({ ...editFormData, client_whatsapp: e.target.value })} className="edit-input" />
-                      </div>
-                      <div className="form-group">
-                        <label>Ville</label>
-                        <input type="text" value={editFormData.neighborhood} onChange={e => setEditFormData({ ...editFormData, neighborhood: e.target.value })} className="edit-input" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="detail-section mt-6 border-t pt-6">
-                    <h3 className="text-sm fw-bold text-muted mb-4 uppercase">Tarification</h3>
-                    <div className="form-grid-2 gap-4">
-                      <div className="form-group">
-                        <label>Montant total (MAD)</label>
-                        <input type="number" value={editFormData.prix} onChange={e => setEditFormData({ ...editFormData, prix: e.target.value })} className="edit-input" />
-                        <span className="text-xs text-muted">Candidat : {editFormData.prix * 0.5} MAD</span>
-                      </div>
-                      <div className="form-group">
-                        <label>Statut de paiement</label>
-                        <select value={editFormData.statut_paiement} onChange={e => setEditFormData({ ...editFormData, statut_paiement: e.target.value })} className="edit-input">
-                          <option value="non_paye">Non payé</option>
-                          <option value="acompte">Acompte versé</option>
-                          <option value="partiel">Paiement partiel</option>
-                          <option value="integral">Paiement intégral</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="detail-section mt-6 border-t pt-6">
-                    <h3 className="text-sm fw-bold text-muted mb-4 uppercase">Notes client</h3>
-                    <div className="form-group">
-                      <textarea value={editFormData.note_commerciale} onChange={e => setEditFormData({ ...editFormData, note_commerciale: e.target.value })} className="edit-textarea" rows={4} />
-                    </div>
-                  </div>
-
-                  <div className="edit-footer-extra">
-                    <div className="whatsapp-toggle-card">
-                      <div className="flex items-center gap-4">
-                        <label className="switch">
-                          <input type="checkbox" checked={editFormData.envoyer_whatsapp} onChange={e => setEditFormData({ ...editFormData, envoyer_whatsapp: e.target.checked, regenerer_devis: e.target.checked })} />
-                          <span className="slider round"></span>
-                        </label>
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2 text-teal-dark fw-bold">
-                            <MessageSquare size={18} />
-                            Régénérer le devis et renvoyer au client via WhatsApp
-                          </div>
-                          <p className="text-xs text-muted">Le devis sera régénéré et envoyé automatiquement au numéro WhatsApp du client.</p>
                         </div>
                       </div>
                     </div>
@@ -1021,8 +1072,8 @@ export default function Dashboard() {
                     <h3>Détails Prestation</h3>
                     <div className="detail-grid">
                       <div className="detail-item"><span>Service:</span> {selectedDemande.service}</div>
-                      <div className="detail-item"><span>Date:</span> {selectedDemande.date_intervention}</div>
-                      <div className="detail-item"><span>Heures:</span> {selectedDemande.nb_heures}h</div>
+                      <div className="detail-item"><span>Date:</span> {selectedDemande.date_intervention ? new Date(selectedDemande.date_intervention).toLocaleDateString('fr-FR') : (selectedDemande.formulaire_data?.date_intervention || selectedDemande.formulaire_data?.date || '—')}</div>
+                      <div className="detail-item"><span>Heures:</span> {selectedDemande.nb_heures || selectedDemande.formulaire_data?.duree || selectedDemande.formulaire_data?.nb_heures || '—'}h</div>
                       <div className="detail-item"><span>Fréquence:</span> {selectedDemande.frequency}</div>
                       <div className="detail-item"><span>Avec produit:</span> {selectedDemande.avec_produit ? `Oui (${selectedDemande.tarif_produit} MAD)` : 'Non'}</div>
                     </div>
@@ -1038,19 +1089,19 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {(selectedDemande.note_commerciale || selectedDemande.note_operationnelle) && (
+                  {(selectedDemande.note_commercial || selectedDemande.note_operationnel) && (
                     <div className="detail-section">
-                      <h3>Notes</h3>
-                      {selectedDemande.note_commerciale && (
-                        <div className="mb-2">
-                          <p className="fw-bold text-xs text-muted mb-1">Note commerciale:</p>
-                          <p className="note-text">{selectedDemande.note_commerciale}</p>
+                      <h4 className="detail-section-title">Notes Agence</h4>
+                      {selectedDemande.note_commercial && (
+                        <div className="note-item mb-4">
+                          <label className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1 block">Note commerciale</label>
+                          <p className="note-text">{selectedDemande.note_commercial}</p>
                         </div>
                       )}
-                      {selectedDemande.note_operationnelle && (
-                        <div>
-                          <p className="fw-bold text-xs text-muted mb-1">Note opérationnelle:</p>
-                          <p className="note-text">{selectedDemande.note_operationnelle}</p>
+                      {selectedDemande.note_operationnel && (
+                        <div className="note-item">
+                          <label className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1 block">Note opération</label>
+                          <p className="note-text">{selectedDemande.note_operationnel}</p>
                         </div>
                       )}
                     </div>

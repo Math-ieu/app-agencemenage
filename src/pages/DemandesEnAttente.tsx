@@ -309,7 +309,9 @@ export default function DemandesEnAttente() {
         addToast('Demande créée avec succès !', 'success');
       }
 
-      setShowCreateModal(false);
+      if (!editingDemande) {
+        setShowCreateModal(false);
+      }
       setFormSubmitted(false);
 
       // S'assurer que le refresh est immédiat
