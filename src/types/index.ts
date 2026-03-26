@@ -9,13 +9,17 @@ export interface User {
 
 export interface Client {
   id: number;
+  first_name: string;
+  last_name: string;
   full_name: string;
   email: string;
   phone: string;
+  whatsapp?: string;
   address: string;
   city: string;
   neighborhood: string;
   segment: 'particulier' | 'entreprise';
+  demandes_count: number;
   created_at: string;
 }
 

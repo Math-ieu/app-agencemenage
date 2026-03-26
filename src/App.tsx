@@ -16,6 +16,8 @@ import Finance from './pages/Finance';
 import Qualite from './pages/Qualite';
 import Marketing from './pages/Marketing';
 import Parametres from './pages/Parametres';
+import ClientDetails from './pages/ClientDetails.tsx';
+
 
 // Navigation guard function
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -42,6 +44,7 @@ export default function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="demandes" element={<DemandesEnAttente />} />
+          <Route path="clients/:id" element={<ClientDetails />} />
           <Route path="clients" element={<Clients />} />
           <Route path="profils" element={<Profils />} />
           <Route path="historique" element={<Historique />} />

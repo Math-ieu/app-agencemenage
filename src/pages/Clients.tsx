@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { encodeId } from '../utils/obfuscation';
 import { getClients } from '../api/client';
 import { 
   Search, Settings, MoreVertical, 
@@ -246,10 +248,10 @@ export default function Clients() {
                       </button>
                       {activeDropdown?.type === 'actions' && activeDropdown.id === c.id && (
                         <div className="dropdown-menu" ref={dropdownRef} style={{ left: 0, right: 'auto' }}>
-                          <div className="dropdown-item">
+                          <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
                             <User size={16} className="dropdown-item-icon" />
                             <span>Compte client</span>
-                          </div>
+                          </Link>
                           <div className="dropdown-item">
                             <Pencil size={16} className="dropdown-item-icon" />
                             <span>Éditer le besoin</span>
@@ -320,10 +322,10 @@ export default function Clients() {
                       </button>
                       {activeDropdown?.type === 'more' && activeDropdown.id === c.id && (
                         <div className="dropdown-menu" ref={dropdownRef} style={{ minWidth: '160px' }}>
-                          <div className="dropdown-item">
+                          <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
                             <User size={16} className="dropdown-item-icon" />
                             <span>Voir le compte</span>
-                          </div>
+                          </Link>
                           <div className="dropdown-item">
                             <Pencil size={16} className="dropdown-item-icon" />
                             <span>Éditer</span>

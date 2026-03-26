@@ -201,8 +201,8 @@ export default function Profils() {
                     </div>
                   </td>
                   <td>
-                    <span className={`badge ${agent.statut === 'disponible' ? 'badge-lime' : 'badge-status-partielle'}`}>
-                      {agent.statut === 'disponible' ? 'Disponible' : agent.statut}
+                    <span className={`badge ${agent.statut === 'disponible' ? 'badge-lime' : 'badge-status-annule'}`}>
+                      {agent.statut === 'disponible' ? 'Disponible' : 'Non disponible'}
                     </span>
                   </td>
                   <td>
@@ -450,6 +450,7 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                 {['Arabe', 'Français', 'Anglais', 'Espagnol', 'Amazigh', 'Autre'].map(lang => (
                   <button
                     key={lang}
+                    type="button"
                     onClick={() => toggleLanguage(lang)}
                     className={`lang-btn ${formData.languages.includes(lang) ? 'lang-btn-active' : ''}`}
                   >
@@ -467,10 +468,13 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                   <option value="">Choisir</option>
                   <option>Sans diplôme</option>
                   <option>Primaire</option>
-                  <option>Secondaire</option>
+                  <option>Collège</option>
+                  <option>Lycée</option>
                   <option>Bac</option>
-                  <option>Bac +2</option>
-                  <option>Supérieur</option>
+                  <option>Bac+2</option>
+                  <option>Bac+3</option>
+                  <option>Bac+5</option>
+                  <option>Autre</option>
                 </select>
               </div>
               <div className="form-group">
@@ -489,17 +493,17 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                 <label>Statut profil</label>
                 <select value={formData.statut} onChange={e => setFormData({ ...formData, statut: e.target.value })} className="form-select">
                   <option value="disponible">Disponible</option>
-                  <option value="en_mission">En mission</option>
-                  <option value="inactif">Inactif</option>
+                  <option value="non_disponible">Non disponible</option>
                 </select>
               </div>
               <div className="form-group">
                 <label>Type de profil</label>
                 <select value={formData.type_profil} onChange={e => setFormData({ ...formData, type_profil: e.target.value })} className="form-select">
                   <option value="">Choisir</option>
-                  <option>Agent de ménage</option>
+                  <option>Femme de ménage</option>
                   <option>Garde malade</option>
-                  <option>Placement</option>
+                  <option>Auxiliaire de vie</option>
+                  <option>Nounou</option>
                 </select>
               </div>
             </div>
@@ -560,7 +564,7 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
             </div>
           </div>
 
-          <hr className="my-8 border-slate-100" />
+
 
           {/* ── Disponibilité ── */}
           <div className="form-section">
@@ -599,7 +603,7 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
             </div>
           </div>
 
-          <hr className="my-8 border-slate-100" />
+
 
           {/* ── Média ── */}
           <div className="form-section">
@@ -632,7 +636,7 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
             </div>
           </div>
 
-          <hr className="my-8 border-slate-100" />
+
 
           {/* ── Les expériences ── */}
           <div className="form-section">
@@ -660,7 +664,8 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                       <option value="">Choisir le poste</option>
                       <option>Femme de ménage</option>
                       <option>Garde malade</option>
-                      <option>Agent de nettoyage</option>
+                      <option>Auxiliaire de vie</option>
+                      <option>Nounou</option>
                     </select>
                   </div>
 
@@ -689,6 +694,7 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                         {['Hôtel', 'Riad', 'Entreprise', 'Villa', 'Appartement', 'Duplex'].map(loc => (
                           <button
                             key={loc}
+                            type="button"
                             onClick={() => {
                               const locations = currentExp.work_locations.includes(loc)
                                 ? currentExp.work_locations.filter(l => l !== loc)
