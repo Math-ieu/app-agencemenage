@@ -1204,7 +1204,8 @@ export default function DemandesEnAttente() {
                           const createdAt = doc.created_at ? new Date(doc.created_at.replace(' ', 'T')).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
                           const isDevis = doc.type_document === 'devis';
                           const fileName = doc.nom || (isDevis ? 'Devis PDF' : 'Récapitulatif PNG');
-                          const handleOpen = async () => {
+                          const handleOpen = async (e: React.MouseEvent) => {
+                            e.preventDefault();
                             if (!doc.download_url) { addToast('Fichier non disponible', 'error'); return; }
                             try {
                               addToast('Chargement du document...', 'info');
@@ -1212,7 +1213,8 @@ export default function DemandesEnAttente() {
                               setShowPreviewModal({ url: blobUrl, type: isDevis ? 'devis' : 'png', name: fileName });
                             } catch (e) { console.error(e); addToast('Erreur lors du chargement', 'error'); }
                           };
-                          const handleDownload = async () => {
+                          const handleDownload = async (e: React.MouseEvent) => {
+                            e.preventDefault();
                             if (!doc.download_url) { addToast('Fichier non disponible', 'error'); return; }
                             try {
                               const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
@@ -1240,14 +1242,14 @@ export default function DemandesEnAttente() {
                                 </div>
                               </div>
                               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                                <button onClick={handleOpen} title="Aperçu"
+                                <button type="button" onClick={handleOpen} title="Aperçu"
                                   style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px solid #d1d5db', background: 'white', color: '#0d9488', cursor: 'pointer', transition: 'all 0.15s' }}
                                   onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f0fdf4'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#0d9488'; }}
                                   onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'white'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db'; }}
                                 >
                                   <Eye size={15} />
                                 </button>
-                                <button onClick={handleDownload} title="Télécharger"
+                                <button type="button" onClick={handleDownload} title="Télécharger"
                                   style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px solid #d1d5db', background: 'white', color: '#475569', cursor: 'pointer', transition: 'all 0.15s' }}
                                   onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f8fafc'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#94a3b8'; }}
                                   onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'white'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#d1d5db'; }}
