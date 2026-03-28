@@ -17,6 +17,7 @@ import Qualite from './pages/Qualite';
 import Marketing from './pages/Marketing';
 import Parametres from './pages/Parametres';
 import ClientDetails from './pages/ClientDetails.tsx';
+import ProfilDetails from './pages/ProfilDetails.tsx';
 
 
 // Navigation guard function
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="demandes" element={<DemandesEnAttente />} />
           <Route path="clients/:id" element={<ClientDetails />} />
           <Route path="clients" element={<Clients />} />
+          <Route path="profils/:id" element={<ProfilDetails />} />
           <Route path="profils" element={<Profils />} />
           <Route path="historique" element={<Historique />} />
           <Route path="finance" element={<Finance />} />

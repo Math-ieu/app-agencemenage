@@ -16,12 +16,12 @@ import { Client, Demande } from '../types';
    Color palette (matching the reference screenshots)
    ═══════════════════════════════════════════════════════════ */
 const C = {
-  teal:   '#037265',
-  coral:  '#E16E53',
+  teal: '#037265',
+  coral: '#E16E53',
   orange: '#F0A24A',
-  tan:    '#D1A784',
-  sage:   '#B7D9C6',
-  lime:   '#BADF00',
+  tan: '#D1A784',
+  sage: '#B7D9C6',
+  lime: '#BADF00',
 };
 
 /* ─── Accordion Section ─── */

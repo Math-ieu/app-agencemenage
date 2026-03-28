@@ -75,7 +75,7 @@ export default function DemandesEnAttente() {
   const { addToast } = useToastStore();
 
   const [commerciaux, setCommerciaux] = useState<any[]>([]);
-  const [activeAffectMenu, setActiveAffectMenu] = useState<number | null>(null);
+  const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
 
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string } | null>(null);
 
@@ -92,7 +92,7 @@ export default function DemandesEnAttente() {
     try {
       await affecterDemande(demandeId, commercialId);
       addToast('Demande affectée avec succès', 'success');
-      setActiveAffectMenu(null);
+      setShowAssignmentModal(null);
       fetchDemandes();
     } catch (err) {
       addToast('Erreur lors de l\'affectation', 'error');
@@ -529,7 +529,7 @@ export default function DemandesEnAttente() {
                   {(user?.role === 'admin' || user?.role === 'responsable_commercial') && (
                     <button className="btn transition-all flex-1 text-sm leading-tight px-1 py-2 text-center flex items-center justify-center break-words"
                       style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc' }}
-                      onClick={() => setActiveAffectMenu(d.id)}>
+                      onClick={() => setShowAssignmentModal(d.id)}>
                       Affecter
                     </button>
                   )}
@@ -616,7 +616,7 @@ export default function DemandesEnAttente() {
                     {(user?.role === 'admin' || user?.role === 'responsable_commercial') && (
                       <button className="btn transition-all flex items-center justify-center p-2"
                         style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc', borderRadius: '4px' }}
-                        onClick={() => setActiveAffectMenu(d.id)}>
+                        onClick={() => setShowAssignmentModal(d.id)}>
                         <UserPlus size={16} />
                       </button>
                     )}
@@ -1340,40 +1340,59 @@ export default function DemandesEnAttente() {
         </div>
       )}
 
-      {/* Modal d'affectation d'un commercial */}
-      {activeAffectMenu !== null && (
-        <div className="modal-overlay z-[100]" onClick={() => setActiveAffectMenu(null)}>
-          <div className="modal-content max-w-md w-full" onClick={e => e.stopPropagation()}>
-            <div className="modal-header border-b pb-3 mb-4">
-              <h2 className="text-xl font-bold text-teal-800">Assigner un commercial</h2>
-              <button className="btn-close text-slate-400 hover:text-slate-600" onClick={() => setActiveAffectMenu(null)}><XCircle size={24} /></button>
+      {/* Assignment Modal */}
+      {showAssignmentModal && (
+        <div className="modal-overlay z-[110]" onClick={() => setShowAssignmentModal(null)}>
+          <div className="modal-content max-w-[500px]" onClick={e => e.stopPropagation()} style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800">Affectation</h2>
+                <p className="text-slate-500 text-sm mt-1">Sélectionnez le commercial pour cette demande</p>
+              </div>
+              <button className="p-2 hover:bg-slate-100 rounded-full transition-colors" onClick={() => setShowAssignmentModal(null)}>
+                <XCircle size={24} className="text-slate-400" />
+              </button>
             </div>
-            <div className="modal-body p-2 max-h-[60vh] overflow-y-auto">
-              {commerciaux.length > 0 ? (
-                <div className="grid gap-2">
-                  {commerciaux.map((c: any) => (
-                    <button key={c.id}
-                      className="flex items-center gap-3 w-full p-3 text-left border rounded-lg hover:bg-teal-50 hover:border-teal-200 transition-colors group"
-                      onClick={() => handleAffecter(activeAffectMenu, c.id)}>
-                      <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold group-hover:bg-teal-200 shrink-0">
-                        {c.first_name?.[0] || c.full_name?.[0] || 'C'}
+
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {commerciaux && commerciaux.length > 0 ? (
+                commerciaux.map(comm => {
+                  const initials = (comm.full_name || `${comm.first_name} ${comm.last_name}`).split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2);
+                  return (
+                    <button
+                      key={comm.id}
+                      onClick={() => handleAffecter(showAssignmentModal, comm.id)}
+                      className="w-full flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50 transition-all text-left group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-lg group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                        {initials}
                       </div>
-                      <div>
-                        <div className="font-bold text-slate-700 group-hover:text-teal-900">{c.first_name} {c.last_name || c.full_name}</div>
-                        <div className="text-xs text-slate-500">{c.email || 'Commercial'}</div>
+                      <div className="flex-1">
+                        <div className="font-bold text-slate-700 group-hover:text-teal-900">{comm.full_name || `${comm.first_name} ${comm.last_name}`}</div>
+                        <div className="text-xs text-slate-400">Commercial Agence</div>
+                      </div>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="bg-teal-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Choisir</div>
                       </div>
                     </button>
-                  ))}
-                </div>
+                  );
+                })
               ) : (
-                <div className="text-center p-8 text-slate-500">
-                  <UserPlus size={48} className="mx-auto text-slate-300 mb-4" />
-                  <p>Aucun commercial disponible.</p>
+                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <UserPlus size={40} className="mx-auto text-slate-300 mb-3" />
+                  <p className="text-slate-500 font-medium">Aucun commercial trouvé</p>
+                  <p className="text-slate-400 text-xs mt-1">Veuillez d'abord créer des commerciaux dans le système.</p>
                 </div>
               )}
             </div>
-            <div className="modal-footer border-t pt-4 mt-2 bg-white flex justify-end">
-              <button className="btn btn-secondary" onClick={() => setActiveAffectMenu(null)}>Annuler</button>
+
+            <div className="mt-8 flex justify-end">
+              <button 
+                className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
+                onClick={() => setShowAssignmentModal(null)}
+              >
+                Annuler
+              </button>
             </div>
           </div>
         </div>

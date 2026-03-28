@@ -1,24 +1,16 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import {
-  RefreshCw, ClipboardCheck, Building2, Clock,
-  Search, List, Grid, MoreVertical, Edit2,
-  User as UserIcon,
-  CheckCircle,
-  Settings, UserCheck,
-  XCircle, CreditCard, MessageSquare,
-  ChevronLeft, ChevronUp, ChevronDown,
-  FileText, ClipboardList,
-  Save,
-  Download,
-  UserPlus,
-  Eye,
-  Send
+  RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
+  User as UserIcon, CheckCircle, UserCheck, CreditCard, MessageSquare,
+  ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
 import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
+import { encodeId } from '../utils/obfuscation';
 
 // Services qui nécessitent un devis PDF (les autres ont un récapitulatif PNG)
 const isDevisRequired = (d: Demande | null): boolean => {
@@ -58,6 +50,7 @@ const SERVICES_LIST = {
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [stats, setStats] = useState<DashboardStats>({ total: 0, en_cours: 0, particulier: 0, entreprise: 0, en_attente: 0 });
   const [loading, setLoading] = useState(true);
@@ -73,14 +66,14 @@ export default function Dashboard() {
   const [isEditing, setIsEditing] = useState(false);
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
-  
+
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string } | null>(null);
 
 
   const { addToast } = useToastStore();
   const { user } = useAuthStore();
   const [commerciaux, setCommerciaux] = useState<User[]>([]);
-  const [activeAffectMenu, setActiveAffectMenu] = useState<number | null>(null);
+  const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
 
   useEffect(() => {
     if (user?.role === 'admin' || user?.role === 'responsable_commercial') {
@@ -93,7 +86,7 @@ export default function Dashboard() {
       await affecterDemande(demandeId, commercialId);
       addToast('Demande affectée avec succès', 'success');
       fetchData();
-      setActiveAffectMenu(null);
+      setShowAssignmentModal(null);
     } catch (err) {
       addToast('Erreur lors de l\'affectation', 'error');
     }
@@ -138,7 +131,7 @@ export default function Dashboard() {
       const allResults: Demande[] = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
 
       const enAttenteList = allResults.filter(d => d.statut === 'en_attente');
-      const results = allResults.filter(d => d.statut !== 'en_attente');
+      const results = allResults.filter(d => d.statut !== 'en_attente' && d.statut !== 'annule');
       setDemandes(results);
 
       const enCours = results.filter(d => d.statut === 'en_cours');
@@ -194,12 +187,12 @@ export default function Dashboard() {
       updateData.avec_produit = editFormData.avec_produit;
 
       const response = await updateDemande(selectedDemande.id, updateData);
-      
+
       // Mettre à jour selectedDemande pour que les modifications suivantes soient basées sur les nouvelles données
       if (response.data) {
         setSelectedDemande(response.data);
       }
-      
+
       await fetchData();
       addToast('Mise à jour effectuée avec succès !', 'success');
 
@@ -287,7 +280,7 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Tableau de bord</h1>
-          <p className="page-subtitle">Vue d'ensemble des besoins clients validés</p>
+          <p className="page-subtitle">Vue d'ensemble des besoins clients validés (en cours et terminés)</p>
         </div>
         <button className="btn btn-secondary" onClick={fetchData}>
           <RefreshCw size={16} />
@@ -439,6 +432,8 @@ export default function Dashboard() {
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
+
+      
                             <button className="menu-item" onClick={async () => {
                               if (confirm('Confirmer cette opération ?')) {
                                 await confirmerCAO(d.id);
@@ -447,9 +442,14 @@ export default function Dashboard() {
                             }}>
                               <CheckCircle size={14} /> Confirmation Opé
                             </button>
-                            <button className="menu-item">
+                            <Link
+                              to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
+                              className="menu-item"
+                              onClick={() => setActiveMenu(null)}
+                              style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}
+                            >
                               <UserCheck size={14} /> Compte Client
-                            </button>
+                            </Link>
                           </div>
                         )}
                       </td>
@@ -526,24 +526,7 @@ export default function Dashboard() {
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
-                            {(user?.role === 'admin' || user?.role === 'responsable_commercial') && d.statut === 'en_attente' && (
-                              <button className="menu-item text-purple-600" onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveAffectMenu(activeAffectMenu === d.id ? null : d.id);
-                              }}>
-                                <UserPlus size={14} /> Affecter la demande
-                              </button>
-                            )}
-                            {activeAffectMenu === d.id && commerciaux && commerciaux.length > 0 && (
-                              <div className="bg-gray-50 p-2 border-t mt-1 max-h-40 overflow-y-auto">
-                                <div className="text-xs fw-bold text-muted mb-2 px-2">SÉLECTIONNER UN COMMERCIAL</div>
-                                {commerciaux.map(comm => (
-                                  <button key={comm.id} className="menu-item text-sm" onClick={() => handleAffecter(d.id, comm.id)}>
-                                    {comm.full_name || `${comm.first_name} ${comm.last_name}`}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
+                            
                             <button className="menu-item">
                               <MessageSquare size={14} /> Note commerciale
                             </button>
@@ -739,24 +722,7 @@ export default function Dashboard() {
                           <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                             <Edit2 size={14} /> Éditer le besoin
                           </button>
-                          {(user?.role === 'admin' || user?.role === 'responsable_commercial') && d.statut === 'en_attente' && (
-                            <button className="menu-item text-purple-600" onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveAffectMenu(activeAffectMenu === d.id ? null : d.id);
-                            }}>
-                              <UserPlus size={14} /> Affecter la demande
-                            </button>
-                          )}
-                          {activeAffectMenu === d.id && commerciaux && commerciaux.length > 0 && (
-                            <div className="bg-gray-50 p-2 border-t mt-1 max-h-40 overflow-y-auto">
-                              <div className="text-xs fw-bold text-muted mb-2 px-2">SÉLECTIONNER UN COMMERCIAL</div>
-                              {commerciaux.map(comm => (
-                                <button key={comm.id} className="menu-item text-sm" onClick={() => handleAffecter(d.id, comm.id)}>
-                                  {comm.full_name || `${comm.first_name} ${comm.last_name}`}
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                          
                           <button className="menu-item" onClick={async () => {
                             if (confirm('Confirmer cette opération ?')) {
                               await confirmerCAO(d.id);
@@ -765,9 +731,14 @@ export default function Dashboard() {
                           }}>
                             <CheckCircle size={14} /> Confirmation Opé
                           </button>
-                          <button className="menu-item">
+                          <Link
+                            to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
+                            className="menu-item"
+                            onClick={() => setActiveMenu(null)}
+                            style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}
+                          >
                             <UserCheck size={14} /> Compte Client
-                          </button>
+                          </Link>
                         </div>
                       )}
                     </div>
@@ -811,8 +782,8 @@ export default function Dashboard() {
                 <div className="edit-form-full">
                   {/* Formulaire de la demande Section (Collapsible) */}
                   <div className="form-collapsible-section">
-                    <div 
-                      className="form-section-header demande" 
+                    <div
+                      className="form-section-header demande"
                       onClick={() => setIsFormExpanded(!isFormExpanded)}
                     >
                       <div className="section-title">
@@ -821,7 +792,7 @@ export default function Dashboard() {
                       </div>
                       {isFormExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </div>
-                    
+
                     {isFormExpanded && (
                       <div className="form-section-content">
                         <div className="form-grid-2 gap-4 mb-4">
@@ -844,12 +815,12 @@ export default function Dashboard() {
                           </div>
                           <div className="form-group">
                             <label>Superficie (m²)</label>
-                            <input 
-                              type="number" 
+                            <input
+                              type="number"
                               placeholder="ex: 50"
-                              value={editFormData.surface} 
-                              onChange={e => setEditFormData({ ...editFormData, surface: parseInt(e.target.value) || 0 })} 
-                              className="edit-input" 
+                              value={editFormData.surface}
+                              onChange={e => setEditFormData({ ...editFormData, surface: parseInt(e.target.value) || 0 })}
+                              className="edit-input"
                             />
                           </div>
                         </div>
@@ -867,9 +838,9 @@ export default function Dashboard() {
 
                         <div className="form-group mb-6">
                           <label>Préférence horaire</label>
-                          <select 
-                            value={editFormData.preference_horaire} 
-                            onChange={e => setEditFormData({ ...editFormData, preference_horaire: e.target.value })} 
+                          <select
+                            value={editFormData.preference_horaire}
+                            onChange={e => setEditFormData({ ...editFormData, preference_horaire: e.target.value })}
                             className="edit-input"
                           >
                             <option value="">Choisir...</option>
@@ -917,11 +888,11 @@ export default function Dashboard() {
                         <div className="section-divider"></div>
                         <h4 className="contact-section-title">Notes client</h4>
                         <div className="form-group">
-                          <textarea 
-                            value={editFormData.note_client || ''} 
-                            onChange={e => setEditFormData({ ...editFormData, note_client: e.target.value })} 
-                            className="edit-textarea" 
-                            rows={3} 
+                          <textarea
+                            value={editFormData.note_client || ''}
+                            onChange={e => setEditFormData({ ...editFormData, note_client: e.target.value })}
+                            className="edit-textarea"
+                            rows={3}
                             placeholder="Notes du client..."
                           />
                         </div>
@@ -1017,21 +988,21 @@ export default function Dashboard() {
                       <div className="form-grid-2 gap-4 mb-6">
                         <div className="form-group">
                           <label>Note commerciale</label>
-                          <textarea 
-                            value={editFormData.note_commercial} 
-                            onChange={e => setEditFormData({ ...editFormData, note_commercial: e.target.value })} 
-                            className="edit-textarea" 
-                            rows={4} 
+                          <textarea
+                            value={editFormData.note_commercial}
+                            onChange={e => setEditFormData({ ...editFormData, note_commercial: e.target.value })}
+                            className="edit-textarea"
+                            rows={4}
                             placeholder="Notes du commercial..."
                           />
                         </div>
                         <div className="form-group">
                           <label>Note opération</label>
-                          <textarea 
-                            value={editFormData.note_operationnel} 
-                            onChange={e => setEditFormData({ ...editFormData, note_operationnel: e.target.value })} 
-                            className="edit-textarea" 
-                            rows={4} 
+                          <textarea
+                            value={editFormData.note_operationnel}
+                            onChange={e => setEditFormData({ ...editFormData, note_operationnel: e.target.value })}
+                            className="edit-textarea"
+                            rows={4}
                             placeholder="Notes opérationnelles..."
                           />
                         </div>
@@ -1192,9 +1163,9 @@ export default function Dashboard() {
                     Annuler
                   </button>
                   <div className="flex gap-3">
-                   <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} onClick={() => handlePreviewDocument(isDevisRequired(selectedDemande) ? 'devis' : 'png')}>
-                    <Eye size={16} /> Aperçu du {isDevisRequired(selectedDemande) ? 'Devis' : 'Récapitulatif'}
-                  </button>
+                    <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} onClick={() => handlePreviewDocument(isDevisRequired(selectedDemande) ? 'devis' : 'png')}>
+                      <Eye size={16} /> Aperçu du {isDevisRequired(selectedDemande) ? 'Devis' : 'Récapitulatif'}
+                    </button>
                     <button className="btn flex items-center gap-2" style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '8px 24px', borderRadius: '4px', border: 'none' }} onClick={handleUpdate}>
                       <Save size={16} /> Enregistrer
                     </button>
@@ -1239,17 +1210,17 @@ export default function Dashboard() {
               </h2>
               <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowPreviewModal(null)}><XCircle size={20} /></button>
             </div>
-            
+
             <div className="modal-body bg-slate-800 rounded-md border border-slate-700 shadow-inner" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
-               {showPreviewModal.type === 'devis' ? (
-                 <iframe src={showPreviewModal.url} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Apercu" />
-               ) : (
-                 <div style={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '24px', backgroundColor: '#ffffff' }}>
-                   <img src={showPreviewModal.url} alt="Recapitulatif" style={{ maxWidth: '100%', width: 'auto', height: 'auto', objectFit: 'contain', boxShadow: '0 4px 24px rgba(0,0,0,0.15)', borderRadius: '8px', display: 'block' }} />
-                 </div>
-               )}
+              {showPreviewModal.type === 'devis' ? (
+                <iframe src={showPreviewModal.url} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Apercu" />
+              ) : (
+                <div style={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '24px', backgroundColor: '#ffffff' }}>
+                  <img src={showPreviewModal.url} alt="Recapitulatif" style={{ maxWidth: '100%', width: 'auto', height: 'auto', objectFit: 'contain', boxShadow: '0 4px 24px rgba(0,0,0,0.15)', borderRadius: '8px', display: 'block' }} />
+                </div>
+              )}
             </div>
-            
+
             <div className="modal-footer border-t-0 pt-0 mt-6 bg-white flex justify-center sm:justify-end gap-3 flex-wrap">
               <button className="btn transition-all" style={{ border: '1px solid #e2e8f0', backgroundColor: 'transparent', color: '#475569', fontWeight: 500, padding: '10px 24px', borderRadius: '6px' }} onClick={() => setShowPreviewModal(null)}>
                 Fermer
@@ -1262,6 +1233,64 @@ export default function Dashboard() {
                 addToast("Fonction d'envoi en cours de développement", "info");
               }}>
                 <Send size={18} /> Envoyer au client
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assignment Modal */}
+      {showAssignmentModal && (
+        <div className="modal-overlay z-[110]" onClick={() => setShowAssignmentModal(null)}>
+          <div className="modal-content max-w-[500px]" onClick={e => e.stopPropagation()} style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800">Affectation</h2>
+                <p className="text-slate-500 text-sm mt-1">Sélectionnez le commercial pour cette demande</p>
+              </div>
+              <button className="p-2 hover:bg-slate-100 rounded-full transition-colors" onClick={() => setShowAssignmentModal(null)}>
+                <XCircle size={24} className="text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {commerciaux && commerciaux.length > 0 ? (
+                commerciaux.map(comm => {
+                  const initials = (comm.full_name || `${comm.first_name} ${comm.last_name}`).split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                  return (
+                    <button
+                      key={comm.id}
+                      onClick={() => handleAffecter(showAssignmentModal, comm.id)}
+                      className="w-full flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50 transition-all text-left group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-lg group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                        {initials}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold text-slate-700 group-hover:text-teal-900">{comm.full_name || `${comm.first_name} ${comm.last_name}`}</div>
+                        <div className="text-xs text-slate-400">Commercial Agence</div>
+                      </div>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="bg-teal-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Choisir</div>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <UserPlus size={40} className="mx-auto text-slate-300 mb-3" />
+                  <p className="text-slate-500 font-medium">Aucun commercial trouvé</p>
+                  <p className="text-slate-400 text-xs mt-1">Veuillez d'abord créer des commerciaux dans le système.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8 flex justify-end">
+              <button 
+                className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
+                onClick={() => setShowAssignmentModal(null)}
+              >
+                Annuler
               </button>
             </div>
           </div>

@@ -1,26 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getAgents, createAgent } from '../api/client';
 import { Search, Plus, RotateCw, Calendar, ChevronDown, User, Save } from 'lucide-react';
+import { useToastStore } from '../store/toast';
+import { Agent } from '../types';
+import { encodeId } from '../utils/obfuscation';
 
-interface Agent {
-  id: number;
-  first_name: string;
-  last_name: string;
-  full_name: string;
-  phone: string;
-  whatsapp: string;
-  poste: string;
-  statut: string;
-  city: string;
-  neighborhood: string;
-  experience: string;
-  languages: string[];
-  nationality: string;
-  cin: string;
-  situation: string;
-  photo: string | null;
-  created_at: string;
-}
+// Local Agent interface removed in favor of global one from ../types
 
 const TABS = [
   { id: 'tout', label: 'Tout' },
@@ -30,6 +16,7 @@ const TABS = [
 ];
 
 export default function Profils() {
+  const navigate = useNavigate();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -211,7 +198,10 @@ export default function Profils() {
                     </span>
                   </td>
                   <td>
-                    <button className="actions-cell-btn py-1.5 px-3">
+                    <button 
+                      className="actions-cell-btn py-1.5 px-3"
+                      onClick={() => navigate(`/profils/${encodeId(agent.id)}`)}
+                    >
                       <User size={14} className="mr-2" />
                       Compte Profil
                     </button>
@@ -269,6 +259,9 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
     operator_notes: '',
   });
 
+  const [errors, setErrors] = useState<Record<string, boolean>>({});
+  const { addToast } = useToastStore();
+
   const [experiences, setExperiences] = useState<any[]>([]);
   const [showExpForm, setShowExpForm] = useState(false);
   const [currentExp, setCurrentExp] = useState({
@@ -309,6 +302,34 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
   };
 
   const handleSave = async () => {
+    // Validation logic
+    const requiredFields = [
+      'last_name', 'first_name', 'neighborhood', 'city', 'cin', 'birth_date', 
+      'gender', 'phone', 'whatsapp', 'situation', 'nationality', 
+      'education_level', 'type_profil', 'training_details', 
+      'health_issues', 'physical_appearance', 'corpulence', 'operator_notes'
+    ];
+    const newErrors: Record<string, boolean> = {};
+    let hasError = false;
+
+    requiredFields.forEach(field => {
+      if (!formData[field as keyof typeof formData]) {
+        newErrors[field] = true;
+        hasError = true;
+      }
+    });
+
+    if (formData.languages.length === 0) {
+      newErrors.languages = true;
+      hasError = true;
+    }
+
+    if (hasError) {
+      setErrors(newErrors);
+      addToast('Veuillez remplir tous les champs obligatoires (*)', 'error');
+      return;
+    }
+
     try {
       const data = new FormData();
 
@@ -330,10 +351,11 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
       if (files.attestation_file) data.append('attestation_file', files.attestation_file);
 
       await createAgent(data as any);
+      addToast('Profil ajouté avec succès !', 'success');
       onSuccess();
     } catch (err) {
       console.error('Error saving agent:', err);
-      alert('Erreur lors de l\'enregistrement du profil.');
+      addToast('Erreur lors de l\'enregistrement du profil.', 'error');
     }
   };
 
@@ -362,63 +384,63 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
             <div className="form-grid grid-cols-3">
               <div className="form-group">
                 <label>Nom <span className="text-red-500">*</span></label>
-                <input type="text" value={formData.last_name} onChange={e => setFormData({ ...formData, last_name: e.target.value })} className="form-input" placeholder="Bernat" />
+                <input type="text" value={formData.last_name} onChange={e => { setFormData({ ...formData, last_name: e.target.value }); if (errors.last_name) setErrors({ ...errors, last_name: false }); }} className={`form-input ${errors.last_name ? 'form-input-error' : ''}`} placeholder="Bernat" />
               </div>
               <div className="form-group">
                 <label>Prénom <span className="text-red-500">*</span></label>
-                <input type="text" value={formData.first_name} onChange={e => setFormData({ ...formData, first_name: e.target.value })} className="form-input" placeholder="Jean" />
+                <input type="text" value={formData.first_name} onChange={e => { setFormData({ ...formData, first_name: e.target.value }); if (errors.first_name) setErrors({ ...errors, first_name: false }); }} className={`form-input ${errors.first_name ? 'form-input-error' : ''}`} placeholder="Jean" />
               </div>
               <div className="form-group">
-                <label>Quartier</label>
-                <input type="text" value={formData.neighborhood} onChange={e => setFormData({ ...formData, neighborhood: e.target.value })} placeholder="Saisir le quartier" className="form-input" />
+                <label>Quartier <span className="text-red-500">*</span></label>
+                <input type="text" value={formData.neighborhood} onChange={e => { setFormData({ ...formData, neighborhood: e.target.value }); if (errors.neighborhood) setErrors({ ...errors, neighborhood: false }); }} placeholder="Saisir le quartier" className={`form-input ${errors.neighborhood ? 'form-input-error' : ''}`} />
               </div>
             </div>
 
             {/* Row 2 : Ville / Numéro CIN / Date de naissance */}
             <div className="form-grid grid-cols-3">
               <div className="form-group">
-                <label>Ville</label>
-                <select value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} className="form-select">
+                <label>Ville <span className="text-red-500">*</span></label>
+                <select value={formData.city} onChange={e => { setFormData({ ...formData, city: e.target.value }); if (errors.city) setErrors({ ...errors, city: false }); }} className={`form-select ${errors.city ? 'form-input-error' : ''}`}>
                   <option>Casablanca</option>
                   <option>Rabat</option>
                   <option>Marrakech</option>
                 </select>
               </div>
               <div className="form-group">
-                <label>Numéro CIN</label>
-                <input type="text" value={formData.cin} onChange={e => setFormData({ ...formData, cin: e.target.value })} className="form-input" placeholder="Z123456" />
+                <label>Numéro CIN <span className="text-red-500">*</span></label>
+                <input type="text" value={formData.cin} onChange={e => { setFormData({ ...formData, cin: e.target.value }); if (errors.cin) setErrors({ ...errors, cin: false }); }} className={`form-input ${errors.cin ? 'form-input-error' : ''}`} placeholder="Z123456" />
               </div>
               <div className="form-group">
-                <label>Date de naissance</label>
-                <input type="date" value={formData.birth_date} onChange={e => setFormData({ ...formData, birth_date: e.target.value })} className="form-input" />
+                <label>Date de naissance <span className="text-red-500">*</span></label>
+                <input type="date" value={formData.birth_date} onChange={e => { setFormData({ ...formData, birth_date: e.target.value }); if (errors.birth_date) setErrors({ ...errors, birth_date: false }); }} className={`form-input ${errors.birth_date ? 'form-input-error' : ''}`} />
               </div>
             </div>
 
             {/* Row 3 : Sexe / Téléphone / WhatsApp */}
             <div className="form-grid grid-cols-3">
               <div className="form-group">
-                <label>Sexe</label>
-                <select value={formData.gender} onChange={e => setFormData({ ...formData, gender: e.target.value })} className="form-select">
+                <label>Sexe <span className="text-red-500">*</span></label>
+                <select value={formData.gender} onChange={e => { setFormData({ ...formData, gender: e.target.value }); if (errors.gender) setErrors({ ...errors, gender: false }); }} className={`form-select ${errors.gender ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
                   <option value="homme">Homme</option>
                   <option value="femme">Femme</option>
                 </select>
               </div>
               <div className="form-group">
-                <label>Téléphone</label>
-                <input type="text" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="form-input" placeholder="06.." />
+                <label>Téléphone <span className="text-red-500">*</span></label>
+                <input type="text" value={formData.phone} onChange={e => { setFormData({ ...formData, phone: e.target.value }); if (errors.phone) setErrors({ ...errors, phone: false }); }} className={`form-input ${errors.phone ? 'form-input-error' : ''}`} placeholder="06.." />
               </div>
               <div className="form-group">
-                <label>WhatsApp</label>
-                <input type="text" value={formData.whatsapp} onChange={e => setFormData({ ...formData, whatsapp: e.target.value })} className="form-input" placeholder="06.." />
+                <label>WhatsApp <span className="text-red-500">*</span></label>
+                <input type="text" value={formData.whatsapp} onChange={e => { setFormData({ ...formData, whatsapp: e.target.value }); if (errors.whatsapp) setErrors({ ...errors, whatsapp: false }); }} className={`form-input ${errors.whatsapp ? 'form-input-error' : ''}`} placeholder="06.." />
               </div>
             </div>
 
             {/* Row 4 : Situation matrimoniale / A des enfants / Nationalité */}
             <div className="form-grid grid-cols-3">
               <div className="form-group">
-                <label>Situation matrimoniale</label>
-                <select value={formData.situation} onChange={e => setFormData({ ...formData, situation: e.target.value })} className="form-select">
+                <label>Situation matrimoniale <span className="text-red-500">*</span></label>
+                <select value={formData.situation} onChange={e => { setFormData({ ...formData, situation: e.target.value }); if (errors.situation) setErrors({ ...errors, situation: false }); }} className={`form-select ${errors.situation ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
                   <option>Célibataire</option>
                   <option>Marié(e)</option>
@@ -433,8 +455,8 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                 </label>
               </div>
               <div className="form-group">
-                <label>Nationalité</label>
-                <select value={formData.nationality} onChange={e => setFormData({ ...formData, nationality: e.target.value })} className="form-select">
+                <label>Nationalité <span className="text-red-500">*</span></label>
+                <select value={formData.nationality} onChange={e => { setFormData({ ...formData, nationality: e.target.value }); if (errors.nationality) setErrors({ ...errors, nationality: false }); }} className={`form-select ${errors.nationality ? 'form-input-error' : ''}`}>
                   <option>Marocaine</option>
                   <option>Ivoirienne</option>
                   <option>Sénégalaise</option>
@@ -445,13 +467,13 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
 
             {/* Langues */}
             <div className="form-group mt-2">
-              <label>Langues</label>
-              <div className="flex flex-wrap gap-2 mt-1">
+              <label>Langues <span className="text-red-500">*</span></label>
+              <div className={`flex flex-wrap gap-2 mt-1 p-2 rounded-lg ${errors.languages ? 'border border-red-500 bg-red-50' : ''}`}>
                 {['Arabe', 'Français', 'Anglais', 'Espagnol', 'Amazigh', 'Autre'].map(lang => (
                   <button
                     key={lang}
                     type="button"
-                    onClick={() => toggleLanguage(lang)}
+                    onClick={() => { toggleLanguage(lang); if (errors.languages) setErrors({...errors, languages: false}); }}
                     className={`lang-btn ${formData.languages.includes(lang) ? 'lang-btn-active' : ''}`}
                   >
                     {lang}
@@ -463,8 +485,8 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
             {/* Row 5 : Niveau d'étude / Expérience années / Expérience mois */}
             <div className="form-grid grid-cols-3 mt-2">
               <div className="form-group">
-                <label>Niveau d'étude</label>
-                <select value={formData.education_level} onChange={e => setFormData({ ...formData, education_level: e.target.value })} className="form-select">
+                <label>Niveau d'étude <span className="text-red-500">*</span></label>
+                <select value={formData.education_level} onChange={e => { setFormData({ ...formData, education_level: e.target.value }); if (errors.education_level) setErrors({ ...errors, education_level: false }); }} className={`form-select ${errors.education_level ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
                   <option>Sans diplôme</option>
                   <option>Primaire</option>
@@ -497,8 +519,8 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                 </select>
               </div>
               <div className="form-group">
-                <label>Type de profil</label>
-                <select value={formData.type_profil} onChange={e => setFormData({ ...formData, type_profil: e.target.value })} className="form-select">
+                <label>Type de profil <span className="text-red-500">*</span></label>
+                <select value={formData.type_profil} onChange={e => { setFormData({ ...formData, type_profil: e.target.value }); if (errors.type_profil) setErrors({ ...errors, type_profil: false }); }} className={`form-select ${errors.type_profil ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
                   <option>Femme de ménage</option>
                   <option>Garde malade</option>
@@ -517,12 +539,12 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
             </h3>
 
             <div className="form-group">
-              <label>Formation requise</label>
+              <label>Formation requise <span className="text-red-500">*</span></label>
               <textarea
                 value={formData.training_details}
-                onChange={e => setFormData({ ...formData, training_details: e.target.value })}
+                onChange={e => { setFormData({ ...formData, training_details: e.target.value }); if (errors.training_details) setErrors({ ...errors, training_details: false }); }}
                 placeholder="Détails de la formation..."
-                className="form-textarea"
+                className={`form-textarea ${errors.training_details ? 'form-input-error' : ''}`}
                 rows={3}
               />
             </div>
@@ -536,12 +558,12 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                 </label>
               </div>
               <div className="form-group">
-                <label>Maladie / Handicap</label>
-                <input type="text" value={formData.health_issues} onChange={e => setFormData({ ...formData, health_issues: e.target.value })} placeholder="Aucun" className="form-input" />
+                <label>Maladie / Handicap <span className="text-red-500">*</span></label>
+                <input type="text" value={formData.health_issues} onChange={e => { setFormData({ ...formData, health_issues: e.target.value }); if (errors.health_issues) setErrors({ ...errors, health_issues: false }); }} placeholder="Saisir 'Aucun' si néant" className={`form-input ${errors.health_issues ? 'form-input-error' : ''}`} />
               </div>
               <div className="form-group">
-                <label>Présentation physique</label>
-                <select value={formData.physical_appearance} onChange={e => setFormData({ ...formData, physical_appearance: e.target.value })} className="form-select">
+                <label>Présentation physique <span className="text-red-500">*</span></label>
+                <select value={formData.physical_appearance} onChange={e => { setFormData({ ...formData, physical_appearance: e.target.value }); if (errors.physical_appearance) setErrors({ ...errors, physical_appearance: false }); }} className={`form-select ${errors.physical_appearance ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
                   <option>Correcte</option>
                   <option>Moyenne</option>
@@ -553,8 +575,8 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
             {/* Corpulence alone */}
             <div className="form-grid grid-cols-3">
               <div className="form-group">
-                <label>Corpulence</label>
-                <select value={formData.corpulence} onChange={e => setFormData({ ...formData, corpulence: e.target.value })} className="form-select">
+                <label>Corpulence <span className="text-red-500">*</span></label>
+                <select value={formData.corpulence} onChange={e => { setFormData({ ...formData, corpulence: e.target.value }); if (errors.corpulence) setErrors({ ...errors, corpulence: false }); }} className={`form-select ${errors.corpulence ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
                   <option>Mince</option>
                   <option>Moyenne</option>
@@ -592,12 +614,12 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
             </div>
 
             <div className="form-group mt-6">
-              <label>Note de l'opérateur</label>
+              <label>Note de l'opérateur <span className="text-red-500">*</span></label>
               <textarea
                 value={formData.operator_notes}
-                onChange={e => setFormData({ ...formData, operator_notes: e.target.value })}
+                onChange={e => { setFormData({ ...formData, operator_notes: e.target.value }); if (errors.operator_notes) setErrors({ ...errors, operator_notes: false }); }}
                 placeholder="Remarques..."
-                className="form-textarea"
+                className={`form-textarea ${errors.operator_notes ? 'form-input-error' : ''}`}
                 rows={3}
               />
             </div>

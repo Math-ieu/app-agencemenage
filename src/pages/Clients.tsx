@@ -1,11 +1,14 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { encodeId } from '../utils/obfuscation';
-import { getClients } from '../api/client';
-import { 
-  Search, Settings, MoreVertical, 
+import { getClients, getUsers, affecterDemande } from '../api/client';
+import { useAuthStore } from '../store/auth';
+import { useToastStore } from '../store/toast';
+import { User } from '../types';
+import {
+  Search, Settings, MoreVertical,
   RotateCw, Calendar, ChevronDown,
-  User, Pencil, MessageSquare, UserPlus, Slash, Trash2
+  User as UserIcon, Pencil, MessageSquare, UserPlus, Slash, Trash2, XCircle
 } from 'lucide-react';
 
 interface LatestDemande {
@@ -50,6 +53,11 @@ export default function Clients() {
   const [activeDropdown, setActiveDropdown] = useState<{ type: 'actions' | 'more', id: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
+  const { user } = useAuthStore();
+  const { addToast } = useToastStore();
+  const [commerciaux, setCommerciaux] = useState<User[]>([]);
+  const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
+
   // New filter states based on screenshot
   const [commercialFilter, setCommercialFilter] = useState('Tout');
   const [segmentFilter, setSegmentFilter] = useState('Tout');
@@ -82,6 +90,25 @@ export default function Clients() {
     fetchData();
   }, [search, activeTab]);
 
+  useEffect(() => {
+    if (user?.role === 'admin' || user?.role === 'responsable_commercial') {
+      getUsers({ role: 'commercial' }).then(res => setCommerciaux(res.data?.results || res.data)).catch(console.error);
+    }
+  }, [user]);
+
+  const handleAffecter = async (demandeId: number, commercialId: number) => {
+    try {
+      await affecterDemande(demandeId, commercialId);
+      addToast('Client affecté avec succès', 'success');
+      fetchData();
+      setShowAssignmentModal(null);
+      setActiveDropdown(null);
+    } catch (err) {
+      console.error('Error affecting client:', err);
+      addToast('Erreur lors de l\'affectation', 'error');
+    }
+  };
+
   // Click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -111,7 +138,7 @@ export default function Clients() {
     if (latest.statut === 'annule') return <span className="badge badge-status-annulee">Annulée</span>;
     if (latest.statut === 'termine') return <span className="badge badge-status-effectuee">Prestation effectuée</span>;
     if (latest.statut === 'en_cours') return <span className="badge badge-status-encours">En cours</span>;
-    
+
     return <span className="badge badge-status-attente">{latest.statut}</span>;
   };
 
@@ -137,8 +164,8 @@ export default function Clients() {
 
       <div className="client-tabs">
         {TABS.map(tab => (
-          <div 
-            key={tab.id} 
+          <div
+            key={tab.id}
             className={`client-tab ${activeTab === tab.id ? 'client-tab-active' : ''}`}
             onClick={() => setActiveTab(tab.id)}
           >
@@ -158,7 +185,7 @@ export default function Clients() {
             className="search-input"
           />
         </div>
-        
+
         <div className="client-toolbar-filters">
           <div className="toolbar-dropdown">
             <select value={commercialFilter} onChange={e => setCommercialFilter(e.target.value)} className="toolbar-select">
@@ -192,13 +219,13 @@ export default function Clients() {
             </select>
             <ChevronDown size={16} className="dropdown-icon" />
           </div>
-          
+
           <div className="toolbar-date-picker">
             <Calendar size={18} className="text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Du" 
-              value={dateDebut} 
+            <input
+              type="text"
+              placeholder="Du"
+              value={dateDebut}
               onChange={e => setDateDebut(e.target.value)}
               onFocus={(e) => e.target.type = 'date'}
               onBlur={(e) => e.target.type = 'text'}
@@ -207,10 +234,10 @@ export default function Clients() {
           </div>
           <div className="toolbar-date-picker">
             <Calendar size={18} className="text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Au" 
-              value={dateFin} 
+            <input
+              type="text"
+              placeholder="Au"
+              value={dateFin}
               onChange={e => setDateFin(e.target.value)}
               onFocus={(e) => e.target.type = 'date'}
               onBlur={(e) => e.target.type = 'text'}
@@ -249,7 +276,7 @@ export default function Clients() {
                       {activeDropdown?.type === 'actions' && activeDropdown.id === c.id && (
                         <div className="dropdown-menu" ref={dropdownRef} style={{ left: 0, right: 'auto' }}>
                           <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
-                            <User size={16} className="dropdown-item-icon" />
+                            <UserIcon size={16} className="dropdown-item-icon" />
                             <span>Compte client</span>
                           </Link>
                           <div className="dropdown-item">
@@ -266,10 +293,16 @@ export default function Clients() {
                             <span>Avis opérationnel</span>
                           </div>
                           <div className="dropdown-divider"></div>
-                          <div className="dropdown-item">
-                            <UserPlus size={16} className="dropdown-item-icon" />
-                            <span>Affectation</span>
-                          </div>
+                          {(user?.role === 'admin' || user?.role === 'responsable_commercial') && c.latest_demande && (
+                            <div className="dropdown-item" onClick={(e) => {
+                              e.stopPropagation();
+                              setShowAssignmentModal(c.latest_demande!.id);
+                              setActiveDropdown(null);
+                            }}>
+                              <UserPlus size={16} className="dropdown-item-icon" />
+                              <span>Affectation</span>
+                            </div>
+                          )}
                           <div className="dropdown-item">
                             <Slash size={16} className="dropdown-item-icon" />
                             <span>Geste commercial</span>
@@ -323,7 +356,7 @@ export default function Clients() {
                       {activeDropdown?.type === 'more' && activeDropdown.id === c.id && (
                         <div className="dropdown-menu" ref={dropdownRef} style={{ minWidth: '160px' }}>
                           <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
-                            <User size={16} className="dropdown-item-icon" />
+                            <UserIcon size={16} className="dropdown-item-icon" />
                             <span>Voir le compte</span>
                           </Link>
                           <div className="dropdown-item">
@@ -343,6 +376,63 @@ export default function Clients() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+      {/* Assignment Modal */}
+      {showAssignmentModal && (
+        <div className="modal-overlay z-[110]" onClick={() => { setShowAssignmentModal(null); }}>
+          <div className="modal-content max-w-[500px]" onClick={e => e.stopPropagation()} style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800">Affectation</h2>
+                <p className="text-slate-500 text-sm mt-1">Sélectionnez le commercial pour ce client</p>
+              </div>
+              <button className="p-2 hover:bg-slate-100 rounded-full transition-colors" onClick={() => { setShowAssignmentModal(null); }}>
+                <XCircle size={24} className="text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {commerciaux && commerciaux.length > 0 ? (
+                commerciaux.map(comm => {
+                  const initials = (comm.full_name || `${comm.first_name} ${comm.last_name}`).split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                  return (
+                    <button
+                      key={comm.id}
+                      onClick={() => handleAffecter(showAssignmentModal, comm.id)}
+                      className="w-full flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50 transition-all text-left group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-lg group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                        {initials}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold text-slate-700 group-hover:text-teal-900">{comm.full_name || `${comm.first_name} ${comm.last_name}`}</div>
+                        <div className="text-xs text-slate-400">Commercial Agence</div>
+                      </div>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="bg-teal-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Choisir</div>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <UserPlus size={40} className="mx-auto text-slate-300 mb-3" />
+                  <p className="text-slate-500 font-medium">Aucun commercial trouvé</p>
+                  <p className="text-slate-400 text-xs mt-1">Veuillez d'abord créer des commerciaux dans le système.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8 flex justify-end">
+              <button 
+                className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
+                onClick={() => { setShowAssignmentModal(null); }}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
