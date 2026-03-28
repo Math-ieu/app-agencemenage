@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
   User as UserIcon, CheckCircle, UserCheck, CreditCard, MessageSquare,
@@ -50,7 +50,7 @@ const SERVICES_LIST = {
 };
 
 export default function Dashboard() {
-  const navigate = useNavigate();
+
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [stats, setStats] = useState<DashboardStats>({ total: 0, en_cours: 0, particulier: 0, entreprise: 0, en_attente: 0 });
   const [loading, setLoading] = useState(true);
