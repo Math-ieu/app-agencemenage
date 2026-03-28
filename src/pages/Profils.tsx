@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAgents, createAgent } from '../api/client';
-import { Search, Plus, RotateCw, Calendar, ChevronDown, User, Save } from 'lucide-react';
+import { Search, Plus, RotateCw, Calendar, User, Save } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { Agent } from '../types';
 import { encodeId } from '../utils/obfuscation';
@@ -21,7 +21,6 @@ export default function Profils() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('tout');
-  const [commercialFilter, setCommercialFilter] = useState('Tout');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -32,7 +31,6 @@ export default function Profils() {
       const params: Record<string, string> = {};
       if (search) params.search = search;
       if (activeTab !== 'tout') params.poste = activeTab;
-      if (commercialFilter !== 'Tout') params.commercial = commercialFilter;
       if (dateDebut) params.date_debut = dateDebut;
       if (dateFin) params.date_fin = dateFin;
 
@@ -104,18 +102,8 @@ export default function Profils() {
         </div>
 
         <div className="client-toolbar-filters">
-          <div className="toolbar-dropdown">
-            <select value={commercialFilter} onChange={e => setCommercialFilter(e.target.value)} className="toolbar-select">
-              <option>Tous</option>
-              <option>Kaoutar</option>
-              <option>Amine</option>
-              <option>Yassine</option>
-            </select>
-            <ChevronDown size={16} className="dropdown-icon" />
-          </div>
-
-          <div className="toolbar-date-picker">
-            <Calendar size={18} className="text-slate-400" />
+          <div className="pro-date-picker">
+            <Calendar size={18} className="calendar-icon" />
             <input
               type="text"
               placeholder="Du"
@@ -123,11 +111,11 @@ export default function Profils() {
               onChange={e => setDateDebut(e.target.value)}
               onFocus={(e) => e.target.type = 'date'}
               onBlur={(e) => e.target.type = 'text'}
-              className="date-input"
+              className="pro-date-input"
             />
           </div>
-          <div className="toolbar-date-picker">
-            <Calendar size={18} className="text-slate-400" />
+          <div className="pro-date-picker">
+            <Calendar size={18} className="calendar-icon" />
             <input
               type="text"
               placeholder="Au"
@@ -135,7 +123,7 @@ export default function Profils() {
               onChange={e => setDateFin(e.target.value)}
               onFocus={(e) => e.target.type = 'date'}
               onBlur={(e) => e.target.type = 'text'}
-              className="date-input"
+              className="pro-date-input"
             />
           </div>
         </div>

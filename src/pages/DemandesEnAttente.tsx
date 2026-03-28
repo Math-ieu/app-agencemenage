@@ -23,6 +23,8 @@ export default function DemandesEnAttente() {
   const [search, setSearch] = useState('');
   const [segment, setSegment] = useState('');
   const [prestation, setPrestation] = useState('');
+  const [dateDebut, setDateDebut] = useState('');
+  const [dateFin, setDateFin] = useState('');
   const [expandedCards, setExpandedCards] = useState<Record<number, string | null>>({});
 
   const [showNewMenu, setShowNewMenu] = useState(false);
@@ -148,7 +150,19 @@ export default function DemandesEnAttente() {
         const matchesSearch = !search || clientName.toLowerCase().includes(search.toLowerCase()) || clientPhone.includes(search);
         const matchesSegment = !segment || d.segment === segment;
         const matchesService = !prestation || d.service === prestation;
-        return matchesSearch && matchesSegment && matchesService;
+        let matchesDate = true;
+        if (dateDebut || dateFin) {
+          const demandeDate = new Date(d.created_at);
+          if (dateDebut) {
+            matchesDate = matchesDate && demandeDate >= new Date(dateDebut);
+          }
+          if (dateFin) {
+            const dateFinObj = new Date(dateFin);
+            dateFinObj.setHours(23, 59, 59, 999);
+            matchesDate = matchesDate && demandeDate <= dateFinObj;
+          }
+        }
+        return matchesSearch && matchesSegment && matchesService && matchesDate;
       });
 
       setDemandes(filtered);
@@ -159,7 +173,7 @@ export default function DemandesEnAttente() {
     } finally {
       setLoading(false);
     }
-  }, [search, segment, prestation, setPendingCount]);
+  }, [search, segment, prestation, dateDebut, dateFin, setPendingCount]);
 
   useEffect(() => { fetchDemandes(); }, [fetchDemandes]);
 
@@ -408,8 +422,31 @@ export default function DemandesEnAttente() {
           ))}
         </select>
 
-        <div className="date-picker-placeholder btn btn-secondary">
-          <Calendar size={18} /> Du — Au
+        <div className="flex gap-2">
+          <div className="pro-date-picker">
+            <Calendar size={18} className="calendar-icon" />
+            <input
+              type="text"
+              placeholder="Du"
+              value={dateDebut}
+              onChange={e => setDateDebut(e.target.value)}
+              onFocus={(e) => e.target.type = 'date'}
+              onBlur={(e) => e.target.type = 'text'}
+              className="pro-date-input"
+            />
+          </div>
+          <div className="pro-date-picker">
+            <Calendar size={18} className="calendar-icon" />
+            <input
+              type="text"
+              placeholder="Au"
+              value={dateFin}
+              onChange={e => setDateFin(e.target.value)}
+              onFocus={(e) => e.target.type = 'date'}
+              onBlur={(e) => e.target.type = 'text'}
+              className="pro-date-input"
+            />
+          </div>
         </div>
       </div>
 

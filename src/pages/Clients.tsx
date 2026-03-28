@@ -189,11 +189,12 @@ export default function Clients() {
         <div className="client-toolbar-filters">
           <div className="toolbar-dropdown">
             <select value={commercialFilter} onChange={e => setCommercialFilter(e.target.value)} className="toolbar-select">
-              <option>Tout</option>
-              {/* These would ideally be fetched from the API */}
-              <option>Kaoutar</option>
-              <option>Amine</option>
-              <option>Yassine</option>
+              <option value="Tout">Tous les commerciaux</option>
+              {commerciaux.map(comm => (
+                <option key={comm.id} value={comm.id.toString()}>
+                  {comm.full_name || `${comm.first_name} ${comm.last_name}`}
+                </option>
+              ))}
             </select>
             <ChevronDown size={16} className="dropdown-icon" />
           </div>
@@ -220,8 +221,8 @@ export default function Clients() {
             <ChevronDown size={16} className="dropdown-icon" />
           </div>
 
-          <div className="toolbar-date-picker">
-            <Calendar size={18} className="text-slate-400" />
+          <div className="pro-date-picker">
+            <Calendar size={18} className="calendar-icon" />
             <input
               type="text"
               placeholder="Du"
@@ -229,11 +230,11 @@ export default function Clients() {
               onChange={e => setDateDebut(e.target.value)}
               onFocus={(e) => e.target.type = 'date'}
               onBlur={(e) => e.target.type = 'text'}
-              className="date-input"
+              className="pro-date-input"
             />
           </div>
-          <div className="toolbar-date-picker">
-            <Calendar size={18} className="text-slate-400" />
+          <div className="pro-date-picker">
+            <Calendar size={18} className="calendar-icon" />
             <input
               type="text"
               placeholder="Au"
@@ -241,7 +242,7 @@ export default function Clients() {
               onChange={e => setDateFin(e.target.value)}
               onFocus={(e) => e.target.type = 'date'}
               onBlur={(e) => e.target.type = 'text'}
-              className="date-input"
+              className="pro-date-input"
             />
           </div>
         </div>

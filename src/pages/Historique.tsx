@@ -15,18 +15,25 @@ interface Demande {
 export default function Historique() {
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  const fetchHistorique = async () => {
+    setLoading(true);
+    try {
+      const { data } = await getDemandes(search ? { search } : {});
+      setDemandes(data.results || data);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchHistorique = async () => {
-      try {
-        const { data } = await getDemandes(); // Fetch all initially
-        setDemandes(data.results || data);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchHistorique();
-  }, []);
+    const delayDebounceFn = setTimeout(() => {
+      fetchHistorique();
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [search]);
 
   return (
     <div className="page">
@@ -43,10 +50,16 @@ export default function Historique() {
       <div className="filters-bar">
         <div className="search-box" style={{ maxWidth: '400px' }}>
           <Search size={16} className="search-icon" />
-          <input type="text" placeholder="Rechercher par numéro de demande, nom de client..." className="search-input" />
+          <input 
+            type="text" 
+            placeholder="Rechercher par numéro de demande, nom de client..." 
+            className="search-input" 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-        <button className="btn btn-secondary">
-          <Filter size={16} /> Filtres avancés
+        <button className="btn btn-secondary" onClick={() => fetchHistorique()}>
+          <Filter size={16} /> Actualiser
         </button>
       </div>
 

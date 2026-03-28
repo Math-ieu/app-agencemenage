@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
   User as UserIcon, CheckCircle, UserCheck, CreditCard, MessageSquare,
-  ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle
+  ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle, Calendar
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
@@ -61,7 +61,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [serviceFilter, setServiceFilter] = useState('tous');
   const [prestationFilter, setPrestationFilter] = useState('toutes');
-  const [dateRange] = useState({ start: '', end: '' });
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [selectedDemande, setSelectedDemande] = useState<Demande | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isFormExpanded, setIsFormExpanded] = useState(false);
@@ -268,8 +268,19 @@ export default function Dashboard() {
       if (prestationFilter !== 'toutes' && d.service !== prestationFilter) return false;
 
       // Filtre Date
-      if (dateRange.start && new Date(d.date_intervention) < new Date(dateRange.start)) return false;
-      if (dateRange.end && new Date(d.date_intervention) > new Date(dateRange.end)) return false;
+      if (dateRange.start || dateRange.end) {
+        // En Dashboard, on utilise la date d'intervention
+        const dateInterventionStr = d.date_intervention || d.formulaire_data?.date_intervention;
+        if (dateInterventionStr) {
+          const dateInterObj = new Date(dateInterventionStr);
+          if (dateRange.start && dateInterObj < new Date(dateRange.start)) return false;
+          if (dateRange.end) {
+            const endObj = new Date(dateRange.end);
+            endObj.setHours(23, 59, 59, 999);
+            if (dateInterObj > endObj) return false;
+          }
+        }
+      }
 
       return true;
     });
@@ -339,14 +350,38 @@ export default function Dashboard() {
         </select>
 
         <select className="filter-select" value={prestationFilter} onChange={(e) => setPrestationFilter(e.target.value)}>
-          <option value="toutes">Toutes prestations</option>
-          <option value="Ménage standard">Ménage standard</option>
-          <option value="Grand ménage">Grand ménage</option>
-          <option value="Nettoyage fin de chantier">Nettoyage fin de chantier</option>
-          <option value="Ménage post-déménagement">Ménage post-déménagement</option>
-          <option value="Ménage AirBnB">Ménage AirBnB</option>
-          <option value="Ménage bureaux">Ménage bureaux</option>
+          <option value="toutes">Toutes les prestations</option>
+          {Array.from(new Set([...SERVICES_LIST.particulier, ...SERVICES_LIST.entreprise])).map(s => (
+            <option key={s} value={s}>{s}</option>
+          ))}
         </select>
+
+        <div className="flex gap-2">
+          <div className="pro-date-picker">
+            <Calendar size={18} className="calendar-icon" />
+            <input
+              type="text"
+              placeholder="Du"
+              value={dateRange.start}
+              onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+              onFocus={(e) => e.target.type = 'date'}
+              onBlur={(e) => e.target.type = 'text'}
+              className="pro-date-input"
+            />
+          </div>
+          <div className="pro-date-picker">
+            <Calendar size={18} className="calendar-icon" />
+            <input
+              type="text"
+              placeholder="Au"
+              value={dateRange.end}
+              onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+              onFocus={(e) => e.target.type = 'date'}
+              onBlur={(e) => e.target.type = 'text'}
+              className="pro-date-input"
+            />
+          </div>
+        </div>
 
         <div className="view-toggles">
           <button
@@ -433,7 +468,7 @@ export default function Dashboard() {
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
 
-      
+
                             <button className="menu-item" onClick={async () => {
                               if (confirm('Confirmer cette opération ?')) {
                                 await confirmerCAO(d.id);
@@ -526,7 +561,7 @@ export default function Dashboard() {
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
-                            
+
                             <button className="menu-item">
                               <MessageSquare size={14} /> Note commerciale
                             </button>
@@ -722,7 +757,7 @@ export default function Dashboard() {
                           <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                             <Edit2 size={14} /> Éditer le besoin
                           </button>
-                          
+
                           <button className="menu-item" onClick={async () => {
                             if (confirm('Confirmer cette opération ?')) {
                               await confirmerCAO(d.id);
@@ -1286,7 +1321,7 @@ export default function Dashboard() {
             </div>
 
             <div className="mt-8 flex justify-end">
-              <button 
+              <button
                 className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
                 onClick={() => setShowAssignmentModal(null)}
               >
