@@ -56,6 +56,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'besoins' | 'abonnements'>('besoins');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [showNoteModal, setShowNoteModal] = useState<{ demandeId: number; type: 'commercial' | 'operationnel'; note: string } | null>(null);
 
   // Filtres
   const [search, setSearch] = useState('');
@@ -562,10 +563,16 @@ export default function Dashboard() {
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
 
-                            <button className="menu-item">
+                            <button className="menu-item" onClick={() => {
+                              setShowNoteModal({ demandeId: d.id, type: 'commercial', note: d.note_commercial || '' });
+                              setActiveMoreMenu(null);
+                            }}>
                               <MessageSquare size={14} /> Note commerciale
                             </button>
-                            <button className="menu-item">
+                            <button className="menu-item" onClick={() => {
+                              setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: d.note_operationnel || '' });
+                              setActiveMoreMenu(null);
+                            }}>
                               <MessageSquare size={14} /> Note opérationnelle
                             </button>
                             <div className="menu-divider" />
@@ -758,6 +765,19 @@ export default function Dashboard() {
                             <Edit2 size={14} /> Éditer le besoin
                           </button>
 
+                          <button className="menu-item" onClick={() => {
+                            setShowNoteModal({ demandeId: d.id, type: 'commercial', note: d.note_commercial || '' });
+                            setActiveMenu(null);
+                          }}>
+                            <MessageSquare size={14} /> Note commerciale
+                          </button>
+                          <button className="menu-item" onClick={() => {
+                            setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: d.note_operationnel || '' });
+                            setActiveMenu(null);
+                          }}>
+                            <MessageSquare size={14} /> Note opérationnelle
+                          </button>
+
                           <button className="menu-item" onClick={async () => {
                             if (confirm('Confirmer cette opération ?')) {
                               await confirmerCAO(d.id);
@@ -794,6 +814,82 @@ export default function Dashboard() {
             </div>
           )}
         </>
+      )}
+
+      {/* Note Modal */}
+      {showNoteModal && (
+        <div className="modal-overlay z-[110]" onClick={() => setShowNoteModal(null)}>
+          <div className="modal-content max-w-[500px]" onClick={e => e.stopPropagation()} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: 0, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', border: 'none' }}>
+            {/* Header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#ccfbf1', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', color: '#0d9488' }}>
+                  <MessageSquare size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+                    {showNoteModal.type === 'commercial' ? 'Note Commerciale' : 'Note Opérationnelle'}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b', marginTop: '2px' }}>Saisie des informations de la demande</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowNoteModal(null)}
+                style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'white'; }}
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+            
+            {/* Body */}
+            <div style={{ padding: '24px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Détails de la note</label>
+              <textarea
+                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '16px', fontSize: '14px', color: '#0f172a', minHeight: '140px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)', transition: 'all 0.2s', boxSizing: 'border-box' }}
+                placeholder={`Veuillez rédiger la note ${showNoteModal.type === 'commercial' ? 'commerciale' : 'opérationnelle'}...`}
+                value={showNoteModal.note}
+                onChange={(e) => setShowNoteModal({ ...showNoteModal, note: e.target.value })}
+                onKeyDown={(e) => e.stopPropagation()}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#0d9488'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.15)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)'; }}
+              />
+            </div>
+            
+            {/* Footer */}
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px', backgroundColor: '#ffffff' }}>
+              <button 
+                onClick={() => setShowNoteModal(null)}
+                style={{ padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#475569', backgroundColor: 'white', border: '1px solid #cbd5e1', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#0f172a'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.color = '#475569'; }}
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const payload = showNoteModal.type === 'commercial' 
+                      ? { note_commercial: showNoteModal.note }
+                      : { note_operationnel: showNoteModal.note };
+                    await updateDemande(showNoteModal.demandeId, payload);
+                    addToast('Note enregistrée avec succès', 'success');
+                    setShowNoteModal(null);
+                    fetchData(); // Refresh to update list
+                  } catch (err) {
+                    addToast('Erreur lors de la sauvegarde', 'error');
+                  }
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white', backgroundColor: '#0f766e', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(15, 118, 110, 0.2), 0 2px 4px -1px rgba(15, 118, 110, 0.1)', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#0d9488'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0f766e'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                <Save size={18} /> Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Detail Modal / Sheet */}
@@ -1335,3 +1431,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

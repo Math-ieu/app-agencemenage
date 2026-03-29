@@ -21,6 +21,8 @@ export interface Client {
   segment: 'particulier' | 'entreprise';
   demandes_count: number;
   created_at: string;
+  avis_commercial?: string;
+  avis_operationnel?: string;
 }
 
 export interface Agent {

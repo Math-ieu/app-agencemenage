@@ -1,14 +1,14 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { encodeId } from '../utils/obfuscation';
-import { getClients, getUsers, affecterDemande } from '../api/client';
+import { getClients, getUsers, affecterDemande, updateClient } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import { User } from '../types';
 import {
   Search, Settings, MoreVertical,
   RotateCw, Calendar, ChevronDown,
-  User as UserIcon, Pencil, MessageSquare, UserPlus, Slash, Trash2, XCircle
+  User as UserIcon, Pencil, MessageSquare, UserPlus, Slash, Trash2, XCircle, Save
 } from 'lucide-react';
 
 interface LatestDemande {
@@ -30,9 +30,12 @@ interface Client {
   segment: string;
   city: string;
   neighborhood: string;
+  address: string;
   created_at: string;
   demandes_count: number;
   latest_demande: LatestDemande | null;
+  avis_commercial?: string;
+  avis_operationnel?: string;
 }
 
 const TABS = [
@@ -44,6 +47,25 @@ const TABS = [
   { id: 'facturation_partielle', label: 'Facturation partielle' },
   { id: 'facturation', label: 'Facturation' }
 ];
+
+const SERVICES_LIST = {
+  particulier: [
+    "Ménage standard",
+    "Grand ménage",
+    "Ménage Air BnB",
+    "Nettoyage post-déménagement",
+    "Ménage fin de chantier",
+    "Aide à domicile",
+    "Auxiliaire de vie",
+    "Ménage post-sinistre"
+  ],
+  entreprise: [
+    "Ménage bureaux",
+    "Nettoyage fin de chantier",
+    "Placement & gestion",
+    "Ménage post-sinistre"
+  ]
+};
 
 export default function Clients() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -57,6 +79,7 @@ export default function Clients() {
   const { addToast } = useToastStore();
   const [commerciaux, setCommerciaux] = useState<User[]>([]);
   const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
+  const [showAvisModal, setShowAvisModal] = useState<{ clientId: number; type: 'commercial' | 'operationnel'; avis: string } | null>(null);
 
   // New filter states based on screenshot
   const [commercialFilter, setCommercialFilter] = useState('Tout');
@@ -88,7 +111,7 @@ export default function Clients() {
 
   useEffect(() => {
     fetchData();
-  }, [search, activeTab]);
+  }, [search, activeTab, commercialFilter, segmentFilter, serviceFilter, dateDebut, dateFin]);
 
   useEffect(() => {
     if (user?.role === 'admin' || user?.role === 'responsable_commercial') {
@@ -106,6 +129,23 @@ export default function Clients() {
     } catch (err) {
       console.error('Error affecting client:', err);
       addToast('Erreur lors de l\'affectation', 'error');
+    }
+  };
+
+  const handleSaveAvis = async () => {
+    if (!showAvisModal) return;
+    try {
+      const payload = showAvisModal.type === 'commercial' 
+        ? { avis_commercial: showAvisModal.avis }
+        : { avis_operationnel: showAvisModal.avis };
+      
+      await updateClient(showAvisModal.clientId, payload);
+      addToast('Avis mis à jour avec succès', 'success');
+      fetchData();
+      setShowAvisModal(null);
+    } catch (err) {
+      console.error('Error updating avis:', err);
+      addToast('Erreur lors de la mise à jour', 'error');
     }
   };
 
@@ -210,13 +250,13 @@ export default function Clients() {
 
           <div className="toolbar-dropdown">
             <select value={serviceFilter} onChange={e => setServiceFilter(e.target.value)} className="toolbar-select">
-              <option>Tout</option>
-              <option>Ménage Bureaux</option>
-              <option>Ménage standard</option>
-              <option>Grand ménage</option>
-              <option>Nettoyage fin de chantier</option>
-              <option>Aide à domicile</option>
-              <option>Placement & gestion</option>
+              <option value="Tout">Toutes les prestations</option>
+              <optgroup label="Particuliers">
+                {SERVICES_LIST.particulier.map(s => <option key={s} value={s}>{s}</option>)}
+              </optgroup>
+              <optgroup label="Entreprises">
+                {SERVICES_LIST.entreprise.map(s => <option key={s} value={s}>{s}</option>)}
+              </optgroup>
             </select>
             <ChevronDown size={16} className="dropdown-icon" />
           </div>
@@ -245,6 +285,21 @@ export default function Clients() {
               className="pro-date-input"
             />
           </div>
+
+          {(serviceFilter !== 'Tout' || segmentFilter !== 'Tout' || commercialFilter !== 'Tout' || dateDebut || dateFin) && (
+            <button
+              onClick={() => {
+                setCommercialFilter('Tout');
+                setSegmentFilter('Tout');
+                setServiceFilter('Tout');
+                setDateDebut('');
+                setDateFin('');
+              }}
+              style={{ padding: '0 12px', background: 'transparent', border: 'none', color: '#ef4444', fontSize: '13px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center' }}
+            >
+              Réinitialiser
+            </button>
+          )}
         </div>
       </div>
 
@@ -285,11 +340,17 @@ export default function Clients() {
                             <span>Éditer le besoin</span>
                           </div>
                           <div className="dropdown-divider"></div>
-                          <div className="dropdown-item">
+                          <div className="dropdown-item" onClick={() => {
+                            setShowAvisModal({ clientId: c.id, type: 'commercial', avis: c.avis_commercial || '' });
+                            setActiveDropdown(null);
+                          }}>
                             <MessageSquare size={16} className="dropdown-item-icon" />
                             <span>Avis commercial</span>
                           </div>
-                          <div className="dropdown-item">
+                          <div className="dropdown-item" onClick={() => {
+                            setShowAvisModal({ clientId: c.id, type: 'operationnel', avis: c.avis_operationnel || '' });
+                            setActiveDropdown(null);
+                          }}>
                             <MessageSquare size={16} className="dropdown-item-icon" />
                             <span>Avis opérationnel</span>
                           </div>
@@ -379,7 +440,72 @@ export default function Clients() {
           </table>
         </div>
       )}
-      {/* Assignment Modal */}
+
+      {/* Modal d'Avis */}
+      {showAvisModal && (
+        <div className="modal-overlay z-[110]" onClick={() => setShowAvisModal(null)}>
+          <div className="modal-content max-w-[500px]" onClick={e => e.stopPropagation()} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: 0, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', border: 'none' }}>
+            {/* Header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#ccfbf1', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', color: '#0d9488' }}>
+                  <MessageSquare size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+                    {showAvisModal.type === 'commercial' ? 'Avis Commercial' : 'Avis Opérationnel'}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b', marginTop: '2px' }}>Saisie des retours pour ce client</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAvisModal(null)}
+                style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'white'; }}
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+            
+            {/* Body */}
+            <div style={{ padding: '24px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Détails de l'avis</label>
+              <textarea
+                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '16px', fontSize: '14px', color: '#0f172a', minHeight: '140px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)', transition: 'all 0.2s', boxSizing: 'border-box' }}
+                placeholder={`Veuillez rédiger l'avis ${showAvisModal.type === 'commercial' ? 'commercial' : 'opérationnel'} complet...`}
+                value={showAvisModal.avis}
+                onChange={(e) => setShowAvisModal({ ...showAvisModal, avis: e.target.value })}
+                onKeyDown={(e) => e.stopPropagation()}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#0d9488'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.15)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)'; }}
+              />
+            </div>
+            
+            {/* Footer */}
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px', backgroundColor: '#ffffff' }}>
+              <button 
+                onClick={() => setShowAvisModal(null)}
+                style={{ padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#475569', backgroundColor: 'white', border: '1px solid #cbd5e1', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#0f172a'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.color = '#475569'; }}
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={handleSaveAvis}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white', backgroundColor: '#0f766e', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(15, 118, 110, 0.2), 0 2px 4px -1px rgba(15, 118, 110, 0.1)', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#0d9488'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0f766e'; e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                <Save size={18} /> Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Affectation */}
       {showAssignmentModal && (
         <div className="modal-overlay z-[110]" onClick={() => { setShowAssignmentModal(null); }}>
           <div className="modal-content max-w-[500px]" onClick={e => e.stopPropagation()} style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
