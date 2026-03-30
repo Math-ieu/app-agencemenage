@@ -79,6 +79,9 @@ export const createDemande = (data: Record<string, unknown>) =>
 export const updateDemande = (id: number, data: Record<string, unknown>) =>
   apiClient.patch(`/api/demandes/${id}/`, data);
 
+export const deleteDemande = (id: number) =>
+  apiClient.delete(`/api/demandes/${id}/`);
+
 export const validerDemande = (id: number) =>
   apiClient.post(`/api/demandes/${id}/valider/`);
 

@@ -8,8 +8,10 @@ import { decodeId } from '../utils/obfuscation';
 import {
   ChevronDown, User, Calendar, FileText,
   MessageSquare, History, ArrowLeft, RefreshCw, Slash,
-  Download, Eye, Star, Clock, Heart, AlertCircle
+  Eye, Star, Clock, Heart, AlertCircle, FileDown,
+  XCircle, Send, Download
 } from 'lucide-react';
+import { useToastStore } from '../store/toast';
 import { Client, Demande } from '../types';
 
 /* ═══════════════════════════════════════════════════════════
@@ -181,6 +183,8 @@ export default function ClientDetails() {
   const [avisComm, setAvisComm] = useState('');
   const [avisOp, setAvisOp] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string; type: string; name: string } | null>(null);
+  const addToast = useToastStore(state => state.addToast);
 
   const fetchData = async () => {
     if (!id) return;
@@ -195,7 +199,7 @@ export default function ClientDetails() {
         getClient(realId),
         getDemandes({ client: realId.toString() }),
         getFeedbacks({ client: realId.toString() }),
-        getMissions({ demande__client: realId.toString() }),
+        getMissions({ client: realId.toString() }),
       ]);
       setClient(clientRes.data);
       const list = Array.isArray(demandesRes.data?.results) ? demandesRes.data.results : (Array.isArray(demandesRes.data) ? demandesRes.data : []);
@@ -218,9 +222,47 @@ export default function ClientDetails() {
     finally { setSaving(false); }
   };
 
-  const handlePreview = async (url: string) => {
-    try { const { blobUrl } = await fetchSecureDocBlob(url); window.open(blobUrl, '_blank'); }
-    catch (err) { console.error(err); }
+  const handlePreview = async (url: string, type: string, name: string) => {
+    try {
+      addToast('Chargement du document...', 'info');
+      const { blobUrl } = await fetchSecureDocBlob(url);
+      setShowPreviewModal({ url: blobUrl, type, name });
+    } catch (err) {
+      console.error(err);
+      addToast('Erreur lors du chargement', 'error');
+    }
+  };
+
+  const handleDownload = async (url: string, fileName: string) => {
+    try {
+      addToast('Téléchargement en cours...', 'info');
+      let finalBlobUrl = url;
+      let shouldRevoke = false;
+
+      // If it's not already a blob URL, fetch it
+      if (!url.startsWith('blob:')) {
+        const { blobUrl } = await fetchSecureDocBlob(url);
+        finalBlobUrl = blobUrl;
+        shouldRevoke = true;
+      }
+
+      const a = document.createElement('a');
+      a.href = finalBlobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Only revoke if we created the blob here
+      if (shouldRevoke) {
+        URL.revokeObjectURL(finalBlobUrl);
+      }
+      
+      addToast('Téléchargement réussi', 'success');
+    } catch (err) {
+      console.error(err);
+      addToast('Erreur lors du téléchargement', 'error');
+    }
   };
 
   /* ── Loading / Not found ── */
@@ -525,32 +567,60 @@ export default function ClientDetails() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                <Th>Date d'émission</Th><Th>Type</Th><Th>Service</Th><Th>Statut</Th><Th center>Actions</Th>
+                <Th>Date d'émission</Th>
+                <Th>Commercial</Th>
+                <Th>Segment</Th>
+                <Th>Type de service</Th>
+                <Th>Statut demande</Th>
+                <Th center>Fichier (PNG/PDF)</Th>
               </tr></thead>
               <tbody>
-                {demandes.flatMap(d => (d.documents || []).map(doc => (
-                  <tr key={doc.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <Td>{new Date(doc.created_at).toLocaleDateString('fr-FR')}</Td>
-                    <Td bold color="#1e293b">{doc.type_document}</Td>
-                    <Td>{d.service}</Td>
-                    <Td>
-                      <Badge bg={d.statut_paiement === 'integral' ? '#2F855A' : C.orange} color="white">
-                        {d.statut_paiement === 'integral' ? 'Payé' : 'Facturation partielle'}
-                      </Badge>
-                    </Td>
-                    <Td center>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-                        {doc.download_url && (
-                          <button onClick={() => handlePreview(doc.download_url!)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
-                            <Eye size={17} />
-                          </button>
-                        )}
-                        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><Download size={17} /></button>
-                      </div>
-                    </Td>
-                  </tr>
-                )))}
-                {demandes.every(d => (d.documents || []).length === 0) && <EmptyState text="Aucun document trouvé" colSpan={5} />}
+                {demandes.flatMap(d => (d.documents || []).map(doc => {
+                  const statusLabel = d.statut === 'en_cours' ? 'En cours' : d.statut === 'termine' ? 'Prestation effectuée' : 'En attente';
+                  const statusBg = d.statut === 'termine' ? C.orange : (d.statut === 'en_cours' ? '#3B82F6' : '#94A3B8');
+                  const fileName = doc.nom || (doc.type_document === 'devis' ? 'Devis PDF' : 'Récapitulatif PNG');
+
+                  return (
+                    <tr key={doc.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                      <Td>{new Date(doc.created_at).toLocaleDateString('fr-FR')}</Td>
+                      <Td color="#94a3b8">{d.commercial_name || '—'}</Td>
+                      <Td>
+                        <Badge bg={d.segment === 'entreprise' ? '#10b981' : C.teal} color="white">
+                          {d.segment === 'particulier' ? 'Particulier' : 'Entreprise'}
+                        </Badge>
+                      </Td>
+                      <Td bold color="#1e293b">{d.service}</Td>
+                      <Td>
+                        <Badge bg={statusBg} color="white">
+                          {statusLabel}
+                        </Badge>
+                      </Td>
+                      <Td center>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                          {doc.download_url && (
+                            <button
+                              onClick={() => handlePreview(doc.download_url!, doc.type_document, fileName)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                              title="Voir le document"
+                            >
+                              <Eye size={18} />
+                            </button>
+                          )}
+                          {doc.download_url && (
+                            <button
+                              onClick={() => handleDownload(doc.download_url!, fileName)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                              title="Télécharger le document"
+                            >
+                              <FileDown size={18} />
+                            </button>
+                          )}
+                        </div>
+                      </Td>
+                    </tr>
+                  );
+                }))}
+                {demandes.every(d => (d.documents || []).length === 0) && <EmptyState text="Aucun document trouvé" colSpan={6} />}
               </tbody>
             </table>
           </div>
@@ -639,6 +709,79 @@ export default function ClientDetails() {
         </Accordion>
 
       </div>
+
+      {/* Unified Preview Modal */}
+      {showPreviewModal && (
+        <div 
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 100, padding: 24
+          }} 
+          onClick={() => setShowPreviewModal(null)}
+        >
+          <div 
+            style={{ 
+              width: '95%', maxWidth: 1200, height: '90vh', background: 'white',
+              borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+            }} 
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f0fdfa', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0d9488' }}>
+                  <Eye size={20} />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', margin: 0 }}>
+                    Aperçu — {showPreviewModal.type === 'devis' ? 'Devis' : 'Récapitulatif'}
+                  </h2>
+                  <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>{showPreviewModal.name}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPreviewModal(null)}
+                style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', transition: 'color 0.2s' }}
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+
+            <div style={{ flex: 1, background: '#1e293b', overflow: 'hidden', position: 'relative' }}>
+              {showPreviewModal.type === 'devis' ? (
+                <iframe src={showPreviewModal.url} style={{ width: '100%', height: '100%', border: 'none' }} title="Document" />
+              ) : (
+                <div style={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 24, background: 'white' }}>
+                  <img src={showPreviewModal.url} alt="Recap" style={{ maxWidth: '100%', height: 'auto', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '20px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button 
+                onClick={() => setShowPreviewModal(null)}
+                style={{ padding: '10px 20px', background: 'white', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 14, fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+              >
+                Fermer
+              </button>
+              <button 
+                onClick={() => handleDownload(showPreviewModal.url, showPreviewModal.name)}
+                style={{ padding: '10px 20px', background: C.teal, border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                <Download size={18} /> Télécharger
+              </button>
+              <button 
+                onClick={() => addToast("Fonction d'envoi en cours de développement", "info")}
+                style={{ padding: '10px 20px', background: C.orange, border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                <Send size={18} /> Envoyer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

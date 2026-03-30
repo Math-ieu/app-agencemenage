@@ -2,12 +2,12 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
-  User as UserIcon, CheckCircle, UserCheck, CreditCard, MessageSquare,
-  ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle, Calendar
+  User as UserIcon, CheckCircle, UserCheck, MessageSquare,
+  ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle, Calendar, Trash2
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
@@ -558,7 +558,7 @@ export default function Dashboard() {
                         </button>
 
                         {activeMoreMenu === d.id && (
-                          <div className="action-menu" style={{ right: 0, left: 'auto', top: '100%' }}>
+                          <div className="action-menu" style={{ right: 0, left: 'auto', top: '100%', minWidth: '180px' }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
@@ -575,45 +575,55 @@ export default function Dashboard() {
                             }}>
                               <MessageSquare size={14} /> Note opérationnelle
                             </button>
+
                             <div className="menu-divider" />
+
                             <button className="menu-item text-blue" onClick={async () => {
                               await updateDemande(d.id, { statut: 'termine' });
+                              addToast('Statut mis à jour : Prestation effectuée', 'success');
                               fetchData();
+                              setActiveMoreMenu(null);
                             }}>
                               <CheckCircle size={14} /> Prestation effectuée
                             </button>
-                            <button className="menu-item text-green" onClick={async () => {
-                              await updateDemande(d.id, { statut_paiement: 'acompte' });
-                              fetchData();
-                            }}>
-                              <CreditCard size={14} /> Facturation en cours
-                            </button>
-                            <button className="menu-item text-orange" onClick={async () => {
-                              await updateDemande(d.id, { statut_paiement: 'partiel' });
-                              fetchData();
-                            }}>
-                              <CreditCard size={14} /> Facturation partielle
-                            </button>
-                            <button className="menu-item text-green" onClick={async () => {
-                              await updateDemande(d.id, { statut_paiement: 'integral' });
-                              fetchData();
-                            }}>
-                              <CheckCircle size={14} /> Payé
-                            </button>
+
                             <div className="menu-divider" />
+
                             <button className="menu-item text-red" onClick={async () => {
                               const reason = prompt('Motif d\'annulation :');
                               if (reason === null) return;
                               await annulerDemande(d.id, reason);
+                              addToast('Demande rejetée / annulée', 'success');
                               fetchData();
+                              setActiveMoreMenu(null);
                             }}>
                               <XCircle size={14} /> Rejeté / Annulé
                             </button>
-                            <button className="menu-item text-red" onClick={async () => {
-                              await updateDemande(d.id, { statut_paiement: 'annule' });
-                              fetchData();
+                            
+                            <button className="menu-item text-orange" onClick={async () => {
+                              if (confirm('Confirmer l\'annulation de la facturation ?')) {
+                                await updateDemande(d.id, { statut_paiement: 'annule' });
+                                addToast('Facturation annulée', 'success');
+                                fetchData();
+                                setActiveMoreMenu(null);
+                              }
                             }}>
                               <XCircle size={14} /> Facturation annulée
+                            </button>
+
+                            <button className="menu-item text-red" onClick={async () => {
+                              if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
+                                try {
+                                  await deleteDemande(d.id);
+                                  addToast('Demande supprimée avec succès', 'success');
+                                  fetchData();
+                                  setActiveMoreMenu(null);
+                                } catch (err) {
+                                  addToast('Erreur lors de la suppression', 'error');
+                                }
+                              }
+                            }}>
+                              <Trash2 size={14} /> Supprimer
                             </button>
                           </div>
                         )}
@@ -647,55 +657,72 @@ export default function Dashboard() {
                         </button>
 
                         {activeMoreMenu === d.id && (
-                          <div className="action-menu" style={{ right: 0, left: 'auto', top: '100%', zIndex: 50 }}>
+                          <div className="action-menu" style={{ right: 0, left: 'auto', top: '100%', zIndex: 50, minWidth: '180px' }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
-                            <button className="menu-item">
+
+                            <button className="menu-item" onClick={() => {
+                              setShowNoteModal({ demandeId: d.id, type: 'commercial', note: d.note_commercial || '' });
+                              setActiveMoreMenu(null);
+                            }}>
                               <MessageSquare size={14} /> Note commerciale
                             </button>
-                            <button className="menu-item">
+                            <button className="menu-item" onClick={() => {
+                              setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: d.note_operationnel || '' });
+                              setActiveMoreMenu(null);
+                            }}>
                               <MessageSquare size={14} /> Note opérationnelle
                             </button>
+
                             <div className="menu-divider" />
+
                             <button className="menu-item text-blue" onClick={async () => {
                               await updateDemande(d.id, { statut: 'termine' });
+                              addToast('Statut mis à jour : Prestation effectuée', 'success');
                               fetchData();
+                              setActiveMoreMenu(null);
                             }}>
                               <CheckCircle size={14} /> Prestation effectuée
                             </button>
-                            <button className="menu-item text-green" onClick={async () => {
-                              await updateDemande(d.id, { statut_paiement: 'acompte' });
-                              fetchData();
-                            }}>
-                              <CreditCard size={14} /> Facturation en cours
-                            </button>
-                            <button className="menu-item text-orange" onClick={async () => {
-                              await updateDemande(d.id, { statut_paiement: 'partiel' });
-                              fetchData();
-                            }}>
-                              <CreditCard size={14} /> Facturation partielle
-                            </button>
-                            <button className="menu-item text-green" onClick={async () => {
-                              await updateDemande(d.id, { statut_paiement: 'integral' });
-                              fetchData();
-                            }}>
-                              <CheckCircle size={14} /> Payé
-                            </button>
+
                             <div className="menu-divider" />
+
                             <button className="menu-item text-red" onClick={async () => {
                               const reason = prompt('Motif d\'annulation :');
                               if (reason === null) return;
                               await annulerDemande(d.id, reason);
+                              addToast('Demande rejetée / annulée', 'success');
                               fetchData();
+                              setActiveMoreMenu(null);
                             }}>
                               <XCircle size={14} /> Rejeté / Annulé
                             </button>
-                            <button className="menu-item text-red" onClick={async () => {
-                              await updateDemande(d.id, { statut_paiement: 'annule' });
-                              fetchData();
+
+                            <button className="menu-item text-orange" onClick={async () => {
+                              if (confirm('Confirmer l\'annulation de la facturation ?')) {
+                                await updateDemande(d.id, { statut_paiement: 'annule' });
+                                addToast('Facturation annulée', 'success');
+                                fetchData();
+                                setActiveMoreMenu(null);
+                              }
                             }}>
                               <XCircle size={14} /> Facturation annulée
+                            </button>
+
+                            <button className="menu-item text-red" onClick={async () => {
+                              if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
+                                try {
+                                  await deleteDemande(d.id);
+                                  addToast('Demande supprimée avec succès', 'success');
+                                  fetchData();
+                                  setActiveMoreMenu(null);
+                                } catch (err) {
+                                  addToast('Erreur lors de la suppression', 'error');
+                                }
+                              }
+                            }}>
+                              <Trash2 size={14} /> Supprimer
                             </button>
                           </div>
                         )}
@@ -760,32 +787,22 @@ export default function Dashboard() {
                       </button>
 
                       {activeMenu === d.id && (
-                        <div className="action-menu shadow-lg border" style={{ right: 'auto', left: 0, bottom: '100%', top: 'auto', marginBottom: '8px', zIndex: 50 }}>
+                        <div className="action-menu shadow-lg border" style={{ right: 'auto', left: 0, bottom: '100%', top: 'auto', marginBottom: '8px', zIndex: 50, minWidth: '180px' }}>
                           <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                             <Edit2 size={14} /> Éditer le besoin
-                          </button>
-
-                          <button className="menu-item" onClick={() => {
-                            setShowNoteModal({ demandeId: d.id, type: 'commercial', note: d.note_commercial || '' });
-                            setActiveMenu(null);
-                          }}>
-                            <MessageSquare size={14} /> Note commerciale
-                          </button>
-                          <button className="menu-item" onClick={() => {
-                            setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: d.note_operationnel || '' });
-                            setActiveMenu(null);
-                          }}>
-                            <MessageSquare size={14} /> Note opérationnelle
                           </button>
 
                           <button className="menu-item" onClick={async () => {
                             if (confirm('Confirmer cette opération ?')) {
                               await confirmerCAO(d.id);
+                              addToast('CAO confirmée', 'success');
                               fetchData();
+                              setActiveMenu(null);
                             }
                           }}>
                             <CheckCircle size={14} /> Confirmation Opé
                           </button>
+
                           <Link
                             to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
                             className="menu-item"
