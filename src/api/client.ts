@@ -13,6 +13,13 @@ const apiClient = axios.create({
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (value?: unknown) => void; reject: (err: unknown) => void }> = [];
 
+apiClient.interceptors.request.use((config) => {
+  if (config.method === 'get') {
+    config.params = { ...config.params, _t: Date.now() };
+  }
+  return config;
+});
+
 const processQueue = (error: unknown) => {
   failedQueue.forEach((prom) => {
     if (error) prom.reject(error);

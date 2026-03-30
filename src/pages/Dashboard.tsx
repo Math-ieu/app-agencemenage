@@ -195,6 +195,8 @@ export default function Dashboard() {
       }
 
       await fetchData();
+      setShowDetail(false);
+      setIsEditing(false);
       addToast('Mise à jour effectuée avec succès !', 'success');
 
       if (editFormData.envoyer_whatsapp) {
