@@ -55,7 +55,6 @@ const SERVICES_LIST = {
     "Ménage Air BnB",
     "Nettoyage post-déménagement",
     "Ménage fin de chantier",
-    "Aide à domicile",
     "Auxiliaire de vie",
     "Ménage post-sinistre"
   ],
