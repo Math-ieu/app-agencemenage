@@ -38,6 +38,88 @@
   --header-h: 70px;
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Blog Literal Port Scope (Sync with happy-post-manager)
+ * ──────────────────────────────────────────────────────────────────────────── */
+.blog-literal {
+  --background: 220 20% 97%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 199 89% 48%;
+  /* Force Cyan as Primary for Blog section */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 214 32% 91%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 199 89% 48%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 199 89% 48%;
+  --radius: 0.75rem;
+  --success: 142 76% 36%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 100%;
+
+  /* Localized overrides for components */
+  font-family: 'Inter', sans-serif !important;
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground));
+}
+
+.blog-literal * {
+  border-color: hsl(var(--border));
+}
+
+.blog-literal .bg-accent {
+  background-color: hsl(var(--accent)) !important;
+}
+
+.blog-literal .text-accent {
+  color: hsl(var(--accent)) !important;
+}
+
+.blog-literal .bg-primary {
+  background-color: hsl(var(--primary)) !important;
+}
+
+.blog-literal .text-primary {
+  color: hsl(var(--primary)) !important;
+}
+
+.blog-literal .bg-card {
+  background-color: hsl(var(--card)) !important;
+}
+
+.blog-literal.dark {
+  --background: 222 47% 6%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 47% 9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 199 89% 48%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 199 89% 48%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 63% 31%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217 33% 17%;
+  --input: 217 33% 17%;
+  --ring: 199 89% 48%;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -470,8 +552,27 @@ body {
   border-radius: 8px;
   font-weight: 500;
   font-size: 0.875rem;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  overflow: hidden;
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  background-color: var(--accent);
+  border-radius: 0 4px 4px 0;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+}
+
+.nav-item-active::before,
+.nav-parent-active::before {
+  transform: translateX(0);
 }
 
 .nav-item:hover {
@@ -492,6 +593,87 @@ body {
 .sidebar-collapsed .nav-item {
   justify-content: center;
   padding: 0.75rem 0;
+}
+
+/* Sub-menu styling */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-parent {
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.nav-category-label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.nav-parent-active {
+  color: white;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.nav-chevron {
+  margin-left: auto;
+  transition: transform 0.3s ease;
+  opacity: 0.5;
+}
+
+.nav-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.nav-children {
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding-left: 2.75rem;
+  /* Icon (20px) + Gap (12px) = ~32px/2.75rem align */
+  position: relative;
+}
+
+.nav-children::before {
+  content: '';
+  position: absolute;
+  left: 1.6rem;
+  top: 0;
+  bottom: 10px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-child-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 0.8125rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.nav-child-item:hover {
+  color: white;
+  background-color: rgba(255, 255, 255, 0.03);
+  transform: translateX(2px);
+}
+
+.nav-child-active {
+  color: var(--accent);
+  font-weight: 600;
+  background-color: rgba(237, 186, 84, 0.05);
 }
 
 .nav-badge {
@@ -2191,6 +2373,15 @@ body {
   .menu-group-item.active svg {
     transform: rotate(0deg) !important;
   }
+}
+
+.blog-literal {
+  --primary: hsl(172, 50%, 34%);
+  --primary-dark: hsl(172, 50%, 24%);
+  --bg-main: hsl(210, 20%, 98%);
+  --text-main: hsl(222, 47%, 11%);
+  --text-muted: hsl(215, 16%, 47%);
+  --border-color: hsl(214, 32%, 91%);
 }
 
 /* Modal Styles for Creation Form */

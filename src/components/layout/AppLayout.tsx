@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Users, UserCheck, History,
-  DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X
+  DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X, Globe, ChevronDown
 } from 'lucide-react';
 import { useAuthStore, useNotificationStore } from '../../store/auth';
 import logoUrl from '../../assets/LOGO-AGENCE-MENAGE.png';
@@ -16,6 +16,14 @@ const navItems = [
   { to: '/finance', icon: DollarSign, label: 'Gestion Financière' },
   { to: '/qualite', icon: Star, label: 'Qualité & Feedback' },
   { to: '/marketing', icon: Megaphone, label: 'Marketing' },
+  { 
+    id: 'seo',
+    icon: Globe, 
+    label: 'SEO',
+    children: [
+      { to: '/seo/blog', label: 'Blog' }
+    ]
+  },
   { to: '/parametres', icon: Settings, label: 'Paramètres' },
 ];
 
@@ -25,6 +33,14 @@ export default function AppLayout() {
   const { user, logout } = useAuthStore();
   const { pendingCount } = useNotificationStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [expandedItems, setExpandedItems] = useState<string[]>(['seo']); // SEO expanded by default
+
+  const toggleExpand = (id: string) => {
+    setExpandedItems(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -66,27 +82,70 @@ export default function AppLayout() {
         </div>
 
         <nav className="sidebar-nav">
-          {navItems.map(({ to, icon: Icon, label, badge }) => (
+          {navItems.map((item) => {
+            const { icon: Icon, label, badge } = item;
+            const hasChildren = 'children' in item;
+            const isExpanded = hasChildren && expandedItems.includes(item.id!);
+            const isChildActive = hasChildren && item.children!.some(child => location.pathname.startsWith(child.to!));
+            
+            if (hasChildren) {
+              return (
+                <div key={item.id} className={`nav-group ${isChildActive ? 'group-active' : ''}`}>
+                  <button 
+                    className={`nav-item nav-parent ${isExpanded ? 'nav-parent-expanded' : ''} ${isChildActive ? 'nav-parent-active' : ''}`}
+                    onClick={() => toggleExpand(item.id!)}
+                  >
+                    <span className="nav-icon">
+                      <Icon size={20} />
+                    </span>
+                    {!collapsed && <span className="nav-label nav-category-label">{label}</span>}
+                    {!collapsed && (
+                      <ChevronDown size={14} className={`nav-chevron ${isExpanded ? 'rotated' : ''}`} />
+                    )}
+                    {collapsed && isChildActive && (
+                      <span className="nav-badge-dot" style={{ backgroundColor: 'var(--accent)' }} />
+                    )}
+                  </button>
+                  {isExpanded && !collapsed && (
+                    <div className="nav-children">
+                      {item.children!.map((child) => (
+                        <NavLink
+                          key={child.to}
+                          to={child.to!}
+                          onClick={() => setMobileOpen(false)}
+                          className={({ isActive }) => `nav-child-item ${isActive ? 'nav-child-active' : ''}`}
+                        >
+                          <span className="nav-child-label">{child.label}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
               <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              onClick={() => setMobileOpen(false)}
-              className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}
-              title={collapsed ? label : undefined}
-            >
-              <span className="nav-icon">
-                <Icon size={20} />
-              </span>
-              {!collapsed && <span className="nav-label">{label}</span>}
-              {!collapsed && badge && pendingCount > 0 && (
-                <span className="nav-badge">{pendingCount}</span>
-              )}
-              {collapsed && badge && pendingCount > 0 && (
-                <span className="nav-badge-dot" />
-              )}
-            </NavLink>
-          ))}
+                key={item.to}
+                to={item.to!}
+                end={item.to === '/'}
+                onClick={() => setMobileOpen(false)}
+                className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''}`}
+                title={collapsed ? label : undefined}
+              >
+                <span className="nav-icon">
+                  <Icon size={20} />
+                </span>
+                {!collapsed && <span className="nav-label">{label}</span>}
+                {!collapsed && badge && pendingCount > 0 && (
+                  <span className="nav-badge">{pendingCount}</span>
+                )}
+                {collapsed && badge && pendingCount > 0 && (
+                  <span className="nav-badge-dot" />
+                )}
+              </NavLink>
+            );
+          })}
         </nav>
 
         <div className="sidebar-footer">

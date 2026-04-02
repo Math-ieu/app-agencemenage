@@ -18,6 +18,9 @@ import Marketing from './pages/Marketing';
 import Parametres from './pages/Parametres';
 import ClientDetails from './pages/ClientDetails.tsx';
 import ProfilDetails from './pages/ProfilDetails.tsx';
+import Blog from './pages/seo/Blog';
+import BlogPreview from './pages/seo/BlogPreview';
+import ArticleForm from './components/blog/ArticleForm';
 
 
 // Navigation guard function
@@ -54,6 +57,14 @@ export default function App() {
           <Route path="qualite" element={<Qualite />} />
           <Route path="marketing" element={<Marketing />} />
           <Route path="parametres" element={<Parametres />} />
+
+          {/* SEO / Blog Routes */}
+          <Route path="seo">
+            <Route path="blog" element={<Blog />} />
+            <Route path="blog/new" element={<ArticleForm />} />
+            <Route path="blog/edit/:id" element={<ArticleForm />} />
+            <Route path="blog/preview/:id" element={<BlogPreview />} />
+          </Route>
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
