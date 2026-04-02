@@ -76,6 +76,7 @@ export interface Demande {
   client_whatsapp?: string;
   client_city?: string;
   client_neighborhood?: string;
+  client_address?: string;
   client_details?: Client;
   assigned_to_name: string;
   assigned_to_id?: number;

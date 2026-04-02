@@ -487,8 +487,8 @@ export default function DemandesEnAttente() {
                         <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value">{d.service}</span></div>
                         <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">{d.formulaire_data?.type_habitation || d.formulaire_data?.structure_type || '—'}</span></div>
                         <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency_label || d.frequency || '—'}</span></div>
-                        <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.formulaire_data?.duree ? `${d.formulaire_data.duree}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—')}</span></div>
-                        <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.formulaire_data?.duree ? `${d.formulaire_data.duree}h` : (d.formulaire_data?.duration ? `${d.formulaire_data.duration}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—'))}</span></div>
+                        <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || '—'}</span></div>
                         {d.service.includes('Auxiliaire') ? (
                           <>
                             <div className="detail-item"><span className="detail-label">Âge / Sexe :</span> <span className="detail-value">{d.formulaire_data?.age_personne ? `${d.formulaire_data.age_personne} ans` : '—'} / {d.formulaire_data?.sexe_personne || '—'}</span></div>
@@ -496,15 +496,17 @@ export default function DemandesEnAttente() {
                             <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Médical :</span> <span className="detail-value">{d.formulaire_data?.situation_medicale || '—'}</span></div>
                           </>
                         ) : (
-                          <div className="detail-item"><span className="detail-label">Surface :</span> <span className="detail-value">{d.formulaire_data?.surface ? `${d.formulaire_data.surface} m²` : '—'}</span></div>
+                          <div className="detail-item"><span className="detail-label">Surface :</span> <span className="detail-value">{d.formulaire_data?.surface ? `${d.formulaire_data.surface} m²` : (d.formulaire_data?.officeSurface ? `${d.formulaire_data.officeSurface} m²` : (d.formulaire_data?.surfaceArea ? `${d.formulaire_data.surfaceArea} m²` : '—'))}</span></div>
                         )}
                         {d.formulaire_data?.details_pieces && (
                           <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Pièces :</span> <span className="detail-value">{d.formulaire_data?.details_pieces || '—'}</span></div>
                         )}
                         <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Services opt. :</span> <span className="detail-value">
                           {[
-                            d.formulaire_data?.produits && 'Produits (+90 MAD)',
-                            d.formulaire_data?.torchons && 'Torchons (+40 MAD)'
+                            (d.formulaire_data?.produits || d.formulaire_data?.additionalServices?.produitsEtOutils) && 'Produits (+90 MAD)',
+                            (d.formulaire_data?.torchons || d.formulaire_data?.additionalServices?.torchonsEtSerpierres) && 'Torchons (+40 MAD)',
+                            d.formulaire_data?.additionalServices?.nettoyageTerrasse && 'Terrasse (+500 MAD)',
+                            d.formulaire_data?.additionalServices?.baiesVitrees && 'Baies Vitrées',
                           ].filter(Boolean).join(', ') || 'Aucun'}
                         </span></div>
                       </div>
@@ -518,10 +520,10 @@ export default function DemandesEnAttente() {
                     </div>
                     {expandedCards[d.id] === 'lieux' && (
                       <div className="accordion-content">
-                        <div className="detail-item"><span className="detail-label">Date :</span> <span className="detail-value">{d.date_intervention || '—'}</span></div>
-                        <div className="detail-item"><span className="detail-label">Heure :</span> <span className="detail-value">{d.heure_intervention || '—'}</span></div>
-                        <div className="detail-item"><span className="detail-label">Ville :</span> <span className="detail-value">{d.formulaire_data?.ville || d.client_city || '—'}</span></div>
-                        <div className="detail-item"><span className="detail-label">Quartier :</span> <span className="detail-value">{d.formulaire_data?.quartier || d.client_neighborhood || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Date :</span> <span className="detail-value">{d.date_intervention || d.formulaire_data?.schedulingDate || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Heure :</span> <span className="detail-value">{d.heure_intervention || d.formulaire_data?.fixedTime || (d.formulaire_data?.schedulingTime === 'morning' ? 'Le matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? "L'après-midi" : d.formulaire_data?.schedulingTime) || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Ville :</span> <span className="detail-value">{d.formulaire_data?.ville || d.formulaire_data?.city || d.client_city || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Quartier :</span> <span className="detail-value">{d.formulaire_data?.quartier || d.formulaire_data?.neighborhood || d.client_neighborhood || '—'}</span></div>
                         <div className="detail-item"><span className="detail-label">Préférence horaire :</span> <span className="detail-value">{d.formulaire_data?.preference_horaire ? (d.formulaire_data.preference_horaire === 'matin' ? 'Matin (08h–12h)' : 'Après-midi (14h–18h)') : '—'}</span></div>
                         <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Adresse :</span> <span className="detail-value">{d.formulaire_data?.adresse || '—'}</span></div>
                       </div>
@@ -535,8 +537,8 @@ export default function DemandesEnAttente() {
                     </div>
                     {expandedCards[d.id] === 'notes' && (
                       <div className="accordion-content" style={{ gridTemplateColumns: '1fr' }}>
-                        {d.formulaire_data?.notes
-                          ? <p className="text-sm">{d.formulaire_data?.notes || '—'}</p>
+                        {(d.formulaire_data?.notes || d.formulaire_data?.changeRepereNotes || d.formulaire_data?.additionalNotes)
+                          ? <p className="text-sm">{[d.formulaire_data?.notes, d.formulaire_data?.changeRepereNotes, d.formulaire_data?.additionalNotes].filter(Boolean).join(' — ')}</p>
                           : <p className="text-sm text-muted italic">Aucune note</p>
                         }
                       </div>
