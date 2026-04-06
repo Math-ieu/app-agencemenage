@@ -24,7 +24,10 @@ const SERVICES = [
   "Nettoyage Fin de chantier (Entreprise)", "Menage Post-sinistre (Entreprise)",
 ];
 
-const CATEGORIES = ["Particuliers", "Entreprises", "Airbnb", "Post-demenagement"];
+const CATEGORIES = [
+  { id: 1, name: "Particuliers" },
+  { id: 2, name: "Entreprises" }
+];
 
 const st = {
   header: {
@@ -141,8 +144,17 @@ function ToolbarBtn({ onMD, children, title }) {
   );
 }
 
-function RichTextEditor({ onChange }) {
+function RichTextEditor({ value, onChange }) {
   const editorRef = useRef(null);
+  const isFirstLoad = useRef(true);
+
+  useEffect(() => {
+    if (editorRef.current && isFirstLoad.current && value) {
+      editorRef.current.innerHTML = value;
+      isFirstLoad.current = false;
+    }
+  }, [value]);
+
   const exec = (cmd, val) => {
     if (editorRef.current) editorRef.current.focus();
     document.execCommand(cmd, false, val || null);
@@ -184,7 +196,7 @@ function RichTextEditor({ onChange }) {
   );
 }
 
-function GalleryManager({ images, onChange }) {
+function GalleryManager({ images, onChange, onDelete }: any) {
   const fileRef = useRef(null);
   const [mediaTitle, setMediaTitle] = useState("");
 
@@ -193,7 +205,7 @@ function GalleryManager({ images, onChange }) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      onChange([...images, { url: ev.target.result, title: mediaTitle }]);
+      onChange([...images, { file: file, url: ev.target.result, title: mediaTitle }]);
       setMediaTitle("");
       if (fileRef.current) fileRef.current.value = "";
     };
@@ -208,10 +220,13 @@ function GalleryManager({ images, onChange }) {
             <div key={i} style={st.thumb}>
               <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               <button
-                onClick={() => onChange(images.filter((_, j) => j !== i))}
+                onClick={() => {
+                  if (img.id) onDelete(img.id);
+                  onChange(images.filter((_, j) => j !== i));
+                }}
                 style={{
                   position: "absolute", top: 3, right: 3,
-                  background: "rgba(0,0,0,0.55)", border: "none", borderRadius: 4,
+                  background: "rgba(200,0,0,0.75)", border: "none", borderRadius: 4,
                   color: "white", cursor: "pointer", width: 18, height: 18,
                   display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
                 }}
@@ -251,7 +266,10 @@ function ServiceSelector({ selected, onChange }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
       {SERVICES.map((item) => {
-        const active = selected.includes(item);
+        const normalize = (str: string) => 
+          (str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        const itemNorm = normalize(item);
+        const active = selected.some(s => normalize(s) === itemNorm);
         return (
           <button
             key={item}
@@ -335,22 +353,28 @@ export default function ArticleForm() {
     tags: [], status: "draft", publishedAt: today,
     gallery: [], recommendedServices: [],
     ctaContactLink: "/contact", ctaPhone: "+212 5 22 00 00 00",
-    servicesSection: [],
+    servicesSection: [], deletedImages: [],
   });
 
   useEffect(() => {
     getBlogCategories().then(res => {
-       const cats = res.data?.results || res.data || [];
-       setDynamicCategories(cats);
-       if (cats.length > 0 && form.category === "Particuliers") {
-           setForm(prev => ({ ...prev, category: cats[0].id.toString() }));
-       }
+      const cats = res.data?.results || res.data || [];
+      setDynamicCategories(cats);
+      if (cats.length > 0 && form.category === "Particuliers") {
+        setForm(prev => ({ ...prev, category: cats[0].id.toString() }));
+      }
     }).catch(e => console.error(e));
 
     if (id) {
       setIsLoading(true);
       getBlogPost(id).then(res => {
         const article = res.data;
+
+        // Map related services back to form sections
+        const services = article.related_services || [];
+        const recommended = services.filter(s => s.is_recommended).map(s => s.name);
+        const section = services.filter(s => !s.is_recommended).map(s => s.name);
+
         setForm(prev => ({
           ...prev,
           title: article.title || "",
@@ -358,13 +382,19 @@ export default function ArticleForm() {
           excerpt: article.excerpt || "",
           content: article.content || "",
           status: article.status || "draft",
-          category: article.category?.toString() || prev.category, 
+          category: article.category?.toString() || prev.category,
           author: article.author_name || article.author || prev.author,
-          
-          tags: prev.tags,
-          gallery: prev.gallery,
-          recommendedServices: prev.recommendedServices,
-          servicesSection: prev.servicesSection
+
+          tags: (article.tags || []).map(t => t.name),
+          gallery: (article.gallery || []).map(img => ({
+            url: img.image,
+            title: img.caption,
+            id: img.id
+          })),
+          recommendedServices: recommended,
+          servicesSection: section,
+          ctaContactLink: article.cta_contact_link || prev.ctaContactLink,
+          ctaPhone: article.cta_phone || prev.ctaPhone
         }));
       }).catch(err => {
         toast.error("Article introuvable");
@@ -385,45 +415,68 @@ export default function ArticleForm() {
 
   const handleSave = async (publish) => {
     if (!form.title.trim()) { toast.error("Le titre est requis"); return; }
-    if (!form.slug.trim()) { toast.error("Le slug est requis"); return; }
-    
-    const formData = new FormData();
-    formData.append("title", form.title);
-    if (!isEditing) formData.append("slug", form.slug || generateSlug(form.title));
-    if (form.excerpt) formData.append("excerpt", form.excerpt);
-    if (form.content) formData.append("content", form.content);
-    
-    if (form.category && form.category !== "Particuliers") {
-      formData.append("category", form.category.toString());
-    }
-    
-    const finalStatus = publish ? "published" : (form.status || "draft");
-    formData.append("status", finalStatus);
 
-    if (form.gallery && form.gallery.length > 0) {
-      const firstImg = form.gallery[0];
-      if (firstImg.url && firstImg.url.startsWith('data:')) {
-         const res = await fetch(firstImg.url);
-         const blob = await res.blob();
-         formData.append("featured_image", blob, `cover-${generateId()}.${blob.type.split('/')[1]}`);
-      }
-    }
-
+    setIsLoading(true);
     try {
-       setIsLoading(true);
-       if (isEditing) {
-         await updateBlogPost(id!, formData);
-         toast.success(publish ? "Article publié !" : "Article mis à jour !");
-       } else {
-         await createBlogPost(formData);
-         toast.success(publish ? "Article créé et publié !" : "Brouillon sauvegardé !");
-       }
-       navigate("/seo/blog");
-    } catch(err: any) {
-       console.error(err);
-       toast.error(err.response?.data?.detail || "Erreur lors de la sauvegarde");
+      const formData = new FormData();
+      formData.append("title", form.title);
+      if (!isEditing) formData.append("slug", form.slug || generateSlug(form.title));
+      formData.append("excerpt", form.excerpt || "");
+      formData.append("content", form.content || "");
+      formData.append("status", publish ? "published" : form.status);
+      formData.append("category", form.category.toString());
+
+      // Handle Tags
+      form.tags.forEach(tag => {
+        formData.append("tag_names", tag);
+      });
+
+      // Handle Services (JSON)
+      const combinedServices = [
+        ...form.recommendedServices.map(name => ({ name, is_recommended: true })),
+        ...form.servicesSection.map(name => ({ name, is_recommended: false }))
+      ];
+      formData.append("related_services", JSON.stringify(combinedServices));
+
+      formData.append("cta_contact_link", form.ctaContactLink);
+      formData.append("cta_phone", form.ctaPhone);
+
+      // Handle Gallery updates
+      if (form.gallery && form.gallery.length > 0) {
+        // Send ALL new files
+        form.gallery.forEach(item => {
+          if (item.file) {
+            formData.append("gallery_files", item.file);
+          }
+        });
+
+        // Use first image as featured if new file provided
+        const firstImg = form.gallery[0];
+        if (firstImg.file) {
+           formData.append("featured_image", firstImg.file);
+        }
+      }
+
+      // Send IDs of images to delete
+      if (form.deletedImages && form.deletedImages.length > 0) {
+        form.deletedImages.forEach(id => {
+          formData.append("delete_gallery_ids", id);
+        });
+      }
+
+      if (isEditing) {
+        await updateBlogPost(id!, formData);
+        toast.success(publish ? "Article publié !" : "Article mis à jour !");
+      } else {
+        await createBlogPost(formData);
+        toast.success(publish ? "Article créé !" : "Brouillon sauvegardé !");
+      }
+      navigate("/seo/blog");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || "Erreur lors de la sauvegarde");
     } finally {
-       setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -454,10 +507,56 @@ export default function ArticleForm() {
 
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: isMobile ? "16px 12px 48px" : "24px 24px 48px" }}>
         {showPreview ? (
-          <div style={st.card}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 22, color: "#0f172a" }}>{form.title || "Sans titre"}</h2>
-            {form.excerpt && <p style={{ color: "#64748b", marginBottom: 16 }}>{form.excerpt}</p>}
-            <div style={{ fontSize: 15, lineHeight: 1.8, color: "#334155" }} dangerouslySetInnerHTML={{ __html: form.content || "<p style='color:#94a3b8'>Aucun contenu.</p>" }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {/* Main Content Preview */}
+            <div style={st.card}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                {form.tags.map(t => <span key={t} style={st.tag}>{t}</span>)}
+              </div>
+              <h2 style={{ margin: "0 0 8px", fontSize: 24, fontWeight: 700, color: "#0f172a" }}>{form.title || "Sans titre"}</h2>
+              {form.excerpt && <p style={{ color: "#64748b", marginBottom: 20, fontSize: 16 }}>{form.excerpt}</p>}
+              <div style={{ fontSize: 15, lineHeight: 1.8, color: "#334155" }} dangerouslySetInnerHTML={{ __html: form.content || "<p style='color:#94a3b8'>Aucun contenu.</p>" }} />
+            </div>
+
+            {/* Recommended Services Preview */}
+            {form.recommendedServices.length > 0 && (
+              <div style={st.card}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 12 }}>Aperçu : Nos services recommandés</h3>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {form.recommendedServices.map(s => (
+                    <span key={s} style={{ ...st.serviceTag, background: "#f1f5f9", borderColor: "#e2e8f0", cursor: "default" }}>{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* CTA Preview */}
+            <div style={{ ...st.card, background: "#f0f9ff", border: "1px solid #bae6fd", textAlign: "center", padding: "30px 20px" }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: "#0c4a6e", marginBottom: 8 }}>Prêt à passer à l'action ?</h3>
+              <p style={{ color: "#0369a1", marginBottom: 20, fontSize: 14 }}>{form.ctaPhone || "Contactez-nous"}</p>
+              <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
+                <div style={{ padding: "8px 20px", background: "#0ea5e9", color: "white", borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
+                  {form.recommendedServices[0] || "Réserver"}
+                </div>
+                <div style={{ padding: "8px 20px", border: "1px solid #0ea5e9", color: "#0ea5e9", borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
+                  {form.ctaPhone ? "Appeler" : "Contact"}
+                </div>
+              </div>
+            </div>
+
+            {/* Other Services Preview */}
+            {form.servicesSection.length > 0 && (
+              <div style={st.card}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 12 }}>Aperçu : Section Nos Services</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {form.servicesSection.map(s => (
+                    <div key={s} style={{ padding: 10, background: "#fafafa", borderRadius: 8, border: "1px solid #f1f5f9", fontSize: 13, color: "#475569" }}>
+                      {s}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div style={{
@@ -491,11 +590,17 @@ export default function ArticleForm() {
               </SectionCard>
 
               <SectionCard number={2} title="Contenu de l'article">
-                <RichTextEditor onChange={(v) => updateField("content", v)} />
+                <RichTextEditor value={form.content} onChange={(v) => updateField("content", v)} />
               </SectionCard>
 
               <SectionCard number={3} title="Galerie d'images" description="Ajoutez plusieurs images avec un titre pour chacune.">
-                <GalleryManager images={form.gallery} onChange={(g) => updateField("gallery", g)} />
+                <GalleryManager 
+                  images={form.gallery} 
+                  onChange={(g) => updateField("gallery", g)} 
+                  onDelete={(id) => {
+                    if (id) updateField("deletedImages", [...form.deletedImages, id]);
+                  }}
+                />
               </SectionCard>
 
               <SectionCard number={4} title="Nos services recommandes" description="Selectionnez les services a recommander dans cet article.">
@@ -575,7 +680,7 @@ export default function ArticleForm() {
                     <div>
                       <label style={st.label}>Categorie</label>
                       <select value={form.category} onChange={(e) => updateField("category", e.target.value)} style={st.select}>
-                        {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        {CATEGORIES.map((c) => <option key={c.id} value={c.id.toString()}>{c.name}</option>)}
                       </select>
                     </div>
                     <div>
