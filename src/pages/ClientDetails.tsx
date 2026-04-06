@@ -289,7 +289,7 @@ export default function ClientDetails() {
         padding: '12px 0', position: 'sticky', top: 0, zIndex: 20,
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
       }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="flex-wrap gap-y-4">
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
             {/* Back button */}
             <button
@@ -341,7 +341,7 @@ export default function ClientDetails() {
           </div>
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10 }} className="flex-wrap">
             <button style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 18px', border: '1px solid #e2e8f0',

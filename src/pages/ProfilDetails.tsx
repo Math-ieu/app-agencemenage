@@ -163,7 +163,7 @@ export default function ProfilDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addToast } = useToastStore();
-  
+
   const [agent, setAgent] = useState<Agent | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
@@ -195,14 +195,14 @@ export default function ProfilDetails() {
         getMissions({ agent: realId.toString() }),
         getFeedbacks({ mission__agent: realId.toString() }),
       ]);
-      
+
       setAgent(agentRes.data);
       setOperatorNotes(agentRes.data.operator_notes || '');
-      
+
       // Handle list structure if paginated
       const missionsData = missionsRes.data.results || missionsRes.data;
       const feedbackData = feedbackRes.data.results || feedbackRes.data;
-      
+
       setMissions(Array.isArray(missionsData) ? missionsData : []);
       setFeedbacks(Array.isArray(feedbackData) ? feedbackData : []);
     } catch (err) {
@@ -276,7 +276,7 @@ export default function ProfilDetails() {
         padding: '12px 0', position: 'sticky', top: 0, zIndex: 20,
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
       }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="flex-wrap gap-4">
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
             <button
               onClick={() => navigate('/profils')}
@@ -311,10 +311,10 @@ export default function ProfilDetails() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>
-                    {agent.poste === 'femme_menage' ? 'Femme de ménage' : 
-                     agent.poste === 'garde_malade' ? 'Garde malade' : 
-                     agent.poste === 'auxiliaire_vie' ? 'Auxiliaire de vie' :
-                     agent.poste === 'nounou' ? 'Nounou' : agent.poste}
+                    {agent.poste === 'femme_menage' ? 'Femme de ménage' :
+                      agent.poste === 'garde_malade' ? 'Garde malade' :
+                        agent.poste === 'auxiliaire_vie' ? 'Auxiliaire de vie' :
+                          agent.poste === 'nounou' ? 'Nounou' : agent.poste}
                   </span>
                   <span style={{ color: '#e2e8f0' }}>•</span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>{agent.phone}</span>
@@ -323,7 +323,7 @@ export default function ProfilDetails() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10 }} className="flex-wrap">
             <button style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 18px', border: '1px solid #e2e8f0',
@@ -400,15 +400,15 @@ export default function ProfilDetails() {
               EXPÉRIENCES
             </p>
             <div style={{ padding: 20, background: '#f8fafc', borderRadius: 12, border: '1px solid #f1f5f9' }}>
-               {/* This would be a map over agent.experiences if they were passed separately, 
+              {/* This would be a map over agent.experiences if they were passed separately, 
                   but in the screenshot it shows a specialized list */}
-               <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 12 }}>Femme de ménage</div>
-               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                 {['Hôtel', 'Faire le lit', 'Laver le sol', 'Nettoyer les vitres', 'Ranger les placards'].map(task => (
-                   <span key={task} style={{ padding: '4px 12px', background: '#ecfdf5', color: '#065f46', borderRadius: 6, fontSize: 12, fontWeight: 500 }}>{task}</span>
-                 ))}
-                 <span style={{ padding: '4px 12px', background: '#ecfdf5', color: '#065f46', borderRadius: 6, fontSize: 12, fontWeight: 500 }}>...</span>
-               </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', marginBottom: 12 }}>Femme de ménage</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {['Hôtel', 'Faire le lit', 'Laver le sol', 'Nettoyer les vitres', 'Ranger les placards'].map(task => (
+                  <span key={task} style={{ padding: '4px 12px', background: '#ecfdf5', color: '#065f46', borderRadius: 6, fontSize: 12, fontWeight: 500 }}>{task}</span>
+                ))}
+                <span style={{ padding: '4px 12px', background: '#ecfdf5', color: '#065f46', borderRadius: 6, fontSize: 12, fontWeight: 500 }}>...</span>
+              </div>
             </div>
           </div>
         </Accordion>
@@ -440,37 +440,37 @@ export default function ProfilDetails() {
 
         {/* ── 3. Média ── */}
         <Accordion title="Média" icon={<Eye size={18} />} isOpen={openSections.media} onToggle={() => toggle('media')} color={C.teal}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 32 }}>
-             {/* Photo */}
-             <div style={{ textAlign: 'center' }}>
-               <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>PHOTO DE PROFIL</p>
-               <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                 {agent.photo ? <img src={agent.photo} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} /> : <User size={40} color="#cbd5e1" />}
-               </div>
-               <button onClick={() => agent.photo && handleDownload(agent.photo)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                 <Download size={14} /> Télécharger
-               </button>
-             </div>
-             {/* CIN */}
-             <div style={{ textAlign: 'center' }}>
-               <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>CIN</p>
-               <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                 <FileText size={40} color="#cbd5e1" />
-               </div>
-               <button onClick={() => agent.cin_file && handleDownload(agent.cin_file)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                 <Download size={14} /> Télécharger
-               </button>
-             </div>
-             {/* Attestation */}
-             <div style={{ textAlign: 'center' }}>
-               <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>ATTESTATION</p>
-               <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                 <ClipboardCheck size={40} color="#cbd5e1" />
-               </div>
-               <button onClick={() => agent.attestation_file && handleDownload(agent.attestation_file)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                 <Download size={14} /> Télécharger
-               </button>
-             </div>
+          <div className="media-layout-grid">
+            {/* Photo */}
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>PHOTO DE PROFIL</p>
+              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {agent.photo ? <img src={agent.photo} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} /> : <User size={40} color="#cbd5e1" />}
+              </div>
+              <button onClick={() => agent.photo && handleDownload(agent.photo)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                <Download size={14} /> Télécharger
+              </button>
+            </div>
+            {/* CIN */}
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>CIN</p>
+              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <FileText size={40} color="#cbd5e1" />
+              </div>
+              <button onClick={() => agent.cin_file && handleDownload(agent.cin_file)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                <Download size={14} /> Télécharger
+              </button>
+            </div>
+            {/* Attestation */}
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>ATTESTATION</p>
+              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ClipboardCheck size={40} color="#cbd5e1" />
+              </div>
+              <button onClick={() => agent.attestation_file && handleDownload(agent.attestation_file)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                <Download size={14} /> Télécharger
+              </button>
+            </div>
           </div>
         </Accordion>
 
@@ -486,7 +486,7 @@ export default function ProfilDetails() {
 
         {/* ── 5. Évaluation Profil ── */}
         <Accordion title="Évaluation Profil" icon={<Star size={18} />} isOpen={openSections.evaluation} onToggle={() => toggle('evaluation')} color={C.coral}>
-           <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
                 <Th>Date</Th><Th>Client</Th><Th>Étoiles</Th><Th>Satisfaction</Th><Th>Statut</Th><Th center>Action</Th>
@@ -509,51 +509,51 @@ export default function ProfilDetails() {
                 {feedbacks.length === 0 && <EmptyState text="Aucune évaluation trouvée." colSpan={6} />}
               </tbody>
             </table>
-           </div>
+          </div>
         </Accordion>
 
         {/* ── 6. Historique Mission ── */}
         <Accordion title="Historique Mission" icon={<Briefcase size={18} />} isOpen={openSections.missions} onToggle={() => toggle('missions')} color={C.sage}>
-           <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr>
-                  <Th>N°</Th><Th>Date</Th><Th>Client</Th><Th>Service</Th><Th>Montant</Th><Th>Statut</Th><Th>Feedback</Th>
-                </tr></thead>
-                <tbody>
-                  {missions.map((m, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <Td mono>M-{m.id}</Td>
-                      <Td>{m.date_debut ? new Date(m.date_debut).toLocaleDateString('fr-FR') : '—'}</Td>
-                      <Td bold color="#475569">{m.client_name || '—'}</Td>
-                      <Td>{m.demande_details?.service || '—'}</Td>
-                      <Td bold color="#1e293b">{m.montant || 0} DH</Td>
-                      <Td><Badge bg="#f1f5f9" color="#475569">{m.statut}</Badge></Td>
-                      <Td color="#94a3b8">—</Td>
-                    </tr>
-                  ))}
-                  {missions.length === 0 && <EmptyState text="Aucune mission trouvée." colSpan={7} />}
-                </tbody>
-              </table>
-           </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <Th>N°</Th><Th>Date</Th><Th>Client</Th><Th>Service</Th><Th>Montant</Th><Th>Statut</Th><Th>Feedback</Th>
+              </tr></thead>
+              <tbody>
+                {missions.map((m, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <Td mono>M-{m.id}</Td>
+                    <Td>{m.date_debut ? new Date(m.date_debut).toLocaleDateString('fr-FR') : '—'}</Td>
+                    <Td bold color="#475569">{m.client_name || '—'}</Td>
+                    <Td>{m.demande_details?.service || '—'}</Td>
+                    <Td bold color="#1e293b">{m.montant || 0} DH</Td>
+                    <Td><Badge bg="#f1f5f9" color="#475569">{m.statut}</Badge></Td>
+                    <Td color="#94a3b8">—</Td>
+                  </tr>
+                ))}
+                {missions.length === 0 && <EmptyState text="Aucune mission trouvée." colSpan={7} />}
+              </tbody>
+            </table>
+          </div>
         </Accordion>
 
         {/* ── 7. Historique ── */}
         <Accordion title="Historique" icon={<History size={18} />} isOpen={openSections.historique} onToggle={() => toggle('historique')} color={C.tan}>
-           <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr>
-                  <Th>Date</Th><Th>Action</Th><Th center>Note</Th><Th>Utilisateur</Th>
-                </tr></thead>
-                <tbody>
-                   <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                     <Td>{new Date(agent.created_at).toLocaleString('fr-FR')}</Td>
-                     <Td bold color="#475569">Profil créé</Td>
-                     <Td center color="#94a3b8">—</Td>
-                     <Td>Opérateur</Td>
-                   </tr>
-                </tbody>
-              </table>
-           </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <Th>Date</Th><Th>Action</Th><Th center>Note</Th><Th>Utilisateur</Th>
+              </tr></thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <Td>{new Date(agent.created_at).toLocaleString('fr-FR')}</Td>
+                  <Td bold color="#475569">Profil créé</Td>
+                  <Td center color="#94a3b8">—</Td>
+                  <Td>Opérateur</Td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </Accordion>
 
       </div>

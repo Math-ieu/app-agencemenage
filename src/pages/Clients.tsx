@@ -214,7 +214,7 @@ export default function Clients() {
       </div>
 
       <div className="client-toolbar">
-        <div className="search-box" style={{ flex: '0 0 600px' }}>
+        <div className="search-box w-full md:w-[600px]">
           <Search size={18} className="search-icon" />
           <input
             type="text"
