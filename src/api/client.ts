@@ -178,3 +178,29 @@ export const uploadDocument = (demandeId: number, file: File | Blob, type: strin
     },
   });
 };
+
+// ─── Blog ────────────────────────────────────────────────────────────────────
+export const getBlogCategories = () => apiClient.get('/api/blog/categories/');
+
+export const getBlogPosts = (params?: Record<string, string | number>) =>
+  apiClient.get('/api/blog/posts/', { params });
+
+export const getBlogPost = (slug: string) =>
+  apiClient.get(`/api/blog/posts/${slug}/`);
+
+export const createBlogPost = (data: FormData | Record<string, unknown>) => {
+  const isFormData = data instanceof FormData;
+  return apiClient.post('/api/blog/posts/', data, {
+    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  });
+};
+
+export const updateBlogPost = (slug: string, data: FormData | Record<string, unknown>) => {
+  const isFormData = data instanceof FormData;
+  return apiClient.patch(`/api/blog/posts/${slug}/`, data, {
+    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  });
+};
+
+export const deleteBlogPost = (slug: string) =>
+  apiClient.delete(`/api/blog/posts/${slug}/`);
