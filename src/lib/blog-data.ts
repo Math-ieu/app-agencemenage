@@ -47,5 +47,5 @@ export const generateSlug = (text: string) => text.toLowerCase().replace(/[\\s_]
 
 // Placeholder mocks so that the UI can function if the backend fails, 
 // though we use the real API in ArticleForm.
-export const getArticle = (id: string) => null;
-export const saveArticle = (article: BlogArticle) => {};
+export const getArticle = (_id: string) => null;
+export const saveArticle = (_article: BlogArticle) => {};
