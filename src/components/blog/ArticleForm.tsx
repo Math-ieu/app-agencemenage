@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useRef, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { getBlogPost, createBlogPost, updateBlogPost, getBlogCategories } from "@/api/client";
 import { toast } from "sonner";
 import { generateId } from "@/lib/blog-data";
@@ -338,8 +338,12 @@ function useIsMobile() {
 export default function ArticleForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isPreviewMode = searchParams.get("preview") === "true";
+  
   const isEditing = Boolean(id);
-  const [showPreview, setShowPreview] = useState(false);
+  const [showPreview, setShowPreview] = useState(isPreviewMode);
   const [isLoading, setIsLoading] = useState(false);
   const [dynamicCategories, setDynamicCategories] = useState([]);
   const isMobile = useIsMobile();

@@ -313,7 +313,7 @@ function ArticleCard({ article, onEdit, onDelete, onTogglePublish }: any) {
         {/* Link to public blog article */}
         <ActionBtn 
           title="Aperçu" 
-          onClick={() => window.open(`/blog/${article.slug}`, '_blank')} 
+          onClick={() => window.open(`/seo/blog/edit/${article.slug || article.id}?preview=true`, '_blank')} 
           hoverColor="#64748b" 
           hoverBg="#f1f5f9" 
           icon={<Eye size={16} />} 
