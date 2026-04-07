@@ -69,7 +69,20 @@ export default function DemandesEnAttente() {
     sexe_personne: '',
     mobilite: '',
     situation_medicale: '',
-    nb_jours: 1
+    nb_jours: 1,
+    // Detailed rooms for Ménage Standard
+    rooms: {
+      cuisine: 1,
+      suiteAvecBain: 0,
+      suiteSansBain: 0,
+      salleDeBain: 1,
+      chambre: 1,
+      salonMarocain: 0,
+      salonEuropeen: 1,
+      toilettesLavabo: 0,
+      rooftop: 0,
+      escalier: 0
+    }
   });
 
   const { user } = useAuthStore();
@@ -218,7 +231,11 @@ export default function DemandesEnAttente() {
       montant: '', mode_paiement: '', statut_paiement: 'non_paye', notes: '',
       service_type: 'flexible', structure_type: '', nb_personnel: 1,
       lieu_garde: 'domicile', age_personne: '', sexe_personne: '',
-      mobilite: '', situation_medicale: '', nb_jours: 1
+      mobilite: '', situation_medicale: '', nb_jours: 1,
+      rooms: {
+        cuisine: 1, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 1, chambre: 1,
+        salonMarocain: 0, salonEuropeen: 1, toilettesLavabo: 0, rooftop: 0, escalier: 0
+      }
     });
     setShowCreateModal(true);
     setShowNewMenu(false);
@@ -260,7 +277,11 @@ export default function DemandesEnAttente() {
       sexe_personne: d.formulaire_data?.sexe_personne || '',
       mobilite: d.formulaire_data?.mobilite || '',
       situation_medicale: d.formulaire_data?.situation_medicale || '',
-      nb_jours: d.formulaire_data?.nb_jours || 1
+      nb_jours: d.formulaire_data?.nb_jours || 1,
+      rooms: d.formulaire_data?.rooms || {
+        cuisine: 1, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 1, chambre: 1,
+        salonMarocain: 0, salonEuropeen: 1, toilettesLavabo: 0, rooftop: 0, escalier: 0
+      }
     });
     setShowCreateModal(true);
   };
@@ -311,6 +332,8 @@ export default function DemandesEnAttente() {
           // Contact
           whatsapp_phone: whatsappPhone,
           notes: formData.notes,
+          // Detailed rooms
+          rooms: formData.rooms
         }
       };
 
@@ -484,7 +507,7 @@ export default function DemandesEnAttente() {
                     </div>
                     {expandedCards[d.id] === 'details' && (
                       <div className="accordion-content">
-                        <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value">{d.service}</span></div>
+                        <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value text-teal-700">{d.service}</span></div>
                         <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">{d.formulaire_data?.type_habitation || d.formulaire_data?.structure_type || '—'}</span></div>
                         <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency_label || d.frequency || '—'}</span></div>
                         <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.formulaire_data?.duree ? `${d.formulaire_data.duree}h` : (d.formulaire_data?.duration ? `${d.formulaire_data.duration}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—'))}</span></div>
@@ -493,10 +516,16 @@ export default function DemandesEnAttente() {
                           <>
                             <div className="detail-item"><span className="detail-label">Âge / Sexe :</span> <span className="detail-value">{d.formulaire_data?.age_personne ? `${d.formulaire_data.age_personne} ans` : '—'} / {d.formulaire_data?.sexe_personne || '—'}</span></div>
                             <div className="detail-item"><span className="detail-label">Mobilité :</span> <span className="detail-value">{d.formulaire_data?.mobilite || '—'}</span></div>
-                            <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Médical :</span> <span className="detail-value">{d.formulaire_data?.situation_medicale || '—'}</span></div>
+                            <div className="detail-item" style={{ gridColumn: 'span 2' }}>
+                              <span className="detail-label">Médical :</span> 
+                              <span className="detail-value">{d.formulaire_data?.situation_medicale || '—'}</span>
+                            </div>
                           </>
                         ) : (
-                          <div className="detail-item"><span className="detail-label">Surface :</span> <span className="detail-value">{d.formulaire_data?.surface ? `${d.formulaire_data.surface} m²` : (d.formulaire_data?.officeSurface ? `${d.formulaire_data.officeSurface} m²` : (d.formulaire_data?.surfaceArea ? `${d.formulaire_data.surfaceArea} m²` : '—'))}</span></div>
+                          <div className="detail-item">
+                            <span className="detail-label">Surface :</span> 
+                            <span className="detail-value">{d.formulaire_data?.surface ? `${d.formulaire_data.surface} m²` : (d.formulaire_data?.officeSurface ? `${d.formulaire_data.officeSurface} m²` : (d.formulaire_data?.surfaceArea ? `${d.formulaire_data.surfaceArea} m²` : '—'))}</span>
+                          </div>
                         )}
                         {d.formulaire_data?.details_pieces && (
                           <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Pièces :</span> <span className="detail-value">{d.formulaire_data?.details_pieces || '—'}</span></div>
@@ -546,12 +575,17 @@ export default function DemandesEnAttente() {
                   </div>
                 </div>
 
-                <div className="pending-footer">
-                  <p className="text-sm">
-                    <span className="fw-bold">Montant : {d.is_devis ? 'Sur devis' : (d.prix ? `${d.prix} MAD` : '—')}</span>
-                    <span className="text-muted ml-2">({d.is_devis ? 'Devis' : 'Réservation'})</span>
-                  </p>
-                  <p className="text-sm fw-medium">Mode : {d.mode_paiement || '—'}</p>
+                <div className="pending-footer px-0">
+                  <div className="detail-item flex-1">
+                    <span className="detail-label">Montant :</span>
+                    <span className="detail-value text-teal-700 font-bold" style={{ fontSize: '1rem' }}>
+                      {d.is_devis ? 'Sur devis' : (d.prix ? `${d.prix} MAD` : '—')}
+                    </span>
+                  </div>
+                  <div className="detail-item flex-1">
+                    <span className="detail-label">Paiement :</span>
+                    <span className="detail-value">{d.mode_paiement || '—'}</span>
+                  </div>
                 </div>
 
                 <div className="border-t border-slate-100 pt-3 mt-3 flex gap-2">
@@ -934,11 +968,50 @@ export default function DemandesEnAttente() {
                           />
                         </div>
 
+                        {selectedService === "Ménage standard" && (
+                          <div className="form-section full-width bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <h3 className="text-teal-800 mb-4 flex items-center gap-2">
+                              <span className="text-lg">🏠</span> Détails des pièces
+                            </h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              {Object.entries(formData.rooms).map(([key, value]) => (
+                                <div key={key} className="flex flex-col gap-1">
+                                  <label className="text-[11px] uppercase font-bold text-slate-500">{key.replace(/([A-Z])/g, ' $1').toLowerCase()}</label>
+                                  <div className="flex items-center gap-2">
+                                    <button 
+                                      type="button" 
+                                      className="w-8 h-8 flex items-center justify-center bg-white border border-slate-300 rounded hover:bg-slate-100"
+                                      onClick={() => setFormData({
+                                        ...formData,
+                                        rooms: { ...formData.rooms, [key]: Math.max(0, (value as number) - 1) }
+                                      })}
+                                    >-</button>
+                                    <input 
+                                      type="number" 
+                                      className="w-12 text-center border-none bg-transparent font-bold"
+                                      value={value as number}
+                                      readOnly
+                                    />
+                                    <button 
+                                      type="button" 
+                                      className="w-8 h-8 flex items-center justify-center bg-white border border-slate-300 rounded hover:bg-slate-100"
+                                      onClick={() => setFormData({
+                                        ...formData,
+                                        rooms: { ...formData.rooms, [key]: (value as number) + 1 }
+                                      })}
+                                    >+</button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="form-group full-width">
-                          <label>Détails des pièces (Cuisine, SDB, Salons...)</label>
+                          <label>Détails des pièces (Notes additionnelles)</label>
                           <textarea
                             rows={2}
-                            placeholder="Ex: 1 Cuisine, 2 SDB, 1 Salon..."
+                            placeholder="Ex: Précisions sur l'état des lieux, fragilités..."
                             value={formData.details_pieces}
                             onChange={e => setFormData({ ...formData, details_pieces: e.target.value })}
                           ></textarea>

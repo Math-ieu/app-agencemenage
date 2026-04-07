@@ -73,7 +73,7 @@ export default function Clients() {
   const [activeTab, setActiveTab] = useState('tout');
   const [activeDropdown, setActiveDropdown] = useState<{ type: 'actions' | 'more', id: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
+
   const { user } = useAuthStore();
   const { addToast } = useToastStore();
   const [commerciaux, setCommerciaux] = useState<User[]>([]);
@@ -134,10 +134,10 @@ export default function Clients() {
   const handleSaveAvis = async () => {
     if (!showAvisModal) return;
     try {
-      const payload = showAvisModal.type === 'commercial' 
+      const payload = showAvisModal.type === 'commercial'
         ? { avis_commercial: showAvisModal.avis }
         : { avis_operationnel: showAvisModal.avis };
-      
+
       await updateClient(showAvisModal.clientId, payload);
       addToast('Avis mis à jour avec succès', 'success');
       fetchData();
@@ -457,7 +457,7 @@ export default function Clients() {
                   <p style={{ margin: 0, fontSize: '13px', color: '#64748b', marginTop: '2px' }}>Saisie des retours pour ce client</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => setShowAvisModal(null)}
                 style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
                 onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; }}
@@ -466,7 +466,7 @@ export default function Clients() {
                 <XCircle size={16} />
               </button>
             </div>
-            
+
             {/* Body */}
             <div style={{ padding: '24px' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Détails de l'avis</label>
@@ -480,10 +480,10 @@ export default function Clients() {
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)'; }}
               />
             </div>
-            
+
             {/* Footer */}
             <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px', backgroundColor: '#ffffff' }}>
-              <button 
+              <button
                 onClick={() => setShowAvisModal(null)}
                 style={{ padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#475569', backgroundColor: 'white', border: '1px solid #cbd5e1', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#0f172a'; }}
@@ -491,7 +491,7 @@ export default function Clients() {
               >
                 Annuler
               </button>
-              <button 
+              <button
                 onClick={handleSaveAvis}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white', backgroundColor: '#0f766e', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(15, 118, 110, 0.2), 0 2px 4px -1px rgba(15, 118, 110, 0.1)', transition: 'all 0.2s' }}
                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#0d9488'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
@@ -551,7 +551,7 @@ export default function Clients() {
             </div>
 
             <div className="mt-8 flex justify-end">
-              <button 
+              <button
                 className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
                 onClick={() => { setShowAssignmentModal(null); }}
               >

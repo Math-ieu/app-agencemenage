@@ -2082,19 +2082,32 @@ body {
 
 .detail-item {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.8125rem;
+  min-width: 0;
+  /* Allow inner truncation */
 }
 
 .detail-label {
   color: var(--text-muted);
   font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  width: 110px;
+  /* Fixed width to keep values aligned but close */
 }
 
 .detail-value {
   color: var(--text-main);
   font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 .pending-footer {
@@ -2225,9 +2238,27 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
   font-size: 0.875rem;
   border-bottom: 1px dashed var(--border-color);
   padding-bottom: 0.5rem;
+  min-width: 0;
+}
+
+.mobile-detail-value {
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-detail-label {
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .mobile-detail-row:last-child {
