@@ -25,7 +25,7 @@ export default function DemandesEnAttente() {
   const [prestation, setPrestation] = useState('');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
-  const [expandedCards, setExpandedCards] = useState<Record<number, string | null>>({});
+  const [expandedCards, setExpandedCards] = useState<Record<number, Record<string, boolean>>>({});
 
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [activeSegment, setActiveSegment] = useState<'particulier' | 'entreprise' | null>(null);
@@ -190,10 +190,22 @@ export default function DemandesEnAttente() {
   useEffect(() => { fetchDemandes(); }, [fetchDemandes]);
 
   const toggleSection = (cardId: number, section: string) => {
-    setExpandedCards(prev => ({
-      ...prev,
-      [cardId]: prev[cardId] === section ? null : section
-    }));
+    setExpandedCards(prev => {
+      const cardState = prev[cardId] || { details: true, lieux: true, notes: true };
+      return {
+        ...prev,
+        [cardId]: {
+          ...cardState,
+          [section]: !cardState[section]
+        }
+      };
+    });
+  };
+
+  const isExpanded = (cardId: number, section: string) => {
+    const cardState = expandedCards[cardId];
+    if (cardState === undefined) return true; // Default open
+    return cardState[section] !== false;
   };
 
   const handleAction = async (id: number, action: 'valider' | 'nrp' | 'annuler') => {
@@ -503,11 +515,11 @@ export default function DemandesEnAttente() {
                   <div className="accordion">
                     <div className="accordion-header" onClick={() => toggleSection(d.id, 'details')}>
                       <span>Détails de la prestation</span>
-                      {expandedCards[d.id] === 'details' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      {isExpanded(d.id, 'details') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     </div>
-                    {expandedCards[d.id] === 'details' && (
+                    {isExpanded(d.id, 'details') && (
                       <div className="accordion-content">
-                        <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value text-teal-700">{d.service}</span></div>
+                        <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value text-main-teal fw-bold">{d.service}</span></div>
                         <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">{d.formulaire_data?.type_habitation || d.formulaire_data?.structure_type || '—'}</span></div>
                         <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency_label || d.frequency || '—'}</span></div>
                         <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.formulaire_data?.duree ? `${d.formulaire_data.duree}h` : (d.formulaire_data?.duration ? `${d.formulaire_data.duration}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—'))}</span></div>
@@ -545,9 +557,9 @@ export default function DemandesEnAttente() {
                   <div className="accordion">
                     <div className="accordion-header" onClick={() => toggleSection(d.id, 'lieux')}>
                       <span>Lieux</span>
-                      {expandedCards[d.id] === 'lieux' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      {isExpanded(d.id, 'lieux') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     </div>
-                    {expandedCards[d.id] === 'lieux' && (
+                    {isExpanded(d.id, 'lieux') && (
                       <div className="accordion-content">
                         <div className="detail-item"><span className="detail-label">Date :</span> <span className="detail-value">{d.date_intervention || d.formulaire_data?.schedulingDate || '—'}</span></div>
                         <div className="detail-item"><span className="detail-label">Heure :</span> <span className="detail-value">{d.heure_intervention || d.formulaire_data?.fixedTime || (d.formulaire_data?.schedulingTime === 'morning' ? 'Le matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? "L'après-midi" : d.formulaire_data?.schedulingTime) || '—'}</span></div>
@@ -562,9 +574,9 @@ export default function DemandesEnAttente() {
                   <div className="accordion">
                     <div className="accordion-header" onClick={() => toggleSection(d.id, 'notes')}>
                       <span>Notes et précision</span>
-                      {expandedCards[d.id] === 'notes' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      {isExpanded(d.id, 'notes') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     </div>
-                    {expandedCards[d.id] === 'notes' && (
+                    {isExpanded(d.id, 'notes') && (
                       <div className="accordion-content" style={{ gridTemplateColumns: '1fr' }}>
                         {(d.formulaire_data?.notes || d.formulaire_data?.changeRepereNotes || d.formulaire_data?.additionalNotes)
                           ? <p className="text-sm">{[d.formulaire_data?.notes, d.formulaire_data?.changeRepereNotes, d.formulaire_data?.additionalNotes].filter(Boolean).join(' — ')}</p>
@@ -573,31 +585,31 @@ export default function DemandesEnAttente() {
                       </div>
                     )}
                   </div>
+
+                  <div className="pending-footer">
+                    <div className="detail-item">
+                      <span className="detail-label">Montant :</span>
+                      <span className="detail-value text-main-teal fw-bold" style={{ fontSize: '0.9rem' }}>
+                        {d.is_devis ? 'Sur devis' : (d.prix ? `${d.prix} MAD (Réservation)` : '— (Réservation)')}
+                      </span>
+                    </div>
+                    <div className="detail-item">
+                      <span className="detail-label">Mode :</span>
+                      <span className="detail-value">{d.mode_paiement || '—'}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="pending-footer px-0">
-                  <div className="detail-item flex-1">
-                    <span className="detail-label">Montant :</span>
-                    <span className="detail-value text-teal-700 font-bold" style={{ fontSize: '1rem' }}>
-                      {d.is_devis ? 'Sur devis' : (d.prix ? `${d.prix} MAD` : '—')}
-                    </span>
-                  </div>
-                  <div className="detail-item flex-1">
-                    <span className="detail-label">Paiement :</span>
-                    <span className="detail-value">{d.mode_paiement || '—'}</span>
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-100 pt-3 mt-3 flex gap-2">
-                  <button className="btn btn-nrp flex-1 break-words leading-tight px-1 py-2 text-sm text-center" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
-                  <button className="btn btn-cancel flex-1 break-words leading-tight px-1 py-2 text-sm text-center" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
-                  <button className="btn btn-validate flex-1 break-words leading-tight px-1 py-2 text-sm text-center" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
-                  <button className="btn btn-edit flex-1 flex justify-center items-center px-1 py-2 text-sm text-center" title="Modifier" onClick={() => openEditModal(d)}>
+                <div className="pt-3 mt-1 flex gap-2">
+                  <button className="btn btn-nrp flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
+                  <button className="btn btn-cancel flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
+                  <button className="btn btn-validate flex-[1.5] leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
+                  <button className="btn btn-edit flex-1 flex justify-center items-center px-1 py-2 text-[13px] text-center" title="Modifier" onClick={() => openEditModal(d)}>
                     Modifier
                   </button>
 
                   {(user?.role === 'admin' || user?.role === 'responsable_commercial') && (
-                    <button className="btn transition-all flex-1 text-sm leading-tight px-1 py-2 text-center flex items-center justify-center break-words"
+                    <button className="btn transition-all flex-1 text-[13px] leading-tight px-1 py-2 text-center flex items-center justify-center"
                       style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc' }}
                       onClick={() => setShowAssignmentModal(d.id)}>
                       Affecter
