@@ -89,7 +89,7 @@ function InfoField({ label, value }: { label: string; value?: string | number | 
       <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
         {label}
       </p>
-      <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 15 }}>
+      <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 15, textTransform: 'capitalize' }}>
         {value || '—'}
       </p>
     </div>
@@ -317,7 +317,7 @@ export default function ClientDetails() {
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a202c', margin: 0, textTransform: 'lowercase' }}>
+                  <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a202c', margin: 0, textTransform: 'capitalize' }}>
                     {client.full_name || `${client.first_name || ''} ${client.last_name || ''}`.trim()}
                   </h1>
                   <div style={{

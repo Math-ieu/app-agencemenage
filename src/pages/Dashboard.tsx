@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
@@ -67,7 +67,8 @@ export default function Dashboard() {
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
 
-  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string } | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string, demandeId: number } | null>(null);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
 
   const { addToast } = useToastStore();
@@ -101,7 +102,7 @@ export default function Dashboard() {
 
       // Utilise le download_url sécurisé — jamais le chemin physique
       const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
-      setShowPreviewModal({ url: blobUrl, type, name: doc.nom });
+      setShowPreviewModal({ url: blobUrl, type, name: doc.nom, demandeId: selectedDemande.id });
 
       // Refresh demandes and sync selectedDemande so the history updates
       const refreshed = await getDemandes();
@@ -116,6 +117,20 @@ export default function Dashboard() {
     } catch (error) {
       console.error(error);
       addToast('Erreur lors de la génération', 'error');
+    }
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (!showPreviewModal) return;
+    setSendingWhatsApp(true);
+    try {
+      await sendWhatsApp(showPreviewModal.demandeId, showPreviewModal.type);
+      addToast('Document envoyé via WhatsApp avec succès !', 'success');
+    } catch (err) {
+      console.error(err);
+      addToast("Erreur lors de l'envoi WhatsApp.", 'error');
+    } finally {
+      setSendingWhatsApp(false);
     }
   };
 
@@ -1181,7 +1196,10 @@ export default function Dashboard() {
                     <h3>Informations Client</h3>
                     <div className="detail-grid">
                       <div className="detail-item"><span>Nom:</span> {selectedDemande.client_name || selectedDemande.formulaire_data?.nom || '—'}</div>
-                      <div className="detail-item"><span>Téléphone:</span> {selectedDemande.client_phone || selectedDemande.formulaire_data?.whatsapp_phone || '—'}</div>
+                      <div className="detail-item">
+                        <span>Téléphone:</span> {selectedDemande.client_phone || selectedDemande.formulaire_data?.whatsapp_phone || '—'}
+                        {selectedDemande.source === 'backoffice' && <span className="badge badge-orange ms-1" style={{ fontSize: '9px', padding: '0px 4px' }}>BO</span>}
+                      </div>
                       <div className="detail-item"><span>Email:</span> {selectedDemande.client_details?.email || '—'}</div>
                       <div className="detail-item"><span>Ville:</span> {selectedDemande.neighborhood_city}</div>
                       <div className="detail-item"><span>Segment:</span> {selectedDemande.segment.toUpperCase()}</div>
@@ -1245,7 +1263,7 @@ export default function Dashboard() {
                             try {
                               addToast('Chargement du document...', 'info');
                               const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
-                              setShowPreviewModal({ url: blobUrl, type: isDevis ? 'devis' : 'png', name: fileName });
+                              setShowPreviewModal({ url: blobUrl, type: isDevis ? 'devis' : 'png', name: fileName, demandeId: selectedDemande.id });
                             } catch { addToast('Erreur lors du chargement', 'error'); }
                           };
                           const handleDownload = async () => {
@@ -1377,11 +1395,14 @@ export default function Dashboard() {
               <a href={showPreviewModal.url} download={showPreviewModal.name} target="_blank" rel="noreferrer" className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }}>
                 <Download size={18} /> Télécharger
               </a>
-              <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }} onClick={() => {
-                const addToast = useToastStore.getState().addToast;
-                addToast("Fonction d'envoi en cours de développement", "info");
-              }}>
-                <Send size={18} /> Envoyer au client
+              <button 
+                className="btn transition-all flex items-center gap-2" 
+                style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none', opacity: sendingWhatsApp ? 0.7 : 1 }} 
+                onClick={handleSendWhatsApp}
+                disabled={sendingWhatsApp}
+              >
+                {sendingWhatsApp ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />} 
+                {sendingWhatsApp ? 'Envoi...' : 'Envoyer au client'}
               </button>
             </div>
           </div>

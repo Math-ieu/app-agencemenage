@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAgents, createAgent } from '../api/client';
-import { Search, Plus, RotateCw, Calendar, User, Save } from 'lucide-react';
+import { Search, Plus, RotateCw, Calendar, User, Save, XCircle } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { Agent } from '../types';
 import { encodeId } from '../utils/obfuscation';
-
-// Local Agent interface removed in favor of global one from ../types
 
 const TABS = [
   { id: 'tout', label: 'Tout' },
@@ -14,6 +12,80 @@ const TABS = [
   { id: 'menage_chantier', label: 'Ménage chantier' },
   { id: 'nettoyage_vitres', label: 'Nettoyage de vitres' }
 ];
+
+// ── Filter bar styles ────────────────────────────────────────────────────────
+const filterBarStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  flexWrap: 'nowrap',
+  overflowX: 'auto',
+  padding: '12px 0',
+};
+
+const searchWrapStyle: React.CSSProperties = {
+  position: 'relative',
+  flex: '1 1 220px',
+  minWidth: '180px',
+};
+
+const searchInputStyle: React.CSSProperties = {
+  width: '100%',
+  height: '38px',
+  paddingLeft: '36px',
+  paddingRight: '12px',
+  border: '1px solid #e2e8f0',
+  borderRadius: '8px',
+  fontSize: '13px',
+  color: '#374151',
+  background: 'white',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+
+const searchIconStyle: React.CSSProperties = {
+  position: 'absolute',
+  left: '10px',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  pointerEvents: 'none',
+  color: '#94a3b8',
+};
+
+const dateWrapStyle: React.CSSProperties = {
+  position: 'relative',
+  flexShrink: 0,
+};
+
+const dateInputStyle: React.CSSProperties = {
+  height: '38px',
+  paddingLeft: '32px',
+  paddingRight: '10px',
+  border: '1px solid #e2e8f0',
+  borderRadius: '8px',
+  fontSize: '13px',
+  color: '#374151',
+  background: 'white',
+  outline: 'none',
+  width: '110px',
+};
+
+const calIconStyle: React.CSSProperties = {
+  position: 'absolute',
+  left: '9px',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  pointerEvents: 'none',
+  color: '#94a3b8',
+};
+
+const dividerStyle: React.CSSProperties = {
+  width: '1px',
+  height: '24px',
+  background: '#e2e8f0',
+  flexShrink: 0,
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Profils() {
   const navigate = useNavigate();
@@ -24,6 +96,8 @@ export default function Profils() {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+
+  const hasActiveFilters = Boolean(dateDebut || dateFin);
 
   const fetchData = async () => {
     setLoading(true);
@@ -43,16 +117,19 @@ export default function Profils() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [search, activeTab]);
+  useEffect(() => { fetchData(); }, [search, activeTab, dateDebut, dateFin]);
 
-  const getInitials = (agent: Agent) => {
-    return `${agent.first_name?.[0] || ''}${agent.last_name?.[0] || ''}`.toUpperCase();
+  const getInitials = (agent: Agent) =>
+    `${agent.first_name?.[0] || ''}${agent.last_name?.[0] || ''}`.toUpperCase();
+
+  const resetFilters = () => {
+    setDateDebut('');
+    setDateFin('');
   };
 
   return (
     <div className="page" style={{ backgroundColor: 'white' }}>
+      {/* Header */}
       <div className="page-header flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Listing Profils</h1>
         <div className="flex gap-3">
@@ -70,13 +147,11 @@ export default function Profils() {
       {showAddModal && (
         <AddProfileModal
           onClose={() => setShowAddModal(false)}
-          onSuccess={() => {
-            setShowAddModal(false);
-            fetchData();
-          }}
+          onSuccess={() => { setShowAddModal(false); fetchData(); }}
         />
       )}
 
+      {/* Tabs */}
       <div className="client-tabs">
         {TABS.map(tab => (
           <div
@@ -89,46 +164,79 @@ export default function Profils() {
         ))}
       </div>
 
-      <div className="client-toolbar">
-        <div className="search-box w-full md:w-[600px]">
-          <Search size={18} className="search-icon" />
+      {/* ── Single-line filter bar ── */}
+      <div style={filterBarStyle}>
+
+        {/* Search */}
+        <div style={searchWrapStyle}>
+          <Search size={16} style={searchIconStyle} />
           <input
             type="text"
             placeholder="Rechercher par nom, numéro, ville, quartier..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="search-input"
+            style={searchInputStyle}
           />
         </div>
 
-        <div className="client-toolbar-filters">
-          <div className="pro-date-picker">
-            <Calendar size={18} className="calendar-icon" />
-            <input
-              type="text"
-              placeholder="Du"
-              value={dateDebut}
-              onChange={e => setDateDebut(e.target.value)}
-              onFocus={(e) => e.target.type = 'date'}
-              onBlur={(e) => e.target.type = 'text'}
-              className="pro-date-input"
-            />
-          </div>
-          <div className="pro-date-picker">
-            <Calendar size={18} className="calendar-icon" />
-            <input
-              type="text"
-              placeholder="Au"
-              value={dateFin}
-              onChange={e => setDateFin(e.target.value)}
-              onFocus={(e) => e.target.type = 'date'}
-              onBlur={(e) => e.target.type = 'text'}
-              className="pro-date-input"
-            />
-          </div>
+        <div style={dividerStyle} />
+
+        {/* Date début */}
+        <div style={dateWrapStyle}>
+          <Calendar size={14} style={calIconStyle} />
+          <input
+            type="text"
+            placeholder="Du"
+            value={dateDebut}
+            onChange={e => setDateDebut(e.target.value)}
+            onFocus={(e) => (e.target.type = 'date')}
+            onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
+            style={dateInputStyle}
+          />
         </div>
+
+        {/* Date fin */}
+        <div style={dateWrapStyle}>
+          <Calendar size={14} style={calIconStyle} />
+          <input
+            type="text"
+            placeholder="Au"
+            value={dateFin}
+            onChange={e => setDateFin(e.target.value)}
+            onFocus={(e) => (e.target.type = 'date')}
+            onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
+            style={dateInputStyle}
+          />
+        </div>
+
+        {/* Reset */}
+        {hasActiveFilters && (
+          <button
+            onClick={resetFilters}
+            style={{
+              flexShrink: 0,
+              height: '38px',
+              padding: '0 12px',
+              background: 'transparent',
+              border: '1px solid #fca5a5',
+              borderRadius: '8px',
+              color: '#ef4444',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <XCircle size={14} />
+            Réinitialiser
+          </button>
+        )}
       </div>
 
+      {/* Table */}
       {loading ? (
         <div className="loading-state"><div className="spinner" /></div>
       ) : (
@@ -157,9 +265,7 @@ export default function Profils() {
                     {agent.photo ? (
                       <img src={agent.photo} alt="" className="table-avatar-img" />
                     ) : (
-                      <div className="table-avatar-placeholder">
-                        {getInitials(agent)}
-                      </div>
+                      <div className="table-avatar-placeholder">{getInitials(agent)}</div>
                     )}
                   </td>
                   <td className="font-bold text-slate-700">{agent.last_name || '—'}</td>
@@ -186,7 +292,7 @@ export default function Profils() {
                     </span>
                   </td>
                   <td>
-                    <button 
+                    <button
                       className="actions-cell-btn py-1.5 px-3"
                       onClick={() => navigate(`/profils/${encodeId(agent.id)}`)}
                     >
@@ -208,6 +314,8 @@ export default function Profils() {
     </div>
   );
 }
+
+// ── AddProfileModal ───────────────────────────────────────────────────────────
 
 interface ModalProps {
   onClose: () => void;
@@ -249,7 +357,6 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
 
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const { addToast } = useToastStore();
-
   const [experiences, setExperiences] = useState<any[]>([]);
   const [showExpForm, setShowExpForm] = useState(false);
   const [currentExp, setCurrentExp] = useState({
@@ -257,17 +364,10 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
     duration_text: '',
     work_locations: [] as string[],
     tasks: [] as string[],
-    has_allergies: false
+    has_allergies: false,
   });
-
-  const [files, setFiles] = useState<{
-    photo: File | null;
-    cin_file: File | null;
-    attestation_file: File | null;
-  }>({
-    photo: null,
-    cin_file: null,
-    attestation_file: null,
+  const [files, setFiles] = useState<{ photo: File | null; cin_file: File | null; attestation_file: File | null }>({
+    photo: null, cin_file: null, attestation_file: null,
   });
 
   const photoInputRef = React.useRef<HTMLInputElement>(null);
@@ -279,71 +379,47 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
       ...prev,
       languages: prev.languages.includes(lang)
         ? prev.languages.filter(l => l !== lang)
-        : [...prev.languages, lang]
+        : [...prev.languages, lang],
     }));
   };
 
   const handleFileChange = (field: keyof typeof files, e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setFiles(prev => ({ ...prev, [field]: e.target.files![0] }));
-    }
+    if (e.target.files?.[0]) setFiles(prev => ({ ...prev, [field]: e.target.files![0] }));
   };
 
   const handleSave = async () => {
-    // Validation logic
     const requiredFields = [
-      'last_name', 'first_name', 'neighborhood', 'city', 'cin', 'birth_date', 
-      'gender', 'phone', 'whatsapp', 'situation', 'nationality', 
-      'education_level', 'type_profil', 'training_details', 
-      'health_issues', 'physical_appearance', 'corpulence', 'operator_notes'
+      'last_name', 'first_name', 'neighborhood', 'city', 'cin', 'birth_date',
+      'gender', 'phone', 'whatsapp', 'situation', 'nationality',
+      'education_level', 'type_profil', 'training_details',
+      'health_issues', 'physical_appearance', 'corpulence', 'operator_notes',
     ];
     const newErrors: Record<string, boolean> = {};
     let hasError = false;
-
     requiredFields.forEach(field => {
-      if (!formData[field as keyof typeof formData]) {
-        newErrors[field] = true;
-        hasError = true;
-      }
+      if (!formData[field as keyof typeof formData]) { newErrors[field] = true; hasError = true; }
     });
-
-    if (formData.languages.length === 0) {
-      newErrors.languages = true;
-      hasError = true;
-    }
-
+    if (formData.languages.length === 0) { newErrors.languages = true; hasError = true; }
     if (hasError) {
       setErrors(newErrors);
       addToast('Veuillez remplir tous les champs obligatoires (*)', 'error');
       return;
     }
-
     try {
       const data = new FormData();
-
-      // Append all text/boolean fields
       Object.entries(formData).forEach(([key, value]) => {
-        if (key === 'languages') {
-          data.append(key, JSON.stringify(value));
-        } else {
-          data.append(key, String(value));
-        }
+        data.append(key, key === 'languages' ? JSON.stringify(value) : String(value));
       });
-
-      // Append experiences as JSON string
       data.append('experiences_json', JSON.stringify(experiences));
-
-      // Append files
       if (files.photo) data.append('photo', files.photo);
       if (files.cin_file) data.append('cin_file', files.cin_file);
       if (files.attestation_file) data.append('attestation_file', files.attestation_file);
-
       await createAgent(data as any);
       addToast('Profil ajouté avec succès !', 'success');
       onSuccess();
     } catch (err) {
       console.error('Error saving agent:', err);
-      addToast('Erreur lors de l\'enregistrement du profil.', 'error');
+      addToast("Erreur lors de l'enregistrement du profil.", 'error');
     }
   };
 
@@ -356,7 +432,7 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
         </div>
 
         <div className="modal-body">
-          {/* Hidden File Inputs */}
+          {/* Hidden file inputs */}
           <input type="file" ref={photoInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('photo', e)} />
           <input type="file" ref={cinInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('cin_file', e)} />
           <input type="file" ref={attestationInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('attestation_file', e)} />
@@ -368,7 +444,6 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
               Informations personnelles
             </h3>
 
-            {/* Row 1 : Nom / Prénom / Quartier */}
             <div className="form-grid grid-cols-3">
               <div className="form-group">
                 <label>Nom <span className="text-red-500">*</span></label>
@@ -384,7 +459,6 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
               </div>
             </div>
 
-            {/* Row 2 : Ville / Numéro CIN / Date de naissance */}
             <div className="form-grid grid-cols-3">
               <div className="form-group">
                 <label>Ville <span className="text-red-500">*</span></label>
@@ -404,7 +478,6 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
               </div>
             </div>
 
-            {/* Row 3 : Sexe / Téléphone / WhatsApp */}
             <div className="form-grid grid-cols-3">
               <div className="form-group">
                 <label>Sexe <span className="text-red-500">*</span></label>
@@ -424,7 +497,6 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
               </div>
             </div>
 
-            {/* Row 4 : Situation matrimoniale / A des enfants / Nationalité */}
             <div className="form-grid grid-cols-3">
               <div className="form-group">
                 <label>Situation matrimoniale <span className="text-red-500">*</span></label>
@@ -453,24 +525,17 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
               </div>
             </div>
 
-            {/* Langues */}
             <div className="form-group mt-2">
               <label>Langues <span className="text-red-500">*</span></label>
               <div className={`flex flex-wrap gap-2 mt-1 p-2 rounded-lg ${errors.languages ? 'border border-red-500 bg-red-50' : ''}`}>
                 {['Arabe', 'Français', 'Anglais', 'Espagnol', 'Amazigh', 'Autre'].map(lang => (
-                  <button
-                    key={lang}
-                    type="button"
-                    onClick={() => { toggleLanguage(lang); if (errors.languages) setErrors({...errors, languages: false}); }}
-                    className={`lang-btn ${formData.languages.includes(lang) ? 'lang-btn-active' : ''}`}
-                  >
+                  <button key={lang} type="button" onClick={() => { toggleLanguage(lang); if (errors.languages) setErrors({ ...errors, languages: false }); }} className={`lang-btn ${formData.languages.includes(lang) ? 'lang-btn-active' : ''}`}>
                     {lang}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Row 5 : Niveau d'étude / Expérience années / Expérience mois */}
             <div className="form-grid grid-cols-3 mt-2">
               <div className="form-group">
                 <label>Niveau d'étude <span className="text-red-500">*</span></label>
@@ -497,7 +562,6 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
               </div>
             </div>
 
-            {/* Row 6 : Statut profil / Type de profil */}
             <div className="form-grid grid-cols-3">
               <div className="form-group">
                 <label>Statut profil</label>
@@ -525,19 +589,10 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
               <Plus size={18} className="text-teal-600" />
               Caractéristiques
             </h3>
-
             <div className="form-group">
               <label>Formation requise <span className="text-red-500">*</span></label>
-              <textarea
-                value={formData.training_details}
-                onChange={e => { setFormData({ ...formData, training_details: e.target.value }); if (errors.training_details) setErrors({ ...errors, training_details: false }); }}
-                placeholder="Détails de la formation..."
-                className={`form-textarea ${errors.training_details ? 'form-input-error' : ''}`}
-                rows={3}
-              />
+              <textarea value={formData.training_details} onChange={e => { setFormData({ ...formData, training_details: e.target.value }); if (errors.training_details) setErrors({ ...errors, training_details: false }); }} placeholder="Détails de la formation..." className={`form-textarea ${errors.training_details ? 'form-input-error' : ''}`} rows={3} />
             </div>
-
-            {/* Row : Sait lire et écrire / Maladie-Handicap / Présentation physique */}
             <div className="form-grid grid-cols-3 mt-4">
               <div className="form-group flex items-center pt-6">
                 <label className="checkbox-container">
@@ -559,8 +614,6 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                 </select>
               </div>
             </div>
-
-            {/* Corpulence alone */}
             <div className="form-grid grid-cols-3">
               <div className="form-group">
                 <label>Corpulence <span className="text-red-500">*</span></label>
@@ -573,8 +626,6 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
               </div>
             </div>
           </div>
-
-
 
           {/* ── Disponibilité ── */}
           <div className="form-section">
@@ -591,29 +642,16 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                 { key: 'avail_holidays', label: 'Jours fériés' },
               ].map(({ key, label }) => (
                 <label key={key} className="checkbox-container">
-                  <input
-                    type="checkbox"
-                    checked={formData[key as keyof typeof formData] as boolean}
-                    onChange={e => setFormData({ ...formData, [key]: e.target.checked })}
-                  />
+                  <input type="checkbox" checked={formData[key as keyof typeof formData] as boolean} onChange={e => setFormData({ ...formData, [key]: e.target.checked })} />
                   <span className="checkbox-label">{label}</span>
                 </label>
               ))}
             </div>
-
             <div className="form-group mt-6">
               <label>Note de l'opérateur <span className="text-red-500">*</span></label>
-              <textarea
-                value={formData.operator_notes}
-                onChange={e => { setFormData({ ...formData, operator_notes: e.target.value }); if (errors.operator_notes) setErrors({ ...errors, operator_notes: false }); }}
-                placeholder="Remarques..."
-                className={`form-textarea ${errors.operator_notes ? 'form-input-error' : ''}`}
-                rows={3}
-              />
+              <textarea value={formData.operator_notes} onChange={e => { setFormData({ ...formData, operator_notes: e.target.value }); if (errors.operator_notes) setErrors({ ...errors, operator_notes: false }); }} placeholder="Remarques..." className={`form-textarea ${errors.operator_notes ? 'form-input-error' : ''}`} rows={3} />
             </div>
           </div>
-
-
 
           {/* ── Média ── */}
           <div className="form-section">
@@ -646,19 +684,14 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
             </div>
           </div>
 
-
-
-          {/* ── Les expériences ── */}
+          {/* ── Expériences ── */}
           <div className="form-section">
             <div className="flex justify-between items-center mb-4">
               <h3 className="section-title mb-0">
                 <RotateCw size={18} className="text-teal-600" />
                 Les expériences
               </h3>
-              <button
-                className="btn-premium btn-premium-outline btn-premium-sm"
-                onClick={() => { if (!showExpForm) setShowExpForm(true); }}
-              >
+              <button className="btn-premium btn-premium-outline btn-premium-sm" onClick={() => { if (!showExpForm) setShowExpForm(true); }}>
                 <Plus size={16} />
                 Ajouter un poste
               </button>
@@ -666,7 +699,6 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
 
             {showExpForm && (
               <div className="experience-form-container mb-4">
-                {/* Row 1 : Poste / Depuis combien de temps ? / Allergies */}
                 <div className="form-grid grid-cols-3 mb-4">
                   <div className="form-group">
                     <label>Poste</label>
@@ -678,7 +710,6 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                       <option>Nounou</option>
                     </select>
                   </div>
-
                   {currentExp.position && (
                     <>
                       <div className="form-group">
@@ -697,37 +728,22 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
 
                 {currentExp.position && (
                   <>
-                    {/* Lieux de travail - Keep separate as it has many tags */}
                     <div className="form-group mb-4">
                       <label>Lieux de travail</label>
                       <div className="flex flex-wrap gap-2 mt-1">
                         {['Hôtel', 'Riad', 'Entreprise', 'Villa', 'Appartement', 'Duplex'].map(loc => (
-                          <button
-                            key={loc}
-                            type="button"
-                            onClick={() => {
-                              const locations = currentExp.work_locations.includes(loc)
-                                ? currentExp.work_locations.filter(l => l !== loc)
-                                : [...currentExp.work_locations, loc];
-                              setCurrentExp({ ...currentExp, work_locations: locations });
-                            }}
-                            className={`tag-btn ${currentExp.work_locations.includes(loc) ? 'tag-btn-active' : ''}`}
-                          >
+                          <button key={loc} type="button" onClick={() => {
+                            const locations = currentExp.work_locations.includes(loc)
+                              ? currentExp.work_locations.filter(l => l !== loc)
+                              : [...currentExp.work_locations, loc];
+                            setCurrentExp({ ...currentExp, work_locations: locations });
+                          }} className={`tag-btn ${currentExp.work_locations.includes(loc) ? 'tag-btn-active' : ''}`}>
                             {loc}
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {/* Allergies */}
-                    <div className="form-group mb-4">
-                      <label className="checkbox-container">
-                        <input type="checkbox" checked={currentExp.has_allergies} onChange={e => setCurrentExp({ ...currentExp, has_allergies: e.target.checked })} className="mr-3 w-4 h-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
-                        <span className="checkbox-label">Allergies produits ménagers</span>
-                      </label>
-                    </div>
-
-                    {/* Tâches */}
                     <div className="form-group mb-4">
                       <label className="mb-3 block">Tâches</label>
                       <div className="task-grid">
@@ -737,19 +753,15 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                           'Nettoyer les vitres et miroirs', "Nettoyer le plan de travail et l'évier",
                           'Nettoyer le réfrigérateur et les appareils électroménagers', 'Nettoyage douche',
                           'Nettoyage terrasse et balcon', 'Repasser et plier les vêtements',
-                          'Ranger les placards', 'Grand ménage'
+                          'Ranger les placards', 'Grand ménage',
                         ].map(task => (
                           <label key={task} className="checkbox-container">
-                            <input
-                              type="checkbox"
-                              checked={currentExp.tasks.includes(task)}
-                              onChange={() => {
-                                const tasks = currentExp.tasks.includes(task)
-                                  ? currentExp.tasks.filter(t => t !== task)
-                                  : [...currentExp.tasks, task];
-                                setCurrentExp({ ...currentExp, tasks });
-                              }}
-                            />
+                            <input type="checkbox" checked={currentExp.tasks.includes(task)} onChange={() => {
+                              const tasks = currentExp.tasks.includes(task)
+                                ? currentExp.tasks.filter(t => t !== task)
+                                : [...currentExp.tasks, task];
+                              setCurrentExp({ ...currentExp, tasks });
+                            }} />
                             <span className="checkbox-label" style={{ textTransform: 'none' }}>{task}</span>
                           </label>
                         ))}
@@ -758,31 +770,19 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                   </>
                 )}
 
-                {/* Experience form actions */}
                 <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    className="btn-premium btn-premium-outline btn-premium-sm border-none shadow-none text-slate-500 hover:text-slate-800"
-                    onClick={() => setShowExpForm(false)}
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    className="btn-premium btn-premium-teal btn-premium-sm"
-                    onClick={() => {
-                      if (currentExp.position) {
-                        setExperiences([...experiences, currentExp]);
-                        setCurrentExp({ position: '', duration_text: '', work_locations: [], tasks: [], has_allergies: false });
-                        setShowExpForm(false);
-                      }
-                    }}
-                  >
-                    Ajouter
-                  </button>
+                  <button className="btn-premium btn-premium-outline btn-premium-sm border-none shadow-none text-slate-500 hover:text-slate-800" onClick={() => setShowExpForm(false)}>Annuler</button>
+                  <button className="btn-premium btn-premium-teal btn-premium-sm" onClick={() => {
+                    if (currentExp.position) {
+                      setExperiences([...experiences, currentExp]);
+                      setCurrentExp({ position: '', duration_text: '', work_locations: [], tasks: [], has_allergies: false });
+                      setShowExpForm(false);
+                    }
+                  }}>Ajouter</button>
                 </div>
               </div>
             )}
 
-            {/* Experience list */}
             <div className="space-y-3">
               {experiences.map((exp, idx) => (
                 <div key={idx} className="flex items-center justify-between p-4 rounded-xl border border-teal-100 bg-teal-50/40">
@@ -790,27 +790,17 @@ function AddProfileModal({ onClose, onSuccess }: ModalProps) {
                     <p className="font-semibold text-slate-800 text-sm">{exp.position}</p>
                     <p className="text-xs text-slate-500 mt-0.5">{exp.duration_text}{exp.work_locations.length > 0 ? ` · ${exp.work_locations.join(', ')}` : ''}</p>
                   </div>
-                  <button className="text-red-400 hover:text-red-600 text-lg leading-none px-2" onClick={() => setExperiences(experiences.filter((_, i) => i !== idx))}>
-                    &times;
-                  </button>
+                  <button className="text-red-400 hover:text-red-600 text-lg leading-none px-2" onClick={() => setExperiences(experiences.filter((_, i) => i !== idx))}>&times;</button>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* ── Footer ── */}
+        {/* Footer */}
         <div className="modal-footer flex justify-end gap-3">
-          <button
-            className="btn-premium btn-premium-outline"
-            onClick={onClose}
-          >
-            Annuler
-          </button>
-          <button
-            className="btn-premium btn-premium-teal"
-            onClick={handleSave}
-          >
+          <button className="btn-premium btn-premium-outline" onClick={onClose}>Annuler</button>
+          <button className="btn-premium btn-premium-teal" onClick={handleSave}>
             <Save size={18} />
             Enregistrer
           </button>

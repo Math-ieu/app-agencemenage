@@ -109,6 +109,7 @@ export interface Demande {
   note_commercial?: string;
   note_operationnel?: string;
   formulaire_data?: Record<string, any>;
+  source?: string;
   documents?: Document[];
   created_at: string;
 }

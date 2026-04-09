@@ -107,6 +107,9 @@ export const confirmerCAO = (id: number) =>
 export const generateDocument = (id: number, type: 'devis' | 'png') =>
   apiClient.post(`/api/demandes/${id}/generate_document/`, { type });
 
+export const sendWhatsApp = (id: number, type: 'devis' | 'png') =>
+  apiClient.post(`/api/demandes/${id}/send_whatsapp/`, { type });
+
 /**
  * Télécharge un document via l'endpoint sécurisé (authentifié).
  * Ne passe jamais par le chemin physique du fichier.

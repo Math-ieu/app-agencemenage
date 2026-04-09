@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob } from '../api/client';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp } from '../api/client';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import {
@@ -18,6 +19,8 @@ const isDevisRequired = (d: Demande | null) => {
 
 
 export default function DemandesEnAttente() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -92,7 +95,8 @@ export default function DemandesEnAttente() {
   const [commerciaux, setCommerciaux] = useState<any[]>([]);
   const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
 
-  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string } | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string, demandeId: number } | null>(null);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   // Fecth Commerciaux for Assignation
   useEffect(() => {
@@ -102,6 +106,23 @@ export default function DemandesEnAttente() {
       }).catch(err => console.error('Erreur commerciaux:', err));
     }
   }, [user]);
+
+  // Handle external edit request (from Clients list)
+  useEffect(() => {
+    const state = location.state as { editDemandeId?: number } | null;
+    if (state?.editDemandeId && demandes.length > 0 && !editingDemande) {
+      const target = demandes.find(d => d.id === state.editDemandeId);
+      if (target) {
+        openEditModal(target);
+        // Clear state to prevent reopening
+        navigate(location.pathname, { replace: true, state: {} });
+      } else {
+        // Optionnel: si non trouvé dans la liste courante (ex: déjà validée)
+        addToast("La demande n'est plus en attente ou est introuvable.", 'info');
+        navigate(location.pathname, { replace: true, state: {} });
+      }
+    }
+  }, [location.state, demandes, editingDemande, navigate, location.pathname]);
 
   const handleAffecter = async (demandeId: number, commercialId: number) => {
     try {
@@ -122,7 +143,7 @@ export default function DemandesEnAttente() {
 
       // Utilise le download_url sécurisé — jamais le chemin physique
       const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
-      setShowPreviewModal({ url: blobUrl, type: type === 'devis' ? 'devis' : 'png', name: doc.nom });
+      setShowPreviewModal({ url: blobUrl, type: type === 'devis' ? 'devis' : 'png', name: doc.nom, demandeId });
       fetchDemandes(); // Refresh list to show generated file in history
       addToast('Aperçu prêt', 'success');
     } catch (error) {
@@ -206,6 +227,20 @@ export default function DemandesEnAttente() {
     const cardState = expandedCards[cardId];
     if (cardState === undefined) return true; // Default open
     return cardState[section] !== false;
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (!showPreviewModal) return;
+    setSendingWhatsApp(true);
+    try {
+      await sendWhatsApp(showPreviewModal.demandeId, showPreviewModal.type);
+      addToast('Document envoyé via WhatsApp avec succès !', 'success');
+    } catch (err) {
+      console.error(err);
+      addToast("Erreur lors de l'envoi WhatsApp.", 'error');
+    } finally {
+      setSendingWhatsApp(false);
+    }
   };
 
   const handleAction = async (id: number, action: 'valider' | 'nrp' | 'annuler') => {
@@ -506,7 +541,10 @@ export default function DemandesEnAttente() {
                         {new Date(d.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(' à', '')}
                       </p>
                     )}
-                    <p className="text-sm fw-medium">Téléphone : <span className="text-main">{d.client_phone || d.formulaire_data?.whatsapp_phone || 'Non renseigné'}</span></p>
+                    <p className="text-sm fw-medium">
+                      Téléphone : <span className="text-main">{d.client_phone || d.formulaire_data?.whatsapp_phone || 'Non renseigné'}</span>
+                      {d.source === 'backoffice' && <span className="badge badge-orange ms-1" style={{ fontSize: '10px', padding: '1px 6px', verticalAlign: 'middle' }}>BO</span>}
+                    </p>
                     <p className="text-sm fw-medium">WhatsApp : <span className="text-main">{d.client_whatsapp || d.formulaire_data?.whatsapp_phone || d.client_phone}</span></p>
                   </div>
                 </div>
@@ -636,7 +674,10 @@ export default function DemandesEnAttente() {
                   </div>
                   <h3 className="mobile-client-name">{d.client_name || d.formulaire_data?.nom || 'Nom inconnu'}</h3>
                   <div className="mobile-contact-info">
-                    <a href={`tel:${d.client_phone || d.formulaire_data?.whatsapp_phone || ''}`} className="mobile-contact-link">📞 {d.client_phone || d.formulaire_data?.whatsapp_phone || 'Non renseigné'}</a>
+                    <a href={`tel:${d.client_phone || d.formulaire_data?.whatsapp_phone || ''}`} className="mobile-contact-link">
+                      📞 {d.client_phone || d.formulaire_data?.whatsapp_phone || 'Non renseigné'}
+                      {d.source === 'backoffice' && <span className="badge badge-orange ms-1" style={{ fontSize: '9px', padding: '0px 4px' }}>BO</span>}
+                    </a>
                     <a href={`https://wa.me/${(d.client_whatsapp || d.formulaire_data?.whatsapp_phone || d.client_phone || '').replace(/\+/g, '')}`} target="_blank" rel="noreferrer" className="mobile-contact-link mobile-wa-link">📱 WhatsApp</a>
                   </div>
                 </div>
@@ -1331,7 +1372,7 @@ export default function DemandesEnAttente() {
                             try {
                               addToast('Chargement du document...', 'info');
                               const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
-                              setShowPreviewModal({ url: blobUrl, type: isDevis ? 'devis' : 'png', name: fileName });
+                              setShowPreviewModal({ url: blobUrl, type: isDevis ? 'devis' : 'png', name: fileName, demandeId: editingDemande.id });
                             } catch (e) { console.error(e); addToast('Erreur lors du chargement', 'error'); }
                           };
                           const handleDownload = async (e: React.MouseEvent) => {
@@ -1450,11 +1491,14 @@ export default function DemandesEnAttente() {
               <a href={showPreviewModal.url} download={showPreviewModal.name} target="_blank" rel="noreferrer" className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }}>
                 <Download size={18} /> Télécharger
               </a>
-              <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }} onClick={() => {
-                const addToast = useToastStore.getState().addToast;
-                addToast("Fonction d'envoi en cours de développement", "info");
-              }}>
-                <Send size={18} /> Envoyer au client
+              <button 
+                className="btn transition-all flex items-center gap-2" 
+                style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none', opacity: sendingWhatsApp ? 0.7 : 1 }} 
+                onClick={handleSendWhatsApp}
+                disabled={sendingWhatsApp}
+              >
+                {sendingWhatsApp ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />} 
+                {sendingWhatsApp ? 'Envoi...' : 'Envoyer au client'}
               </button>
             </div>
           </div>

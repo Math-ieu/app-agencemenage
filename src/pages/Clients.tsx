@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { encodeId } from '../utils/obfuscation';
 import { getClients, getUsers, affecterDemande, updateClient } from '../api/client';
 import { useAuthStore } from '../store/auth';
@@ -66,7 +66,112 @@ const SERVICES_LIST = {
   ]
 };
 
+// ── Inline styles for the single-line filter bar ─────────────────────────────
+const filterBarStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  flexWrap: 'nowrap',
+  overflowX: 'auto',
+  padding: '12px 0',
+};
+
+const selectWrapStyle: React.CSSProperties = {
+  position: 'relative',
+  flexShrink: 0,
+};
+
+const selectStyle: React.CSSProperties = {
+  appearance: 'none',
+  height: '38px',
+  paddingLeft: '12px',
+  paddingRight: '30px',
+  border: '1px solid #e2e8f0',
+  borderRadius: '8px',
+  fontSize: '13px',
+  color: '#374151',
+  background: 'white',
+  cursor: 'pointer',
+  outline: 'none',
+  whiteSpace: 'nowrap',
+};
+
+const chevronStyle: React.CSSProperties = {
+  position: 'absolute',
+  right: '8px',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  pointerEvents: 'none',
+  color: '#94a3b8',
+};
+
+const dateWrapStyle: React.CSSProperties = {
+  position: 'relative',
+  flexShrink: 0,
+};
+
+const dateInputStyle: React.CSSProperties = {
+  height: '38px',
+  paddingLeft: '32px',
+  paddingRight: '10px',
+  border: '1px solid #e2e8f0',
+  borderRadius: '8px',
+  fontSize: '13px',
+  color: '#374151',
+  background: 'white',
+  outline: 'none',
+  width: '110px',
+};
+
+const calIconStyle: React.CSSProperties = {
+  position: 'absolute',
+  left: '9px',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  pointerEvents: 'none',
+  color: '#94a3b8',
+};
+
+const searchWrapStyle: React.CSSProperties = {
+  position: 'relative',
+  flex: '1 1 220px',
+  minWidth: '180px',
+};
+
+const searchInputStyle: React.CSSProperties = {
+  width: '100%',
+  height: '38px',
+  paddingLeft: '36px',
+  paddingRight: '12px',
+  border: '1px solid #e2e8f0',
+  borderRadius: '8px',
+  fontSize: '13px',
+  color: '#374151',
+  background: 'white',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+
+const searchIconStyle: React.CSSProperties = {
+  position: 'absolute',
+  left: '10px',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  pointerEvents: 'none',
+  color: '#94a3b8',
+};
+
+const dividerStyle: React.CSSProperties = {
+  width: '1px',
+  height: '24px',
+  background: '#e2e8f0',
+  flexShrink: 0,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function Clients() {
+  const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -80,12 +185,13 @@ export default function Clients() {
   const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
   const [showAvisModal, setShowAvisModal] = useState<{ clientId: number; type: 'commercial' | 'operationnel'; avis: string } | null>(null);
 
-  // New filter states based on screenshot
   const [commercialFilter, setCommercialFilter] = useState('Tout');
   const [segmentFilter, setSegmentFilter] = useState('Tout');
   const [serviceFilter, setServiceFilter] = useState('Tout');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
+
+  const hasActiveFilters = serviceFilter !== 'Tout' || segmentFilter !== 'Tout' || commercialFilter !== 'Tout' || dateDebut || dateFin;
 
   const fetchData = async () => {
     setLoading(true);
@@ -108,9 +214,7 @@ export default function Clients() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [search, activeTab, commercialFilter, segmentFilter, serviceFilter, dateDebut, dateFin]);
+  useEffect(() => { fetchData(); }, [search, activeTab, commercialFilter, segmentFilter, serviceFilter, dateDebut, dateFin]);
 
   useEffect(() => {
     if (user?.role === 'admin' || user?.role === 'responsable_commercial') {
@@ -127,7 +231,7 @@ export default function Clients() {
       setActiveDropdown(null);
     } catch (err) {
       console.error('Error affecting client:', err);
-      addToast('Erreur lors de l\'affectation', 'error');
+      addToast("Erreur lors de l'affectation", 'error');
     }
   };
 
@@ -137,7 +241,6 @@ export default function Clients() {
       const payload = showAvisModal.type === 'commercial'
         ? { avis_commercial: showAvisModal.avis }
         : { avis_operationnel: showAvisModal.avis };
-
       await updateClient(showAvisModal.clientId, payload);
       addToast('Avis mis à jour avec succès', 'success');
       fetchData();
@@ -148,7 +251,6 @@ export default function Clients() {
     }
   };
 
-  // Click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -170,14 +272,11 @@ export default function Clients() {
   const getStatusBadge = (client: Client) => {
     const latest = client.latest_demande;
     if (!latest) return <span className="badge badge-status-attente">Nouveau</span>;
-
-    // Logic to determine status badge based on latest demand
     if (latest.statut_paiement === 'partiel') return <span className="badge badge-status-partielle">Facturation partielle</span>;
     if (latest.statut_paiement === 'integral') return <span className="badge badge-status-paye">Payé</span>;
     if (latest.statut === 'annule') return <span className="badge badge-status-annulee">Annulée</span>;
     if (latest.statut === 'termine') return <span className="badge badge-status-effectuee">Prestation effectuée</span>;
     if (latest.statut === 'en_cours') return <span className="badge badge-status-encours">En cours</span>;
-
     return <span className="badge badge-status-attente">{latest.statut}</span>;
   };
 
@@ -191,8 +290,17 @@ export default function Clients() {
     return '';
   };
 
+  const resetFilters = () => {
+    setCommercialFilter('Tout');
+    setSegmentFilter('Tout');
+    setServiceFilter('Tout');
+    setDateDebut('');
+    setDateFin('');
+  };
+
   return (
     <div className="page" style={{ backgroundColor: 'white' }}>
+      {/* Page header */}
       <div className="page-header flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Listing Clients</h1>
         <button className="btn btn-secondary" onClick={fetchData}>
@@ -201,6 +309,7 @@ export default function Clients() {
         </button>
       </div>
 
+      {/* Tabs */}
       <div className="client-tabs">
         {TABS.map(tab => (
           <div
@@ -213,95 +322,130 @@ export default function Clients() {
         ))}
       </div>
 
-      <div className="client-toolbar">
-        <div className="search-box w-full md:w-[600px]">
-          <Search size={18} className="search-icon" />
+      {/* ── Single-line filter bar ── */}
+      <div style={filterBarStyle}>
+
+        {/* Search */}
+        <div style={searchWrapStyle}>
+          <Search size={16} style={searchIconStyle} />
           <input
             type="text"
-            placeholder="Rechercher par nom, numéro, ville, quartier..."
+            placeholder="Rechercher par nom, numéro, ville..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="search-input"
+            style={searchInputStyle}
           />
         </div>
 
-        <div className="client-toolbar-filters">
-          <div className="toolbar-dropdown">
-            <select value={commercialFilter} onChange={e => setCommercialFilter(e.target.value)} className="toolbar-select">
-              <option value="Tout">Tous les commerciaux</option>
-              {commerciaux.map(comm => (
-                <option key={comm.id} value={comm.id.toString()}>
-                  {comm.full_name || `${comm.first_name} ${comm.last_name}`}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} className="dropdown-icon" />
-          </div>
+        <div style={dividerStyle} />
 
-          <div className="toolbar-dropdown">
-            <select value={segmentFilter} onChange={e => setSegmentFilter(e.target.value)} className="toolbar-select">
-              <option>Tout</option>
-              <option>Particulier</option>
-              <option>Entreprise</option>
-            </select>
-            <ChevronDown size={16} className="dropdown-icon" />
-          </div>
-
-          <div className="toolbar-dropdown">
-            <select value={serviceFilter} onChange={e => setServiceFilter(e.target.value)} className="toolbar-select">
-              <option value="Tout">Toutes les prestations</option>
-              <optgroup label="Particuliers">
-                {SERVICES_LIST.particulier.map(s => <option key={s} value={s}>{s}</option>)}
-              </optgroup>
-              <optgroup label="Entreprises">
-                {SERVICES_LIST.entreprise.map(s => <option key={s} value={s}>{s}</option>)}
-              </optgroup>
-            </select>
-            <ChevronDown size={16} className="dropdown-icon" />
-          </div>
-
-          <div className="pro-date-picker">
-            <Calendar size={18} className="calendar-icon" />
-            <input
-              type="text"
-              placeholder="Du"
-              value={dateDebut}
-              onChange={e => setDateDebut(e.target.value)}
-              onFocus={(e) => e.target.type = 'date'}
-              onBlur={(e) => e.target.type = 'text'}
-              className="pro-date-input"
-            />
-          </div>
-          <div className="pro-date-picker">
-            <Calendar size={18} className="calendar-icon" />
-            <input
-              type="text"
-              placeholder="Au"
-              value={dateFin}
-              onChange={e => setDateFin(e.target.value)}
-              onFocus={(e) => e.target.type = 'date'}
-              onBlur={(e) => e.target.type = 'text'}
-              className="pro-date-input"
-            />
-          </div>
-
-          {(serviceFilter !== 'Tout' || segmentFilter !== 'Tout' || commercialFilter !== 'Tout' || dateDebut || dateFin) && (
-            <button
-              onClick={() => {
-                setCommercialFilter('Tout');
-                setSegmentFilter('Tout');
-                setServiceFilter('Tout');
-                setDateDebut('');
-                setDateFin('');
-              }}
-              style={{ padding: '0 12px', background: 'transparent', border: 'none', color: '#ef4444', fontSize: '13px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center' }}
-            >
-              Réinitialiser
-            </button>
-          )}
+        {/* Commercial */}
+        <div style={selectWrapStyle}>
+          <select
+            value={commercialFilter}
+            onChange={e => setCommercialFilter(e.target.value)}
+            style={{ ...selectStyle, minWidth: '170px' }}
+          >
+            <option value="Tout">Tous les commerciaux</option>
+            {commerciaux.map(comm => (
+              <option key={comm.id} value={comm.id.toString()}>
+                {comm.full_name || `${comm.first_name} ${comm.last_name}`}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={14} style={chevronStyle} />
         </div>
+
+        {/* Segment */}
+        <div style={selectWrapStyle}>
+          <select
+            value={segmentFilter}
+            onChange={e => setSegmentFilter(e.target.value)}
+            style={{ ...selectStyle, minWidth: '130px' }}
+          >
+            <option>Tout</option>
+            <option>Particulier</option>
+            <option>Entreprise</option>
+          </select>
+          <ChevronDown size={14} style={chevronStyle} />
+        </div>
+
+        {/* Prestation */}
+        <div style={selectWrapStyle}>
+          <select
+            value={serviceFilter}
+            onChange={e => setServiceFilter(e.target.value)}
+            style={{ ...selectStyle, minWidth: '180px' }}
+          >
+            <option value="Tout">Toutes les prestations</option>
+            <optgroup label="Particuliers">
+              {SERVICES_LIST.particulier.map(s => <option key={s} value={s}>{s}</option>)}
+            </optgroup>
+            <optgroup label="Entreprises">
+              {SERVICES_LIST.entreprise.map(s => <option key={s} value={s}>{s}</option>)}
+            </optgroup>
+          </select>
+          <ChevronDown size={14} style={chevronStyle} />
+        </div>
+
+        <div style={dividerStyle} />
+
+        {/* Date début */}
+        <div style={dateWrapStyle}>
+          <Calendar size={14} style={calIconStyle} />
+          <input
+            type="text"
+            placeholder="Du"
+            value={dateDebut}
+            onChange={e => setDateDebut(e.target.value)}
+            onFocus={(e) => (e.target.type = 'date')}
+            onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
+            style={dateInputStyle}
+          />
+        </div>
+
+        {/* Date fin */}
+        <div style={dateWrapStyle}>
+          <Calendar size={14} style={calIconStyle} />
+          <input
+            type="text"
+            placeholder="Au"
+            value={dateFin}
+            onChange={e => setDateFin(e.target.value)}
+            onFocus={(e) => (e.target.type = 'date')}
+            onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
+            style={dateInputStyle}
+          />
+        </div>
+
+        {/* Reset */}
+        {hasActiveFilters && (
+          <button
+            onClick={resetFilters}
+            style={{
+              flexShrink: 0,
+              height: '38px',
+              padding: '0 12px',
+              background: 'transparent',
+              border: '1px solid #fca5a5',
+              borderRadius: '8px',
+              color: '#ef4444',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <XCircle size={14} />
+            Réinitialiser
+          </button>
+        )}
       </div>
 
+      {/* Table */}
       {loading ? (
         <div className="loading-state"><div className="spinner" /></div>
       ) : (
@@ -377,9 +521,7 @@ export default function Clients() {
                       )}
                     </div>
                   </td>
-                  <td>
-                    {getStatusBadge(c)}
-                  </td>
+                  <td>{getStatusBadge(c)}</td>
                   <td>
                     <span className={`badge ${c.segment === 'particulier' ? 'badge-dark-teal' : 'badge-lime'}`}>
                       {c.segment === 'particulier' ? 'Particulier' : 'Entreprise'}
@@ -420,7 +562,13 @@ export default function Clients() {
                             <UserIcon size={16} className="dropdown-item-icon" />
                             <span>Voir le compte</span>
                           </Link>
-                          <div className="dropdown-item">
+                          <div className="dropdown-item" onClick={() => {
+                            if (c.latest_demande) {
+                              navigate('/demandes', { state: { editDemandeId: c.latest_demande.id } });
+                            } else {
+                              addToast("Ce client n'a pas de demande à éditer.", 'info');
+                            }
+                          }}>
                             <Pencil size={16} className="dropdown-item-icon" />
                             <span>Éditer</span>
                           </div>
@@ -440,14 +588,17 @@ export default function Clients() {
         </div>
       )}
 
-      {/* Modal d'Avis */}
+      {/* Modal Avis */}
       {showAvisModal && (
         <div className="modal-overlay z-[110]" onClick={() => setShowAvisModal(null)}>
-          <div className="modal-content max-w-[500px]" onClick={e => e.stopPropagation()} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: 0, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', border: 'none' }}>
-            {/* Header */}
+          <div
+            className="modal-content max-w-[500px]"
+            onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: 0, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', border: 'none' }}
+          >
             <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#ccfbf1', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', color: '#0d9488' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#ccfbf1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0d9488' }}>
                   <MessageSquare size={20} />
                 </div>
                 <div>
@@ -459,43 +610,39 @@ export default function Clients() {
               </div>
               <button
                 onClick={() => setShowAvisModal(null)}
-                style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}
                 onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; }}
                 onMouseLeave={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'white'; }}
               >
                 <XCircle size={16} />
               </button>
             </div>
-
-            {/* Body */}
             <div style={{ padding: '24px' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Détails de l'avis</label>
               <textarea
-                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '16px', fontSize: '14px', color: '#0f172a', minHeight: '140px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)', transition: 'all 0.2s', boxSizing: 'border-box' }}
+                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '16px', fontSize: '14px', color: '#0f172a', minHeight: '140px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
                 placeholder={`Veuillez rédiger l'avis ${showAvisModal.type === 'commercial' ? 'commercial' : 'opérationnel'} complet...`}
                 value={showAvisModal.avis}
                 onChange={(e) => setShowAvisModal({ ...showAvisModal, avis: e.target.value })}
                 onKeyDown={(e) => e.stopPropagation()}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#0d9488'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.15)'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'none'; }}
               />
             </div>
-
-            {/* Footer */}
-            <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px', backgroundColor: '#ffffff' }}>
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <button
                 onClick={() => setShowAvisModal(null)}
-                style={{ padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#475569', backgroundColor: 'white', border: '1px solid #cbd5e1', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
-                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#0f172a'; }}
-                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'white'; e.currentTarget.style.color = '#475569'; }}
+                style={{ padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#475569', backgroundColor: 'white', border: '1px solid #cbd5e1', cursor: 'pointer' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'white'; }}
               >
                 Annuler
               </button>
               <button
                 onClick={handleSaveAvis}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white', backgroundColor: '#0f766e', border: 'none', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(15, 118, 110, 0.2), 0 2px 4px -1px rgba(15, 118, 110, 0.1)', transition: 'all 0.2s' }}
-                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#0d9488'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0f766e'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white', backgroundColor: '#0f766e', border: 'none', cursor: 'pointer' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#0d9488'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0f766e'; }}
               >
                 <Save size={18} /> Enregistrer
               </button>
@@ -506,22 +653,25 @@ export default function Clients() {
 
       {/* Modal Affectation */}
       {showAssignmentModal && (
-        <div className="modal-overlay z-[110]" onClick={() => { setShowAssignmentModal(null); }}>
-          <div className="modal-content max-w-[500px]" onClick={e => e.stopPropagation()} style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+        <div className="modal-overlay z-[110]" onClick={() => setShowAssignmentModal(null)}>
+          <div
+            className="modal-content max-w-[500px]"
+            onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}
+          >
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-slate-800">Affectation</h2>
                 <p className="text-slate-500 text-sm mt-1">Sélectionnez le commercial pour ce client</p>
               </div>
-              <button className="p-2 hover:bg-slate-100 rounded-full transition-colors" onClick={() => { setShowAssignmentModal(null); }}>
+              <button className="p-2 hover:bg-slate-100 rounded-full transition-colors" onClick={() => setShowAssignmentModal(null)}>
                 <XCircle size={24} className="text-slate-400" />
               </button>
             </div>
-
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
               {commerciaux && commerciaux.length > 0 ? (
                 commerciaux.map(comm => {
-                  const initials = (comm.full_name || `${comm.first_name} ${comm.last_name}`).split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                  const initials = (comm.full_name || `${comm.first_name} ${comm.last_name}`).split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2);
                   return (
                     <button
                       key={comm.id}
@@ -549,12 +699,8 @@ export default function Clients() {
                 </div>
               )}
             </div>
-
             <div className="mt-8 flex justify-end">
-              <button
-                className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
-                onClick={() => { setShowAssignmentModal(null); }}
-              >
+              <button className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors" onClick={() => setShowAssignmentModal(null)}>
                 Annuler
               </button>
             </div>
