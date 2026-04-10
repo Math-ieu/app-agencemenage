@@ -2,17 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   getAgent, getMissions, getFeedbacks,
-  updateAgent, fetchSecureDocBlob
+  updateAgent, fetchSecureDocBlob, getDemandes, sendProfilToDemande,
+  getAgentHistory
 } from '../api/client';
 import { decodeId } from '../utils/obfuscation';
 import {
   ChevronDown, User, FileText,
   MessageSquare, History, ArrowLeft,
   Download, Eye, Star, Briefcase, ShieldAlert,
-  ClipboardCheck
+  ClipboardCheck, Search, Send
 } from 'lucide-react';
 import { Agent } from '../types';
 import { useToastStore } from '../store/toast';
+import AddProfileModal from './ProfilEditModal';
 
 /* ═══════════════════════════════════════════════════════════
    Color palette
@@ -170,15 +172,28 @@ export default function ProfilDetails() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [operatorNotes, setOperatorNotes] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  // Postuler modal state
+  const [showPostulerModal, setShowPostulerModal] = useState(false);
+  const [allDemandes, setAllDemandes] = useState<any[]>([]);
+  const [demandesLoading, setDemandesLoading] = useState(false);
+  const [demandesSearch, setDemandesSearch] = useState('');
+  const [selectedDemande, setSelectedDemande] = useState<any | null>(null);
+  const [sending, setSending] = useState(false);
+
+  // History state
+  const [history, setHistory] = useState<any[]>([]);
+  const [historySearch, setHistorySearch] = useState('');
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     info: true,
     notes: true,
-    media: false,
-    finance: false,
-    evaluation: false,
-    missions: false,
-    historique: false,
+    media: true,
+    finance: true,
+    evaluation: true,
+    missions: true,
+    historique: true,
   });
 
   const fetchData = async () => {
@@ -190,10 +205,11 @@ export default function ProfilDetails() {
     }
     setLoading(true);
     try {
-      const [agentRes, missionsRes, feedbackRes] = await Promise.all([
+      const [agentRes, missionsRes, feedbackRes, historyRes] = await Promise.all([
         getAgent(realId),
-        getMissions({ agent: realId.toString() }),
-        getFeedbacks({ mission__agent: realId.toString() }),
+        getMissions({ agent: realId }),
+        getFeedbacks({ mission__agent: realId }),
+        getAgentHistory(realId)
       ]);
 
       setAgent(agentRes.data);
@@ -205,6 +221,7 @@ export default function ProfilDetails() {
 
       setMissions(Array.isArray(missionsData) ? missionsData : []);
       setFeedbacks(Array.isArray(feedbackData) ? feedbackData : []);
+      setHistory(Array.isArray(historyRes.data) ? historyRes.data : []);
     } catch (err) {
       console.error('Error fetching agent details:', err);
       addToast('Erreur lors du chargement des données.', 'error');
@@ -218,6 +235,88 @@ export default function ProfilDetails() {
   }, [id]);
 
   const toggle = (s: string) => setOpenSections(p => ({ ...p, [s]: !p[s] }));
+
+  // Fetch all demandes when Postuler modal opens
+  useEffect(() => {
+    if (!showPostulerModal) return;
+    setDemandesLoading(true);
+    getDemandes({})
+      .then(res => {
+        const data = res.data;
+        setAllDemandes(Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []));
+      })
+      .catch(console.error)
+      .finally(() => setDemandesLoading(false));
+  }, [showPostulerModal]);
+
+  const handleEnvoyerProfil = async () => {
+    if (!agent || !selectedDemande) return;
+    setSending(true);
+    try {
+      await sendProfilToDemande(selectedDemande.id, agent.id);
+      addToast(`Profil envoyé pour la demande #${selectedDemande.id} avec succès !`, 'success');
+      setShowPostulerModal(false);
+      setSelectedDemande(null);
+      setDemandesSearch('');
+    } catch (err) {
+      console.error(err);
+      addToast("Erreur lors de l'envoi du profil.", 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const getStatutBadge = (statut: string) => {
+    const map: Record<string, { label: string; bg: string; color: string }> = {
+      en_attente: { label: 'En attente', bg: '#fef3c7', color: '#92400e' },
+      en_cours:   { label: 'En cours',   bg: '#dcfce7', color: '#166534' },
+      termine:    { label: 'Terminée',   bg: '#f1f5f9', color: '#475569' },
+      annule:     { label: 'Annulée',    bg: '#fee2e2', color: '#991b1b' },
+    };
+    const s = map[statut] || { label: statut, bg: '#f1f5f9', color: '#475569' };
+    return (
+      <span style={{ padding: '3px 10px', borderRadius: 99, fontSize: 12, fontWeight: 700, backgroundColor: s.bg, color: s.color }}>
+        {s.label}
+      </span>
+    );
+  };
+
+  const formatAction = (log: any) => {
+    const { action, extra_data } = log;
+    if (action === 'envoyer_profil' || (typeof action === 'string' && action.startsWith('envoyer_profil:'))) {
+      const demandId = extra_data?.object_id || log.object_id;
+      const clientName = extra_data?.client_name || 'Client';
+      return `Profil envoyé pour la demande #${demandId} — ${clientName}`;
+    }
+    if (action === 'Mission créée') {
+      return `Mission créée pour la demande #${extra_data?.demande_id} — ${extra_data?.client_name || 'Client'}`;
+    }
+    if (action === 'Feedback reçu') {
+      return `Note de ${extra_data?.note}/5 reçue — ${extra_data?.client_name || 'Client'}`;
+    }
+    return action;
+  };
+
+  const filteredHistory = history.filter(log => {
+    if (!historySearch) return true;
+    const q = historySearch.toLowerCase();
+    const actionDesc = formatAction(log).toLowerCase();
+    return actionDesc.includes(q) || (log.user_name || '').toLowerCase().includes(q);
+  });
+
+  const ACTIVE_STATUTS = ['en_attente', 'en_cours'];
+  const filteredDemandes = allDemandes.filter(d => {
+    // Only show active demands
+    if (!ACTIVE_STATUTS.includes(d.statut)) return false;
+    if (!demandesSearch) return true;
+    const q = demandesSearch.toLowerCase();
+    return (
+      String(d.id).includes(q) ||
+      (d.client_name || '').toLowerCase().includes(q) ||
+      (d.service || '').toLowerCase().includes(q) ||
+      (d.client_phone || '').includes(q)
+    );
+  });
 
   const handleSaveNotes = async () => {
     if (!agent) return;
@@ -324,20 +423,30 @@ export default function ProfilDetails() {
           </div>
 
           <div style={{ display: 'flex', gap: 10 }} className="flex-wrap">
-            <button style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 18px', border: '1px solid #e2e8f0',
-              borderRadius: 8, background: 'white', color: '#475569',
-              fontSize: 14, fontWeight: 600, cursor: 'pointer',
-            }}>
+            <button
+              onClick={() => setShowEditModal(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 18px', border: '1px solid #e2e8f0',
+                borderRadius: 8, background: 'white', color: '#475569',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
               <FileText size={16} color={C.teal} /> Éditer
             </button>
-            <button style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '10px 20px', backgroundColor: C.teal, color: 'white',
-              borderRadius: 8, border: 'none', fontWeight: 700,
-              fontSize: 14, cursor: 'pointer',
-            }}>
+            <button
+              onClick={() => {
+                setShowPostulerModal(true);
+                setSelectedDemande(null);
+                setDemandesSearch('');
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 20px', backgroundColor: C.teal, color: 'white',
+                borderRadius: 8, border: 'none', fontWeight: 700,
+                fontSize: 14, cursor: 'pointer',
+              }}
+            >
               <PlusCircleIcon size={16} /> Postuler
             </button>
             <button style={{
@@ -539,24 +648,232 @@ export default function ProfilDetails() {
 
         {/* ── 7. Historique ── */}
         <Accordion title="Historique" icon={<History size={18} />} isOpen={openSections.historique} onToggle={() => toggle('historique')} color={C.tan}>
+          {/* Search bar */}
+          <div style={{ padding: '0 0 16px 0' }}>
+            <div style={{ position: 'relative', maxWidth: 350 }}>
+              <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input
+                value={historySearch}
+                onChange={e => setHistorySearch(e.target.value)}
+                placeholder="Rechercher une action..."
+                style={{
+                  width: '100%', height: 38, paddingLeft: 38, paddingRight: 12,
+                  border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13,
+                  outline: 'none', color: '#1e293b',
+                }}
+              />
+            </div>
+          </div>
+
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                <Th>Date</Th><Th>Action</Th><Th center>Note</Th><Th>Utilisateur</Th>
+                <Th>Date</Th><Th>Action</Th><Th>Note</Th><Th>Utilisateur</Th>
               </tr></thead>
               <tbody>
-                <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <Td>{new Date(agent.created_at).toLocaleString('fr-FR')}</Td>
-                  <Td bold color="#475569">Profil créé</Td>
-                  <Td center color="#94a3b8">—</Td>
-                  <Td>Opérateur</Td>
-                </tr>
+                {filteredHistory.map((log, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <Td mono>{new Date(log.timestamp).toLocaleString('fr-FR', {
+                      day: '2-digit', month: '2-digit', year: '2-digit',
+                      hour: '2-digit', minute: '2-digit'
+                    })}</Td>
+                    <Td bold color="#475569">{formatAction(log)}</Td>
+                    <Td color="#94a3b8">{log.extra_data?.notes || '—'}</Td>
+                    <Td>{log.user_name || 'Opérateur'}</Td>
+                  </tr>
+                ))}
+                {filteredHistory.length === 0 && <EmptyState text="Aucun historique trouvé." colSpan={4} />}
               </tbody>
             </table>
           </div>
         </Accordion>
 
       </div>
+
+      {showEditModal && agent && (
+        <AddProfileModal
+          initialAgent={agent}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            setShowEditModal(false);
+            fetchData();
+          }}
+        />
+      )}
+
+      {/* ── Postuler Modal ── */}
+      {showPostulerModal && agent && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 200, backdropFilter: 'blur(2px)',
+          }}
+          onClick={() => { if (!selectedDemande) { setShowPostulerModal(false); } }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'white', borderRadius: 16, width: '100%', maxWidth: 660,
+              maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.25)', overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', margin: 0 }}>
+                {selectedDemande ? 'Aperçu avant envoi' : 'Postuler — Choisir une demande'}
+              </h2>
+              <button
+                onClick={() => { setShowPostulerModal(false); setSelectedDemande(null); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 22, lineHeight: 1 }}
+              >×</button>
+            </div>
+
+            {!selectedDemande ? (
+              /* ── Step 1: Liste des demandes ── */
+              <>
+                {/* Search */}
+                <div style={{ padding: '16px 24px', borderBottom: '1px solid #f1f5f9' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                    <input
+                      autoFocus
+                      value={demandesSearch}
+                      onChange={e => setDemandesSearch(e.target.value)}
+                      placeholder="Rechercher par nom, service, numéro..."
+                      style={{
+                        width: '100%', height: 44, paddingLeft: 38, paddingRight: 12,
+                        border: '2px solid #0d9488', borderRadius: 10, fontSize: 14,
+                        outline: 'none', boxSizing: 'border-box', color: '#1e293b',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* List */}
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {demandesLoading ? (
+                    <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Chargement...</div>
+                  ) : filteredDemandes.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontStyle: 'italic' }}>Aucune demande trouvée.</div>
+                  ) : filteredDemandes.map(d => {
+                    const isAlreadyAssigned = d.profils_envoyes?.some((p: any) => p.id === agent.id);
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => !isAlreadyAssigned && setSelectedDemande(d)}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '14px 24px', borderBottom: '1px solid #f8fafc',
+                          cursor: isAlreadyAssigned ? 'not-allowed' : 'pointer',
+                          opacity: isAlreadyAssigned ? 0.75 : 1,
+                          transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={e => { if(!isAlreadyAssigned) e.currentTarget.style.background = '#f8fafc'; }}
+                        onMouseLeave={e => { if(!isAlreadyAssigned) e.currentTarget.style.background = 'white'; }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>#{d.id}</span>
+                            <span style={{ fontWeight: 700, color: '#1e293b', fontSize: 15 }}>{d.client_name || 'Client inconnu'}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 4, background: d.segment === 'particulier' ? '#dbeafe' : '#f3e8ff', color: d.segment === 'particulier' ? '#1e40af' : '#6b21a8' }}>
+                              {d.segment === 'particulier' ? 'SPP' : 'SPE'}
+                            </span>
+                            <span>•</span>
+                            <span>{d.client_details?.city || d.formulaire_data?.ville || 'N/A'}</span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          {isAlreadyAssigned && (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#d97706', backgroundColor: '#fffbeb', padding: '2px 8px', borderRadius: 6, border: '1px solid #fef3c7' }}>
+                              Déjà affecté
+                            </span>
+                          )}
+                          {getStatutBadge(d.statut)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              /* ── Step 2: Confirmation ── */
+              <div style={{ padding: 24, overflowY: 'auto' }}>
+                {/* Back */}
+                <button
+                  onClick={() => setSelectedDemande(null)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#475569', fontWeight: 600, fontSize: 14, marginBottom: 20 }}
+                >
+                  ← Retour à la liste
+                </button>
+
+                {/* Demande card */}
+                <div style={{ background: '#f8fafc', borderRadius: 12, padding: '16px 20px', marginBottom: 24 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Demande sélectionnée</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>#{selectedDemande.id}</span>
+                    <span style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>{selectedDemande.client_name || 'Client inconnu'}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 4, background: selectedDemande.segment === 'particulier' ? '#dbeafe' : '#f3e8ff', color: selectedDemande.segment === 'particulier' ? '#1e40af' : '#6b21a8' }}>
+                      {selectedDemande.segment === 'particulier' ? 'SPP' : 'SPE'}
+                    </span>
+                    <span>•</span>
+                    <span>{selectedDemande.client_details?.city || selectedDemande.formulaire_data?.ville || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* Agent preview */}
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Profil à envoyer</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: C.teal, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 20, flexShrink: 0 }}>
+                    {`${agent.last_name?.[0] || ''}${agent.first_name?.[0] || ''}`.toUpperCase()}
+                  </div>
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: 17, color: '#1e293b', margin: 0 }}>{agent.last_name} {agent.first_name}</p>
+                    <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>{agent.type_profil}</p>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: 28 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#475569' }}>
+                    <span>📞</span> {agent.phone}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#475569' }}>
+                    <span>📍</span> {agent.neighborhood || '—'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#475569' }}>
+                    <span>📅</span> {agent.experience_years} an(s) {agent.experience_months} mois d’expérience
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#475569' }}>
+                    <span>👤</span> {agent.nationality || '—'}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                  <button
+                    onClick={() => { setShowPostulerModal(false); setSelectedDemande(null); }}
+                    style={{ padding: '10px 20px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleEnvoyerProfil}
+                    disabled={sending}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', backgroundColor: C.teal, color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.7 : 1 }}
+                  >
+                    <Send size={16} />
+                    {sending ? 'Envoi...' : 'Envoyer le profil'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

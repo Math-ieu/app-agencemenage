@@ -101,6 +101,9 @@ export const nrpDemande = (id: number, notes?: string) =>
 export const affecterDemande = (id: number, commercial_id: number) =>
   apiClient.post(`/api/demandes/${id}/affecter/`, { commercial_id });
 
+export const sendProfilToDemande = (demandeId: number, agentId: number) =>
+  apiClient.post(`/api/demandes/${demandeId}/envoyer_profil/`, { agent_id: agentId });
+
 export const confirmerCAO = (id: number) =>
   apiClient.post(`/api/demandes/${id}/confirmer_cao/`);
 
@@ -139,6 +142,8 @@ export const getAgents = (params?: Record<string, string | number>) =>
   apiClient.get('/api/agents/', { params });
 
 export const getAgent = (id: number) => apiClient.get(`/api/agents/${id}/`);
+
+export const getAgentHistory = (id: number) => apiClient.get(`/api/agents/${id}/history/`);
 
 export const createAgent = (data: Record<string, unknown>) =>
   apiClient.post('/api/agents/', data);

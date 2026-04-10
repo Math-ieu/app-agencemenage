@@ -550,7 +550,9 @@ export default function Dashboard() {
                         {(d.profils_envoyes?.length ?? 0) > 0 ? (
                           <div className="avatar-group">
                             {d.profils_envoyes?.map(p => (
-                              <span key={p.id} className="avatar-sm" title={p.full_name}>{p.full_name[0]}</span>
+                              <span key={p.id} className="avatar-sm" title={p.full_name}>
+                                {`${p.first_name?.[0] || ''}${p.last_name?.[0] || ''}`.toUpperCase()}
+                              </span>
                             ))}
                           </div>
                         ) : '—'}
