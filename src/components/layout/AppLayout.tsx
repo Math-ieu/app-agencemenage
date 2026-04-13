@@ -13,7 +13,15 @@ const navItems = [
   { to: '/profils', icon: UserCheck, label: 'Listing profils' },
   { to: '/clients', icon: Users, label: 'Listing clients' },
   { to: '/historique', icon: History, label: 'Historique' },
-  { to: '/finance', icon: DollarSign, label: 'Gestion Financière' },
+  {
+    id: 'finance',
+    icon: DollarSign,
+    label: 'Gestion Financière',
+    children: [
+      { to: '/finance/vue-globale', label: 'Vue Globale' },
+      { to: '/finance/la-caisse', label: 'La Caisse' }
+    ]
+  },
   { to: '/qualite', icon: Star, label: 'Qualité & Feedback' },
   { to: '/marketing', icon: Megaphone, label: 'Marketing' },
   { 
@@ -34,7 +42,7 @@ export default function AppLayout() {
   const { pendingCount } = useNotificationStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const [expandedItems, setExpandedItems] = useState<string[]>(['seo']); // SEO expanded by default
+  const [expandedItems, setExpandedItems] = useState<string[]>(['seo', 'finance']);
 
   const toggleExpand = (id: string) => {
     setExpandedItems(prev => 
@@ -98,7 +106,7 @@ export default function AppLayout() {
                     <span className="nav-icon">
                       <Icon size={20} />
                     </span>
-                    {!collapsed && <span className="nav-label nav-category-label">{label}</span>}
+                    {!collapsed && <span className="nav-label">{label}</span>}
                     {!collapsed && (
                       <ChevronDown size={14} className={`nav-chevron ${isExpanded ? 'rotated' : ''}`} />
                     )}

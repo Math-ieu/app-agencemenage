@@ -165,6 +165,20 @@ export const getCaisse = (params?: Record<string, string | number>) =>
 export const getCaisseSolde = () =>
   apiClient.get('/api/finance/caisse/solde/');
 
+export const createCaisseMouvement = (data: FormData | Record<string, unknown>) => {
+  const isFormData = data instanceof FormData;
+  return apiClient.post('/api/finance/caisse/', data, {
+    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  });
+};
+
+export const updateCaisseMouvement = (id: number, data: FormData | Record<string, unknown>) => {
+  const isFormData = data instanceof FormData;
+  return apiClient.patch(`/api/finance/caisse/${id}/`, data, {
+    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  });
+};
+
 // ─── Feedback ────────────────────────────────────────────────────────────────
 export const getFeedbacks = (params?: Record<string, string | number>) =>
   apiClient.get('/api/feedback/', { params });

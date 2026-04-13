@@ -12,7 +12,8 @@ import DemandesEnAttente from './pages/DemandesEnAttente';
 import Clients from './pages/Clients';
 import Profils from './pages/Profils';
 import Historique from './pages/Historique';
-import Finance from './pages/Finance';
+import VueGlobale from './pages/finance/VueGlobale';
+import LaCaisse from './pages/finance/LaCaisse';
 import Qualite from './pages/Qualite';
 import Marketing from './pages/Marketing';
 import Parametres from './pages/Parametres';
@@ -52,7 +53,10 @@ export default function App() {
           <Route path="profils/:id" element={<ProfilDetails />} />
           <Route path="profils" element={<Profils />} />
           <Route path="historique" element={<Historique />} />
-          <Route path="finance" element={<Finance />} />
+          <Route path="finance">
+            <Route path="vue-globale" element={<VueGlobale />} />
+            <Route path="la-caisse" element={<LaCaisse />} />
+          </Route>
           <Route path="qualite" element={<Qualite />} />
           <Route path="marketing" element={<Marketing />} />
           <Route path="parametres" element={<Parametres />} />

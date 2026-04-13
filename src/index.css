@@ -609,14 +609,6 @@ body {
   text-align: left;
 }
 
-.nav-category-label {
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 0.75rem;
-  font-weight: 700;
-  opacity: 0.9;
-}
-
 .nav-parent-active {
   color: white;
   background-color: rgba(255, 255, 255, 0.03);
@@ -808,6 +800,13 @@ body {
   max-width: 1600px;
   margin: 0 auto;
   width: 100%;
+}
+
+/* Give pages more room when the sidebar is collapsed */
+.sidebar.sidebar-collapsed + .main-content .page {
+  max-width: 1720px;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
 }
 
 .page-header {

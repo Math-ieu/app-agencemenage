@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   getAgent, getMissions, getFeedbacks,
@@ -344,6 +344,59 @@ export default function ProfilDetails() {
     return `${age} ans`;
   };
 
+  const money = (value: number): string => `${new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)} DH`;
+
+  const toNumber = (value: unknown): number => {
+    const parsed = Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const financeStats = useMemo(() => {
+    let totalCa = 0;
+    let profilDoitAgence = 0;
+    let agenceDoitProfil = 0;
+
+    missions.forEach((mission) => {
+      const demande = mission?.demande_detail || {};
+      const montant = toNumber(demande.prix);
+      const partAgence = montant * 0.5;
+      const partProfil = montant * 0.5;
+      totalCa += montant;
+
+      const encaisseParProfil = demande.mode_paiement === 'sur_place';
+      const paiementIntegral = demande.statut_paiement === 'integral';
+
+      if (!paiementIntegral) {
+        if (encaisseParProfil) {
+          profilDoitAgence += partAgence;
+        } else {
+          agenceDoitProfil += partProfil;
+        }
+      }
+    });
+
+    return {
+      totalCa,
+      nombreMissions: missions.length,
+      profilDoitAgence,
+      agenceDoitProfil,
+    };
+  }, [missions]);
+
+  const formatMissionStatus = (status?: string): string => {
+    const map: Record<string, string> = {
+      en_attente: 'En attente',
+      confirmee: 'Confirmée',
+      en_cours: 'En cours',
+      terminee: 'Terminée',
+      annulee: 'Annulée',
+    };
+    return map[status || ''] || status || '—';
+  };
+
   const handleDownload = async (url: string) => {
     try {
       const { blobUrl } = await fetchSecureDocBlob(url);
@@ -586,10 +639,22 @@ export default function ProfilDetails() {
         {/* ── 4. Solde financier ── */}
         <Accordion title="Solde financier" icon={<ArrowLeft size={18} />} isOpen={openSections.finance} onToggle={() => toggle('finance')} color={C.tan}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-            <FinancialCard label="TOTAL CA GÉNÉRÉ" value="9.700 DH" color="#f1f5f9" textColor="#1e293b" />
-            <FinancialCard label="NOMBRE DE MISSIONS" value="4" color="#f1f5f9" textColor="#1e293b" />
-            <FinancialCard label="LE PROFIL DOIT À L'AGENCE" value="600 DH" color="#FFF5F5" textColor="#C53030" subtext="Part agence non reversée" />
-            <FinancialCard label="L'AGENCE DOIT AU PROFIL" value="4.250 DH" color="#EBF8FF" textColor="#2B6CB0" subtext="Part profil non versée" />
+            <FinancialCard label="TOTAL CA GÉNÉRÉ" value={money(financeStats.totalCa)} color="#f1f5f9" textColor="#1e293b" />
+            <FinancialCard label="NOMBRE DE MISSIONS" value={String(financeStats.nombreMissions)} color="#f1f5f9" textColor="#1e293b" />
+            <FinancialCard
+              label="LE PROFIL DOIT À L'AGENCE"
+              value={money(financeStats.profilDoitAgence)}
+              color="#FFF5F5"
+              textColor="#C53030"
+              subtext="Part agence non reversée"
+            />
+            <FinancialCard
+              label="L'AGENCE DOIT AU PROFIL"
+              value={money(financeStats.agenceDoitProfil)}
+              color="#EBF8FF"
+              textColor="#2B6CB0"
+              subtext="Part profil non versée"
+            />
           </div>
         </Accordion>
 
@@ -631,12 +696,12 @@ export default function ProfilDetails() {
               <tbody>
                 {missions.map((m, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <Td mono>M-{m.id}</Td>
-                    <Td>{m.date_debut ? new Date(m.date_debut).toLocaleDateString('fr-FR') : '—'}</Td>
-                    <Td bold color="#475569">{m.client_name || '—'}</Td>
-                    <Td>{m.demande_details?.service || '—'}</Td>
-                    <Td bold color="#1e293b">{m.montant || 0} DH</Td>
-                    <Td><Badge bg="#f1f5f9" color="#475569">{m.statut}</Badge></Td>
+                    <Td mono>MSN-{String(m.id).padStart(5, '0')}</Td>
+                    <Td>{m.demande_detail?.date_intervention ? new Date(m.demande_detail.date_intervention).toLocaleDateString('fr-FR') : (m.date_debut ? new Date(m.date_debut).toLocaleDateString('fr-FR') : '—')}</Td>
+                    <Td bold color="#475569">{m.demande_detail?.client_name || '—'}</Td>
+                    <Td>{m.demande_detail?.service || '—'}</Td>
+                    <Td bold color="#1e293b">{money(toNumber(m.demande_detail?.prix))}</Td>
+                    <Td><Badge bg="#f1f5f9" color="#475569">{formatMissionStatus(m.statut)}</Badge></Td>
                     <Td color="#94a3b8">—</Td>
                   </tr>
                 ))}
