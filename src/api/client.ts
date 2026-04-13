@@ -155,6 +155,13 @@ export const updateAgent = (id: number, data: Record<string, unknown>) =>
 export const getMissions = (params?: Record<string, string | number>) =>
   apiClient.get('/api/missions/', { params });
 
+export const updateMission = (id: number, data: FormData | Record<string, unknown>) => {
+  const isFormData = data instanceof FormData;
+  return apiClient.patch(`/api/missions/${id}/`, data, {
+    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  });
+};
+
 // ─── Finance ─────────────────────────────────────────────────────────────────
 export const getFactures = (params?: Record<string, string | number>) =>
   apiClient.get('/api/finance/factures/', { params });
@@ -164,6 +171,12 @@ export const getCaisse = (params?: Record<string, string | number>) =>
 
 export const getCaisseSolde = () =>
   apiClient.get('/api/finance/caisse/solde/');
+
+export const exportCaisseCsv = (params?: Record<string, string | number>) =>
+  apiClient.get('/api/finance/caisse/export_csv/', {
+    params,
+    responseType: 'blob',
+  });
 
 export const createCaisseMouvement = (data: FormData | Record<string, unknown>) => {
   const isFormData = data instanceof FormData;

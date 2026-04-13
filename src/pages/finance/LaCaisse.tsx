@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X } from 'lucide-react';
-import { createCaisseMouvement, getCaisse, getCaisseSolde, updateCaisseMouvement } from '../../api/client';
+import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement } from '../../api/client';
 import './LaCaisse.css';
 
 interface CashRow {
@@ -78,6 +78,7 @@ export default function LaCaisse() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingMovementId, setEditingMovementId] = useState<number | null>(null);
   const [savingMovement, setSavingMovement] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
 
   const [selectedOperationType, setSelectedOperationType] = useState('Entrée');
   const [isOperationMenuOpen, setIsOperationMenuOpen] = useState(false);
@@ -218,6 +219,36 @@ export default function LaCaisse() {
     }
   };
 
+  const buildFiltersParams = (): Record<string, string> => {
+    const params: Record<string, string> = {};
+    if (typeFilter !== 'all') params.type_mouvement = typeFilter;
+    if (modeFilter !== 'all') params.mode_paiement = modeFilter;
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    if (searchTerm.trim()) params.search = searchTerm.trim();
+    return params;
+  };
+
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const response = await exportCaisseCsv(buildFiltersParams());
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const now = new Date();
+      const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      link.href = url;
+      link.download = `mouvements-caisse-${stamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
   return (
     <div className="page lc-page">
       <section className="lc-hero">
@@ -234,7 +265,7 @@ export default function LaCaisse() {
         <button type="button" className="btn btn-primary lc-add-btn" onClick={openAddMovementModal}>
           <Plus size={18} /> Ajouter un mouvement
         </button>
-        <button type="button" className="btn btn-secondary lc-export-btn">
+        <button type="button" className="btn btn-secondary lc-export-btn" onClick={handleExportCsv} disabled={exportingCsv}>
           <Download size={16} /> Export CSV
         </button>
       </section>

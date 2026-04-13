@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -18,7 +18,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { getMissions } from '../../api/client';
+import { getAgents, getMissions, updateMission } from '../../api/client';
 import './VueGlobale.css';
 
 type FinanceSubTab = 'vue-globale' | 'suivi-facturation' | 'comptes-profils';
@@ -30,6 +30,7 @@ interface MissionEditForm {
   statutMission: FacturationRow['statut'];
   commission: string;
   montantPaye: string;
+  montantEncaisseProfil: string;
   modePaiementReel: string;
   datePaiement: string;
   statutPaiement: string;
@@ -59,6 +60,8 @@ interface MissionSummaryRow {
 }
 
 interface FacturationRow {
+  missionId?: number;
+  profilId?: number;
   missionNo: string;
   date: string;
   client: string;
@@ -83,6 +86,7 @@ interface FacturationRow {
 
 interface ProfileAccount {
   id: number;
+  key: string;
   name: string;
   city: string;
   phone: string;
@@ -101,6 +105,16 @@ interface ProfileBalance extends ProfileAccount {
 interface MissionApiItem {
   id: number;
   statut: string;
+  encaisse_par?: 'agence' | 'profil';
+  montant_paye?: string | number;
+  montant_encaisse_profil?: string | number;
+  mode_paiement_reel?: string;
+  date_paiement?: string;
+  paiement_client_statut?: 'non_paye' | 'en_attente' | 'effectue';
+  part_profil_versee?: boolean;
+  date_versement_profil?: string;
+  part_agence_reversee?: boolean;
+  date_remise_agence?: string;
   demande_detail?: {
     date_intervention?: string;
     client_name?: string;
@@ -114,148 +128,26 @@ interface MissionApiItem {
     reste_a_payer?: string | number;
   };
   agent_detail?: {
+    id?: number;
     full_name?: string;
     city?: string;
     phone?: string;
   };
 }
 
+interface AgentApiItem {
+  id: number;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  city?: string;
+  phone?: string;
+}
+
 const money = (value: number): string => `${new Intl.NumberFormat('fr-FR', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 }).format(value)} DH`;
-
-const facturationRows: FacturationRow[] = [
-  {
-    missionNo: 'MSN-000013',
-    date: '—',
-    client: 'maria',
-    ville: 'Casablanca',
-    profil: 'BONR Karidja',
-    service: 'Ménage post-sinistre',
-    segment: 'Particulier',
-    montant: 0,
-    modePaiement: 'Sur place',
-    partAgence: 0,
-    partProfil: 0,
-    encaissePar: 'Agence',
-    paiement: 'non_paye',
-    statut: 'Facturation annulée',
-    reglementInterne: 'Réglé',
-    montantPaye: 0,
-    datePaiement: '—',
-    modePaiementReel: '—',
-    partProfilVersee: true,
-    dateVersementProfil: '08/04/2026',
-  },
-  {
-    missionNo: 'MSN-000012',
-    date: '10/02/2026',
-    client: 'julien client',
-    ville: 'Casablanca',
-    profil: 'HARIT Imane',
-    service: 'Ménage bureaux',
-    segment: 'Entreprise',
-    montant: 600,
-    modePaiement: '—',
-    partAgence: 300,
-    partProfil: 300,
-    encaissePar: 'Agence',
-    paiement: 'partiellement_paye',
-    statut: 'Confirmée',
-    reglementInterne: 'Non réglé',
-  },
-  {
-    missionNo: 'MSN-000011',
-    date: '—',
-    client: 'test air bnb',
-    ville: 'Casablanca',
-    profil: '—',
-    service: 'Ménage Air BnB',
-    segment: 'Particulier',
-    montant: 500,
-    modePaiement: 'Paiement sur place',
-    partAgence: 250,
-    partProfil: 250,
-    encaissePar: 'Agence',
-    paiement: 'non_paye',
-    statut: 'Terminée',
-    reglementInterne: 'Non réglé',
-  },
-  {
-    missionNo: 'MSN-000010',
-    date: '—',
-    client: 'Houda',
-    ville: 'Casablanca',
-    profil: 'FLEAN Parfaite',
-    service: 'Grand ménage',
-    segment: 'Particulier',
-    montant: 1200,
-    modePaiement: '—',
-    partAgence: 600,
-    partProfil: 600,
-    encaissePar: 'Agence',
-    paiement: 'paye',
-    statut: 'Payé',
-    reglementInterne: 'Non réglé',
-  },
-  {
-    missionNo: 'MSN-000009',
-    date: '01/03/2026',
-    client: 'BONO',
-    ville: 'Casablanca',
-    profil: 'HARIT Imane',
-    service: 'Grand ménage',
-    segment: 'Particulier',
-    montant: 1500,
-    modePaiement: '—',
-    partAgence: 750,
-    partProfil: 750,
-    encaissePar: 'Profil',
-    paiement: 'paye',
-    statut: 'Payé',
-    reglementInterne: 'Réglé',
-  },
-];
-
-const profileAccounts: ProfileAccount[] = [
-  {
-    id: 1,
-    name: 'FLEAN Parfaite',
-    city: 'Casablanca',
-    phone: '0700000000',
-    missions: 1,
-    caTotal: 1200,
-    partAgence: 600,
-    partProfil: 600,
-    verseAuProfil: 0,
-    recuDuProfil: 0,
-  },
-  {
-    id: 2,
-    name: 'BONR Karidja',
-    city: 'Casablanca',
-    phone: '0700000000',
-    missions: 4,
-    caTotal: 9700,
-    partAgence: 4850,
-    partProfil: 4850,
-    verseAuProfil: 0,
-    recuDuProfil: 0,
-  },
-  {
-    id: 3,
-    name: 'HARIT Imane',
-    city: 'Casablanca',
-    phone: '0700000000',
-    missions: 5,
-    caTotal: 4280,
-    partAgence: 2140,
-    partProfil: 2140,
-    verseAuProfil: 0,
-    recuDuProfil: 750,
-  },
-];
 
 const missionSourceOptions = [
   '#25 - DRISSI (CASABLANCA)',
@@ -340,17 +232,55 @@ const formatDateFR = (value?: string): string => {
   return `${day}/${month}/${year}`;
 };
 
+const formatDateISO = (value?: string): string => {
+  if (!value || value === '—') return '';
+  if (value.includes('-')) return value;
+  const [day, month, year] = value.split('/');
+  if (!year || !month || !day) return '';
+  return `${year}-${month}-${day}`;
+};
+
+const modeLabelFromCode = (value?: string): string => {
+  if (value === 'virement') return 'Virement';
+  if (value === 'cheque') return 'Chèque';
+  if (value === 'especes_agence') return "Espèces à l'agence";
+  if (value === 'sur_place') return 'Sur place';
+  return '—';
+};
+
+const modeCodeFromLabel = (value?: string): string => {
+  if (value === 'Virement') return 'virement';
+  if (value === 'Chèque') return 'cheque';
+  if (value === "Espèces à l'agence") return 'especes_agence';
+  if (value === 'Sur place') return 'sur_place';
+  return '';
+};
+
+const statutMissionCodeFromLabel = (value: FacturationRow['statut']): string => {
+  if (value === 'Facturation annulée') return 'annulee';
+  if (value === 'Confirmée') return 'confirmee';
+  if (value === 'Terminée') return 'terminee';
+  if (value === 'Payé') return 'terminee';
+  return 'en_attente';
+};
+
+const paiementStatusCodeFromLabel = (value: string): 'non_paye' | 'en_attente' | 'effectue' => {
+  if (value === 'Paiement effectué') return 'effectue';
+  if (value === 'Paiement en attente') return 'en_attente';
+  return 'non_paye';
+};
+
 const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   const demande = item.demande_detail;
   const agent = item.agent_detail;
   const montant = Number(demande?.prix ?? 0);
   const partAgence = Number((montant * 0.5).toFixed(2));
   const partProfil = Number((montant - partAgence).toFixed(2));
-  const statutPaiement = demande?.statut_paiement ?? 'non_paye';
+  const statutPaiement = item.paiement_client_statut || demande?.statut_paiement || 'non_paye';
   const paiement: FacturationRow['paiement'] =
-    statutPaiement === 'integral'
+    statutPaiement === 'integral' || statutPaiement === 'effectue'
       ? 'paye'
-      : statutPaiement === 'partiel' || statutPaiement === 'acompte'
+      : statutPaiement === 'partiel' || statutPaiement === 'acompte' || statutPaiement === 'en_attente'
         ? 'partiellement_paye'
         : 'non_paye';
 
@@ -364,10 +294,11 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
           ? 'Terminée'
           : 'Confirmée';
 
-  const encaissePar: FacturationRow['encaissePar'] = demande?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
+  const encaissePar: FacturationRow['encaissePar'] = item.encaisse_par === 'profil' || demande?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
 
-  const montantPaye =
-    paiement === 'paye'
+  const montantPaye = item.montant_paye !== undefined
+    ? Number(item.montant_paye)
+    : paiement === 'paye'
       ? montant
       : paiement === 'partiellement_paye'
         ? Number((montant * 0.5).toFixed(2))
@@ -376,6 +307,8 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   const reglementInterne = paiement === 'paye' ? 'Réglé' : 'Non réglé';
 
   return {
+    missionId: item.id,
+    profilId: agent?.id,
     missionNo: `MSN-${String(item.id).padStart(6, '0')}`,
     date: formatDateFR(demande?.date_intervention),
     client: demande?.client_name || '—',
@@ -384,7 +317,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     service: demande?.service || 'Service',
     segment: demande?.segment === 'entreprise' ? 'Entreprise' : 'Particulier',
     montant,
-    modePaiement: demande?.mode_paiement_label || '—',
+    modePaiement: demande?.mode_paiement_label || modeLabelFromCode(item.mode_paiement_reel),
     partAgence,
     partProfil,
     encaissePar,
@@ -392,10 +325,12 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     statut,
     reglementInterne,
     montantPaye,
-    datePaiement: paiement === 'non_paye' ? '—' : formatDateFR(demande?.date_intervention),
-    modePaiementReel: demande?.mode_paiement_label || '—',
-    partProfilVersee: paiement === 'paye',
-    dateVersementProfil: paiement === 'paye' ? formatDateFR(demande?.date_intervention) : '—',
+    datePaiement: item.date_paiement ? formatDateFR(item.date_paiement) : (paiement === 'non_paye' ? '—' : formatDateFR(demande?.date_intervention)),
+    modePaiementReel: modeLabelFromCode(item.mode_paiement_reel) || demande?.mode_paiement_label || '—',
+    partProfilVersee: encaissePar === 'Agence' ? (item.part_profil_versee ?? (paiement === 'paye')) : (item.part_agence_reversee ?? (paiement === 'paye')),
+    dateVersementProfil: encaissePar === 'Agence'
+      ? (item.date_versement_profil ? formatDateFR(item.date_versement_profil) : '—')
+      : (item.date_remise_agence ? formatDateFR(item.date_remise_agence) : '—'),
   };
 };
 
@@ -407,10 +342,12 @@ export default function VueGlobale() {
   const [selectedProfileAccount, setSelectedProfileAccount] = useState<ProfileBalance | null>(null);
   const [missionDetailTab, setMissionDetailTab] = useState<MissionDetailTab>('infos');
   const [showMissionEditModal, setShowMissionEditModal] = useState(false);
+  const [isSavingMissionEdit, setIsSavingMissionEdit] = useState(false);
   const [missionEditForm, setMissionEditForm] = useState<MissionEditForm>({
     statutMission: 'Confirmée',
     commission: '50',
     montantPaye: '0',
+    montantEncaisseProfil: '0',
     modePaiementReel: 'Choisir',
     datePaiement: '',
     statutPaiement: 'Non payé',
@@ -447,69 +384,117 @@ export default function VueGlobale() {
   const [suiviStatutFilter, setSuiviStatutFilter] = useState('Tous les statuts');
   const [suiviPaiementFilter, setSuiviPaiementFilter] = useState('Tous les paiements');
   const [suiviSegmentFilter, setSuiviSegmentFilter] = useState('Tous les segments');
-  const [facturationData, setFacturationData] = useState<FacturationRow[]>(facturationRows);
-  const [profileAccountsData, setProfileAccountsData] = useState<ProfileAccount[]>(profileAccounts);
+  const [facturationData, setFacturationData] = useState<FacturationRow[]>([]);
+  const [profileAccountsData, setProfileAccountsData] = useState<ProfileAccount[]>([]);
+
+  const loadFinanceData = useCallback(async () => {
+    const missions: MissionApiItem[] = [];
+    const agents: AgentApiItem[] = [];
+
+    try {
+      let missionPage = 1;
+      while (true) {
+        const response = await getMissions({ ordering: '-created_at', page: missionPage });
+        const data = response.data;
+        const rows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+        missions.push(...(rows as MissionApiItem[]));
+        if (!data?.next || rows.length === 0) break;
+        missionPage += 1;
+      }
+    } catch {
+      // Missions can fail independently; keep profiles load running.
+    }
+
+    try {
+      let agentPage = 1;
+      while (true) {
+        const response = await getAgents({ ordering: '-created_at', page: agentPage });
+        const data = response.data;
+        const rows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+        agents.push(...(rows as AgentApiItem[]));
+        if (!data?.next || rows.length === 0) break;
+        agentPage += 1;
+      }
+    } catch {
+      // Agents can fail due to permissions; UI will still show mission-derived accounts.
+    }
+
+    setFacturationData(missions.map(mapMissionToFacturationRow));
+
+    const grouped = new Map<string, ProfileAccount>();
+
+    for (const agent of agents) {
+      const fullName =
+        agent.full_name?.trim()
+        || `${agent.first_name || ''} ${agent.last_name || ''}`.trim()
+        || 'Profil inconnu';
+      const accountKey = `agent-${agent.id}`;
+
+      if (!grouped.has(accountKey)) {
+        grouped.set(accountKey, {
+          id: agent.id,
+          key: accountKey,
+          name: fullName,
+          city: agent.city || 'Casablanca',
+          phone: agent.phone || '—',
+          missions: 0,
+          caTotal: 0,
+          partAgence: 0,
+          partProfil: 0,
+          verseAuProfil: 0,
+          recuDuProfil: 0,
+        });
+      }
+    }
+
+    for (const item of missions) {
+      const profileName = item.agent_detail?.full_name || 'Profil inconnu';
+      const profileId = item.agent_detail?.id;
+      const accountKey = profileId ? `agent-${profileId}` : `mission-${profileName}`;
+      const montant = Number(item.demande_detail?.prix ?? 0);
+      const partAgence = Number((montant * 0.5).toFixed(2));
+      const partProfil = Number((montant - partAgence).toFixed(2));
+
+      if (!grouped.has(accountKey)) {
+        grouped.set(accountKey, {
+          id: profileId ?? grouped.size + 1,
+          key: accountKey,
+          name: profileName,
+          city: item.agent_detail?.city || 'Casablanca',
+          phone: item.agent_detail?.phone || '—',
+          missions: 0,
+          caTotal: 0,
+          partAgence: 0,
+          partProfil: 0,
+          verseAuProfil: 0,
+          recuDuProfil: 0,
+        });
+      }
+
+      const profile = grouped.get(accountKey)!;
+      profile.missions += 1;
+      profile.caTotal += montant;
+      profile.partAgence += partAgence;
+      profile.partProfil += partProfil;
+
+      const statutPaiement = item.paiement_client_statut || item.demande_detail?.statut_paiement;
+      const encaissePar = item.encaisse_par === 'profil' || item.demande_detail?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
+      if (statutPaiement === 'integral' || statutPaiement === 'effectue') {
+        if (encaissePar === 'Agence') {
+          profile.verseAuProfil += partProfil;
+        } else {
+          profile.recuDuProfil += partAgence;
+        }
+      }
+    }
+
+    const accounts = Array.from(grouped.values()).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    setProfileAccountsData(accounts);
+  }, []);
 
   useEffect(() => {
-    const loadFinanceData = async () => {
-      try {
-        const response = await getMissions({ ordering: '-created_at' });
-        const payload = response.data?.results ?? response.data;
-        if (!Array.isArray(payload) || payload.length === 0) return;
-
-        const mappedRows = (payload as MissionApiItem[]).map(mapMissionToFacturationRow);
-        setFacturationData(mappedRows);
-
-        const grouped = new Map<string, ProfileAccount>();
-        for (const item of payload as MissionApiItem[]) {
-          const profileName = item.agent_detail?.full_name || 'Profil inconnu';
-          const montant = Number(item.demande_detail?.prix ?? 0);
-          const partAgence = Number((montant * 0.5).toFixed(2));
-          const partProfil = Number((montant - partAgence).toFixed(2));
-
-          if (!grouped.has(profileName)) {
-            grouped.set(profileName, {
-              id: grouped.size + 1,
-              name: profileName,
-              city: item.agent_detail?.city || 'Casablanca',
-              phone: item.agent_detail?.phone || '—',
-              missions: 0,
-              caTotal: 0,
-              partAgence: 0,
-              partProfil: 0,
-              verseAuProfil: 0,
-              recuDuProfil: 0,
-            });
-          }
-
-          const profile = grouped.get(profileName)!;
-          profile.missions += 1;
-          profile.caTotal += montant;
-          profile.partAgence += partAgence;
-          profile.partProfil += partProfil;
-
-          const statutPaiement = item.demande_detail?.statut_paiement;
-          const encaissePar = item.demande_detail?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
-          if (statutPaiement === 'integral') {
-            if (encaissePar === 'Agence') {
-              profile.verseAuProfil += partProfil;
-            } else {
-              profile.recuDuProfil += partAgence;
-            }
-          }
-        }
-
-        const accounts = Array.from(grouped.values());
-        if (accounts.length > 0) {
-          setProfileAccountsData(accounts);
-        }
-      } catch {
-        // keep fallback static data when API is unavailable
-      }
-    };
-
     void loadFinanceData();
-  }, []);
+  }, [loadFinanceData]);
 
   const filteredFacturationRows = useMemo(() => {
     const monthMap: Record<string, number> = {
@@ -654,7 +639,11 @@ export default function VueGlobale() {
   const selectedProfileMissions = useMemo(
     () =>
       selectedProfileAccount
-        ? facturationData.filter((row) => row.profil === selectedProfileAccount.name)
+        ? facturationData.filter((row) =>
+            row.profilId
+              ? row.profilId === selectedProfileAccount.id
+              : row.profil === selectedProfileAccount.name
+          )
         : [],
     [selectedProfileAccount, facturationData]
   );
@@ -698,13 +687,16 @@ export default function VueGlobale() {
       statutMission: selectedMission.statut,
       commission: '50',
       montantPaye: String(selectedMission.montantPaye ?? 0),
+      montantEncaisseProfil: selectedMission.encaissePar === 'Profil'
+        ? String(selectedMission.montantPaye ?? selectedMission.montant)
+        : '0',
       modePaiementReel: selectedMission.modePaiementReel ?? 'Choisir',
-      datePaiement: selectedMission.datePaiement === '—' ? '' : (selectedMission.datePaiement ?? ''),
+      datePaiement: formatDateISO(selectedMission.datePaiement),
       statutPaiement: mappedStatutPaiement,
       justificatifName: 'Aucun fichier choisi',
       encaissePar: selectedMission.encaissePar,
       partProfilVersee: selectedMission.partProfilVersee ? 'Oui' : 'Non',
-      dateVersementProfil: selectedMission.dateVersementProfil === '—' ? '' : (selectedMission.dateVersementProfil ?? ''),
+      dateVersementProfil: formatDateISO(selectedMission.dateVersementProfil),
     });
 
     setShowMissionEditModal(true);
@@ -712,6 +704,37 @@ export default function VueGlobale() {
 
   const closeMissionEditModal = () => {
     setShowMissionEditModal(false);
+  };
+
+  const handleSaveMissionEdit = async () => {
+    if (!selectedMission?.missionId) {
+      closeMissionEditModal();
+      return;
+    }
+
+    const payload: Record<string, unknown> = {
+      statut: statutMissionCodeFromLabel(missionEditForm.statutMission),
+      encaisse_par: missionEditForm.encaissePar === 'Profil' ? 'profil' : 'agence',
+      montant_paye: Number(missionEditForm.montantPaye || 0),
+      mode_paiement_reel: modeCodeFromLabel(missionEditForm.modePaiementReel),
+      date_paiement: missionEditForm.datePaiement || null,
+      paiement_client_statut: paiementStatusCodeFromLabel(missionEditForm.statutPaiement),
+      part_profil_versee: missionEditForm.encaissePar === 'Agence' ? missionEditForm.partProfilVersee === 'Oui' : false,
+      date_versement_profil: missionEditForm.encaissePar === 'Agence' ? (missionEditForm.dateVersementProfil || null) : null,
+      montant_encaisse_profil: missionEditForm.encaissePar === 'Profil' ? Number(missionEditForm.montantEncaisseProfil || 0) : 0,
+      part_agence_reversee: missionEditForm.encaissePar === 'Profil' ? missionEditForm.partProfilVersee === 'Oui' : false,
+      date_remise_agence: missionEditForm.encaissePar === 'Profil' ? (missionEditForm.dateVersementProfil || null) : null,
+    };
+
+    setIsSavingMissionEdit(true);
+    try {
+      await updateMission(selectedMission.missionId, payload);
+      await loadFinanceData();
+      closeMissionEditModal();
+      closeMissionDetails();
+    } finally {
+      setIsSavingMissionEdit(false);
+    }
   };
 
   return (
@@ -1742,8 +1765,21 @@ export default function VueGlobale() {
                     <ChevronDown size={14} />
                   </label>
                 </div>
+
+                {missionEditForm.encaissePar === 'Profil' && (
+                  <div className="fg-modal-field">
+                    <label>Montant encaissé par le profil</label>
+                    <input
+                      value={missionEditForm.montantEncaisseProfil}
+                      onChange={(e) => setMissionEditForm((prev) => ({ ...prev, montantEncaisseProfil: e.target.value }))}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="fg-two-col-fields">
                 <div className="fg-modal-field">
-                  <label>Part profil versée ?</label>
+                  <label>{missionEditForm.encaissePar === 'Profil' ? 'Part agence reversée ?' : 'Part profil versée ?'}</label>
                   <label className="fg-select-wrap">
                     <select
                       value={missionEditForm.partProfilVersee}
@@ -1758,24 +1794,24 @@ export default function VueGlobale() {
                     <ChevronDown size={14} />
                   </label>
                 </div>
-              </div>
 
-              <div className="fg-modal-field fg-short-field">
-                <label>Date versement au profil</label>
-                <div className="fg-input-with-icon">
-                  <input
-                    type="date"
-                    value={missionEditForm.dateVersementProfil}
-                    onChange={(e) => setMissionEditForm((prev) => ({ ...prev, dateVersementProfil: e.target.value }))}
-                  />
-                  <Calendar size={14} />
+                <div className="fg-modal-field">
+                  <label>{missionEditForm.encaissePar === 'Profil' ? "Date remise à l'agence" : 'Date versement au profil'}</label>
+                  <div className="fg-input-with-icon">
+                    <input
+                      type="date"
+                      value={missionEditForm.dateVersementProfil}
+                      onChange={(e) => setMissionEditForm((prev) => ({ ...prev, dateVersementProfil: e.target.value }))}
+                    />
+                    <Calendar size={14} />
+                  </div>
                 </div>
               </div>
             </div>
 
             <footer className="fg-edit-footer">
-              <button type="button" className="btn btn-secondary" onClick={closeMissionEditModal}>Annuler</button>
-              <button type="button" className="btn btn-primary" onClick={closeMissionEditModal}>Enregistrer</button>
+              <button type="button" className="btn btn-secondary" onClick={closeMissionEditModal} disabled={isSavingMissionEdit}>Annuler</button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveMissionEdit} disabled={isSavingMissionEdit}>Enregistrer</button>
             </footer>
           </div>
         </div>
