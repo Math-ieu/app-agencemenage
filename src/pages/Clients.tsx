@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { encodeId } from '../utils/obfuscation';
-import { getClients, getUsers, affecterDemande, updateClient } from '../api/client';
+import { getClients, getUsers, affecterDemande, updateClient, deleteClient } from '../api/client';
 import { useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import { User } from '../types';
@@ -251,6 +251,21 @@ export default function Clients() {
     }
   };
 
+  const handleDeleteClient = async (client: Client) => {
+    const label = client.display_name || `${client.first_name} ${client.last_name}`.trim() || `#${client.id}`;
+    if (!window.confirm(`Supprimer le client ${label} ?`)) return;
+
+    try {
+      await deleteClient(client.id);
+      addToast('Client archivé avec succès', 'success');
+      fetchData();
+      setActiveDropdown(null);
+    } catch (err) {
+      console.error('Error deleting client:', err);
+      addToast('Erreur lors de l\'archivage du client', 'error');
+    }
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -460,7 +475,7 @@ export default function Clients() {
                 <th>Nom client</th>
                 <th>Quartier / Ville</th>
                 <th>Fidélité</th>
-                <th style={{ width: '40px' }}></th>
+                <th style={{ width: '92px' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -513,7 +528,7 @@ export default function Clients() {
                             <span>Geste commercial</span>
                           </div>
                           <div className="dropdown-divider"></div>
-                          <div className="dropdown-item dropdown-item-danger">
+                          <div className="dropdown-item dropdown-item-danger" onClick={() => handleDeleteClient(c)}>
                             <Trash2 size={16} className="dropdown-item-icon" />
                             <span>Supprimer</span>
                           </div>
@@ -552,28 +567,39 @@ export default function Clients() {
                     )}
                   </td>
                   <td>
-                    <div className="dropdown-container">
-                      <button className="btn-more" onClick={() => toggleDropdown('more', c.id)}>
-                        <MoreVertical size={18} />
-                      </button>
-                      {activeDropdown?.type === 'more' && activeDropdown.id === c.id && (
-                        <div className="dropdown-menu" ref={dropdownRef} style={{ minWidth: '160px' }}>
-                          <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
-                            <UserIcon size={16} className="dropdown-item-icon" />
-                            <span>Voir le compte</span>
-                          </Link>
-                          <div className="dropdown-item" onClick={() => {
-                            if (c.latest_demande) {
-                              navigate('/demandes', { state: { editDemandeId: c.latest_demande.id } });
-                            } else {
-                              addToast("Ce client n'a pas de demande à éditer.", 'info');
-                            }
-                          }}>
-                            <Pencil size={16} className="dropdown-item-icon" />
-                            <span>Éditer</span>
+                    <div className="table-inline-actions table-inline-actions-right">
+                      <div className="dropdown-container">
+                        <button className="btn-more" onClick={() => toggleDropdown('more', c.id)}>
+                          <MoreVertical size={18} />
+                        </button>
+                        {activeDropdown?.type === 'more' && activeDropdown.id === c.id && (
+                          <div className="dropdown-menu" ref={dropdownRef} style={{ minWidth: '160px' }}>
+                            <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
+                              <UserIcon size={16} className="dropdown-item-icon" />
+                              <span>Voir le compte</span>
+                            </Link>
+                            <div className="dropdown-item" onClick={() => {
+                              if (c.latest_demande) {
+                                navigate('/demandes', { state: { editDemandeId: c.latest_demande.id } });
+                              } else {
+                                addToast("Ce client n'a pas de demande à éditer.", 'info');
+                              }
+                            }}>
+                              <Pencil size={16} className="dropdown-item-icon" />
+                              <span>Éditer</span>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="table-delete-icon-btn"
+                        title="Supprimer le client"
+                        aria-label="Supprimer le client"
+                        onClick={() => handleDeleteClient(c)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
                   </td>
                 </tr>

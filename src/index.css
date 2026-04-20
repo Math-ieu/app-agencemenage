@@ -865,8 +865,8 @@ body {
  * Login Page
  * ──────────────────────────────────────────────────────────────────────────── */
 .login-page {
-  --login-bg-deep: #0b1f2a;
-  --login-bg-mid: #123546;
+  --login-bg-deep: #102a37;
+  --login-bg-mid: #184355;
   --login-accent: #0f8e85;
   --login-accent-soft: #47b6a5;
   --login-surface: #f7fafc;
@@ -875,10 +875,13 @@ body {
 
   min-height: 100vh;
   display: flex;
+  background-color: var(--login-bg-deep);
   background:
-    radial-gradient(1200px 700px at -10% 0%, #1e5669 0%, transparent 48%),
-    radial-gradient(1000px 620px at 110% 100%, #123f51 0%, transparent 52%),
-    linear-gradient(120deg, var(--login-bg-deep) 0%, var(--login-bg-mid) 52%, #0e2e3d 100%);
+    radial-gradient(920px 560px at -12% -4%, rgba(71, 182, 165, 0.14) 0%, transparent 52%),
+    radial-gradient(860px 520px at 112% 108%, rgba(61, 153, 177, 0.13) 0%, transparent 56%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 36px),
+    linear-gradient(132deg, var(--login-bg-deep) 0%, var(--login-bg-mid) 58%, #113545 100%);
   font-family: 'Source Sans 3', sans-serif;
 }
 
@@ -930,11 +933,11 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 42px 42px;
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
   mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
-  opacity: 0.18;
+  opacity: 0.12;
 }
 
 .login-brand {
@@ -1990,6 +1993,43 @@ body {
   color: var(--text-muted);
 }
 
+.client-link-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+}
+
+.client-link {
+  color: #0f766e;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: rgba(15, 118, 110, 0.35);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+.client-link:hover {
+  color: #0b5f59;
+  text-decoration-color: rgba(11, 95, 89, 0.55);
+}
+
+.client-demandes-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.65rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  padding: 0 0.4rem;
+  background: #ccfbf1;
+  color: #0f766e;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 /* Action Menu & Modal Styles */
 .relative {
   position: relative;
@@ -2050,11 +2090,12 @@ body {
 .detail-sheet {
   width: 100%;
   max-width: 500px;
-  height: 100%;
+  height: auto;
+  max-height: calc(100vh - 2rem);
   background: white;
   display: flex;
   flex-direction: column;
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
 }
 
 .sheet-header {
@@ -2072,8 +2113,15 @@ body {
 
 .sheet-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 1.5rem;
+}
+
+.detail-overlay {
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
 }
 
 .sheet-footer {
@@ -3308,6 +3356,7 @@ input:checked+.slider:before {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   padding: 0.75rem 1.25rem;
   border-radius: 8px;
   cursor: pointer;
@@ -3324,27 +3373,27 @@ input:checked+.slider:before {
 }
 
 .form-section-header.demande {
-  background-color: #0d9488;
-  /* Teal-600 */
+  background-color: #dff2ee;
+  color: #0a6660;
+  border: 1px solid #a6d8cf;
 }
 
 .form-section-header.demande:hover {
-  background-color: #0f766e;
-  /* Teal-700 */
+  background-color: #d1ece6;
 }
 
-.form-section-header.agence {
-  background-color: #ef4444;
-  /* Red-500 (Salmon-ish in screenshot) */
-  opacity: 0.8;
-  cursor: default;
-  /* Not collapsible in screenshot? */
-}
-
-/* User's screenshot shows a slightly different salmon color, let's try to match it */
 .form-section-header.agence {
   background-color: #f06a4d;
-  /* More salmon/orange */
+  border: 1px solid #ea8b78;
+  cursor: pointer;
+}
+
+.form-section-header.agence:hover {
+  background-color: #eb6042;
+}
+
+.form-section-header-soft {
+  margin-bottom: 0.85rem;
 }
 
 .form-section-content {
@@ -3385,6 +3434,219 @@ input:checked+.slider:before {
 .edit-textarea:focus {
   border-color: #0d9488;
   box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.1);
+}
+
+.agency-block {
+  border: 1px solid #d9e2e8;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: #ffffff;
+}
+
+.agency-block h4 {
+  margin: 0 0 0.9rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.agency-block-besoin {
+  background: #edf7f5;
+  border-color: #b7ddd6;
+}
+
+.agency-block-besoin h4 {
+  color: #0b7f7a;
+}
+
+.agency-block-facturation {
+  background: #fffdf2;
+  border-color: #edd981;
+}
+
+.agency-block-facturation h4 {
+  color: #b35a00;
+}
+
+.agency-block-parts {
+  background: #effaf6;
+  border-color: #9fe5cb;
+}
+
+.agency-block-history {
+  background: #f2f8f9;
+  border-color: #d7e3e7;
+}
+
+.agency-collapse-btn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #065f46;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 0.8rem;
+}
+
+.agency-alert-card {
+  margin: 1rem 0;
+  border: 1px solid #f4b0b5;
+  background: #fff5f6;
+  border-radius: 10px;
+  padding: 0.9rem;
+}
+
+.agency-alert-card p {
+  color: #c81e1e;
+  font-weight: 700;
+  margin: 0 0 0.7rem;
+}
+
+.facturation-annulee-active {
+  border-color: #ef4444 !important;
+  color: #b91c1c !important;
+  background: #fff1f2 !important;
+}
+
+.parts-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  font-weight: 700;
+}
+
+.parts-summary.is-valid {
+  background: #e8f8f1;
+  color: #047857;
+  border: 1px solid #98dfc0;
+}
+
+.parts-summary.is-warning {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.history-item {
+  background: #ffffff;
+  border: 1px solid #dbe4e8;
+  border-radius: 8px;
+  padding: 0.8rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.history-title {
+  margin: 0;
+  font-weight: 700;
+  color: #0f172a;
+  text-transform: capitalize;
+}
+
+.history-meta {
+  margin: 0.2rem 0 0;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.history-date {
+  font-size: 0.78rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.rooms-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.room-counter-item {
+  border: 1px solid #d8e3e8;
+  border-radius: 8px;
+  padding: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  background: #f8fbfc;
+}
+
+.room-counter-item span {
+  font-size: 0.82rem;
+  color: #1f2937;
+}
+
+.room-counter-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+.optional-services-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  background: #f7fbfb;
+  border: 1px solid #d7e8e6;
+  border-radius: 10px;
+  padding: 0.9rem;
+}
+
+.optional-service-row {
+  background: #ffffff;
+  border: 1px solid #dbe7ea;
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  font-weight: 600;
+}
+
+.optional-service-row input {
+  accent-color: #0f766e;
+}
+
+.switch-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+@media (max-width: 768px) {
+  .parts-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .rooms-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .optional-services-panel {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Listing Clients Styles */
@@ -3689,6 +3951,36 @@ input:checked+.slider:before {
 .btn-more:hover {
   background-color: #e2e8f0;
   color: #1e293b;
+}
+
+.table-inline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.table-inline-actions-right {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.table-delete-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  border-radius: 0.35rem;
+  transition: all 0.15s ease;
+}
+
+.table-delete-icon-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 /* Action Dropdown Menus */

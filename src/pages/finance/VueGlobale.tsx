@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle,
   ArrowUpRight,
   BarChart3,
   Calendar,
@@ -16,12 +16,12 @@ import {
   User,
   Users,
   X,
-  type LucideIcon,
 } from 'lucide-react';
 import { getAgents, getMissions, updateMission } from '../../api/client';
+import { encodeId } from '../../utils/obfuscation';
 import './VueGlobale.css';
 
-type FinanceSubTab = 'vue-globale' | 'suivi-facturation' | 'comptes-profils';
+type FinanceSubTab = 'vue-globale' | 'debit-profil' | 'credit-profil' | 'suivi-facturation' | 'comptes-profils';
 type ProfileDisplayMode = 'cards' | 'table';
 type MissionEntryMode = 'demande' | 'manuel';
 type MissionDetailTab = 'infos' | 'paiement' | 'repartition';
@@ -40,27 +40,9 @@ interface MissionEditForm {
   dateVersementProfil: string;
 }
 
-interface OverviewCard {
-  id: string;
-  title: string;
-  value: number;
-  subtitle: string;
-  tone: 'teal' | 'green' | 'amber' | 'slate';
-  icon: LucideIcon;
-}
-
-interface MissionSummaryRow {
-  profil: string;
-  missions: number;
-  caTotal: number;
-  commissionAgence: number;
-  aVerserProfils: number;
-  paiementRecuClient: number;
-  enAttenteClient: number;
-}
-
 interface FacturationRow {
   missionId?: number;
+  clientId?: number;
   profilId?: number;
   missionNo: string;
   date: string;
@@ -116,6 +98,7 @@ interface MissionApiItem {
   part_agence_reversee?: boolean;
   date_remise_agence?: string;
   demande_detail?: {
+    client?: number;
     date_intervention?: string;
     client_name?: string;
     client_city?: string;
@@ -224,6 +207,18 @@ const reglementDetail = (row: FacturationRow): string => {
     : `Profil doit ${money(row.partAgence)}`;
 };
 
+const creditPaymentLabel = (row: FacturationRow): 'Payé' | 'Non payé' => {
+  if (row.encaissePar === 'Agence') {
+    return row.partProfilVersee ? 'Payé' : 'Non payé';
+  }
+
+  return row.partProfilVersee ? 'Payé' : 'Non payé';
+};
+
+const missionFinanceLabel = (row: FacturationRow): 'Facturation annulée' | 'Facturée' => (
+  row.statut === 'Facturation annulée' ? 'Facturation annulée' : 'Facturée'
+);
+
 const formatDateFR = (value?: string): string => {
   if (!value) return '—';
   if (value.includes('/')) return value;
@@ -238,6 +233,36 @@ const formatDateISO = (value?: string): string => {
   const [day, month, year] = value.split('/');
   if (!year || !month || !day) return '';
   return `${year}-${month}-${day}`;
+};
+
+const parseFrenchDate = (value?: string): Date | null => {
+  if (!value) return null;
+  if (value.includes('-')) {
+    const d = new Date(`${value}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const [day, month, year] = value.split('/');
+  if (!year || !month || !day) return null;
+  const d = new Date(`${year}-${month}-${day}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const getIsoWeekValue = (date: Date): string => {
+  const copy = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = copy.getUTCDay() || 7;
+  copy.setUTCDate(copy.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(copy.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((copy.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${copy.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+};
+
+const csvCell = (value: string | number): string => {
+  const text = String(value ?? '');
+  if (text.includes(';') || text.includes('"') || text.includes('\n')) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
 };
 
 const modeLabelFromCode = (value?: string): string => {
@@ -295,6 +320,9 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
           : 'Confirmée';
 
   const encaissePar: FacturationRow['encaissePar'] = item.encaisse_par === 'profil' || demande?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
+  const partProfilVersee = encaissePar === 'Agence'
+    ? (item.part_profil_versee ?? false)
+    : (item.part_agence_reversee ?? false);
 
   const montantPaye = item.montant_paye !== undefined
     ? Number(item.montant_paye)
@@ -304,10 +332,11 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
         ? Number((montant * 0.5).toFixed(2))
         : 0;
 
-  const reglementInterne = paiement === 'paye' ? 'Réglé' : 'Non réglé';
+  const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
 
   return {
     missionId: item.id,
+    clientId: demande?.client,
     profilId: agent?.id,
     missionNo: `MSN-${String(item.id).padStart(6, '0')}`,
     date: formatDateFR(demande?.date_intervention),
@@ -327,7 +356,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     montantPaye,
     datePaiement: item.date_paiement ? formatDateFR(item.date_paiement) : (paiement === 'non_paye' ? '—' : formatDateFR(demande?.date_intervention)),
     modePaiementReel: modeLabelFromCode(item.mode_paiement_reel) || demande?.mode_paiement_label || '—',
-    partProfilVersee: encaissePar === 'Agence' ? (item.part_profil_versee ?? (paiement === 'paye')) : (item.part_agence_reversee ?? (paiement === 'paye')),
+    partProfilVersee,
     dateVersementProfil: encaissePar === 'Agence'
       ? (item.date_versement_profil ? formatDateFR(item.date_versement_profil) : '—')
       : (item.date_remise_agence ? formatDateFR(item.date_remise_agence) : '—'),
@@ -335,6 +364,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 };
 
 export default function VueGlobale() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<FinanceSubTab>('vue-globale');
   const [displayMode, setDisplayMode] = useState<ProfileDisplayMode>('cards');
   const [showNewMissionModal, setShowNewMissionModal] = useState(false);
@@ -373,12 +403,24 @@ export default function VueGlobale() {
   const [manualSegment, setManualSegment] = useState<'Particulier' | 'Entreprise'>('Particulier');
   const [manualAmount, setManualAmount] = useState('0');
 
-  const [monthFilter, setMonthFilter] = useState('Tous les mois');
-  const [profilFilter, setProfilFilter] = useState('Tous les profils');
-  const [modeFilter, setModeFilter] = useState('Tous les modes');
-  const [statutFilter, setStatutFilter] = useState('Tous les statuts');
+  const [globalPeriodMode, setGlobalPeriodMode] = useState<'jour' | 'semaine' | 'mois' | 'periode'>('mois');
+  const [globalDay, setGlobalDay] = useState(() => new Date().toISOString().slice(0, 10));
+  const [globalWeek, setGlobalWeek] = useState(() => getIsoWeekValue(new Date()));
+  const [globalMonth, setGlobalMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [globalDateFrom, setGlobalDateFrom] = useState('');
+  const [globalDateTo, setGlobalDateTo] = useState('');
+  const [globalTableDateFrom, setGlobalTableDateFrom] = useState('');
+  const [globalTableDateTo, setGlobalTableDateTo] = useState('');
+  const [globalTableSearch, setGlobalTableSearch] = useState('');
+  const [debitDateFrom, setDebitDateFrom] = useState('');
+  const [debitDateTo, setDebitDateTo] = useState('');
+  const [debitSegmentFilter, setDebitSegmentFilter] = useState<'Tous les segments' | 'Particulier' | 'Entreprise'>('Tous les segments');
+  const [debitPaymentFilter, setDebitPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Non payé');
+  const [debitMissionFilter, setDebitMissionFilter] = useState<'Tous' | 'Facturée' | 'Facturation annulée'>('Tous');
+  const [debitSearch, setDebitSearch] = useState('');
   const [searchProfiles, setSearchProfiles] = useState('');
   const [suiviSearch, setSuiviSearch] = useState('');
+  const [creditPaymentFilter, setCreditPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Non payé');
   const [suiviDateFrom, setSuiviDateFrom] = useState('');
   const [suiviDateTo, setSuiviDateTo] = useState('');
   const [suiviStatutFilter, setSuiviStatutFilter] = useState('Tous les statuts');
@@ -477,14 +519,13 @@ export default function VueGlobale() {
       profile.partAgence += partAgence;
       profile.partProfil += partProfil;
 
-      const statutPaiement = item.paiement_client_statut || item.demande_detail?.statut_paiement;
       const encaissePar = item.encaisse_par === 'profil' || item.demande_detail?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
-      if (statutPaiement === 'integral' || statutPaiement === 'effectue') {
-        if (encaissePar === 'Agence') {
+      if (encaissePar === 'Agence') {
+        if (item.part_profil_versee) {
           profile.verseAuProfil += partProfil;
-        } else {
-          profile.recuDuProfil += partAgence;
         }
+      } else if (item.part_agence_reversee) {
+        profile.recuDuProfil += partAgence;
       }
     }
 
@@ -496,50 +537,59 @@ export default function VueGlobale() {
     void loadFinanceData();
   }, [loadFinanceData]);
 
-  const filteredFacturationRows = useMemo(() => {
-    const monthMap: Record<string, number> = {
-      janvier: 1,
-      février: 2,
-      mars: 3,
-      avril: 4,
-      mai: 5,
-      juin: 6,
-      juillet: 7,
-      août: 8,
-      septembre: 9,
-      octobre: 10,
-      novembre: 11,
-      décembre: 12,
-    };
-
+  const periodFilteredRows = useMemo(() => {
     return facturationData.filter((row) => {
-      if (profilFilter !== 'Tous les profils' && row.profil !== profilFilter) return false;
-      if (modeFilter !== 'Tous les modes' && row.modePaiement !== modeFilter) return false;
-      if (statutFilter === 'Non payé' && row.paiement !== 'non_paye') return false;
-      if (statutFilter === 'Partiellement payé' && row.paiement !== 'partiellement_paye') return false;
-      if (statutFilter === 'Payé' && row.paiement !== 'paye') return false;
+      const date = parseFrenchDate(row.date);
+      if (!date) return false;
+      const isoDate = date.toISOString().slice(0, 10);
 
-      if (monthFilter !== 'Tous les mois' && row.date.includes('/')) {
-        const month = Number(row.date.split('/')[1]);
-        if (monthMap[monthFilter] !== month) return false;
+      if (globalPeriodMode === 'jour') {
+        return isoDate === globalDay;
+      }
+
+      if (globalPeriodMode === 'semaine') {
+        return getIsoWeekValue(date) === globalWeek;
+      }
+
+      if (globalPeriodMode === 'mois') {
+        const rowMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        return rowMonth === globalMonth;
+      }
+
+      if (globalDateFrom && isoDate < globalDateFrom) return false;
+      if (globalDateTo && isoDate > globalDateTo) return false;
+      return true;
+    });
+  }, [facturationData, globalDay, globalDateFrom, globalDateTo, globalMonth, globalPeriodMode, globalWeek]);
+
+  const globalTableRows = useMemo(() => {
+    return facturationData.filter((row) => {
+      if (row.encaissePar === 'Profil' && row.reglementInterne === 'Réglé') return false;
+
+      const date = parseFrenchDate(row.date);
+      if (!date) return false;
+      const isoDate = date.toISOString().slice(0, 10);
+
+      if (globalTableDateFrom && isoDate < globalTableDateFrom) return false;
+      if (globalTableDateTo && isoDate > globalTableDateTo) return false;
+
+      if (globalTableSearch.trim()) {
+        const needle = globalTableSearch.toLowerCase();
+        const haystack = `${row.client} ${row.profil}`.toLowerCase();
+        if (!haystack.includes(needle)) return false;
       }
 
       return true;
     });
-  }, [facturationData, monthFilter, profilFilter, modeFilter, statutFilter]);
+  }, [facturationData, globalTableDateFrom, globalTableDateTo, globalTableSearch]);
 
-  const profileFilterOptions = useMemo(
-    () => ['Tous les profils', ...Array.from(new Set(facturationData.map((row) => row.profil).filter((name) => name !== '—')))],
-    [facturationData]
-  );
-
-  const modeFilterOptions = useMemo(
-    () => ['Tous les modes', ...Array.from(new Set(facturationData.map((row) => row.modePaiement).filter((m) => m && m !== '—')))],
+  const suiviBaseRows = useMemo(
+    () => facturationData.filter((row) => row.statut !== 'Facturation annulée'),
     [facturationData]
   );
 
   const filteredSuiviRows = useMemo(() => {
-    return facturationData.filter((row) => {
+    return suiviBaseRows.filter((row) => {
       if (suiviSegmentFilter !== 'Tous les segments' && row.segment !== suiviSegmentFilter) return false;
 
       if (suiviStatutFilter !== 'Tous les statuts' && row.statut !== suiviStatutFilter) return false;
@@ -565,48 +615,7 @@ export default function VueGlobale() {
 
       return true;
     });
-  }, [facturationData, suiviDateFrom, suiviDateTo, suiviPaiementFilter, suiviSearch, suiviSegmentFilter, suiviStatutFilter]);
-
-  const overviewCardsData: OverviewCard[] = useMemo(() => {
-    const totalMissions = filteredFacturationRows.length;
-    const totalCa = filteredFacturationRows.reduce((sum, row) => sum + row.montant, 0);
-    const totalCommission = filteredFacturationRows.reduce((sum, row) => sum + row.partAgence, 0);
-    const attente = filteredFacturationRows.reduce((sum, row) => sum + Math.max(row.montant - (row.montantPaye ?? 0), 0), 0);
-
-    return [
-      { id: 'missions', title: 'Missions (filtré)', value: totalMissions, subtitle: 'interventions', tone: 'slate', icon: FileText },
-      { id: 'ca', title: "Chiffre d'affaires", value: totalCa, subtitle: 'HT missions', tone: 'teal', icon: BarChart3 },
-      { id: 'commission', title: 'Commissions agence', value: totalCommission, subtitle: 'total gagné', tone: 'green', icon: ArrowUpRight },
-      { id: 'attente', title: 'Montants en attente', value: attente, subtitle: 'non encaissé', tone: 'amber', icon: Clock3 },
-    ];
-  }, [filteredFacturationRows]);
-
-  const missionSummaryRowsData = useMemo<MissionSummaryRow[]>(() => {
-    const grouped = new Map<string, MissionSummaryRow>();
-    for (const row of filteredFacturationRows) {
-      if (!grouped.has(row.profil)) {
-        grouped.set(row.profil, {
-          profil: row.profil,
-          missions: 0,
-          caTotal: 0,
-          commissionAgence: 0,
-          aVerserProfils: 0,
-          paiementRecuClient: 0,
-          enAttenteClient: 0,
-        });
-      }
-
-      const target = grouped.get(row.profil)!;
-      target.missions += 1;
-      target.caTotal += row.montant;
-      target.commissionAgence += row.partAgence;
-      target.aVerserProfils += row.partProfil;
-      target.paiementRecuClient += row.montantPaye ?? 0;
-      target.enAttenteClient += Math.max(row.montant - (row.montantPaye ?? 0), 0);
-    }
-
-    return Array.from(grouped.values());
-  }, [filteredFacturationRows]);
+  }, [suiviBaseRows, suiviDateFrom, suiviDateTo, suiviPaiementFilter, suiviSearch, suiviSegmentFilter, suiviStatutFilter]);
 
   const agenceNonPayeAmount = useMemo(
     () => facturationData.filter((row) => row.encaissePar === 'Profil' && row.reglementInterne !== 'Réglé').reduce((sum, row) => sum + row.partAgence, 0),
@@ -650,6 +659,156 @@ export default function VueGlobale() {
 
   const displayedMissionCount = filteredSuiviRows.length;
   const displayedMissionTotal = filteredSuiviRows.reduce((sum, row) => sum + row.montant, 0);
+
+  const suiviRecap = useMemo(() => {
+    const totalFacture = filteredSuiviRows.filter((row) => row.paiement === 'paye').length;
+    const chiffreAffaires = filteredSuiviRows.reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
+    const commissionEncaissementAgence = filteredSuiviRows.reduce((sum, row) => {
+      if (row.encaissePar !== 'Agence') return sum;
+      return sum + Math.max((row.montantPaye ?? 0) - row.partProfil, 0);
+    }, 0);
+    const commissionEncaissementProfil = filteredSuiviRows.reduce((sum, row) => {
+      if (row.encaissePar !== 'Profil' || row.reglementInterne !== 'Réglé') return sum;
+      return sum + row.partAgence;
+    }, 0);
+    const commissionAgence = commissionEncaissementAgence + commissionEncaissementProfil;
+
+    // Pending only tracks partial/waiting statuses. Non confirme + Paye are excluded.
+    const paiementsEnAttente = filteredSuiviRows.filter((row) => row.paiement === 'partiellement_paye').length;
+
+    return { totalFacture, chiffreAffaires, commissionAgence, paiementsEnAttente };
+  }, [filteredSuiviRows]);
+
+  const globalSegmentStats = useMemo(() => {
+    const particulier = facturationData.filter((row) => row.segment === 'Particulier').length;
+    const entreprise = facturationData.filter((row) => row.segment === 'Entreprise').length;
+    const total = particulier + entreprise;
+    const particulierRatio = total > 0 ? (particulier / total) * 100 : 0;
+    const entrepriseRatio = total > 0 ? (entreprise / total) * 100 : 0;
+    return { particulier, entreprise, total, particulierRatio, entrepriseRatio };
+  }, [facturationData]);
+
+  const globalKpis = useMemo(() => {
+    const missions = facturationData.filter((row) => row.statut !== 'Facturation annulée').length;
+    const chiffreAffaires = periodFilteredRows.reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
+    const commissionEncaissementAgence = periodFilteredRows.reduce((sum, row) => {
+      if (row.encaissePar !== 'Agence') return sum;
+      return sum + Math.max((row.montantPaye ?? 0) - row.partProfil, 0);
+    }, 0);
+    const commissionEncaissementProfil = periodFilteredRows.reduce((sum, row) => {
+      if (row.encaissePar !== 'Profil' || row.reglementInterne !== 'Réglé') return sum;
+      return sum + row.partAgence;
+    }, 0);
+    const commissionAgence = commissionEncaissementAgence + commissionEncaissementProfil;
+    const facturationAnnulee = periodFilteredRows
+      .filter((row) => row.statut === 'Facturation annulée' && row.partProfilVersee)
+      .reduce((sum, row) => sum + row.partProfil, 0);
+
+    return { missions, chiffreAffaires, commissionAgence, facturationAnnulee };
+  }, [facturationData, periodFilteredRows]);
+
+  const debitRows = useMemo(
+    () => facturationData.filter((row) => row.encaissePar === 'Profil'),
+    [facturationData]
+  );
+
+  const filteredDebitRows = useMemo(() => {
+    return debitRows.filter((row) => {
+      const rowDate = parseFrenchDate(row.date);
+      if (!rowDate) return false;
+      const isoDate = rowDate.toISOString().slice(0, 10);
+
+      if (debitDateFrom && isoDate < debitDateFrom) return false;
+      if (debitDateTo && isoDate > debitDateTo) return false;
+
+      if (debitSegmentFilter !== 'Tous les segments' && row.segment !== debitSegmentFilter) return false;
+
+      if (debitPaymentFilter === 'Non payé' && row.reglementInterne === 'Réglé') return false;
+      if (debitPaymentFilter === 'Payé' && row.reglementInterne !== 'Réglé') return false;
+
+      if (debitMissionFilter === 'Facturation annulée' && row.statut !== 'Facturation annulée') return false;
+      if (debitMissionFilter === 'Facturée' && row.statut === 'Facturation annulée') return false;
+
+      if (debitSearch.trim()) {
+        const needle = debitSearch.toLowerCase();
+        const haystack = `${row.client} ${row.profil} ${row.ville}`.toLowerCase();
+        if (!haystack.includes(needle)) return false;
+      }
+
+      return true;
+    });
+  }, [debitDateFrom, debitDateTo, debitMissionFilter, debitPaymentFilter, debitRows, debitSearch, debitSegmentFilter]);
+
+  const creditRows = useMemo(
+    () => facturationData.filter((row) => row.encaissePar === 'Agence'),
+    [facturationData]
+  );
+
+  const filteredCreditRows = useMemo(() => {
+    return creditRows.filter((row) => {
+      if (creditPaymentFilter === 'Tous') return true;
+      return creditPaymentLabel(row) === creditPaymentFilter;
+    });
+  }, [creditRows, creditPaymentFilter]);
+
+  const debitTotal = useMemo(
+    () => filteredDebitRows.reduce((sum, row) => sum + row.partAgence, 0),
+    [filteredDebitRows]
+  );
+
+  const debitProfilesCount = useMemo(
+    () => new Set(filteredDebitRows.map((row) => row.profilId || row.profil)).size,
+    [filteredDebitRows]
+  );
+
+  const creditTotal = useMemo(
+    () => filteredCreditRows.reduce((sum, row) => sum + row.partProfil, 0),
+    [filteredCreditRows]
+  );
+
+  const agenceNonPayeByProfile = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of facturationData) {
+      if (row.encaissePar !== 'Profil' || row.reglementInterne === 'Réglé') continue;
+      map.set(row.profil, (map.get(row.profil) || 0) + row.partAgence);
+    }
+    return Array.from(map.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [facturationData]);
+
+  const profilNonPayeByProfile = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of facturationData) {
+      if (row.encaissePar !== 'Agence' || row.reglementInterne === 'Réglé') continue;
+      map.set(row.profil, (map.get(row.profil) || 0) + row.partProfil);
+    }
+    return Array.from(map.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [facturationData]);
+
+  const globalTableTotals = useMemo(() => {
+    return globalTableRows.reduce(
+      (acc, row) => {
+        if (row.encaissePar === 'Profil') acc.debit += row.partAgence;
+        if (row.encaissePar === 'Agence') acc.credit += row.partProfil;
+        acc.commission += row.partAgence;
+        return acc;
+      },
+      { debit: 0, credit: 0, commission: 0 }
+    );
+  }, [globalTableRows]);
+
+  const goToClientDetails = useCallback((clientId?: number) => {
+    if (!clientId) return;
+    navigate(`/clients/${encodeId(clientId)}`);
+  }, [navigate]);
+
+  const goToProfilDetails = useCallback((profilId?: number) => {
+    if (!profilId) return;
+    navigate(`/profils/${encodeId(profilId)}`);
+  }, [navigate]);
 
   const closeMissionModal = () => {
     setShowNewMissionModal(false);
@@ -706,6 +865,30 @@ export default function VueGlobale() {
     setShowMissionEditModal(false);
   };
 
+  const updateCreditPaymentStatus = async (row: FacturationRow, nextStatus: 'Payé' | 'Non payé') => {
+    if (!row.missionId || row.encaissePar !== 'Agence') return;
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    await updateMission(row.missionId, {
+      part_profil_versee: nextStatus === 'Payé',
+      date_versement_profil: nextStatus === 'Payé' ? todayIso : null,
+    });
+
+    await loadFinanceData();
+  };
+
+  const updateDebitPaymentStatus = async (row: FacturationRow, nextStatus: 'Payé' | 'Non payé') => {
+    if (!row.missionId || row.encaissePar !== 'Profil') return;
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    await updateMission(row.missionId, {
+      part_agence_reversee: nextStatus === 'Payé',
+      date_remise_agence: nextStatus === 'Payé' ? todayIso : null,
+    });
+
+    await loadFinanceData();
+  };
+
   const handleSaveMissionEdit = async () => {
     if (!selectedMission?.missionId) {
       closeMissionEditModal();
@@ -737,6 +920,106 @@ export default function VueGlobale() {
     }
   };
 
+  const exportSuiviReportExcel = useCallback(() => {
+    const headers = [
+      'N° Mission',
+      'Date',
+      'Client',
+      'Ville',
+      'Profil',
+      'Service',
+      'Segment',
+      'Montant TTC',
+      'Paye',
+      'Reste a payer',
+      'Part agence',
+      'Part profil',
+      'Encaisse par',
+      'Paiement',
+      'Statut',
+      'Reglement interne',
+    ];
+
+    const rows = filteredSuiviRows.map((row) => {
+      const ttc = row.montant;
+      const paid = row.montantPaye ?? 0;
+      const ecart = Number((ttc - paid).toFixed(2));
+      return [
+        row.missionNo,
+        row.date,
+        row.client,
+        row.ville,
+        row.profil,
+        row.service,
+        row.segment,
+        ttc,
+        paid,
+        ecart,
+        row.partAgence,
+        row.partProfil,
+        row.encaissePar,
+        paiementLabel(row.paiement),
+        row.statut,
+        row.reglementInterne,
+      ];
+    });
+
+    const csv = [headers, ...rows]
+      .map((line) => line.map((cell) => csvCell(cell as string | number)).join(';'))
+      .join('\n');
+
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `suivi-facturation-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [filteredSuiviRows]);
+
+  const exportSuiviReportPdf = useCallback(() => {
+    const lines = filteredSuiviRows.map((row) => {
+      const ttc = row.montant;
+      const paid = row.montantPaye ?? 0;
+      const ecart = Number((ttc - paid).toFixed(2));
+      return `<tr>
+        <td>${row.missionNo}</td>
+        <td>${row.date}</td>
+        <td>${row.client}</td>
+        <td>${row.profil}</td>
+        <td>${row.service}</td>
+        <td>${row.segment}</td>
+        <td>${money(ttc)}</td>
+        <td>${money(paid)}</td>
+        <td>${money(ecart)}</td>
+      </tr>`;
+    }).join('');
+
+    const popup = window.open('', '_blank');
+    if (!popup) return;
+    popup.document.write(`
+      <html>
+        <head><title>Suivi Facturation</title></head>
+        <body style="font-family: Arial, sans-serif; padding: 16px;">
+          <h2>Rapport Suivi Facturation</h2>
+          <table border="1" cellspacing="0" cellpadding="6" style="border-collapse: collapse; width: 100%; font-size: 12px;">
+            <thead>
+              <tr>
+                <th>N° Mission</th><th>Date</th><th>Client</th><th>Profil</th><th>Service</th><th>Segment</th><th>Montant TTC</th><th>Paye</th><th>Reste a payer</th>
+              </tr>
+            </thead>
+            <tbody>${lines}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    popup.document.close();
+    popup.focus();
+    popup.print();
+  }, [filteredSuiviRows]);
+
   return (
     <div className="page fg-page">
 
@@ -750,14 +1033,28 @@ export default function VueGlobale() {
         </button>
         <button
           type="button"
-          className={`fg-tab ${activeTab === 'suivi-facturation' ? 'active' : ''}`}
+          className={`fg-tab ${activeTab === 'debit-profil' ? 'active active-red' : ''}`}
+          onClick={() => setActiveTab('debit-profil')}
+        >
+          <ArrowUpRight size={15} /> Débit (Profil doit à l'Agence)
+        </button>
+        <button
+          type="button"
+          className={`fg-tab ${activeTab === 'credit-profil' ? 'active active-blue' : ''}`}
+          onClick={() => setActiveTab('credit-profil')}
+        >
+          <ArrowUpRight size={15} /> Crédit (L'Agence doit au Profil)
+        </button>
+        <button
+          type="button"
+          className={`fg-tab ${activeTab === 'suivi-facturation' ? 'active active-amber' : ''}`}
           onClick={() => setActiveTab('suivi-facturation')}
         >
           <FileText size={15} /> Suivi Facturation
         </button>
         <button
           type="button"
-          className={`fg-tab ${activeTab === 'comptes-profils' ? 'active' : ''}`}
+          className={`fg-tab ${activeTab === 'comptes-profils' ? 'active active-purple' : ''}`}
           onClick={() => setActiveTab('comptes-profils')}
         >
           <Users size={15} /> Comptes Profils
@@ -766,155 +1063,418 @@ export default function VueGlobale() {
 
       {activeTab === 'vue-globale' && (
         <>
-          <div className="fg-filter-row">
-            <label className="fg-select-wrap">
-              <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)}>
-                <option>Tous les mois</option>
-                <option>janvier</option>
-                <option>février</option>
-                <option>mars</option>
-                <option>avril</option>
-                <option>mai</option>
-                <option>juin</option>
-                <option>juillet</option>
-                <option>août</option>
-                <option>septembre</option>
-                <option>octobre</option>
-                <option>novembre</option>
-                <option>décembre</option>
+          <div className="fg-global-period-row">
+            <span className="fg-global-period-label">Période :</span>
+            <label className="fg-select-wrap fg-global-mode-select">
+              <select value={globalPeriodMode} onChange={(e) => setGlobalPeriodMode(e.target.value as 'jour' | 'semaine' | 'mois' | 'periode')}>
+                <option value="jour">Par jour</option>
+                <option value="semaine">Par semaine</option>
+                <option value="mois">Par mois</option>
+                <option value="periode">Période X → Y</option>
               </select>
               <ChevronDown size={14} />
             </label>
-            <label className="fg-select-wrap">
-              <select value={profilFilter} onChange={(e) => setProfilFilter(e.target.value)}>
-                {profileFilterOptions.map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} />
-            </label>
-            <label className="fg-select-wrap">
-              <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value)}>
-                {modeFilterOptions.map((mode) => (
-                  <option key={mode}>{mode}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} />
-            </label>
-            <label className="fg-select-wrap">
-              <select value={statutFilter} onChange={(e) => setStatutFilter(e.target.value)}>
-                <option>Tous les statuts</option>
-                <option>Non payé</option>
-                <option>Partiellement payé</option>
-                <option>Payé</option>
-              </select>
-              <ChevronDown size={14} />
-            </label>
+            {globalPeriodMode === 'jour' && (
+              <div className="fg-period-wrap">
+                <label><Calendar size={14} /><input type="date" aria-label="Jour" value={globalDay} onChange={(e) => setGlobalDay(e.target.value)} /></label>
+              </div>
+            )}
+            {globalPeriodMode === 'semaine' && (
+              <div className="fg-period-wrap">
+                <label><Calendar size={14} /><input type="week" aria-label="Semaine" value={globalWeek} onChange={(e) => setGlobalWeek(e.target.value)} /></label>
+              </div>
+            )}
+            {globalPeriodMode === 'mois' && (
+              <div className="fg-period-wrap">
+                <label><Calendar size={14} /><input type="month" aria-label="Mois" value={globalMonth} onChange={(e) => setGlobalMonth(e.target.value)} /></label>
+              </div>
+            )}
+            {globalPeriodMode === 'periode' && (
+              <div className="fg-period-wrap">
+                <label><Calendar size={14} /><input type="date" aria-label="Date début" value={globalDateFrom} onChange={(e) => setGlobalDateFrom(e.target.value)} /></label>
+                <span className="fg-period-arrow">→</span>
+                <label><Calendar size={14} /><input type="date" aria-label="Date fin" value={globalDateTo} onChange={(e) => setGlobalDateTo(e.target.value)} /></label>
+              </div>
+            )}
           </div>
 
-          <div className="fg-overview-grid">
-            {overviewCardsData.map((card) => {
-              const Icon = card.icon;
-              return (
-                <article key={card.id} className={`fg-overview-card tone-${card.tone}`}>
-                  <div>
-                    <p className="fg-overview-title">{card.title}</p>
-                    <p className="fg-overview-value">{card.id === 'missions' ? card.value : money(card.value)}</p>
-                    <p className="fg-overview-subtitle">{card.subtitle}</p>
+          <div className="fg-global-kpis">
+            <article className="fg-global-kpi blue">
+              <p className="fg-global-kpi-title">Nombre de missions</p>
+              <p className="fg-global-kpi-value">{globalKpis.missions}</p>
+              <p className="fg-global-kpi-subtitle">missions en cours (temps réel)</p>
+            </article>
+            <article className="fg-global-kpi green">
+              <p className="fg-global-kpi-title">Chiffre d'affaires</p>
+              <p className="fg-global-kpi-value">{money(globalKpis.chiffreAffaires)}</p>
+              <p className="fg-global-kpi-subtitle">paiements reçus des clients</p>
+            </article>
+            <article className="fg-global-kpi green">
+              <p className="fg-global-kpi-title">Commission Agence</p>
+              <p className="fg-global-kpi-value">{money(globalKpis.commissionAgence)}</p>
+              <p className="fg-global-kpi-subtitle">part agence (mensuelle)</p>
+            </article>
+            <article className="fg-global-kpi red">
+              <p className="fg-global-kpi-title">Facturation annulée</p>
+              <p className="fg-global-kpi-value">{money(globalKpis.facturationAnnulee)}</p>
+              <p className="fg-global-kpi-subtitle">perte totale</p>
+            </article>
+          </div>
+
+          <section className="fg-global-repartition-card">
+            <h3>Répartition des missions</h3>
+            <div className="fg-global-repartition-content">
+              <div className="fg-repartition-label left">Particuliers: {globalSegmentStats.particulier}</div>
+              <div
+                className="fg-global-pie"
+                style={{
+                  background: `conic-gradient(#3f7fe6 0% ${globalSegmentStats.particulierRatio}%, #8b5cf6 ${globalSegmentStats.particulierRatio}% 100%)`,
+                }}
+              />
+              <div className="fg-repartition-label right">Entreprises: {globalSegmentStats.entreprise}</div>
+            </div>
+            <div className="fg-repartition-legend">
+              <span><i className="dot blue" />Particuliers</span>
+              <span><i className="dot purple" />Entreprises</span>
+            </div>
+          </section>
+
+          <div className="fg-global-balance-grid">
+            <article className="fg-global-balance-card red">
+              <header>
+                <p>Agence non payée</p>
+                <span>{money(agenceNonPayeAmount)}</span>
+              </header>
+              <small>Ce que les profils doivent à l'agence</small>
+              <div className="fg-global-bars">
+                {agenceNonPayeByProfile.map((item) => (
+                  <div key={`debit-${item.name}`} className="fg-global-bar-row">
+                    <div className="fg-global-bar-top">
+                      <span>{item.name}</span>
+                      <strong>{money(item.amount)}</strong>
+                    </div>
+                    <div className="fg-global-balance-track">
+                      <div
+                        className="fg-global-balance-fill red"
+                        style={{ width: `${Math.min(100, (item.amount / Math.max(agenceNonPayeByProfile[0]?.amount || 1, 1)) * 100)}%` }}
+                      />
+                    </div>
                   </div>
-                  <Icon size={18} />
-                </article>
-              );
-            })}
-          </div>
-
-          <div className="fg-highlight-grid">
-            <article className="fg-highlight-card red">
-              <div>
-                <p className="fg-highlight-label">Agence non payée</p>
-                <h3>{money(agenceNonPayeAmount)}</h3>
-                <p>
-                  {facturationData.filter((row) => row.encaissePar === 'Profil' && row.reglementInterne !== 'Réglé').length}
-                  {' '}mission(s) - encaissé par profil, part agence non reversée
-                </p>
-              </div>
-              <AlertTriangle size={18} />
-            </article>
-
-            <article className="fg-highlight-card blue">
-              <div>
-                <p className="fg-highlight-label">Profil non payé</p>
-                <h3>{money(profilNonPayeAmount)}</h3>
-                <p>
-                  {facturationData.filter((row) => row.encaissePar === 'Agence' && row.reglementInterne !== 'Réglé').length}
-                  {' '}mission(s) - encaissé par agence, part profil non versée
-                </p>
-              </div>
-              <AlertTriangle size={18} />
-            </article>
-          </div>
-
-          <div className="fg-dual-panels">
-            <section className="fg-panel red">
-              <header>
-                <h4>Profils débiteurs</h4>
-                <span>{profileBalances.filter((profile) => profile.solde < 0).length}</span>
-              </header>
-              {profileBalances.filter((profile) => profile.solde < 0).length === 0 ? (
-                <p>Aucun profil débiteur</p>
-              ) : (
-                <ul>
-                  {profileBalances.filter((profile) => profile.solde < 0).map((profile) => (
-                    <li key={profile.id}><strong>{profile.name}</strong><span>{money(Math.abs(profile.solde))}</span></li>
-                  ))}
-                </ul>
-              )}
-            </section>
-            <section className="fg-panel blue">
-              <header>
-                <h4>Agence doit au profil</h4>
-                <span>{profileBalances.filter((profile) => profile.solde > 0).length}</span>
-              </header>
-              <ul>
-                {profileBalances.filter((profile) => profile.solde > 0).map((profile) => (
-                  <li key={profile.id}><strong>{profile.name}</strong><span>{money(profile.solde)}</span></li>
                 ))}
-              </ul>
-            </section>
+              </div>
+            </article>
+
+            <article className="fg-global-balance-card blue">
+              <header>
+                <p>Profil non payé</p>
+                <span>{money(profilNonPayeAmount)}</span>
+              </header>
+              <small>Ce que l'agence doit aux profils</small>
+              <div className="fg-global-bars">
+                {profilNonPayeByProfile.map((item) => (
+                  <div key={`credit-${item.name}`} className="fg-global-bar-row">
+                    <div className="fg-global-bar-top">
+                      <span>{item.name}</span>
+                      <strong>{money(item.amount)}</strong>
+                    </div>
+                    <div className="fg-global-balance-track">
+                      <div
+                        className="fg-global-balance-fill blue"
+                        style={{ width: `${Math.min(100, (item.amount / Math.max(profilNonPayeByProfile[0]?.amount || 1, 1)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+
+          <div className="fg-facturation-filters">
+            <label className="fg-search-wrap">
+              <Search size={15} />
+              <input
+                type="text"
+                placeholder="Rechercher par nom client ou profil..."
+                value={globalTableSearch}
+                onChange={(e) => setGlobalTableSearch(e.target.value)}
+              />
+            </label>
+            <div className="fg-period-wrap">
+              <label><Calendar size={14} /><input type="date" aria-label="Filtre date début" value={globalTableDateFrom} onChange={(e) => setGlobalTableDateFrom(e.target.value)} /></label>
+              <span className="fg-period-arrow">→</span>
+              <label><Calendar size={14} /><input type="date" aria-label="Filtre date fin" value={globalTableDateTo} onChange={(e) => setGlobalTableDateTo(e.target.value)} /></label>
+            </div>
           </div>
 
           <section className="fg-table-section">
             <div className="fg-section-head">
-              <h3>Récapitulatif missions filtrées</h3>
-              <span>{missionSummaryRowsData.length} résultat(s)</span>
+              <h3>Tableau Débit / Crédit</h3>
+              <span>{globalTableRows.length} ligne(s)</span>
             </div>
             <div className="table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
+                    <th>Date</th>
+                    <th>Client</th>
                     <th>Profil</th>
-                    <th>Missions</th>
-                    <th>CA total</th>
+                    <th>Débit</th>
+                    <th>Crédit</th>
                     <th>Commission agence</th>
-                    <th>À verser profils</th>
-                    <th>Paiement reçu du client</th>
-                    <th>En attente du client</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {missionSummaryRowsData.map((row) => (
-                    <tr key={row.profil}>
-                      <td className="fw-bold">{row.profil}</td>
-                      <td>{row.missions}</td>
-                      <td className="fw-semibold">{money(row.caTotal)}</td>
-                      <td>{money(row.commissionAgence)}</td>
-                      <td className="fg-text-green fw-semibold">{money(row.aVerserProfils)}</td>
-                      <td>{money(row.paiementRecuClient)}</td>
-                      <td className={row.enAttenteClient > 0 ? 'fg-text-red fw-semibold' : 'fw-semibold'}>
-                        {money(row.enAttenteClient)}
+                  {globalTableRows.map((row) => (
+                    <tr key={`${row.missionNo}-${row.client}`}>
+                      <td>{row.date || '—'}</td>
+                      <td className="fw-bold">
+                        {row.clientId ? (
+                          <button type="button" className="fg-link-btn" onClick={() => goToClientDetails(row.clientId)}>{row.client}</button>
+                        ) : row.client}
+                      </td>
+                      <td>
+                        {row.profilId ? (
+                          <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>{row.profil || '—'}</button>
+                        ) : (row.profil || '—')}
+                      </td>
+                      <td className="fg-text-red fw-semibold">{row.encaissePar === 'Profil' ? money(row.partAgence) : '—'}</td>
+                      <td className="fg-text-orange fw-semibold">{row.encaissePar === 'Agence' ? money(row.partProfil) : '—'}</td>
+                      <td className="fg-text-green fw-semibold">
+                        {money(row.partAgence)}
                       </td>
                     </tr>
                   ))}
+                  {globalTableRows.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="empty-row">Aucune ligne trouvée pour ce filtre.</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td className="fw-bold">TOTAL</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td className="fg-text-red fw-bold">{money(globalTableTotals.debit)}</td>
+                    <td className="fg-text-orange fw-bold">{money(globalTableTotals.credit)}</td>
+                    <td className="fg-text-green fw-bold">{money(globalTableTotals.commission)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+
+      {activeTab === 'debit-profil' && (
+        <>
+          <div className="fg-global-kpis fg-duo-kpis">
+            <article className="fg-global-kpi red">
+              <p className="fg-global-kpi-title">Profils débiteurs</p>
+              <p className="fg-global-kpi-value">{debitProfilesCount}</p>
+            </article>
+            <article className="fg-global-kpi red">
+              <p className="fg-global-kpi-title">Total montant</p>
+              <p className="fg-global-kpi-value">{money(debitTotal)}</p>
+            </article>
+          </div>
+
+          <div className="fg-facturation-filters">
+            <label className="fg-search-wrap">
+              <Search size={15} />
+              <input
+                type="text"
+                placeholder="Rechercher par nom client/profil..."
+                value={debitSearch}
+                onChange={(e) => setDebitSearch(e.target.value)}
+              />
+            </label>
+            <div className="fg-period-wrap">
+              <label><Calendar size={14} /><input type="date" aria-label="Date début débit" value={debitDateFrom} onChange={(e) => setDebitDateFrom(e.target.value)} /></label>
+              <span className="fg-period-arrow">→</span>
+              <label><Calendar size={14} /><input type="date" aria-label="Date fin débit" value={debitDateTo} onChange={(e) => setDebitDateTo(e.target.value)} /></label>
+            </div>
+            <div className="fg-select-group">
+              <label className="fg-select-wrap">
+                <select value={debitSegmentFilter} onChange={(e) => setDebitSegmentFilter(e.target.value as 'Tous les segments' | 'Particulier' | 'Entreprise')}>
+                  <option>Tous les segments</option>
+                  <option>Particulier</option>
+                  <option>Entreprise</option>
+                </select>
+                <ChevronDown size={14} />
+              </label>
+              <label className="fg-select-wrap">
+                <select value={debitPaymentFilter} onChange={(e) => setDebitPaymentFilter(e.target.value as 'Non payé' | 'Payé' | 'Tous')}>
+                  <option>Non payé</option>
+                  <option>Payé</option>
+                  <option>Tous</option>
+                </select>
+                <ChevronDown size={14} />
+              </label>
+              <label className="fg-select-wrap">
+                <select value={debitMissionFilter} onChange={(e) => setDebitMissionFilter(e.target.value as 'Tous' | 'Facturée' | 'Facturation annulée')}>
+                  <option>Tous</option>
+                  <option>Facturée</option>
+                  <option>Facturation annulée</option>
+                </select>
+                <ChevronDown size={14} />
+              </label>
+            </div>
+          </div>
+
+          <section className="fg-table-section">
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date mission</th>
+                    <th>Client - Ville</th>
+                    <th>Nom du profil</th>
+                    <th>Service</th>
+                    <th>Segment</th>
+                    <th>Montant reçu du client</th>
+                    <th>Doit à l'agence</th>
+                    <th>Part du profil</th>
+                    <th>Statut du paiement</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDebitRows.map((row) => (
+                    <tr key={row.missionNo}>
+                      <td>{row.date || '—'}</td>
+                      <td>
+                        {row.clientId ? (
+                          <button type="button" className="fg-link-btn" onClick={() => goToClientDetails(row.clientId)}>{row.client}</button>
+                        ) : <span className="fw-bold">{row.client}</span>}
+                        <br />{row.ville}
+                      </td>
+                      <td>
+                        {row.profilId ? (
+                          <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>{row.profil || '—'}</button>
+                        ) : (row.profil || '—')}
+                      </td>
+                      <td>{row.service}</td>
+                      <td><span className="fg-pill fg-pill-blue">{row.segment}</span></td>
+                      <td className="fw-semibold">{money(row.montant)}</td>
+                      <td className="fg-text-red fw-bold">{money(row.partAgence)}</td>
+                      <td>{money(row.partProfil)}</td>
+                      <td>
+                        <label className="fg-select-wrap fg-compact-select">
+                          <select
+                            value={row.reglementInterne === 'Réglé' ? 'Payé' : 'Non payé'}
+                            onChange={(e) => void updateDebitPaymentStatus(row, e.target.value as 'Payé' | 'Non payé')}
+                          >
+                            <option value="Non payé">Non payé</option>
+                            <option value="Payé">Payé</option>
+                          </select>
+                          <ChevronDown size={14} />
+                        </label>
+                      </td>
+                      <td><button className="icon-btn" title="Voir" onClick={() => openMissionDetails(row)}><Eye size={14} /></button></td>
+                    </tr>
+                  ))}
+                  {filteredDebitRows.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="empty-row">Aucune ligne pour ce filtre.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+
+      {activeTab === 'credit-profil' && (
+        <>
+          <div className="fg-global-kpis fg-duo-kpis">
+            <article className="fg-global-kpi blue">
+              <p className="fg-global-kpi-title">Profils créditeurs</p>
+              <p className="fg-global-kpi-value">{filteredCreditRows.length}</p>
+            </article>
+            <article className="fg-global-kpi blue">
+              <p className="fg-global-kpi-title">Total montant</p>
+              <p className="fg-global-kpi-value">{money(creditTotal)}</p>
+            </article>
+          </div>
+
+          <div className="fg-filter-row">
+            <label className="fg-select-wrap">
+              <select
+                value={creditPaymentFilter}
+                onChange={(e) => setCreditPaymentFilter(e.target.value as 'Non payé' | 'Payé' | 'Tous')}
+              >
+                <option value="Non payé">Non payé</option>
+                <option value="Payé">Payé</option>
+                <option value="Tous">Non payé + Payé</option>
+              </select>
+              <ChevronDown size={14} />
+            </label>
+          </div>
+
+          <section className="fg-table-section">
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date mission</th>
+                    <th>Client - Ville</th>
+                    <th>Nom du profil</th>
+                    <th>Service</th>
+                    <th>Mission</th>
+                    <th>Segment</th>
+                    <th>Montant reçu du client</th>
+                    <th>Part de l'agence</th>
+                    <th>Doit au profil</th>
+                    <th>Statut paiement</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCreditRows.map((row) => (
+                    <tr key={row.missionNo}>
+                      <td>{row.date || '—'}</td>
+                      <td>
+                        {row.clientId ? (
+                          <button type="button" className="fg-link-btn" onClick={() => goToClientDetails(row.clientId)}>{row.client}</button>
+                        ) : row.client}
+                        <small>{row.ville}</small>
+                      </td>
+                      <td>
+                        {row.profilId ? (
+                          <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>{row.profil || '—'}</button>
+                        ) : (row.profil || '—')}
+                      </td>
+                      <td>{row.service}</td>
+                      <td>
+                        <span className={`fg-pill ${missionFinanceLabel(row) === 'Facturation annulée' ? 'fg-pill-pink' : 'fg-pill-light-green'}`}>
+                          {missionFinanceLabel(row)}
+                        </span>
+                        {row.statut === 'Facturation annulée' && <small>Montant profil: {money(row.partProfil)}</small>}
+                      </td>
+                      <td><span className="fg-pill fg-pill-blue">{row.segment}</span></td>
+                      <td className="fw-semibold">{money(row.montant)}</td>
+                      <td>{money(row.partAgence)}</td>
+                      <td className="fg-text-blue fw-bold">{money(row.partProfil)}</td>
+                      <td>
+                        <label className="fg-select-wrap fg-compact-select">
+                          <select
+                            value={creditPaymentLabel(row)}
+                            onChange={(e) => void updateCreditPaymentStatus(row, e.target.value as 'Payé' | 'Non payé')}
+                          >
+                            <option value="Non payé">Non payé</option>
+                            <option value="Payé">Payé</option>
+                          </select>
+                          <ChevronDown size={14} />
+                        </label>
+                      </td>
+                      <td><button className="icon-btn" title="Voir" onClick={() => openMissionDetails(row)}><Eye size={14} /></button></td>
+                    </tr>
+                  ))}
+                  {filteredCreditRows.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="empty-row">Aucune ligne pour ce filtre.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -929,14 +1489,17 @@ export default function VueGlobale() {
               <h2>Historique des Missions</h2>
               <p>Suivi complet de toutes les interventions</p>
             </div>
-            <button className="btn btn-primary" onClick={() => setShowNewMissionModal(true)}>+ Nouvelle mission</button>
+            <div className="fg-export-actions">
+              <button className="btn btn-secondary" onClick={exportSuiviReportPdf}>Exporter PDF</button>
+              <button className="btn btn-primary" onClick={exportSuiviReportExcel}>Exporter Excel</button>
+            </div>
           </section>
 
           <div className="fg-hero-stats">
-            <article><FileText size={20} /><div><strong>{facturationData.length}</strong><span>Total missions</span></div></article>
-            <article><BarChart3 size={20} /><div><strong>{money(facturationData.reduce((sum, row) => sum + row.montant, 0))}</strong><span>Chiffre d'affaires</span></div></article>
-            <article><Clock3 size={20} /><div><strong>{facturationData.filter((row) => row.statut === 'Confirmée').length}</strong><span>En cours</span></div></article>
-            <article><Users size={20} /><div><strong>{facturationData.filter((row) => row.paiement !== 'paye').length}</strong><span>Paiements en attente</span></div></article>
+            <article><FileText size={20} /><div><strong>{suiviRecap.totalFacture}</strong><span>Total facturé (payé)</span></div></article>
+            <article><BarChart3 size={20} /><div><strong>{money(suiviRecap.chiffreAffaires)}</strong><span>Chiffre d'affaires</span></div></article>
+            <article><Clock3 size={20} /><div><strong>{money(suiviRecap.commissionAgence)}</strong><span>Commission agence</span></div></article>
+            <article><Users size={20} /><div><strong>{suiviRecap.paiementsEnAttente}</strong><span>Paiements en attente</span></div></article>
           </div>
 
           <div className="fg-facturation-filters">
@@ -994,7 +1557,9 @@ export default function VueGlobale() {
                   <th>Profil</th>
                   <th>Service</th>
                   <th>Segment</th>
-                  <th>Montant</th>
+                  <th>Montant TTC</th>
+                  <th>Payé</th>
+                  <th>Reste à payer</th>
                   <th>Mode paiement</th>
                   <th>Part agence</th>
                   <th>Part profil</th>
@@ -1006,18 +1571,31 @@ export default function VueGlobale() {
                 </tr>
               </thead>
               <tbody>
-                {filteredSuiviRows.map((row) => (
-                  <tr key={row.missionNo}>
+                {filteredSuiviRows.map((row) => {
+                  const montantTtc = row.montant;
+                  const montantPaye = row.montantPaye ?? 0;
+                  const ecart = Number((montantTtc - montantPaye).toFixed(2));
+
+                  return (
+                    <tr key={row.missionNo}>
                     <td className="fw-bold fg-mission-no">{row.missionNo}</td>
                     <td>{row.date}</td>
                     <td>
-                      <strong>{row.client}</strong>
+                      {row.clientId ? (
+                        <button type="button" className="fg-link-btn" onClick={() => goToClientDetails(row.clientId)}>{row.client}</button>
+                      ) : <strong>{row.client}</strong>}
                       <small>{row.ville}</small>
                     </td>
-                    <td>{row.profil}</td>
+                    <td>
+                      {row.profilId ? (
+                        <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>{row.profil}</button>
+                      ) : row.profil}
+                    </td>
                     <td>{row.service}</td>
                     <td><span className={`fg-pill ${row.segment === 'Particulier' ? 'fg-pill-sky' : 'fg-pill-violet'}`}>{row.segment}</span></td>
-                    <td className="fw-semibold">{money(row.montant)}</td>
+                    <td className="fw-semibold">{money(montantTtc)}</td>
+                    <td className="fw-semibold">{money(montantPaye)}</td>
+                    <td className={Math.abs(ecart) > 0.009 ? 'fg-text-red fw-semibold' : 'fw-semibold'}>{Math.abs(ecart) > 0.009 ? money(ecart) : '—'}</td>
                     <td>{row.modePaiement}</td>
                     <td className="fg-text-green fw-semibold">{money(row.partAgence)}</td>
                     <td className="fg-text-blue fw-semibold">{money(row.partProfil)}</td>
@@ -1029,17 +1607,18 @@ export default function VueGlobale() {
                       <small>{reglementDetail(row)}</small>
                     </td>
                     <td><button className="icon-btn" title="Voir" onClick={() => openMissionDetails(row)}><Eye size={14} /></button></td>
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
                 {filteredSuiviRows.length === 0 && (
                   <tr>
-                    <td colSpan={15} className="empty-row">Aucune mission trouvée.</td>
+                    <td colSpan={17} className="empty-row">Aucune mission trouvée.</td>
                   </tr>
                 )}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={15}>
+                  <td colSpan={17}>
                     <div className="fg-table-footer-summary">
                       <span className="fg-summary-count">{displayedMissionCount} mission(s) affichée(s)</span>
                       <span className="fg-summary-total">Total affiché : <strong>{money(displayedMissionTotal)}</strong></span>
@@ -1140,7 +1719,9 @@ export default function VueGlobale() {
                   {profileBalances.map((profile) => (
                     <tr key={profile.id}>
                       <td>
-                        <strong>{profile.name}</strong>
+                        {profile.key.startsWith('agent-') ? (
+                          <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(profile.id)}>{profile.name}</button>
+                        ) : <strong>{profile.name}</strong>}
                         <small>{profile.city} - {profile.phone}</small>
                       </td>
                       <td>{profile.missions}</td>
@@ -1227,7 +1808,11 @@ export default function VueGlobale() {
                       <tr key={mission.missionNo}>
                         <td>{shortMissionNo(mission.missionNo)}</td>
                         <td>{mission.date}</td>
-                        <td>{mission.client}</td>
+                        <td>
+                          {mission.clientId ? (
+                            <button type="button" className="fg-link-btn" onClick={() => goToClientDetails(mission.clientId)}>{mission.client}</button>
+                          ) : mission.client}
+                        </td>
                         <td className="fw-semibold">{money(mission.montant)}</td>
                         <td>
                           <span className="fg-pill fg-pill-outline">{mission.encaissePar}</span>

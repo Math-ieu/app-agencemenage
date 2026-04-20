@@ -43,14 +43,21 @@ export default function DemandesEnAttente() {
   // Nouveaux états pour le formulaire
   const [formData, setFormData] = useState({
     nom: '',
+    email: '',
+    entity_name: '',
+    contact_person: '',
     ville: 'Casablanca',
     quartier: '',
     adresse: '',
     date: '',
     heure: '',
+    scheduling_type: 'fixed',
     preference_horaire: '',
     type_habitation: '',
     frequence: '',
+    intervention_nature: 'sinistre',
+    accommodation_state: '',
+    cleanliness_type: '',
     nb_intervenants: 1,
     surface: 50,
     details_pieces: '',
@@ -272,8 +279,8 @@ export default function DemandesEnAttente() {
     setDirectPhone('');
     setWhatsappPhone('');
     setFormData({
-      nom: '', ville: 'Casablanca', quartier: '', adresse: '', date: '', heure: '',
-      preference_horaire: '', type_habitation: '', frequence: '', nb_intervenants: 1,
+      nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: '', heure: '',
+      scheduling_type: 'fixed', preference_horaire: '', type_habitation: '', frequence: '', intervention_nature: 'sinistre', accommodation_state: '', cleanliness_type: '', nb_intervenants: 1,
       surface: 50, details_pieces: '', duree: 4, produits: false, torchons: false,
       montant: '', mode_paiement: '', statut_paiement: 'non_paye', notes: '',
       service_type: 'flexible', structure_type: '', nb_personnel: 1,
@@ -298,14 +305,21 @@ export default function DemandesEnAttente() {
 
     setFormData({
       nom: d.client_name,
+      email: d.formulaire_data?.email || d.client_details?.email || '',
+      entity_name: d.formulaire_data?.entityName || d.formulaire_data?.entity_name || '',
+      contact_person: d.formulaire_data?.contactPerson || d.formulaire_data?.contact_person || '',
       ville: d.formulaire_data?.ville || d.client_city || 'Casablanca',
       quartier: d.formulaire_data?.quartier || d.client_neighborhood || '',
       adresse: d.formulaire_data?.adresse || '',
       date: d.date_intervention || '',
-      heure: d.heure_intervention || '',
-      preference_horaire: d.formulaire_data?.preference_horaire || '',
+      heure: d.heure_intervention || d.formulaire_data?.fixedTime || '',
+      scheduling_type: d.heure_intervention || d.formulaire_data?.fixedTime ? 'fixed' : 'flexible',
+      preference_horaire: d.formulaire_data?.preference_horaire || (d.formulaire_data?.schedulingTime === 'morning' ? 'matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? 'apres_midi' : ''),
       type_habitation: d.formulaire_data?.type_habitation || '',
       frequence: d.frequency_label || (d.frequency === 'oneshot' ? 'ponctuel' : 'mensuel'),
+      intervention_nature: d.formulaire_data?.interventionNature || d.formulaire_data?.intervention_nature || 'sinistre',
+      accommodation_state: d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '',
+      cleanliness_type: d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '',
       nb_intervenants: d.formulaire_data?.nb_intervenants || 1,
       surface: d.formulaire_data?.surface || 50,
       details_pieces: d.formulaire_data?.details_pieces || '',
@@ -340,44 +354,82 @@ export default function DemandesEnAttente() {
 
     try {
       const frequencyValue = formData.frequence === 'ponctuel' ? 'oneshot' : 'abonnement';
+      const isFixedSchedule = formData.scheduling_type === 'fixed';
+      const clientDisplayName = activeSegment === 'entreprise'
+        ? (formData.contact_person || formData.entity_name || formData.nom)
+        : formData.nom;
+
+      const additionalServices = {
+        produitsEtOutils: Boolean(formData.produits),
+        torchonsEtSerpierres: Boolean(formData.torchons),
+      };
+
       const payload = {
-        client_name: formData.nom,
+        client_name: clientDisplayName,
         client_phone: directPhone,
         service: selectedService,
         segment: activeSegment,
         date_intervention: formData.date || null,
-        heure_intervention: formData.heure || '',
+        heure_intervention: isFixedSchedule ? (formData.heure || '') : '',
         prix: formData.montant || null,
         mode_paiement: formData.mode_paiement,
         statut_paiement: formData.statut_paiement,
         frequency: frequencyValue,
         frequency_label: formData.frequence,
         formulaire_data: {
-          nom: formData.nom,
+          nom: clientDisplayName,
+          firstName: activeSegment === 'particulier' ? (formData.nom.split(' ').slice(0, -1).join(' ') || formData.nom) : '',
+          lastName: activeSegment === 'particulier' ? (formData.nom.split(' ').slice(-1).join(' ') || formData.nom) : '',
+          email: formData.email,
+          entityName: formData.entity_name,
+          contactPerson: formData.contact_person,
           ville: formData.ville,
+          city: formData.ville,
           quartier: formData.quartier,
+          neighborhood: formData.quartier,
           adresse: formData.adresse,
-          preference_horaire: formData.preference_horaire,
+          preference_horaire: isFixedSchedule ? '' : formData.preference_horaire,
+          schedulingType: formData.scheduling_type,
+          schedulingDate: formData.date || null,
+          fixedTime: formData.heure || '',
+          schedulingTime: formData.preference_horaire === 'matin' ? 'morning' : formData.preference_horaire === 'apres_midi' ? 'afternoon' : '',
           type_habitation: formData.type_habitation,
+          propertyType: formData.type_habitation ? formData.type_habitation.toLowerCase() : '',
           surface: formData.surface,
+          surfaceArea: formData.surface,
           duree: formData.duree,
+          duration: formData.duree,
           nb_intervenants: formData.nb_intervenants,
+          numberOfPeople: formData.nb_intervenants,
           details_pieces: formData.details_pieces,
           produits: formData.produits,
           torchons: formData.torchons,
+          additionalServices,
           // Placement & gestion
           structure_type: formData.structure_type,
+          structureType: formData.structure_type,
           service_type: formData.service_type,
+          serviceType: formData.service_type,
           nb_personnel: formData.nb_personnel,
           // Auxiliaire de vie
           lieu_garde: formData.lieu_garde,
+          careLocation: formData.lieu_garde,
           age_personne: formData.age_personne,
+          patientAge: formData.age_personne,
           sexe_personne: formData.sexe_personne,
+          patientGender: formData.sexe_personne,
           mobilite: formData.mobilite,
           situation_medicale: formData.situation_medicale,
+          healthIssues: formData.situation_medicale,
           nb_jours: formData.nb_jours,
+          numberOfDays: formData.nb_jours,
+          // Post-sinistre / post-demenagement
+          interventionNature: formData.intervention_nature,
+          accommodationState: formData.accommodation_state,
+          cleanlinessType: formData.cleanliness_type,
           // Contact
           whatsapp_phone: whatsappPhone,
+          whatsappNumber: whatsappPhone,
           notes: formData.notes,
           // Detailed rooms
           rooms: formData.rooms
@@ -830,6 +882,42 @@ export default function DemandesEnAttente() {
                   />
                 </div>
 
+                <div className="form-group">
+                  <label className="label-teal">Email</label>
+                  <input
+                    type="email"
+                    className="phone-number"
+                    placeholder="nom@domaine.com"
+                    value={formData.email}
+                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  />
+                </div>
+
+                {activeSegment === 'entreprise' && (
+                  <>
+                    <div className="form-group">
+                      <label className="label-teal">Nom entreprise *</label>
+                      <input
+                        type="text"
+                        className="phone-number"
+                        required
+                        value={formData.entity_name}
+                        onChange={e => setFormData({ ...formData, entity_name: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="label-teal">Personne de contact *</label>
+                      <input
+                        type="text"
+                        className="phone-number"
+                        required
+                        value={formData.contact_person}
+                        onChange={e => setFormData({ ...formData, contact_person: e.target.value, nom: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div className="form-group full-width" style={{ marginTop: '-5px', marginBottom: '10px' }}>
                   <label className="custom-checkbox-container">
                     <input
@@ -930,27 +1018,57 @@ export default function DemandesEnAttente() {
                         onChange={e => setFormData({ ...formData, date: e.target.value })}
                       />
                     </div>
-                    <div className="form-group">
-                      <label>Heure *</label>
-                      <input
-                        type="time"
-                        required
-                        value={formData.heure}
-                        onChange={e => setFormData({ ...formData, heure: e.target.value })}
-                      />
+                    <div className="form-group full-width">
+                      <label>Type de planification *</label>
+                      <div className="flex gap-4 flex-wrap mt-1">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="schedulingType"
+                            value="fixed"
+                            className="w-4 h-4 text-primary"
+                            checked={formData.scheduling_type === 'fixed'}
+                            onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })}
+                          />
+                          <span className="text-sm font-medium">Heure fixe</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="schedulingType"
+                            value="flexible"
+                            className="w-4 h-4 text-primary"
+                            checked={formData.scheduling_type === 'flexible'}
+                            onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })}
+                          />
+                          <span className="text-sm font-medium">Plage horaire</span>
+                        </label>
+                      </div>
                     </div>
-                    <div className="form-group">
-                      <label>Préférence horaire *</label>
-                      <select
-                        required
-                        value={formData.preference_horaire}
-                        onChange={e => setFormData({ ...formData, preference_horaire: e.target.value })}
-                      >
-                        <option value="">Choisir...</option>
-                        <option value="matin">Matin (08h - 12h)</option>
-                        <option value="apres_midi">Après-midi (14h - 18h)</option>
-                      </select>
-                    </div>
+                    {formData.scheduling_type === 'fixed' ? (
+                      <div className="form-group">
+                        <label>Heure *</label>
+                        <input
+                          type="time"
+                          required={formData.scheduling_type === 'fixed'}
+                          value={formData.heure}
+                          onChange={e => setFormData({ ...formData, heure: e.target.value })}
+                        />
+                      </div>
+                    ) : (
+                      <div className="form-group">
+                        <label>Préférence horaire *</label>
+                        <select
+                          required={formData.scheduling_type === 'flexible'}
+                          value={formData.preference_horaire}
+                          onChange={e => setFormData({ ...formData, preference_horaire: e.target.value })}
+                        >
+                          <option value="">Choisir...</option>
+                          <option value="matin">Matin (08h - 12h)</option>
+                          <option value="apres_midi">Après-midi (14h - 18h)</option>
+                        </select>
+                      </div>
+                    )}
 
                     {/* Champs dynamiques selon le service */}
                     {(selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage')) && (
@@ -971,6 +1089,51 @@ export default function DemandesEnAttente() {
                             <option value="Bureau">Bureau</option>
                           </select>
                         </div>
+
+                        {selectedService.toLowerCase().includes('post-sinistre') && (
+                          <div className="form-group">
+                            <label>Nature de l'intervention *</label>
+                            <select
+                              required
+                              value={formData.intervention_nature}
+                              onChange={e => setFormData({ ...formData, intervention_nature: e.target.value })}
+                            >
+                              <option value="sinistre">Après sinistre</option>
+                              <option value="event">Post évènement</option>
+                              <option value="express">Remise en état express</option>
+                              <option value="autre">Autre situation urgente</option>
+                            </select>
+                          </div>
+                        )}
+
+                        {selectedService.toLowerCase().includes('post-déménagement') && (
+                          <>
+                            <div className="form-group">
+                              <label>État du logement *</label>
+                              <select
+                                required
+                                value={formData.accommodation_state}
+                                onChange={e => setFormData({ ...formData, accommodation_state: e.target.value })}
+                              >
+                                <option value="">Choisir...</option>
+                                <option value="vide">Vide</option>
+                                <option value="meuble">Meublé</option>
+                              </select>
+                            </div>
+                            <div className="form-group">
+                              <label>Niveau de salissure *</label>
+                              <select
+                                required
+                                value={formData.cleanliness_type}
+                                onChange={e => setFormData({ ...formData, cleanliness_type: e.target.value })}
+                              >
+                                <option value="">Choisir...</option>
+                                <option value="normal">Normal</option>
+                                <option value="intensif">Intensif</option>
+                              </select>
+                            </div>
+                          </>
+                        )}
 
                         <div className="form-group">
                           <label>Fréquence *</label>
@@ -1022,10 +1185,21 @@ export default function DemandesEnAttente() {
                         </div>
 
                         {selectedService === "Ménage standard" && (
-                          <div className="form-section full-width bg-slate-50 p-4 rounded-lg border border-slate-200">
-                            <h3 className="text-teal-800 mb-4 flex items-center gap-2">
-                              <span className="text-lg">🏠</span> Détails des pièces
-                            </h3>
+                          <div
+                            className="form-section full-width"
+                            style={{
+                              background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
+                              padding: '16px',
+                              borderRadius: '12px',
+                              border: '1px solid #dbe3ea',
+                            }}
+                          >
+                            <div style={{ marginBottom: '12px' }}>
+                              <h3 style={{ color: '#0f766e', margin: 0, fontSize: '16px', fontWeight: 700 }}>Détails des pièces</h3>
+                              <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '12px' }}>
+                                Ajustez le nombre de pièces pour estimer correctement la charge de travail.
+                              </p>
+                            </div>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                               {Object.entries(formData.rooms).map(([key, value]) => (
                                 <div key={key} className="flex flex-col gap-1">

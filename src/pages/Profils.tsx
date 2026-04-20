@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAgents } from '../api/client';
-import { Search, Plus, RotateCw, Calendar, User, XCircle } from 'lucide-react';
+import { getAgents, deleteAgent } from '../api/client';
+import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2 } from 'lucide-react';
 import { Agent } from '../types';
 import { encodeId } from '../utils/obfuscation';
 import AddProfileModal from './ProfilEditModal';
+import { useToastStore } from '../store/toast';
 
 const TABS = [
   { id: 'tout', label: 'Tout' },
@@ -89,6 +90,7 @@ const dividerStyle: React.CSSProperties = {
 
 export default function Profils() {
   const navigate = useNavigate();
+  const { addToast } = useToastStore();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -118,6 +120,20 @@ export default function Profils() {
   };
 
   useEffect(() => { fetchData(); }, [search, activeTab, dateDebut, dateFin]);
+
+  const handleDeleteAgent = async (agent: Agent) => {
+    const label = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || `#${agent.id}`;
+    if (!window.confirm(`Archiver le profil ${label} ?`)) return;
+
+    try {
+      await deleteAgent(agent.id);
+      addToast('Profil archivé avec succès', 'success');
+      await fetchData();
+    } catch (err) {
+      console.error('Error deleting agent:', err);
+      addToast('Erreur lors de l\'archivage du profil', 'error');
+    }
+  };
 
   const getInitials = (agent: Agent) =>
     `${agent.first_name?.[0] || ''}${agent.last_name?.[0] || ''}`.toUpperCase();
@@ -292,13 +308,24 @@ export default function Profils() {
                     </span>
                   </td>
                   <td>
-                    <button
-                      className="actions-cell-btn py-1.5 px-3"
-                      onClick={() => navigate(`/profils/${encodeId(agent.id)}`)}
-                    >
-                      <User size={14} className="mr-2" />
-                      Compte Profil
-                    </button>
+                    <div className="table-inline-actions">
+                      <button
+                        className="actions-cell-btn py-1.5 px-3"
+                        onClick={() => navigate(`/profils/${encodeId(agent.id)}`)}
+                      >
+                        <User size={14} className="mr-2" />
+                        Compte Profil
+                      </button>
+                      <button
+                        type="button"
+                        className="table-delete-icon-btn"
+                        title="Supprimer le profil"
+                        aria-label="Supprimer le profil"
+                        onClick={() => handleDeleteAgent(agent)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -78,6 +78,9 @@ export const getMe = () => apiClient.get('/api/auth/me/');
 export const getDemandes = (params?: Record<string, string | number>) =>
   apiClient.get('/api/demandes/', { params });
 
+export const getDemandesHistorique = (params?: Record<string, string | number>) =>
+  apiClient.get('/api/demandes/historique/', { params });
+
 export const getDemande = (id: number) => apiClient.get(`/api/demandes/${id}/`);
 
 export const createDemande = (data: Record<string, unknown>) =>
@@ -137,6 +140,9 @@ export const createClient = (data: Record<string, unknown>) =>
 export const updateClient = (id: number, data: Record<string, unknown>) =>
   apiClient.patch(`/api/clients/${id}/`, data);
 
+export const deleteClient = (id: number) =>
+  apiClient.delete(`/api/clients/${id}/`);
+
 // ─── Agents/Profils ───────────────────────────────────────────────────────────
 export const getAgents = (params?: Record<string, string | number>) =>
   apiClient.get('/api/agents/', { params });
@@ -150,6 +156,9 @@ export const createAgent = (data: Record<string, unknown>) =>
 
 export const updateAgent = (id: number, data: Record<string, unknown>) =>
   apiClient.patch(`/api/agents/${id}/`, data);
+
+export const deleteAgent = (id: number) =>
+  apiClient.delete(`/api/agents/${id}/`);
 
 // ─── Missions ────────────────────────────────────────────────────────────────
 export const getMissions = (params?: Record<string, string | number>) =>
@@ -213,6 +222,10 @@ export const uploadDocument = (demandeId: number, file: File | Blob, type: strin
     },
   });
 };
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+export const getAuditLogs = (params?: Record<string, string | number>) =>
+  apiClient.get('/api/audit/', { params });
 
 // ─── Blog ────────────────────────────────────────────────────────────────────
 export const getBlogCategories = () => apiClient.get('/api/blog/categories/');
