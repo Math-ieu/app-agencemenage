@@ -574,7 +574,7 @@ export default function Dashboard() {
 
   const montantHT = toNumber(editFormData.montant_ht ?? editFormData.prix);
   const montantTTC = roundMoney(editFormData.tva_active ? montantHT * 1.2 : montantHT);
-  const montantVerse = toNumber(editFormData.montant_verse);
+// const montantVerse = toNumber(editFormData.montant_verse);
   const montantProfilDoit = toNumber(editFormData.montant_profil_doit);
 
   const partsRepartition: PartRepartitionItem[] = asArray<PartRepartitionItem>(editFormData.parts_repartition, []);
