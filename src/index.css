@@ -1490,8 +1490,11 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--border-color);
-  background: rgba(248, 250, 252, 0.5);
+  background: #f6fafc;
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .data-table td {
@@ -1515,13 +1518,14 @@ body {
 }
 
 /* Dashboard table: compact layout without horizontal scroll and sticky head */
-.dashboard-table-wrapper.enable-table-scroll {
+.table-wrapper.enable-table-scroll {
   overflow-x: hidden;
   overflow-y: auto !important;
-  max-height: 480px; 
+  max-height: calc(100vh - 300px);
+  min-height: 450px;
 }
 
-.dashboard-table-wrapper.disable-table-scroll {
+.table-wrapper.disable-table-scroll {
   overflow: visible !important;
 }
 
@@ -1535,7 +1539,7 @@ body {
   z-index: 30;
   background: #f6fafc;
   padding: 0.65rem 0.55rem;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   letter-spacing: 0.02em;
   white-space: normal;
   line-height: 1.15;
@@ -1543,22 +1547,22 @@ body {
 
 .dashboard-table td {
   padding: 0.6rem 0.55rem;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   line-height: 1.2;
   white-space: normal;
   overflow-wrap: anywhere;
 }
 
 .dashboard-table .price-main {
-  font-size: 0.8rem;
+  font-size: 0.95rem;
 }
 
 .dashboard-table .price-sub {
-  font-size: 0.64rem;
+  font-size: 0.72rem;
 }
 
 .dashboard-table .badge {
-  font-size: 0.68rem;
+  font-size: 0.76rem;
   padding: 0.22rem 0.45rem;
 }
 

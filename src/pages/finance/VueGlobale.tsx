@@ -20,6 +20,7 @@ import {
   Users,
   X,
   XCircle,
+  Trash2,
 } from 'lucide-react';
 import { fetchSecureDocBlob, generateDocument, getAgents, getMissions, sendWhatsApp, updateMission } from '../../api/client';
 import { encodeId } from '../../utils/obfuscation';
@@ -1688,62 +1689,84 @@ export default function VueGlobale() {
             <table className="data-table fg-facturation-table">
               <thead>
                 <tr>
-                  <th>N° Mission</th>
-                  <th>Date</th>
-                  <th>Client / Ville</th>
-                  <th>Profil</th>
+                  <th>Commercial</th>
+                  <th>N°<br/>Facture</th>
+                  <th>Date<br/>prestation</th>
+                  <th>Client -<br/>Ville</th>
                   <th>Service</th>
                   <th>Segment</th>
-                  <th>Montant TTC</th>
+                  <th>Montant<br/>HT</th>
+                  <th>TVA</th>
+                  <th>Montant<br/>TTC</th>
+                  <th>Mode<br/>paiement</th>
                   <th>Payé</th>
-                  <th>Reste à payer</th>
-                  <th>Mode paiement</th>
-                  <th>Part agence</th>
-                  <th>Part profil</th>
-                  <th>Encaissé par</th>
-                  <th>Paiement</th>
-                  <th>Statut</th>
-                  <th>Règlement interne</th>
+                  <th>Reste à<br/>payer</th>
+                  <th style={{ textAlign: 'center' }}>Statut</th>
+                  <th>Date<br/>paiement</th>
+                  <th>Commentaire</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {filteredSuiviRows.map((row) => {
-                  const montantTtc = row.montant;
-                  const montantPaye = row.montantPaye ?? 0;
-                  const ecart = Number((montantTtc - montantPaye).toFixed(2));
+                  const ttc = row.montant;
+                  const ht = Math.round((ttc / 1.20) * 100) / 100;
+                  const tva = Math.round((ttc - ht) * 100) / 100;
+                  const paye = row.montantPaye ?? 0;
+                  const ecart = Number((ttc - paye).toFixed(2));
+                  
+                  const renderMoney = (val: number) => {
+                    const formatted = money(val);
+                    const match = formatted.match(/^(.*?)\s+([^\d\s]+)$/);
+                    if (match) {
+                      return <>{match[1]}<br />{match[2]}</>;
+                    }
+                    return formatted;
+                  };
+                  
+                  let statusContent: React.ReactNode = row.statut;
+                  let statusPillClass = 'fg-pill-pale-orange';
+
+                  if (row.statut === 'Payé' || (row.reglementInterne === 'Réglé' && row.paiement === 'paye')) {
+                    statusPillClass = 'fg-pill-pale-green';
+                    statusContent = 'Payé';
+                  } else if (row.reglementInterne === 'Réglé' && row.paiement !== 'paye') {
+                    statusPillClass = 'fg-pill-pale-orange';
+                    statusContent = <>Profil<br/>payé /<br/>Client</>;
+                  }
 
                   return (
                     <tr key={row.missionNo}>
-                    <td className="fw-bold fg-mission-no">{row.missionNo}</td>
-                    <td>{row.date}</td>
-                    <td>
-                      {row.clientId ? (
-                        <button type="button" className="fg-link-btn" onClick={() => goToClientDetails(row.clientId)}>{row.client}</button>
-                      ) : <strong>{row.client}</strong>}
-                      <small>{row.ville}</small>
-                    </td>
-                    <td>
-                      {row.profilId ? (
-                        <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>{row.profil}</button>
-                      ) : row.profil}
-                    </td>
-                    <td>{row.service}</td>
-                    <td><span className={`fg-pill ${row.segment === 'Particulier' ? 'fg-pill-sky' : 'fg-pill-violet'}`}>{row.segment}</span></td>
-                    <td className="fw-semibold">{money(montantTtc)}</td>
-                    <td className="fw-semibold">{money(montantPaye)}</td>
-                    <td className={Math.abs(ecart) > 0.009 ? 'fg-text-red fw-semibold' : 'fw-semibold'}>{Math.abs(ecart) > 0.009 ? money(ecart) : '—'}</td>
-                    <td>{row.modePaiement}</td>
-                    <td className="fg-text-green fw-semibold">{money(row.partAgence)}</td>
-                    <td className="fg-text-blue fw-semibold">{money(row.partProfil)}</td>
-                    <td>{row.encaissePar}</td>
-                    <td><span className={paiementClass(row.paiement)}>{row.paiement}</span></td>
-                    <td><span className={statutClass(row.statut)}>{row.statut}</span></td>
-                    <td className="fg-reglement-cell">
-                      <span className={reglementClass(row.reglementInterne)}>{row.reglementInterne}</span>
-                      <small>{reglementDetail(row)}</small>
-                    </td>
-                    <td><button className="icon-btn" title="Voir" onClick={() => openMissionDetails(row)}><Eye size={14} /></button></td>
+                      <td className="fw-bold" style={{ color: '#334155' }}>{row.commercialName || '—'}</td>
+                      <td className="fw-bold fg-mission-no">{row.missionNo}</td>
+                      <td>{row.date || '—'}</td>
+                      <td style={{ lineHeight: '1.3' }}>
+                        {row.clientId ? (
+                          <button type="button" style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', fontWeight: 800, color: '#0f5f5b', textAlign: 'left', fontSize: '1rem' }} onClick={() => goToClientDetails(row.clientId)}>{row.client}</button>
+                        ) : <strong style={{ fontWeight: 800, color: '#0f5f5b' }}>{row.client}</strong>}
+                        <small style={{ color: '#94a3b8', fontSize: '0.85rem', display: 'block' }}>{row.ville}</small>
+                      </td>
+                      <td style={{ color: '#64748b' }}>{row.service}</td>
+                      <td><span className={`fg-pill ${row.segment === 'Particulier' ? 'fg-pill-outline-sky' : 'fg-pill-violet'}`}>{row.segment}</span></td>
+                      <td className="fw-bold" style={{ color: '#0f5f5b' }}>{renderMoney(ht)}</td>
+                      <td style={{ color: '#0f5f5b' }}>{renderMoney(tva)}</td>
+                      <td className="fw-bold" style={{ color: '#0f5f5b' }}>{renderMoney(ttc)}</td>
+                      <td style={{ color: '#64748b' }}>{row.modePaiementReel || row.modePaiement || '—'}</td>
+                      <td className="fw-bold" style={{ color: '#059669' }}>{renderMoney(paye)}</td>
+                      <td className="fw-bold" style={{ color: '#d97706' }}>{Math.abs(ecart) > 0.009 ? renderMoney(ecart) : renderMoney(0)}</td>
+                      <td>
+                        <span className={`fg-pill ${statusPillClass}`} style={{ textAlign: 'left', display: 'inline-block', lineHeight: '1.3', border: 'none', padding: '0.35rem 0.55rem' }}>
+                          {statusContent}
+                        </span>
+                      </td>
+                      <td style={{ color: '#64748b' }}>{row.datePaiement || '—'}</td>
+                      <td style={{ color: '#64748b' }}>—</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button className="icon-btn" title="Voir" onClick={() => openMissionDetails(row)}><Eye size={16} color="#64748b" /></button>
+                          <button className="icon-btn" title="Supprimer"><Trash2 size={16} color="#ef4444" /></button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}

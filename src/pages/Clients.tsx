@@ -268,13 +268,19 @@ export default function Clients() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setActiveDropdown(null);
+      const target = event.target as Element;
+      // Ne ferme pas si on clique à l'intérieur du container du menu (le bouton ou le menu lui-même)
+      if (target.closest && target.closest('.dropdown-container')) {
+        return;
       }
+      setActiveDropdown(null);
     };
-    document.addEventListener('mousedown', handleClickOutside);
+    
+    if (activeDropdown !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [activeDropdown]);
 
   const toggleDropdown = (type: 'actions' | 'more', id: number) => {
     if (activeDropdown?.type === type && activeDropdown?.id === id) {
@@ -464,7 +470,7 @@ export default function Clients() {
       {loading ? (
         <div className="loading-state"><div className="spinner" /></div>
       ) : (
-        <div className="table-wrapper">
+        <div className={`table-wrapper ${clients.length >= 8 ? 'enable-table-scroll' : 'disable-table-scroll'}`}>
           <table className="data-table">
             <thead>
               <tr>
@@ -479,7 +485,7 @@ export default function Clients() {
               </tr>
             </thead>
             <tbody>
-              {clients.map((c) => (
+              {clients.map((c, index) => (
                 <tr key={c.id} className={getRowClass(c)}>
                   <td>
                     <div className="dropdown-container">
@@ -488,7 +494,7 @@ export default function Clients() {
                         Actions
                       </button>
                       {activeDropdown?.type === 'actions' && activeDropdown.id === c.id && (
-                        <div className="dropdown-menu" ref={dropdownRef} style={{ left: 0, right: 'auto' }}>
+                        <div className="dropdown-menu" ref={dropdownRef} style={{ left: 0, right: 'auto', ...(clients.length >= 8 && index >= clients.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
                           <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
                             <UserIcon size={16} className="dropdown-item-icon" />
                             <span>Compte client</span>
@@ -573,7 +579,7 @@ export default function Clients() {
                           <MoreVertical size={18} />
                         </button>
                         {activeDropdown?.type === 'more' && activeDropdown.id === c.id && (
-                          <div className="dropdown-menu" ref={dropdownRef} style={{ minWidth: '160px' }}>
+                          <div className="dropdown-menu" ref={dropdownRef} style={{ minWidth: '160px', ...(clients.length >= 8 && index >= clients.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
                             <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
                               <UserIcon size={16} className="dropdown-item-icon" />
                               <span>Voir le compte</span>
