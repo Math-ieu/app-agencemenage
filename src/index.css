@@ -1514,6 +1514,54 @@ body {
   background-color: rgba(248, 250, 252, 0.8);
 }
 
+/* Dashboard table: compact layout without horizontal scroll and sticky head */
+.dashboard-table-wrapper {
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+
+.dashboard-table {
+  table-layout: fixed;
+}
+
+.dashboard-table th {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: #f6fafc;
+  padding: 0.65rem 0.55rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  white-space: normal;
+  line-height: 1.15;
+}
+
+.dashboard-table td {
+  padding: 0.6rem 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-table .price-main {
+  font-size: 0.8rem;
+}
+
+.dashboard-table .price-sub {
+  font-size: 0.64rem;
+}
+
+.dashboard-table .badge {
+  font-size: 0.68rem;
+  padding: 0.22rem 0.45rem;
+}
+
+/* Ensure dropdown menus are not clipped by table scroll container */
+.dashboard-table-wrapper .action-menu {
+  z-index: 1200;
+}
+
 .empty-row {
   text-align: center;
   color: var(--text-muted);

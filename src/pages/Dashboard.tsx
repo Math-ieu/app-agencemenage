@@ -709,27 +709,24 @@ export default function Dashboard() {
       ) : (
         <>
           {viewMode === 'list' ? (
-            <div className="table-wrapper">
-              <table className="data-table">
+            <div className="table-wrapper dashboard-table-wrapper">
+              <table className="data-table dashboard-table">
                 <thead>
                   <tr>
-                    <th>Actions</th>
-                    <th>Commercial</th>
-                    <th>Date intervention</th>
-                    <th>Nb heures</th>
+                    <th></th>
+                    <th>Com</th>
+                    <th>Date d'interv.</th>
                     <th>Statut besoin</th>
-                    <th>Nom client</th>
+                    <th>Nom du client</th>
                     <th>Quartier / Ville</th>
-                    <th>Fréquence</th>
-                    <th>Segment</th>
                     <th>Type de service</th>
-                    <th>Avec produit</th>
-                    <th>Tarif total</th>
-                    <th>Mode paiement</th>
-                    <th>Statut paiement</th>
-                    <th>Reste à payer</th>
+                    <th>Seg.</th>
+                    <th>Nb d'heures</th>
                     <th>Profils envoyés</th>
+                    <th>Option sup.</th>
                     <th>CAO</th>
+                    <th>Tarif total</th>
+                    <th>Statut paie.</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -738,14 +735,14 @@ export default function Dashboard() {
                     <tr key={d.id} className={!d.cao && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000 ? 'row-alert' : ''}>
                       <td className="relative">
                         <button
-                          className="btn btn-action"
+                          className="icon-btn"
                           onClick={() => {
                             setActiveMenu(activeMenu === d.id ? null : d.id);
                             setActiveMoreMenu(null);
                           }}
+                          aria-label="Actions"
                         >
                           <Settings size={14} />
-                          Actions
                         </button>
 
                         {activeMenu === d.id && (
@@ -776,7 +773,6 @@ export default function Dashboard() {
                       </td>
                       <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
                       <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</td>
-                      <td>{d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '—'}</td>
                       <td>
                         <span className={`badge ${d.statut === 'en_cours' ? 'badge-blue' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`}>
                           {d.statut === 'en_cours' ? 'En cours' : d.statut === 'termine' ? 'Terminé' : 'En attente'}
@@ -801,35 +797,13 @@ export default function Dashboard() {
                       <td>
                         {[d.formulaire_data?.quartier || d.client_neighborhood, d.formulaire_data?.ville || d.client_city].filter(Boolean).join(', ') || d.neighborhood_city || '—'}
                       </td>
-                      <td>{d.frequency === 'abonnement' ? 'Abonnement' : 'Une fois'}</td>
+                      <td>{d.service}</td>
                       <td>
                         <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
                           {d.segment === 'particulier' ? 'SPP' : 'SPE'}
                         </span>
                       </td>
-                      <td>{d.service}</td>
-                      <td>
-                        {d.avec_produit ? (
-                          <span className="text-sm">Oui ({d.tarif_produit} MAD)</span>
-                        ) : 'Non'}
-                      </td>
-                      <td>
-                        <div className="price-info">
-                          <p className="price-main">{typeof d.prix === 'number' ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD</p>
-                          <p className="price-sub">{d.is_devis ? 'Prix/devis' : 'Prix/réservation'}</p>
-                        </div>
-                      </td>
-                      <td>{d.mode_paiement_label || d.mode_paiement || '—'}</td>
-                      <td>
-                        <span className={`badge ${['paye', 'integral'].includes(d.statut_paiement) ? 'badge-green' : d.statut_paiement === 'partiel' ? 'badge-orange' : 'badge-red'}`}>
-                          {d.statut_paiement_label || d.statut_paiement || 'Non payé'}
-                        </span>
-                      </td>
-                      <td>
-                        {(d.reste_a_payer ?? 0) > 0 ? (
-                          <span className="text-red fw-bold">{(d.reste_a_payer ?? 0).toLocaleString('fr-FR')} MAD</span>
-                        ) : '—'}
-                      </td>
+                      <td>{d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '—'}</td>
                       <td>
                         {(d.profils_envoyes?.length ?? 0) > 0 ? (
                           <div className="avatar-group">
@@ -842,11 +816,27 @@ export default function Dashboard() {
                         ) : '—'}
                       </td>
                       <td>
+                        {d.avec_produit ? (
+                          <span className="text-sm">Oui ({d.tarif_produit} MAD)</span>
+                        ) : 'Non'}
+                      </td>
+                      <td>
                         {d.cao ? (
                           <span className="badge badge-green">Oui</span>
                         ) : (
                           <span className="badge badge-red animate-pulse">Non</span>
                         )}
+                      </td>
+                      <td>
+                        <div className="price-info">
+                          <p className="price-main">{typeof d.prix === 'number' ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD</p>
+                          <p className="price-sub">{d.is_devis ? 'Prix/devis' : 'Prix/réservation'}</p>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`badge ${['paye', 'integral'].includes(d.statut_paiement) ? 'badge-green' : d.statut_paiement === 'partiel' ? 'badge-orange' : 'badge-red'}`}>
+                          {d.statut_paiement_label || d.statut_paiement || 'Non payé'}
+                        </span>
                       </td>
                       <td className="relative">
                         <button
