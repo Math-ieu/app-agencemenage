@@ -2,8 +2,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
-  CheckCircle, UserCheck, MessageSquare,
-  ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle, Calendar, Trash2, Plus
+  CheckCircle, UserCheck, MessageSquare, AlertTriangle,
+  Check, ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle, Calendar, Trash2, Plus
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
@@ -179,6 +179,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'besoins' | 'abonnements'>('besoins');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [showNoteModal, setShowNoteModal] = useState<{ demandeId: number; type: 'commercial' | 'operationnel'; note: string } | null>(null);
+  const [showCAOModal, setShowCAOModal] = useState<Demande | null>(null);
+  const [caoDecision, setCaoDecision] = useState<'confirmed' | 'postponed' | 'cancelled' | null>(null);
 
   // Filtres
   const [search, setSearch] = useState('');
@@ -321,6 +323,45 @@ export default function Dashboard() {
     }
   };
 
+  const handleCAOUpdate = async (demande: Demande, status: 'confirmed' | 'postponed' | 'cancelled') => {
+    try {
+      if (status === 'confirmed') {
+        // Mark CAO as confirmed (cao = true)
+        await confirmerCAO(demande.id);
+        // Change status to "en_cours" (which represents Confirmé intervention)
+        const updateData: any = { statut: 'en_cours' };
+        await updateDemande(demande.id, updateData);
+        
+        const clientPhone = demande.formulaire_data?.whatsapp_phone || demande.formulaire_data?.phone || demande.client_phone;
+        if (clientPhone) {
+          try {
+            // Trigger WhatsApp with profile info (Mode PJ/PNG)
+            await sendWhatsApp(demande.id, 'png');
+            addToast('Profil envoyé au client via WhatsApp (PJ)', 'success');
+          } catch (err) {
+            console.error('WhatsApp Error:', err);
+            addToast('Erreur lors de l\'envoi WhatsApp', 'error');
+          }
+        }
+        addToast('Besoin confirmé intervention avec succès', 'success');
+      } else if (status === 'postponed') {
+        // Statut redevient "Nouveau besoin" (en_attente)
+        await updateDemande(demande.id, { statut: 'en_attente' });
+        addToast('Statut réinitialisé : Nouveau besoin', 'info');
+      } else if (status === 'cancelled') {
+        // Statut devient "demande annulée" (annule - no accent for backend)
+        await updateDemande(demande.id, { statut: 'annule' });
+        addToast('Demande annulée', 'warning');
+      }
+      setShowCAOModal(null);
+      setCaoDecision(null);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast('Erreur lors de la mise à jour CAO', 'error');
+    }
+  };
+
   const handleUpdate = async () => {
     if (!selectedDemande) return;
     try {
@@ -361,14 +402,24 @@ export default function Dashboard() {
       };
 
       const paymentUiValue = editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee));
-      const paymentOption = PAYMENT_STATUS_OPTIONS.find((option) => option.value === paymentUiValue);
+      
+      // Logic: Status transitions
+      let finalStatutPaiementUi = paymentUiValue;
+      let triggerSatisfactionWhatsApp = false;
+
+      if (editFormData.statut === 'termine' && selectedDemande.statut !== 'termine') {
+        finalStatutPaiementUi = 'paiement_en_attente';
+        triggerSatisfactionWhatsApp = true;
+      }
+
+      const paymentOption = PAYMENT_STATUS_OPTIONS.find((option) => option.value === finalStatutPaiementUi);
       updateData.statut_paiement = paymentOption?.apiValue || editFormData.statut_paiement || 'non_paye';
 
       const previousFormData = selectedDemande.formulaire_data || {};
       const previousAdditional = previousFormData.additionalServices || {};
 
       updateData.formulaire_data = {
-        ...previousFormData,
+        ...(selectedDemande.formulaire_data || {}),
         nom: editFormData.client_name || previousFormData.nom || '',
         whatsapp_phone: editFormData.client_whatsapp || editFormData.client_phone || previousFormData.whatsapp_phone || '',
         ville: editFormData.ville || '',
@@ -405,10 +456,16 @@ export default function Dashboard() {
           montant_ttc: montantTTC,
           montant_verse: montantVerse,
           montant_profil_doit: toNumber(editFormData.montant_profil_doit),
-          facturation_annulee: paymentUiValue === 'facturation_annulee' || Boolean(editFormData.facturation_annulee),
-          statut_paiement_ui: paymentUiValue,
+          facturation_annulee: finalStatutPaiementUi === 'facturation_annulee',
+          statut_paiement_ui: finalStatutPaiementUi,
           part_agence: partAgence,
           parts_repartition: partsRepartition,
+          // New fields
+          annulation_raison: editFormData.annulation_raison || '',
+          profil_sera_paye: Boolean(editFormData.profil_sera_paye),
+          montant_profil_annulation: toNumber(editFormData.montant_profil_annulation),
+          montant_agence_doit_profil: toNumber(editFormData.montant_agence_doit_profil),
+          montant_profil_doit_agence: toNumber(editFormData.montant_profil_doit_agence),
         },
         part_agence: partAgence,
         parts_repartition: partsRepartition,
@@ -419,7 +476,22 @@ export default function Dashboard() {
 
       const response = await updateDemande(selectedDemande.id, updateData);
 
-      // Mettre à jour selectedDemande pour que les modifications suivantes soient basées sur les nouvelles données
+      // Automated Action: Satisfaction WhatsApp
+      if (triggerSatisfactionWhatsApp) {
+        try {
+          const clientPhone = editFormData.client_whatsapp || editFormData.client_phone || previousFormData.whatsapp_phone;
+          if (clientPhone) {
+            // Note: sendWhatsApp in client.ts only takes (id, type). 
+            // In a real scenario we'd use a generic message or a specific type.
+            await sendWhatsApp(selectedDemande.id, 'devis'); 
+            addToast('Lien de satisfaction envoyé au client via WhatsApp', 'success');
+          }
+        } catch (waErr) {
+          console.error("WhatsApp error:", waErr);
+        }
+      }
+
+      // Mettre à jour selectedDemande
       if (response.data) {
         setSelectedDemande(response.data);
       }
@@ -775,13 +847,16 @@ export default function Dashboard() {
                             </button>
 
 
-                            <button className="menu-item" onClick={async () => {
-                              if (confirm('Confirmer cette opération ?')) {
-                                await confirmerCAO(d.id);
-                                fetchData();
-                              }
-                            }}>
-                              <CheckCircle size={14} /> Confirmation Opé
+                            <button
+                              className="menu-item w-full"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowCAOModal(d);
+                                setCaoDecision(null);
+                                setActiveMenu(null);
+                              }}
+                            >
+                              <CheckCircle size={14} className={d.cao ? 'text-green-500' : ''} /> {d.cao ? 'Confirmation avant opération' : 'Confirmation avant opération'}
                             </button>
                             <Link
                               to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
@@ -1120,15 +1195,16 @@ export default function Dashboard() {
                             <Edit2 size={14} /> Éditer le besoin
                           </button>
 
-                          <button className="menu-item" onClick={async () => {
-                            if (confirm('Confirmer cette opération ?')) {
-                              await confirmerCAO(d.id);
-                              addToast('CAO confirmée', 'success');
-                              fetchData();
+                          <button
+                            className="menu-item w-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowCAOModal(d);
+                              setCaoDecision(null);
                               setActiveMenu(null);
-                            }
-                          }}>
-                            <CheckCircle size={14} /> Confirmation Opé
+                            }}
+                          >
+                            <CheckCircle size={14} className={d.cao ? 'text-green-500' : ''} /> {d.cao ? 'Confirmation avant opération' : 'Confirmation avant opération'}
                           </button>
 
                           <Link
@@ -1672,8 +1748,84 @@ export default function Dashboard() {
                           </div>
                         </div>
 
+                        {(editFormData.statut_paiement_ui === 'paiement_partiel' || (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) > 0) && (
+                          <div className="payment-alert-info">
+                            <label>Reste à payer : </label>
+                            <span className="text-red-500 font-bold ml-2">{(toNumber(montantTTC) - toNumber(editFormData.montant_verse)).toFixed(2)} MAD</span>
+                          </div>
+                        )}
+
+                        {editFormData.statut_paiement_ui === 'facturation_annulee' && (
+                          <div className="cancellation-block p-4 bg-red-50 rounded-xl border border-red-100 my-4">
+                            <div className="form-group">
+                              <label className="text-red-700">Raison de l'annulation</label>
+                              <textarea 
+                                value={editFormData.annulation_raison || ''} 
+                                onChange={e => setEditFormData({ ...editFormData, annulation_raison: e.target.value })}
+                                className="edit-input w-full"
+                                placeholder="Indiquez la raison..."
+                              />
+                            </div>
+                            <div className="flex items-center gap-4 mt-4">
+                              <label className="text-red-700">Le profil sera payé ?</label>
+                              <label className="switch">
+                                <input 
+                                  type="checkbox" 
+                                  checked={Boolean(editFormData.profil_sera_paye)} 
+                                  onChange={e => setEditFormData({ ...editFormData, profil_sera_paye: e.target.checked })} 
+                                />
+                                <span className="slider round"></span>
+                              </label>
+                              <span>{editFormData.profil_sera_paye ? 'Oui' : 'Non'}</span>
+                            </div>
+                            {editFormData.profil_sera_paye && (
+                              <div className="form-group mt-4">
+                                <label className="text-red-700">Montant à payer au profil (MAD)</label>
+                                <input 
+                                  type="number" 
+                                  value={editFormData.montant_profil_annulation} 
+                                  onChange={e => setEditFormData({ ...editFormData, montant_profil_annulation: e.target.value })} 
+                                  className="edit-input"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {editFormData.statut_paiement_ui === 'agence_payee_client' && (
+                          <div className="agency-alert-card bg-teal-50 border-teal-100 my-4">
+                            <p className="text-teal-800 font-semibold mb-2">L'agence doit au profil</p>
+                            <div className="form-group mb-0">
+                              <label>Montant (MAD)</label>
+                              <input 
+                                type="number" 
+                                value={editFormData.montant_agence_doit_profil} 
+                                onChange={e => setEditFormData({ ...editFormData, montant_agence_doit_profil: e.target.value })} 
+                                className="edit-input"
+                                placeholder="Part du profil à reverser..."
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {editFormData.statut_paiement_ui === 'profil_paye_client' && (
+                          <div className="agency-alert-card bg-orange-50 border-orange-100 my-4">
+                            <p className="text-orange-800 font-semibold mb-2">Le profil doit à l'agence</p>
+                            <div className="form-group mb-0">
+                              <label>Montant (MAD)</label>
+                              <input 
+                                type="number" 
+                                value={editFormData.montant_profil_doit_agence} 
+                                onChange={e => setEditFormData({ ...editFormData, montant_profil_doit_agence: e.target.value })} 
+                                className="edit-input"
+                                placeholder="Part de l'agence à récupérer..."
+                              />
+                            </div>
+                          </div>
+                        )}
+
                         <div className="agency-alert-card">
-                          <p>Profil doit</p>
+                          <p>Profil doit (Général)</p>
                           <div className="form-group mb-0">
                             <label>Montant (MAD)</label>
                             <input type="number" value={montantProfilDoit} onChange={e => setEditFormData({ ...editFormData, montant_profil_doit: e.target.value })} className="edit-input" />
@@ -1683,7 +1835,11 @@ export default function Dashboard() {
                         <button
                           type="button"
                           className={`btn btn-secondary ${editFormData.facturation_annulee ? 'facturation-annulee-active' : ''}`}
-                          onClick={() => setEditFormData({ ...editFormData, facturation_annulee: !editFormData.facturation_annulee })}
+                          onClick={() => setEditFormData({ 
+                            ...editFormData, 
+                            facturation_annulee: !editFormData.facturation_annulee,
+                            statut_paiement_ui: !editFormData.facturation_annulee ? 'facturation_annulee' : 'non_confirme'
+                          })}
                         >
                           <XCircle size={14} /> Facturation annulée
                         </button>
@@ -1697,20 +1853,50 @@ export default function Dashboard() {
 
                         {showPartsSection && (
                           <>
+                            <div className="encaissement-selector flex gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
+                              <label className="text-sm font-medium">Qui a encaissé le client ?</label>
+                              <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input 
+                                    type="radio" 
+                                    name="encaisse_par" 
+                                    checked={editFormData.encaisse_par === 'agence' || !editFormData.encaisse_par} 
+                                    onChange={() => setEditFormData({ ...editFormData, encaisse_par: 'agence' })}
+                                  />
+                                  <span>L'Agence</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input 
+                                    type="radio" 
+                                    name="encaisse_par" 
+                                    checked={editFormData.encaisse_par === 'profil'} 
+                                    onChange={() => setEditFormData({ ...editFormData, encaisse_par: 'profil' })}
+                                  />
+                                  <span>Le Profil</span>
+                                </label>
+                              </div>
+                            </div>
+
                             <div className="form-grid-2 gap-4 mb-4">
                               <div className="form-group">
                                 <label>Montant total TTC (MAD)</label>
                                 <input type="text" readOnly value={montantTTC.toFixed(2)} className="edit-input" />
                               </div>
                               <div className="form-group">
-                                <label>Part de l'agence (MAD)</label>
-                                <input type="number" value={editFormData.part_agence} onChange={e => setEditFormData({ ...editFormData, part_agence: e.target.value })} className="edit-input" />
+                                <label>{editFormData.encaisse_par === 'profil' ? "Part de l'agence (Calculée)" : "Part de l'agence (MAD)"}</label>
+                                <input 
+                                  type="number" 
+                                  value={editFormData.part_agence} 
+                                  onChange={e => setEditFormData({ ...editFormData, part_agence: e.target.value })} 
+                                  readOnly={editFormData.encaisse_par === 'profil'}
+                                  className={`edit-input ${editFormData.encaisse_par === 'profil' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                />
                               </div>
                             </div>
 
                             <div className="parts-lines">
                               {partsRepartition.map((line, idx) => (
-                                <div key={`${line.profile_id}-${idx}`} className="form-grid-3 gap-4 mb-3">
+                                <div key={`${line.profile_id}-${idx}`} className="form-grid-4 gap-4 mb-3 items-end">
                                   <div className="form-group" style={{ gridColumn: 'span 2' }}>
                                     <label>Nom du profil</label>
                                     <select
@@ -1736,10 +1922,38 @@ export default function Dashboard() {
                                       onChange={e => {
                                         const next = [...partsRepartition];
                                         next[idx] = { ...line, amount: toNumber(e.target.value) };
-                                        setEditFormData({ ...editFormData, parts_repartition: next });
+                                        
+                                        // Case 1 logic: if profile collected, agency part is TTC - sum(profile parts)
+                                        if (editFormData.encaisse_par === 'profil') {
+                                          const totalProfils = next.reduce((acc, p) => acc + toNumber(p.amount), 0);
+                                          setEditFormData({ 
+                                            ...editFormData, 
+                                            parts_repartition: next,
+                                            part_agence: roundMoney(toNumber(montantTTC) - totalProfils)
+                                          });
+                                        } else {
+                                          setEditFormData({ ...editFormData, parts_repartition: next });
+                                        }
                                       }}
                                       className="edit-input"
                                     />
+                                  </div>
+                                  <div className="form-group pb-2 flex flex-col items-center">
+                                    <label className="text-[10px] uppercase text-gray-400 mb-1">Délégué</label>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const next = partsRepartition.map((p, i) => ({
+                                          ...p,
+                                          is_delegate: i === idx ? !p.is_delegate : false
+                                        }));
+                                        setEditFormData({ ...editFormData, parts_repartition: next });
+                                      }}
+                                      className={`p-1 rounded-full transition-colors ${line.is_delegate ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}
+                                      title="Désigner comme délégué"
+                                    >
+                                      <UserCheck size={18} />
+                                    </button>
                                   </div>
                                 </div>
                               ))}
@@ -1747,19 +1961,42 @@ export default function Dashboard() {
 
                             <button
                               type="button"
-                              className="btn btn-secondary mb-4"
+                              className="btn btn-outline btn-sm w-full mb-4"
                               onClick={() => setEditFormData({
                                 ...editFormData,
-                                parts_repartition: [...partsRepartition, { profile_id: '', amount: 0 }],
+                                parts_repartition: [...partsRepartition, { profile_id: '', amount: 0, is_delegate: false }]
                               })}
                             >
-                              <Plus size={14} /> Ajouter un autre profil
+                              <Plus size={14} /> Ajouter un profil
                             </button>
 
-                            <div className={`parts-summary ${Math.abs(resteARepartir) < 0.01 ? 'is-valid' : 'is-warning'}`}>
-                              <span>Total réparti : {totalReparti.toFixed(2)} MAD</span>
-                              <span>Reste à répartir : {Math.max(0, resteARepartir).toFixed(2)} MAD</span>
-                              <span>{Math.abs(resteARepartir) < 0.01 ? 'Repartition correcte' : 'Repartition incomplète'}</span>
+                            <div className="parts-summary p-3 bg-white rounded-lg border border-gray-100">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm font-medium">Somme des parts profils :</span>
+                                <span className="text-sm font-bold text-gray-700">
+                                  {partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0).toFixed(2)} MAD
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center mb-3">
+                                <span className="text-sm font-medium">Part de l'agence :</span>
+                                <span className="text-sm font-bold text-gray-700">{toNumber(editFormData.part_agence).toFixed(2)} MAD</span>
+                              </div>
+                              <div className="flex justify-between items-center pt-2 border-t">
+                                <span className="text-sm font-bold">Total réparti :</span>
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-sm font-black p-1 px-3 rounded-full ${
+                                    Math.abs((partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)) - toNumber(montantTTC)) < 0.01
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-red-100 text-red-700'
+                                  }`}>
+                                    {(partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)).toFixed(2)} MAD
+                                  </span>
+                                  {Math.abs((partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)) - toNumber(montantTTC)) < 0.01 
+                                    ? <CheckCircle size={16} className="text-green-500" /> 
+                                    : <XCircle size={16} className="text-red-500" />
+                                  }
+                                </div>
+                              </div>
                             </div>
                           </>
                         )}
@@ -2096,6 +2333,149 @@ export default function Dashboard() {
                 onClick={() => setShowAssignmentModal(null)}
               >
                 Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CAO Modal */}
+      {showCAOModal && (
+        <div
+          className="modal-overlay z-[120]"
+          onClick={() => { setShowCAOModal(null); setCaoDecision(null); }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '20px',
+              width: '440px',
+              maxWidth: '95vw',
+              boxShadow: '0 8px 40px 0 rgba(0,0,0,0.18)',
+              position: 'relative',
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: '22px 24px 0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#1a1a2e', lineHeight: 1.3 }}>
+                Confirmation avant opération — #{showCAOModal.id}
+              </h3>
+              <button
+                onClick={() => { setShowCAOModal(null); setCaoDecision(null); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: '2px', lineHeight: 1, marginLeft: '12px', flexShrink: 0, fontSize: '16px' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '16px 24px 20px 24px' }}>
+              {/* Info card */}
+              <div style={{ backgroundColor: '#f1f5f9', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <p style={{ margin: 0, fontSize: '13.5px', color: '#374151' }}><span style={{ color: '#9ca3af' }}>Client : </span><strong>{showCAOModal.client_name || showCAOModal.formulaire_data?.nom || '—'}</strong></p>
+                  <p style={{ margin: 0, fontSize: '13.5px', color: '#374151' }}><span style={{ color: '#9ca3af' }}>Date : </span><strong>{showCAOModal.date_intervention ? new Date(showCAOModal.date_intervention).toLocaleDateString('fr-FR') : (showCAOModal.formulaire_data?.date_intervention || '—')}</strong></p>
+                  <p style={{ margin: 0, fontSize: '13.5px', color: '#374151' }}><span style={{ color: '#9ca3af' }}>Heure : </span><strong>{showCAOModal.formulaire_data?.heure || '—'}</strong></p>
+                  <p style={{ margin: 0, fontSize: '13.5px', color: '#374151' }}><span style={{ color: '#9ca3af' }}>Lieu : </span><strong>{[showCAOModal.formulaire_data?.quartier || showCAOModal.client_neighborhood, showCAOModal.formulaire_data?.ville || showCAOModal.client_city].filter(Boolean).join(', ') || '—'}</strong></p>
+                </div>
+              </div>
+
+              {/* Décision dropdown */}
+              <div style={{ position: 'relative' }}>
+                <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>Décision</label>
+
+                {/* Trigger */}
+                <div
+                  onClick={() => {
+                    const menu = document.getElementById('cao-decision-menu');
+                    if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 14px', border: '2px solid #0d9488', borderRadius: '10px',
+                    cursor: 'pointer', backgroundColor: '#ffffff', userSelect: 'none',
+                  }}
+                >
+                  <span style={{ fontSize: '14px', color: caoDecision ? '#1a1a2e' : '#9ca3af', fontWeight: caoDecision ? 600 : 400 }}>
+                    {caoDecision === 'confirmed' ? 'Confirmé' : caoDecision === 'postponed' ? 'Reporté' : caoDecision === 'cancelled' ? 'Annulé' : 'Choisir...'}
+                  </span>
+                  <ChevronDown size={18} style={{ color: '#6b7280' }} />
+                </div>
+
+                {/* Dropdown options */}
+                <div
+                  id="cao-decision-menu"
+                  style={{
+                    display: 'none', position: 'absolute', left: 0, right: 0, top: 'calc(100% + 4px)',
+                    backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e5e7eb',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.10)', overflow: 'hidden', zIndex: 9999,
+                  }}
+                >
+                  <button
+                    onClick={() => { setCaoDecision('confirmed'); const m = document.getElementById('cao-decision-menu'); if (m) m.style.display = 'none'; }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                      padding: '12px 16px', backgroundColor: '#a3e635', border: 'none',
+                      cursor: 'pointer', fontSize: '14px', fontWeight: 700, color: '#1a1a2e', textAlign: 'left',
+                    }}
+                  >
+                    <CheckCircle size={18} style={{ color: '#4d7c0f' }} /> Confirmé
+                  </button>
+                  <button
+                    onClick={() => { setCaoDecision('postponed'); const m = document.getElementById('cao-decision-menu'); if (m) m.style.display = 'none'; }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                      padding: '12px 16px', backgroundColor: '#ffffff', border: 'none', borderTop: '1px solid #f3f4f6',
+                      cursor: 'pointer', fontSize: '14px', fontWeight: 500, color: '#374151', textAlign: 'left',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fff7ed')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                  >
+                    <AlertTriangle size={18} style={{ color: '#f59e0b' }} /> Reporté
+                  </button>
+                  <button
+                    onClick={() => { setCaoDecision('cancelled'); const m = document.getElementById('cao-decision-menu'); if (m) m.style.display = 'none'; }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                      padding: '12px 16px', backgroundColor: '#ffffff', border: 'none', borderTop: '1px solid #f3f4f6',
+                      cursor: 'pointer', fontSize: '14px', fontWeight: 500, color: '#374151', textAlign: 'left',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fef2f2')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                  >
+                    <XCircle size={18} style={{ color: '#ef4444' }} /> Annulé
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '14px 24px 20px 24px', display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid #f1f5f9' }}>
+              <button
+                onClick={() => { setShowCAOModal(null); setCaoDecision(null); }}
+                style={{
+                  padding: '9px 22px', borderRadius: '8px', border: '1px solid #e5e7eb',
+                  backgroundColor: '#ffffff', color: '#374151', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                disabled={!caoDecision}
+                onClick={() => handleCAOUpdate(showCAOModal, caoDecision!)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '9px 22px', borderRadius: '8px', border: 'none',
+                  backgroundColor: caoDecision ? '#0d9488' : '#d1d5db',
+                  color: '#ffffff', fontWeight: 700, fontSize: '14px',
+                  cursor: caoDecision ? 'pointer' : 'not-allowed', transition: 'background 0.2s',
+                }}
+                onMouseEnter={e => { if (caoDecision) e.currentTarget.style.backgroundColor = '#0f766e'; }}
+                onMouseLeave={e => { if (caoDecision) e.currentTarget.style.backgroundColor = '#0d9488'; }}
+              >
+                <Check size={16} /> Valider
               </button>
             </div>
           </div>

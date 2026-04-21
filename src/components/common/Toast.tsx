@@ -12,6 +12,7 @@ export const ToastContainer = () => {
             {toast.type === 'success' && <CheckCircle size={20} />}
             {toast.type === 'error' && <XCircle size={20} />}
             {toast.type === 'info' && <AlertCircle size={20} />}
+            {toast.type === 'warning' && <AlertCircle size={20} />}
           </div>
           <div className="toast-message">{toast.message}</div>
           <button className="toast-close" onClick={() => removeToast(toast.id)}>

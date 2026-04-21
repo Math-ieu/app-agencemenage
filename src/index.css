@@ -3132,6 +3132,10 @@ form.submitted input:invalid:focus {
   border-left-color: var(--blue);
 }
 
+.toast-warning {
+  border-left-color: var(--orange);
+}
+
 .toast-icon {
   flex-shrink: 0;
 }
@@ -3146,6 +3150,10 @@ form.submitted input:invalid:focus {
 
 .toast-info .toast-icon {
   color: var(--blue);
+}
+
+.toast-warning .toast-icon {
+  color: var(--orange);
 }
 
 .toast-message {

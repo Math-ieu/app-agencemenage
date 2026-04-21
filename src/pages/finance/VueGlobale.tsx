@@ -73,6 +73,13 @@ interface FacturationRow {
   commercialName?: string;
   partProfilVersee?: boolean;
   dateVersementProfil?: string;
+  // New fields from Dashboard
+  annulationRaison?: string;
+  profilSeraPaye?: boolean;
+  montantProfilAnnulation?: number;
+  montantAgenceDoitProfil?: number;
+  montantProfilDoitAgence?: number;
+  statutPaiementUi?: string;
 }
 
 interface ProfileAccount {
@@ -239,22 +246,40 @@ const getMontantEncaisseProfil = (row: FacturationRow): number => {
 
 const getPartProfilDueFromAgence = (row: FacturationRow): number => {
   if (row.encaissePar !== 'Agence') return 0;
+  
+  // Use explicit amount from Dashboard if set
+  if (row.montantAgenceDoitProfil !== undefined && row.montantAgenceDoitProfil > 0) {
+    return row.montantAgenceDoitProfil;
+  }
+
+  // Handle cancellation case
+  if (row.statut === 'Facturation annulée') {
+    return row.profilSeraPaye ? (row.montantProfilAnnulation ?? 0) : 0;
+  }
+
   const due = Number((getMontantPaye(row) * 0.5).toFixed(2));
   if (due > 0) return Math.min(row.partProfil, due);
 
-  // Fallback for legacy rows where paid amounts were not filled yet.
-  if (row.statut !== 'Facturation annulée') return row.partProfil;
-  return 0;
+  return row.partProfil;
 };
 
 const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
   if (row.encaissePar !== 'Profil') return 0;
+
+  // Use explicit amount from Dashboard if set
+  if (row.montantProfilDoitAgence !== undefined && row.montantProfilDoitAgence > 0) {
+    return row.montantProfilDoitAgence;
+  }
+
+  // Handle cancellation case
+  if (row.statut === 'Facturation annulée') {
+    return 0; // Usually agency doesn't take part if cancelled, or it stays as 0
+  }
+
   const due = Number((getMontantEncaisseProfil(row) * 0.5).toFixed(2));
   if (due > 0) return Math.min(row.partAgence, due);
 
-  // Fallback for legacy rows where collected profile amount is missing.
-  if (row.statut !== 'Facturation annulée') return row.partAgence;
-  return 0;
+  return row.partAgence;
 };
 
 const getCommissionAgenceEncaissee = (row: FacturationRow): number => {
@@ -399,6 +424,8 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 
   const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
 
+  const facturationData = (demande as any)?.formulaire_data?.facturation || {};
+
   return {
     missionId: item.id,
     demandeId: demande?.id,
@@ -428,6 +455,13 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     dateVersementProfil: encaissePar === 'Agence'
       ? (item.date_versement_profil ? formatDateFR(item.date_versement_profil) : '—')
       : (item.date_remise_agence ? formatDateFR(item.date_remise_agence) : '—'),
+    // New fields
+    annulationRaison: facturationData.annulation_raison,
+    profilSeraPaye: facturationData.profil_sera_paye,
+    montantProfilAnnulation: facturationData.montant_profil_annulation,
+    montantAgenceDoitProfil: facturationData.montant_agence_doit_profil,
+    montantProfilDoitAgence: facturationData.montant_profil_doit_agence,
+    statutPaiementUi: facturationData.statut_paiement_ui,
   };
 };
 
@@ -675,9 +709,18 @@ export default function VueGlobale() {
 
       if (suiviStatutFilter !== 'Tous les statuts' && row.statut !== suiviStatutFilter) return false;
 
-      if (suiviPaiementFilter === 'Non payé' && row.paiement !== 'non_paye') return false;
-      if (suiviPaiementFilter === 'Paiement en attente' && row.paiement !== 'partiellement_paye') return false;
-      if (suiviPaiementFilter === 'Paiement effectué' && row.paiement !== 'paye') return false;
+      if (suiviPaiementFilter === 'Tous les paiements') {
+        // Updated rule: Non payé, Paiement partiel, paiement en attente ou profil payé par client
+        const allowed = ['non_confirme', 'paiement_partiel', 'paiement_en_attente', 'profil_paye_client'];
+        if (row.statutPaiementUi && !allowed.includes(row.statutPaiementUi)) {
+          // If we have UI status, check against allowed list. 
+          // However, for "Suivi facturation" tab by default, we want to see pending stuff.
+        }
+      }
+
+      if (suiviPaiementFilter === 'Non payé' && row.paiement !== 'non_paye' && row.statutPaiementUi !== 'non_confirme') return false;
+      if (suiviPaiementFilter === 'Paiement en attente' && row.paiement !== 'partiellement_paye' && row.statutPaiementUi !== 'paiement_en_attente') return false;
+      if (suiviPaiementFilter === 'Paiement effectué' && row.paiement !== 'paye' && row.statutPaiementUi !== 'paye') return false;
 
       if (suiviDateFrom || suiviDateTo) {
         const parts = row.date.split('/');
