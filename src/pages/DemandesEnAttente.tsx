@@ -92,7 +92,7 @@ export default function DemandesEnAttente() {
       toilettesLavabo: 0,
       rooftop: 0,
       escalier: 0
-    }
+    } as Record<string, number>
   });
 
   const { user } = useAuthStore();
@@ -820,709 +820,528 @@ export default function DemandesEnAttente() {
               <button className="btn-close" onClick={() => setShowCreateModal(false)}><XCircle size={24} /></button>
             </div>
             <div className="modal-body">
-              <form className={`form-grid ${formSubmitted ? 'submitted' : ''}`} id="create-request-form">
-                <div className="form-section full-width">
-                  <h3>Informations Client</h3>
-                </div>
-                <div className="form-group">
-                  <label className="label-teal">Nom *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Jean Dupont"
-                    value={formData.nom}
-                    onChange={e => setFormData({ ...formData, nom: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="label-teal">Tél. direct *</label>
-                  <div className="flex gap-2">
-                    <input type="text" defaultValue="+212" className="phone-prefix" required />
-                    <input
-                      type="text"
-                      className="flex-1 phone-number"
-                      placeholder="6 12 00 00 00"
-                      value={directPhone}
-                      required
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setDirectPhone(val);
-                        if (syncWhatsApp) setWhatsappPhone(val);
-                      }}
-                    />
-                  </div>
-                </div>
+              <form className={`${formSubmitted ? 'submitted' : ''}`} id="create-request-form" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
-                <div className="form-group">
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="label-teal mb-0">Tél. WhatsApp *</label>
-                  </div>
-                  <div className="flex gap-2">
-                    <input type="text" defaultValue="+212" className="phone-prefix" required disabled={syncWhatsApp} />
-                    <input
-                      type="text"
-                      className="flex-1 phone-number"
-                      placeholder="6 12 00 00 00"
-                      value={whatsappPhone}
-                      required
-                      onChange={(e) => setWhatsappPhone(e.target.value)}
-                      disabled={syncWhatsApp}
-                    />
-                  </div>
-                </div>
+                {/* ====== CONDITIONAL SERVICE SECTIONS ====== */}
+                {(selectedService === 'Auxiliaire de vie') ? (
+                  /* Auxiliaire de vie - Service sur mesure */
+                  <div className="ws-form-block">
+                    <div className="ws-section-header">Service sur mesure — {selectedService}</div>
 
-                <div className="form-group">
-                  <label className="label-teal">Ville *</label>
-                  <input
-                    type="text"
-                    className="phone-number"
-                    required
-                    value={formData.ville}
-                    onChange={e => setFormData({ ...formData, ville: e.target.value })}
-                  />
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <div className="ws-section-header" style={{ background: '#f1f5f9', color: 'var(--primary)', fontSize: '0.9rem' }}>Lieu de la garde</div>
+                        <div className="ws-radio-pills">
+                          {['domicile', 'clinique', 'hopital'].map(loc => (
+                            <label key={loc} className="ws-radio-pill">
+                              <input type="radio" name="careLocation" value={loc} checked={formData.lieu_garde === loc} onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })} />
+                              <span>{loc === 'domicile' ? 'Domicile' : loc === 'clinique' ? 'Clinique' : 'Hôpital'}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
 
-                <div className="form-group">
-                  <label className="label-teal">Email</label>
-                  <input
-                    type="email"
-                    className="phone-number"
-                    placeholder="nom@domaine.com"
-                    value={formData.email}
-                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                  />
-                </div>
-
-                {activeSegment === 'entreprise' && (
-                  <>
-                    <div className="form-group">
-                      <label className="label-teal">Nom entreprise *</label>
-                      <input
-                        type="text"
-                        className="phone-number"
-                        required
-                        value={formData.entity_name}
-                        onChange={e => setFormData({ ...formData, entity_name: e.target.value })}
-                      />
+                      <div className="form-group">
+                        <label className="label-teal">Fréquence *</label>
+                        <select className="ws-select" required value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })}>
+                          <option value="">Sélectionner...</option>
+                          <option value="ponctuel">Une fois - Tranche 24h</option>
+                          <option value="1/sem">Abonnement - 1 fois / semaine</option>
+                          <option value="quotidien">Abonnement - Quotidien</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="label-teal">Nombre de jours *</label>
+                        <div className="ws-counter">
+                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_jours: Math.max(1, formData.nb_jours - 1) })} disabled={formData.nb_jours <= 1}>−</button>
+                          <span className="ws-counter-value">{formData.nb_jours}</span>
+                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_jours: formData.nb_jours + 1 })}>+</button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="form-group">
-                      <label className="label-teal">Personne de contact *</label>
-                      <input
-                        type="text"
-                        className="phone-number"
-                        required
-                        value={formData.contact_person}
-                        onChange={e => setFormData({ ...formData, contact_person: e.target.value, nom: e.target.value })}
-                      />
+
+                    <div className="ws-section-header" style={{ marginTop: '1rem', background: '#f1f5f9', color: 'var(--primary)', fontSize: '0.9rem' }}>Profil de la personne aidée</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
+                      <div className="form-group">
+                        <label className="label-teal">Âge *</label>
+                        <input type="number" placeholder="Ans" required value={formData.age_personne} onChange={e => setFormData({ ...formData, age_personne: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label className="label-teal">Sexe *</label>
+                        <select className="ws-select" required value={formData.sexe_personne} onChange={e => setFormData({ ...formData, sexe_personne: e.target.value })}>
+                          <option value="">Sélectionner...</option>
+                          <option value="femme">Femme</option>
+                          <option value="homme">Homme</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="label-teal">Mobilité *</label>
+                        <select className="ws-select" required value={formData.mobilite} onChange={e => setFormData({ ...formData, mobilite: e.target.value })}>
+                          <option value="">Sélectionner...</option>
+                          <option value="adulte">Adulte</option>
+                          <option value="agee">Personne Agée</option>
+                          <option value="autonome">Autonome</option>
+                          <option value="besoin_aide">Besoin d'aide</option>
+                          <option value="alitee">Alité(e)</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="label-teal">Pathologie / Situation médicale *</label>
+                        <textarea rows={2} placeholder="Précisez la situation..." required value={formData.situation_medicale} onChange={e => setFormData({ ...formData, situation_medicale: e.target.value })}></textarea>
+                      </div>
                     </div>
-                  </>
-                )}
+                  </div>
+                ) : selectedService === 'Placement & gestion' ? (
+                  /* Placement & gestion - Service sur mesure */
+                  <div className="ws-form-block">
+                    <div className="ws-section-header">Service sur mesure — {selectedService}</div>
+                    <p style={{ textAlign: 'center', color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>Un chargé de clientèle prendra contact avec l'entreprise pour établir une offre personnalisée.</p>
 
-                <div className="form-group full-width" style={{ marginTop: '-5px', marginBottom: '10px' }}>
-                  <label className="custom-checkbox-container">
-                    <input
-                      type="checkbox"
-                      checked={syncWhatsApp}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setSyncWhatsApp(checked);
-                        if (checked) setWhatsappPhone(directPhone);
-                      }}
-                    />
-                    <span className="checkbox-checkmark"></span>
-                    <span className="checkbox-label">Utilisez-vous ce numéro pour WhatsApp ?</span>
-                  </label>
-                </div>
+                    <div className="ws-section-header" style={{ background: '#f1f5f9', color: 'var(--primary)', fontSize: '0.9rem' }}>Type de service</div>
+                    <div className="ws-radio-pills">
+                      {[{ v: 'flexible', l: 'Service ménage flexible' }, { v: 'premium', l: 'Service ménage Premium' }].map(o => (
+                        <label key={o.v} className="ws-radio-pill">
+                          <input type="radio" name="placementServiceType" value={o.v} checked={formData.service_type === o.v} onChange={e => setFormData({ ...formData, service_type: e.target.value })} />
+                          <span>{o.l}</span>
+                        </label>
+                      ))}
+                    </div>
 
-                <div className="form-group">
-                  <label className="label-teal">Quartier *</label>
-                  <select
-                    className="phone-number"
-                    required
-                    value={formData.quartier}
-                    onChange={e => setFormData({ ...formData, quartier: e.target.value })}
-                  >
-                    <option value="">Sélectionner</option>
-                    <option value="Maârif">Maârif</option>
-                    <option value="Gauthier">Gauthier</option>
-                    <option value="Racine">Racine</option>
-                    <option value="Palmier">Palmier</option>
-                    <option value="Bourgogne">Bourgogne</option>
-                    <option value="Derb Ghallef">Derb Ghallef</option>
-                    <option value="Hôpitaux">Hôpitaux</option>
-                    <option value="Belvédère">Belvédère</option>
-                    <option value="Roches Noires">Roches Noires</option>
-                    <option value="Anfa">Anfa</option>
-                    <option value="Aïn Diab">Aïn Diab</option>
-                    <option value="Californie">Californie</option>
-                    <option value="L'Oasis">L'Oasis</option>
-                    <option value="Polo">Polo</option>
-                    <option value="CIL (Hay El Hanaa)">CIL (Hay El Hanaa)</option>
-                    <option value="Sidi Maârouf">Sidi Maârouf</option>
-                    <option value="Casablanca Finance City (CFC)">Casablanca Finance City (CFC)</option>
-                    <option value="Habous (Nouvelle Médina)">Habous (Nouvelle Médina)</option>
-                    <option value="Ancienne Médina">Ancienne Médina</option>
-                    <option value="Mers Sultan">Mers Sultan</option>
-                    <option value="Derb Sultan">Derb Sultan</option>
-                    <option value="Hay Mohammadi">Hay Mohammadi</option>
-                    <option value="Al Fida">Al Fida</option>
-                    <option value="Aïn Chock">Aïn Chock</option>
-                    <option value="Hay Hassani">Hay Hassani</option>
-                    <option value="Sbata">Sbata</option>
-                    <option value="Ben M'sik">Ben M'sik</option>
-                    <option value="Sidi Othmane">Sidi Othmane</option>
-                    <option value="Moulay Rachid">Moulay Rachid</option>
-                    <option value="Aïn Sebaâ">Aïn Sebaâ</option>
-                    <option value="Sidi Bernoussi">Sidi Bernoussi</option>
-                    <option value="Sidi Moumen">Sidi Moumen</option>
-                    <option value="Lissasfa">Lissasfa</option>
-                    <option value="Bouskoura (périphérie sud)">Bouskoura (périphérie sud)</option>
-                    <option value="Dar Bouazza (périphérie côtière ouest)">Dar Bouazza (périphérie côtière ouest)</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="label-teal">Adresse *</label>
-                  <input
-                    type="text"
-                    className="phone-number"
-                    required
-                    value={formData.adresse}
-                    onChange={e => setFormData({ ...formData, adresse: e.target.value })}
-                  />
-                </div>
-
-                {/* Conditional Rendering for Custom Services */}
-                {(selectedService === 'Auxiliaire de vie' || selectedService === 'Placement & gestion') ? (
-                  <div className="form-section full-width mt-4">
-                    <div className="custom-service-box">
-                      <h3 className="custom-service-title">Service sur mesure — {selectedService}</h3>
-                      <p className="custom-service-text">
-                        {selectedService === 'Placement & gestion'
-                          ? "Un chargé de clientèle prendra contact avec l'entreprise pour établir une offre personnalisée."
-                          : "Un assistant social et garde-malade prendront contact avec le client pour valider les points essentiels."
-                        }
-                      </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem', marginTop: '0.75rem' }}>
+                      <div className="form-group">
+                        <label className="label-teal">Type de structure *</label>
+                        <select className="ws-select" required value={formData.structure_type} onChange={e => setFormData({ ...formData, structure_type: e.target.value })}>
+                          <option value="">Sélectionner...</option>
+                          <option value="bureaux">Bureaux</option>
+                          <option value="magasin">Magasin/Boutique</option>
+                          <option value="restaurant">Restaurant/Café</option>
+                          <option value="clinique">Clinique / Hôpital</option>
+                          <option value="hotel">Hôtel / Riad</option>
+                          <option value="residence">Immeuble/Résidence/Luxe</option>
+                          <option value="entrepot">Entrepôt</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="label-teal">Fréquence *</label>
+                        <select className="ws-select" required value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })}>
+                          <option value="">Sélectionner...</option>
+                          <option value="ponctuel">Une fois</option>
+                          <option value="1/sem">1 fois / semaine</option>
+                          <option value="2/sem">2 fois / semaine</option>
+                          <option value="3/sem">3 fois / semaine</option>
+                          <option value="1/mois">1 fois / mois</option>
+                          <option value="quotidien">Quotidien</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="label-teal">Nombre de personnel *</label>
+                        <div className="ws-counter">
+                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_personnel: Math.max(1, formData.nb_personnel - 1) })} disabled={formData.nb_personnel <= 1}>−</button>
+                          <span className="ws-counter-value">{formData.nb_personnel}</span>
+                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_personnel: formData.nb_personnel + 1 })}>+</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ) : (
+                  /* ====== STANDARD MÉNAGE SERVICES ====== */
                   <>
-                    <div className="form-section full-width">
-                      <h3>Détails du service</h3>
-                    </div>
-                    <div className="form-group">
-                      <label>Date d'intervention *</label>
-                      <input
-                        type="date"
-                        required
-                        value={formData.date}
-                        onChange={e => setFormData({ ...formData, date: e.target.value })}
-                      />
-                    </div>
-                    <div className="form-group full-width">
-                      <label>Type de planification *</label>
-                      <div className="flex gap-4 flex-wrap mt-1">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="schedulingType"
-                            value="fixed"
-                            className="w-4 h-4 text-primary"
-                            checked={formData.scheduling_type === 'fixed'}
-                            onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })}
-                          />
-                          <span className="text-sm font-medium">Heure fixe</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="schedulingType"
-                            value="flexible"
-                            className="w-4 h-4 text-primary"
-                            checked={formData.scheduling_type === 'flexible'}
-                            onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })}
-                          />
-                          <span className="text-sm font-medium">Plage horaire</span>
-                        </label>
-                      </div>
-                    </div>
-                    {formData.scheduling_type === 'fixed' ? (
-                      <div className="form-group">
-                        <label>Heure *</label>
-                        <input
-                          type="time"
-                          required={formData.scheduling_type === 'fixed'}
-                          value={formData.heure}
-                          onChange={e => setFormData({ ...formData, heure: e.target.value })}
-                        />
-                      </div>
-                    ) : (
-                      <div className="form-group">
-                        <label>Préférence horaire *</label>
-                        <select
-                          required={formData.scheduling_type === 'flexible'}
-                          value={formData.preference_horaire}
-                          onChange={e => setFormData({ ...formData, preference_horaire: e.target.value })}
-                        >
-                          <option value="">Choisir...</option>
-                          <option value="matin">Matin (08h - 12h)</option>
-                          <option value="apres_midi">Après-midi (14h - 18h)</option>
-                        </select>
+                    {/* Type d'habitation */}
+                    {(selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage')) && (
+                      <div className="ws-form-block">
+                        <div className="ws-section-header">
+                          {selectedService === 'Ménage bureaux' ? "Type de local professionnel" : "Type d'habitation"}
+                        </div>
+                        <div className="ws-radio-pills">
+                          {(selectedService === 'Ménage bureaux'
+                            ? ['Bureau', 'Magasin', 'Restaurant', 'Clinique', 'Hôtel', 'Entrepôt']
+                            : ['Studio', 'Appartement', 'Duplex', 'Villa', 'Maison']
+                          ).map(type => (
+                            <label key={type} className="ws-radio-pill">
+                              <input type="radio" name="propertyType" value={type} checked={formData.type_habitation === type} onChange={e => setFormData({ ...formData, type_habitation: e.target.value })} />
+                              <span>{type}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     )}
 
-                    {/* Champs dynamiques selon le service */}
-                    {(selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage')) && (
-                      <>
-                        <div className="form-group">
-                          <label>Type d'habitation *</label>
-                          <select
-                            required
-                            value={formData.type_habitation}
-                            onChange={e => setFormData({ ...formData, type_habitation: e.target.value })}
-                          >
-                            <option value="">Choisir...</option>
-                            <option value="Studio">Studio</option>
-                            <option value="Appartement">Appartement</option>
-                            <option value="Duplex">Duplex</option>
-                            <option value="Villa">Villa</option>
-                            <option value="Maison">Maison</option>
-                            <option value="Bureau">Bureau</option>
-                          </select>
+                    {/* Nature d'intervention (Post-sinistre) */}
+                    {selectedService.toLowerCase().includes('post-sinistre') && (
+                      <div className="ws-form-block">
+                        <div className="ws-section-header">Nature de l'intervention</div>
+                        <div className="ws-nature-cards">
+                          {[
+                            { v: 'sinistre', l: '🔥 Après sinistre' },
+                            { v: 'event', l: '🎉 Post évènement' },
+                            { v: 'express', l: '⚡ Remise en état express' },
+                            { v: 'autre', l: '📋 Autre situation urgente' }
+                          ].map(n => (
+                            <div key={n.v} className={`ws-nature-card ${formData.intervention_nature === n.v ? 'active' : ''}`} onClick={() => setFormData({ ...formData, intervention_nature: n.v })}>
+                              {n.l}
+                            </div>
+                          ))}
                         </div>
+                      </div>
+                    )}
 
-                        {selectedService.toLowerCase().includes('post-sinistre') && (
+                    {/* État du logement (Déménagement) */}
+                    {selectedService.toLowerCase().includes('post-déménagement') && (
+                      <div className="ws-form-block">
+                        <div className="ws-section-header">État du logement</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
                           <div className="form-group">
-                            <label>Nature de l'intervention *</label>
-                            <select
-                              required
-                              value={formData.intervention_nature}
-                              onChange={e => setFormData({ ...formData, intervention_nature: e.target.value })}
-                            >
-                              <option value="sinistre">Après sinistre</option>
-                              <option value="event">Post évènement</option>
-                              <option value="express">Remise en état express</option>
-                              <option value="autre">Autre situation urgente</option>
+                            <label className="label-teal">État du logement *</label>
+                            <select className="ws-select" required value={formData.accommodation_state} onChange={e => setFormData({ ...formData, accommodation_state: e.target.value })}>
+                              <option value="">Choisir...</option>
+                              <option value="vide">Vide</option>
+                              <option value="meuble">Meublé</option>
                             </select>
                           </div>
-                        )}
+                          <div className="form-group">
+                            <label className="label-teal">Niveau de salissure *</label>
+                            <select className="ws-select" required value={formData.cleanliness_type} onChange={e => setFormData({ ...formData, cleanliness_type: e.target.value })}>
+                              <option value="">Choisir...</option>
+                              <option value="normal">Normal</option>
+                              <option value="intensif">Intensif</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                        {selectedService.toLowerCase().includes('post-déménagement') && (
-                          <>
-                            <div className="form-group">
-                              <label>État du logement *</label>
-                              <select
-                                required
-                                value={formData.accommodation_state}
-                                onChange={e => setFormData({ ...formData, accommodation_state: e.target.value })}
-                              >
-                                <option value="">Choisir...</option>
-                                <option value="vide">Vide</option>
-                                <option value="meuble">Meublé</option>
-                              </select>
-                            </div>
-                            <div className="form-group">
-                              <label>Niveau de salissure *</label>
-                              <select
-                                required
-                                value={formData.cleanliness_type}
-                                onChange={e => setFormData({ ...formData, cleanliness_type: e.target.value })}
-                              >
-                                <option value="">Choisir...</option>
-                                <option value="normal">Normal</option>
-                                <option value="intensif">Intensif</option>
-                              </select>
-                            </div>
-                          </>
-                        )}
-
-                        <div className="form-group">
-                          <label>Fréquence *</label>
-                          <select
-                            required
-                            value={formData.frequence}
-                            onChange={e => setFormData({ ...formData, frequence: e.target.value })}
-                          >
-                            <option value="">Choisir...</option>
-                            <option value="ponctuel">Une fois</option>
-                            <option value="1/sem">Abonnement - 1 fois / semaine</option>
-                            <option value="2/sem">Abonnement - 2 fois / semaine</option>
-                            <option value="3/sem">Abonnement - 3 fois / semaine</option>
-                            <option value="1/mois">Abonnement - 1 fois / mois</option>
+                    {/* Fréquence */}
+                    <div className="ws-form-block">
+                      <div className="ws-section-header">Choisissez la fréquence</div>
+                      <div className="ws-freq-toggle">
+                        <button type="button" className={formData.frequence === 'ponctuel' || !formData.frequence ? 'active' : ''} onClick={() => setFormData({ ...formData, frequence: 'ponctuel' })}>
+                          Une fois
+                        </button>
+                        <button type="button" className={formData.frequence !== 'ponctuel' && formData.frequence ? 'active' : ''} onClick={() => setFormData({ ...formData, frequence: '1/sem' })}>
+                          Abonnement
+                        </button>
+                      </div>
+                      {formData.frequence && formData.frequence !== 'ponctuel' && (
+                        <div style={{ maxWidth: '380px', margin: '0 auto' }}>
+                          <div className="ws-discount-badge">-10 % de réduction sur l'abonnement</div>
+                          <select className="ws-select" value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })}>
+                            <option value="1/sem">1 fois par semaine</option>
+                            <option value="2/sem">2 fois par semaine</option>
+                            <option value="3/sem">3 fois par semaine</option>
+                            <option value="4/sem">4 fois par semaine</option>
+                            <option value="5/sem">5 fois par semaine</option>
+                            <option value="6/sem">6 fois par semaine</option>
+                            <option value="7/sem">7 fois par semaine</option>
+                            <option value="1/mois">1 fois par mois</option>
+                            <option value="2/mois">2 fois par mois</option>
+                            <option value="3/mois">3 fois par mois</option>
+                            <option value="4/mois">4 fois par mois</option>
                           </select>
                         </div>
+                      )}
+                    </div>
 
-                        <div className="form-group">
-                          <label>Nb intervenants *</label>
-                          <input
-                            type="number"
-                            min={1}
-                            required
-                            value={formData.nb_intervenants}
-                            onChange={e => setFormData({ ...formData, nb_intervenants: parseInt(e.target.value) || 1 })}
-                          />
-                        </div>
-
-                        <div className="form-group">
-                          <label>Surface (m²) *</label>
-                          <input
-                            type="number"
-                            min={1}
-                            required
-                            value={formData.surface}
-                            onChange={e => setFormData({ ...formData, surface: parseInt(e.target.value) || 0 })}
-                          />
-                        </div>
-
-                        <div className="form-group">
-                          <label>Durée (Heures) *</label>
-                          <input
-                            type="number"
-                            min={1}
-                            required
-                            value={formData.duree}
-                            onChange={e => setFormData({ ...formData, duree: parseInt(e.target.value) || 1 })}
-                          />
-                        </div>
-
-                        {selectedService === "Ménage standard" && (
-                          <div
-                            className="form-section full-width"
-                            style={{
-                              background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
-                              padding: '16px',
-                              borderRadius: '12px',
-                              border: '1px solid #dbe3ea',
-                            }}
-                          >
-                            <div style={{ marginBottom: '12px' }}>
-                              <h3 style={{ color: '#0f766e', margin: 0, fontSize: '16px', fontWeight: 700 }}>Détails des pièces</h3>
-                              <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '12px' }}>
-                                Ajustez le nombre de pièces pour estimer correctement la charge de travail.
-                              </p>
+                    {/* Détails des pièces (Ménage Standard uniquement) */}
+                    {selectedService === 'Ménage standard' && (
+                      <div className="ws-form-block">
+                        <div className="ws-section-header">Merci de nous décrire votre domicile</div>
+                        <p style={{ color: '#ef4444', fontSize: '0.75rem', textAlign: 'right', fontWeight: 700, marginBottom: '0.5rem' }}>
+                          Cliquez sur + ou - pour décrire les pièces
+                        </p>
+                        <div className="ws-rooms-grid" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.5rem' }}>
+                          {[
+                            { key: 'cuisine', label: 'Cuisine', time: '45 min' },
+                            { key: 'suiteAvecBain', label: 'Suite parentale avec salle de bain', time: '75 min' },
+                            { key: 'suiteSansBain', label: 'Suite parentale sans salle de bain', time: '45 min' },
+                            { key: 'salleDeBain', label: 'Salle de bain', time: '30 min' },
+                            { key: 'chambre', label: 'Chambre/pièce/bureau', time: '40 min' },
+                            { key: 'salonMarocain', label: 'Salon Marocain', time: '35 min' },
+                            { key: 'salonEuropeen', label: 'Salon européen', time: '35 min' },
+                            { key: 'toilettesLavabo', label: 'Toilette Lavabo', time: '25 min' },
+                            { key: 'rooftop', label: 'Rooftop', time: '30 min' },
+                            { key: 'escalier', label: 'Escalier', time: '25 min' }
+                          ].map(room => (
+                            <div key={room.key} className="ws-room-row">
+                              <div>
+                                <div className="ws-room-label">{room.label}</div>
+                                <div className="ws-room-time">{room.time}</div>
+                              </div>
+                              <div className="ws-room-counter">
+                                <button type="button" className="ws-room-btn" onClick={() => setFormData({ ...formData, rooms: { ...formData.rooms, [room.key]: Math.max(0, (formData.rooms[room.key] || 0) - 1) } })}>−</button>
+                                <span className="ws-room-count">{formData.rooms[room.key] || 0}</span>
+                                <button type="button" className="ws-room-btn" onClick={() => setFormData({ ...formData, rooms: { ...formData.rooms, [room.key]: (formData.rooms[room.key] || 0) + 1 } })}>+</button>
+                              </div>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                              {Object.entries(formData.rooms).map(([key, value]) => (
-                                <div key={key} className="flex flex-col gap-1">
-                                  <label className="text-[11px] uppercase font-bold text-slate-500">{key.replace(/([A-Z])/g, ' $1').toLowerCase()}</label>
-                                  <div className="flex items-center gap-2">
-                                    <button 
-                                      type="button" 
-                                      className="w-8 h-8 flex items-center justify-center bg-white border border-slate-300 rounded hover:bg-slate-100"
-                                      onClick={() => setFormData({
-                                        ...formData,
-                                        rooms: { ...formData.rooms, [key]: Math.max(0, (value as number) - 1) }
-                                      })}
-                                    >-</button>
-                                    <input 
-                                      type="number" 
-                                      className="w-12 text-center border-none bg-transparent font-bold"
-                                      value={value as number}
-                                      readOnly
-                                    />
-                                    <button 
-                                      type="button" 
-                                      className="w-8 h-8 flex items-center justify-center bg-white border border-slate-300 rounded hover:bg-slate-100"
-                                      onClick={() => setFormData({
-                                        ...formData,
-                                        rooms: { ...formData.rooms, [key]: (value as number) + 1 }
-                                      })}
-                                    >+</button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Surface (Grand Ménage, Fin Chantier, Déménagement) */}
+                    {(selectedService === 'Grand ménage' || selectedService.toLowerCase().includes('fin de chantier') || selectedService.toLowerCase().includes('fin chantier') || selectedService.toLowerCase().includes('post-déménagement')) && (
+                      <div className="ws-form-block">
+                        <div className="ws-section-header">Superficie de votre bien en m²</div>
+                        <div className="ws-slider-container">
+                          <div className="ws-slider-value">{formData.surface} m²</div>
+                          <input type="range" className="ws-slider-input" min={0} max={300} step={10} value={formData.surface} onChange={e => setFormData({ ...formData, surface: parseInt(e.target.value) })} />
+                          <div className="ws-slider-labels">
+                            <span>0 m²</span>
+                            <span>150 m²</span>
+                            <span>300 m²</span>
                           </div>
-                        )}
-
-                        <div className="form-group full-width">
-                          <label>Détails des pièces (Notes additionnelles)</label>
-                          <textarea
-                            rows={2}
-                            placeholder="Ex: Précisions sur l'état des lieux, fragilités..."
-                            value={formData.details_pieces}
-                            onChange={e => setFormData({ ...formData, details_pieces: e.target.value })}
-                          ></textarea>
                         </div>
+                      </div>
+                    )}
 
-                        <div className="form-section">
-                          <h3>Services Optionnels</h3>
+                    {/* Surface bureau (cards) */}
+                    {selectedService === 'Ménage bureaux' && (
+                      <div className="ws-form-block">
+                        <div className="ws-section-header">Superficie de vos locaux</div>
+                        <div className="ws-surface-cards">
+                          {[
+                            { v: '0-70', l: '0 - 70 m²' },
+                            { v: '71-150', l: '71 - 150 m²' },
+                            { v: '151-300', l: '151 - 300 m²' },
+                            { v: '300+', l: '300 m² et plus' }
+                          ].map(s => (
+                            <div key={s.v} className={`ws-surface-card ${String(formData.surface) === s.v ? 'active' : ''}`} onClick={() => setFormData({ ...formData, surface: s.v as any })}>
+                              {s.l}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Durée */}
+                    {(selectedService === 'Ménage standard' || selectedService === 'Grand ménage' || selectedService === 'Ménage Air BnB' || selectedService === 'Ménage bureaux') && (
+                      <div className="ws-form-block">
+                        <div className="ws-section-header">Précisez le temps qui vous convient</div>
+                        <p style={{ color: '#ef4444', fontSize: '0.65rem', textAlign: 'center', marginBottom: '0.5rem' }}>
+                          La durée minimale est de {selectedService === 'Grand ménage' ? '6' : selectedService === 'Ménage bureaux' ? '2' : '4'} heures
+                        </p>
+                        <div className="ws-counter">
+                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: Math.max(selectedService === 'Grand ménage' ? 6 : selectedService === 'Ménage bureaux' ? 2 : 4, formData.duree - 1) })} disabled={formData.duree <= (selectedService === 'Grand ménage' ? 6 : selectedService === 'Ménage bureaux' ? 2 : 4)}>−</button>
+                          <span className="ws-counter-value">{formData.duree}</span>
+                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: formData.duree + 1 })}>+</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Nombre de personnes */}
+                    {(selectedService === 'Ménage standard' || selectedService === 'Grand ménage' || selectedService === 'Ménage Air BnB' || selectedService === 'Ménage bureaux') && (
+                      <div className="ws-form-block">
+                        <div className="ws-section-header">Nombre de personne</div>
+                        <div className="ws-counter">
+                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: Math.max(1, formData.nb_intervenants - 1) })} disabled={formData.nb_intervenants <= 1}>−</button>
+                          <span className="ws-counter-value">{formData.nb_intervenants}</span>
+                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: formData.nb_intervenants + 1 })}>+</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Planning */}
+                    <div className="ws-form-block">
+                      <div className="ws-section-header">Planning pour votre demande</div>
+                      <div className="ws-planning-grid">
+                        <div className="ws-planning-col">
+                          <label className="ws-planning-radio-label">
+                            <input type="radio" name="schedulingType" value="fixed" checked={formData.scheduling_type === 'fixed'} onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })} />
+                            <span>Heure fixe</span>
+                          </label>
+                          <input type="time" value={formData.heure} onChange={e => setFormData({ ...formData, heure: e.target.value })} disabled={formData.scheduling_type !== 'fixed'} style={{ width: '120px', textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px' }} />
+                        </div>
+                        <div className="ws-planning-col">
+                          <label className="ws-planning-radio-label">
+                            <input type="radio" name="schedulingType" value="flexible" checked={formData.scheduling_type === 'flexible'} onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })} />
+                            <span>Je suis flexible</span>
+                          </label>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500 }}>
+                              <input type="radio" name="timePref" value="matin" checked={formData.preference_horaire === 'matin'} onChange={() => setFormData({ ...formData, preference_horaire: 'matin' })} disabled={formData.scheduling_type !== 'flexible'} style={{ accentColor: 'var(--primary)' }} />
+                              Le matin
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500 }}>
+                              <input type="radio" name="timePref" value="apres_midi" checked={formData.preference_horaire === 'apres_midi'} onChange={() => setFormData({ ...formData, preference_horaire: 'apres_midi' })} disabled={formData.scheduling_type !== 'flexible'} style={{ accentColor: 'var(--primary)' }} />
+                              L'après-midi
+                            </label>
+                          </div>
+                        </div>
+                        <div className="ws-planning-col">
+                          <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--primary)' }}>Date</div>
+                          <input type="date" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} style={{ padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem' }} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Services optionnels */}
+                    {(selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage')) && !selectedService.toLowerCase().includes('fin de chantier') && !selectedService.toLowerCase().includes('fin chantier') && (
+                      <div className="ws-form-block">
+                        <div className="ws-section-header">Services optionnels</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem' }}>
                           <div className="optional-service-card">
                             <div className="optional-service-info">
                               <span className="text-2xl">🧴</span>
                               <span>Produits de nettoyage (+90 MAD)</span>
                             </div>
                             <label className="toggle-switch">
-                              <input
-                                type="checkbox"
-                                checked={formData.produits}
-                                onChange={e => setFormData({ ...formData, produits: e.target.checked })}
-                              />
+                              <input type="checkbox" checked={formData.produits} onChange={e => setFormData({ ...formData, produits: e.target.checked })} />
                               <span className="toggle-slider"></span>
                             </label>
                           </div>
-
                           <div className="optional-service-card">
                             <div className="optional-service-info">
                               <span className="text-2xl">🧹</span>
                               <span>Torchons et serpillères (+40 MAD)</span>
                             </div>
                             <label className="toggle-switch">
-                              <input
-                                type="checkbox"
-                                checked={formData.torchons}
-                                onChange={e => setFormData({ ...formData, torchons: e.target.checked })}
-                              />
+                              <input type="checkbox" checked={formData.torchons} onChange={e => setFormData({ ...formData, torchons: e.target.checked })} />
                               <span className="toggle-slider"></span>
                             </label>
                           </div>
                         </div>
-                      </>
-                    )}
-
-                    {selectedService === "Placement & gestion" && (
-                      <>
-                        <div className="form-group full-width">
-                          <label>Type de service</label>
-                          <div className="flex gap-4 flex-wrap mt-1">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="placementServiceType"
-                                value="flexible"
-                                className="w-4 h-4 text-primary"
-                                checked={formData.service_type === 'flexible'}
-                                onChange={e => setFormData({ ...formData, service_type: e.target.value })}
-                              />
-                              <span className="text-sm font-medium">Service ménage flexible</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="placementServiceType"
-                                value="premium"
-                                className="w-4 h-4 text-primary"
-                                checked={formData.service_type === 'premium'}
-                                onChange={e => setFormData({ ...formData, service_type: e.target.value })}
-                              />
-                              <span className="text-sm font-medium">Service ménage Premium</span>
-                            </label>
-                          </div>
-                        </div>
-                        <div className="form-group">
-                          <label>Type de structure *</label>
-                          <select
-                            required
-                            value={formData.structure_type}
-                            onChange={e => setFormData({ ...formData, structure_type: e.target.value })}
-                          >
-                            <option value="">Sélectionner...</option>
-                            <option value="bureaux">Bureaux</option>
-                            <option value="magasin">Magasin/Boutique</option>
-                            <option value="restaurant">Restaurant/Café</option>
-                            <option value="clinique">Clinique / Hôpital</option>
-                            <option value="hotel">Hôtel / Riad</option>
-                            <option value="residence">Immeuble/Résidence/Luxe</option>
-                            <option value="entrepot">Entrepôt</option>
-                          </select>
-                        </div>
-                        <div className="form-group">
-                          <label>Fréquence *</label>
-                          <select
-                            required
-                            value={formData.frequence}
-                            onChange={e => setFormData({ ...formData, frequence: e.target.value })}
-                          >
-                            <option value="">Sélectionner...</option>
-                            <option value="ponctuel">Une fois</option>
-                            <option value="1/sem">Abonnement - 1 fois / semaine</option>
-                            <option value="2/sem">Abonnement - 2 fois / semaine</option>
-                            <option value="3/sem">Abonnement - 3 fois / semaine</option>
-                            <option value="1/mois">Abonnement - 1 fois / mois</option>
-                            <option value="quotidien">Abonnement - Quotidien</option>
-                          </select>
-                        </div>
-                        <div className="form-group">
-                          <label>Nombre de personnel *</label>
-                          <input
-                            type="number"
-                            min={1}
-                            required
-                            value={formData.nb_personnel}
-                            onChange={e => setFormData({ ...formData, nb_personnel: parseInt(e.target.value) || 1 })}
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {(selectedService.includes('Auxiliaire') || selectedService.includes('Garde malade') || selectedService.includes('Garde d\'enfant')) && (
-                      <>
-                        <div className="form-group full-width">
-                          <label>Lieu de la garde</label>
-                          <div className="flex gap-4 flex-wrap mt-1">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="careLocation"
-                                value="domicile"
-                                className="w-4 h-4 text-primary"
-                                checked={formData.lieu_garde === 'domicile'}
-                                onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
-                              />
-                              <span className="text-sm font-medium">Domicile</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="careLocation"
-                                value="clinique"
-                                className="w-4 h-4 text-primary"
-                                checked={formData.lieu_garde === 'clinique'}
-                                onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
-                              />
-                              <span className="text-sm font-medium">Clinique</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="radio"
-                                name="careLocation"
-                                value="hopital"
-                                className="w-4 h-4 text-primary"
-                                checked={formData.lieu_garde === 'hopital'}
-                                onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })}
-                              />
-                              <span className="text-sm font-medium">Hôpital</span>
-                            </label>
-                          </div>
-                        </div>
-                        <div className="form-group">
-                          <label>Fréquence *</label>
-                          <select
-                            required
-                            value={formData.frequence}
-                            onChange={e => setFormData({ ...formData, frequence: e.target.value })}
-                          >
-                            <option value="">Sélectionner...</option>
-                            <option value="ponctuel">Une fois - Tranche 24h</option>
-                            <option value="1/sem">Abonnement - 1 fois / semaine</option>
-                            <option value="quotidien">Abonnement - Quotidien</option>
-                          </select>
-                        </div>
-                        <div className="form-group">
-                          <label>Nombre de jours *</label>
-                          <input
-                            type="number"
-                            min={1}
-                            required
-                            value={formData.nb_jours}
-                            onChange={e => setFormData({ ...formData, nb_jours: parseInt(e.target.value) || 1 })}
-                          />
-                        </div>
-
-                        <div className="form-section full-width">
-                          <h3>Profil de la personne aidée</h3>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                            <div className="form-group">
-                              <label>Âge *</label>
-                              <input
-                                type="number"
-                                placeholder="Ans"
-                                required
-                                value={formData.age_personne}
-                                onChange={e => setFormData({ ...formData, age_personne: e.target.value })}
-                              />
-                            </div>
-                            <div className="form-group">
-                              <label>Sexe *</label>
-                              <select
-                                required
-                                value={formData.sexe_personne}
-                                onChange={e => setFormData({ ...formData, sexe_personne: e.target.value })}
-                              >
-                                <option value="">Sélectionner...</option>
-                                <option value="femme">Femme</option>
-                                <option value="homme">Homme</option>
-                              </select>
-                            </div>
-                            <div className="form-group">
-                              <label>Mobilité *</label>
-                              <select
-                                required
-                                value={formData.mobilite}
-                                onChange={e => setFormData({ ...formData, mobilite: e.target.value })}
-                              >
-                                <option value="">Sélectionner...</option>
-                                <option value="adulte">Adulte</option>
-                                <option value="agee">Personne Agée</option>
-                                <option value="autonome">Autonome</option>
-                                <option value="besoin_aide">Besoin d'aide</option>
-                                <option value="alitee">Alité(e)</option>
-                              </select>
-                            </div>
-                            <div className="form-group">
-                              <label>Pathologie / Situation médicale *</label>
-                              <textarea
-                                rows={2}
-                                placeholder="Précisez la situation..."
-                                required
-                                value={formData.situation_medicale}
-                                onChange={e => setFormData({ ...formData, situation_medicale: e.target.value })}
-                              ></textarea>
-                            </div>
-                          </div>
-                        </div>
-                      </>
+                      </div>
                     )}
                   </>
                 )}
 
+                {/* ====== LOCALISATION (all services) ====== */}
+                <div className="ws-form-block">
+                  <div className="ws-section-header">Où aura lieu votre {selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage') ? 'ménage' : 'intervention'} ?</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
+                    <div className="form-group">
+                      <label className="label-teal">Ville *</label>
+                      <select className="ws-select" required value={formData.ville} onChange={e => setFormData({ ...formData, ville: e.target.value, quartier: '' })}>
+                        {['Casablanca', 'Rabat', 'Bouskoura', 'Dar Bouazza', 'Mansouria', 'Almaz', 'Sidi Rahal', 'Benslimane', 'Mohammédia', 'Ville Verte'].map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="label-teal">Quartier *</label>
+                      <select className="ws-select" required value={formData.quartier} onChange={e => setFormData({ ...formData, quartier: e.target.value })}>
+                        <option value="">Sélectionner un quartier</option>
+                        {(({
+                          Casablanca: ['Maârif','Gauthier','Racine','Palmier','Bourgogne','Derb Ghallef','Hôpitaux','Belvédère','Roches Noires','Anfa','Aïn Diab','Californie',"L'Oasis",'Polo','CIL (Hay El Hanaa)','Sidi Maârouf','Casablanca Finance City (CFC)','Habous (Nouvelle Médina)','Ancienne Médina','Mers Sultan','Derb Sultan','Hay Mohammadi','Al Fida','Aïn Chock','Hay Hassani','Sbata',"Ben M'sik",'Sidi Othmane','Moulay Rachid','Aïn Sebaâ','Sidi Bernoussi','Sidi Moumen','Lissasfa','Bouskoura (périphérie sud)','Dar Bouazza (périphérie côtière ouest)'],
+                          Rabat: ['Agdal','Hassan','Hay Riad','Souissi',"L'Océan",'Les Orangers','Quartier des Ministères','Yacoub El Mansour','Médina','Akkari','Diour Jamaa'],
+                          Bouskoura: ['Ville Verte','Victoria','CGI','Golf','Centre-ville','Quartier Industriel'],
+                          'Dar Bouazza': ['Tamaris','Oued Merzeg','Jack Beach','Centre-ville','Dar Bouazza Plage'],
+                          Mansouria: ['Centre','Plage','Résidences Côtières'],
+                          Almaz: ['Almaz','Centre'],
+                          'Sidi Rahal': ['Sidi Rahal Chatai','Centre','Plage'],
+                          Benslimane: ['Centre-ville','Quartier Administratif','Quartier Industriel','Oasis'],
+                          Mohammédia: ['Parc','Alia','Rachidia','Mannesmann','Plage','Centre-ville','Yasmina','Wafaa'],
+                          'Ville Verte': ['Ville Verte (Bouskoura)','Centre']
+                        } as Record<string, string[]>)[formData.ville] || ['Autre']).map(q => (
+                          <option key={q} value={q}>{q}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                      <label className="label-teal">Adresse / Repères</label>
+                      <textarea rows={2} placeholder="Donnez-nous des repères pour faciliter l'intervention..." value={formData.adresse} onChange={e => setFormData({ ...formData, adresse: e.target.value })}></textarea>
+                    </div>
+                  </div>
+                  {['Bouskoura', 'Dar Bouazza', 'Mansouria', 'Almaz', 'Sidi Rahal', 'Benslimane', 'Mohammédia', 'Ville Verte'].includes(formData.ville) && (
+                    <div className="ws-surcharge-notice">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      <p>Un supplément de <strong>50 MAD</strong> sera facturé pour cette zone géographique.</p>
+                    </div>
+                  )}
+                </div>
 
-                <div className="form-section">
-                  <h3 style={{ color: '#547d7c' }}>Tarification & Paiement</h3>
+                {/* ====== INFORMATIONS CLIENT ====== */}
+                <div className="ws-form-block">
+                  <div className="ws-section-header">Mes informations</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
+                    {activeSegment === 'entreprise' && (
+                      <>
+                        <div className="form-group">
+                          <label className="label-teal">Nom entreprise *</label>
+                          <input type="text" required placeholder="Nom de l'entreprise" value={formData.entity_name} onChange={e => setFormData({ ...formData, entity_name: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="label-teal">Personne de contact *</label>
+                          <input type="text" required placeholder="Nom du contact" value={formData.contact_person} onChange={e => setFormData({ ...formData, contact_person: e.target.value, nom: e.target.value })} />
+                        </div>
+                      </>
+                    )}
+                    {activeSegment === 'particulier' && (
+                      <div className="form-group">
+                        <label className="label-teal">Nom complet *</label>
+                        <input type="text" required placeholder="Ex: Jean Dupont" value={formData.nom} onChange={e => setFormData({ ...formData, nom: e.target.value })} />
+                      </div>
+                    )}
+                    <div className="form-group">
+                      <label className="label-teal">Numéro de téléphone *</label>
+                      <div className="flex gap-2">
+                        <input type="text" defaultValue="+212" className="phone-prefix" style={{ width: '80px' }} required />
+                        <input
+                          type="text"
+                          className="flex-1 phone-number"
+                          placeholder="6 12 00 00 00"
+                          value={directPhone}
+                          required
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDirectPhone(val);
+                            if (syncWhatsApp) setWhatsappPhone(val);
+                          }}
+                        />
+                      </div>
+                      <label className="custom-checkbox-container" style={{ marginTop: '4px' }}>
+                        <input type="checkbox" checked={syncWhatsApp} onChange={(e) => { const checked = e.target.checked; setSyncWhatsApp(checked); if (checked) setWhatsappPhone(directPhone); }} />
+                        <span className="checkbox-checkmark"></span>
+                        <span className="checkbox-label">Utilisez-vous ce numéro pour WhatsApp ?</span>
+                      </label>
+                    </div>
+                    <div className="form-group">
+                      <label className="label-teal">Numéro WhatsApp</label>
+                      <div className="flex gap-2">
+                        <input type="text" defaultValue="+212" className="phone-prefix" style={{ width: '80px' }} disabled={syncWhatsApp} />
+                        <input type="text" className="flex-1 phone-number" placeholder="6 12 00 00 00" value={whatsappPhone} onChange={(e) => setWhatsappPhone(e.target.value)} disabled={syncWhatsApp} />
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="label-teal">Email</label>
+                      <input type="email" placeholder="nom@domaine.com" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                    </div>
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>Montant total (MAD) *</label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    required
-                    value={formData.montant}
-                    onChange={e => setFormData({ ...formData, montant: e.target.value })}
-                  />
+
+                {/* ====== TARIFICATION & PAIEMENT ====== */}
+                <div className="ws-form-block">
+                  <div className="ws-section-header" style={{ background: '#547d7c' }}>Tarification & Paiement</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
+                    <div className="form-group">
+                      <label className="label-teal">Montant total (MAD) *</label>
+                      <input type="number" placeholder="0.00" required value={formData.montant} onChange={e => setFormData({ ...formData, montant: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label-teal">Mode de paiement *</label>
+                      <select className="ws-select" required value={formData.mode_paiement} onChange={e => setFormData({ ...formData, mode_paiement: e.target.value })}>
+                        <option value="">Choisir...</option>
+                        <option value="virement">Virement</option>
+                        <option value="cheque">Par chèque</option>
+                        <option value="agence">À l'agence</option>
+                        <option value="sur_place">Sur place</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="label-teal">Statut de paiement</label>
+                      <select className="ws-select" value={formData.statut_paiement} onChange={e => setFormData({ ...formData, statut_paiement: e.target.value })}>
+                        <option value="non_paye">Non payé</option>
+                        <option value="acompte">Acompte versé</option>
+                        <option value="partiel">Paiement partiel</option>
+                        <option value="integral">Paiement intégral</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>Mode de paiement *</label>
-                  <select
-                    required
-                    value={formData.mode_paiement}
-                    onChange={e => setFormData({ ...formData, mode_paiement: e.target.value })}
-                  >
-                    <option value="">Choisir...</option>
-                    <option value="virement">Virement</option>
-                    <option value="cheque">Par chèque</option>
-                    <option value="agence">À l'agence</option>
-                    <option value="sur_place">Sur place</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Statut de paiement</label>
-                  <select
-                    value={formData.statut_paiement}
-                    onChange={e => setFormData({ ...formData, statut_paiement: e.target.value })}
-                  >
-                    <option value="non_paye">Non payé</option>
-                    <option value="acompte">Acompte versé</option>
-                    <option value="partiel">Paiement partiel</option>
-                    <option value="integral">Paiement intégral</option>
-                  </select>
-                </div>
-                <div className="form-group full-width">
-                  <label>Notes client</label>
-                  <textarea
-                    rows={3}
-                    placeholder="Notes ou précisions additionnelles..."
-                    value={formData.notes}
-                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                  ></textarea>
+
+                {/* ====== NOTES ====== */}
+                <div className="ws-form-block">
+                  <div className="ws-section-header" style={{ background: '#64748b' }}>Notes</div>
+                  <textarea rows={3} placeholder="Notes ou précisions additionnelles..." value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} style={{ width: '100%', padding: '0.75rem', border: '1.5px solid #e2e8f0', borderRadius: '10px', fontSize: '0.9rem' }}></textarea>
                 </div>
 
                 {editingDemande && (
