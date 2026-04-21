@@ -7,18 +7,23 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  Download,
   Eye,
   FileText,
   Grid3X3,
   List,
   MapPin,
+  RefreshCw,
   Search,
+  Send,
   User,
   Users,
   X,
+  XCircle,
 } from 'lucide-react';
-import { getAgents, getMissions, updateMission } from '../../api/client';
+import { fetchSecureDocBlob, generateDocument, getAgents, getMissions, sendWhatsApp, updateMission } from '../../api/client';
 import { encodeId } from '../../utils/obfuscation';
+import { useToastStore } from '../../store/toast';
 import './VueGlobale.css';
 
 type FinanceSubTab = 'vue-globale' | 'debit-profil' | 'credit-profil' | 'suivi-facturation' | 'comptes-profils';
@@ -42,6 +47,7 @@ interface MissionEditForm {
 
 interface FacturationRow {
   missionId?: number;
+  demandeId?: number;
   clientId?: number;
   profilId?: number;
   missionNo: string;
@@ -60,8 +66,10 @@ interface FacturationRow {
   statut: 'Facturation annulée' | 'Confirmée' | 'Terminée' | 'Payé';
   reglementInterne: string;
   montantPaye?: number;
+  montantEncaisseProfil?: number;
   datePaiement?: string;
   modePaiementReel?: string;
+  commercialName?: string;
   partProfilVersee?: boolean;
   dateVersementProfil?: string;
 }
@@ -99,6 +107,8 @@ interface MissionApiItem {
   date_remise_agence?: string;
   demande_detail?: {
     client?: number;
+    id?: number;
+    assigned_to_name?: string;
     date_intervention?: string;
     client_name?: string;
     client_city?: string;
@@ -219,6 +229,46 @@ const missionFinanceLabel = (row: FacturationRow): 'Facturation annulée' | 'Fac
   row.statut === 'Facturation annulée' ? 'Facturation annulée' : 'Facturée'
 );
 
+const getMontantPaye = (row: FacturationRow): number => Number(row.montantPaye ?? 0);
+
+const getMontantEncaisseProfil = (row: FacturationRow): number => {
+  if (row.encaissePar !== 'Profil') return 0;
+  return Number(row.montantEncaisseProfil ?? row.montantPaye ?? 0);
+};
+
+const getPartProfilDueFromAgence = (row: FacturationRow): number => {
+  if (row.encaissePar !== 'Agence') return 0;
+  const due = Number((getMontantPaye(row) * 0.5).toFixed(2));
+  if (due > 0) return Math.min(row.partProfil, due);
+
+  // Fallback for legacy rows where paid amounts were not filled yet.
+  if (row.statut !== 'Facturation annulée') return row.partProfil;
+  return 0;
+};
+
+const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
+  if (row.encaissePar !== 'Profil') return 0;
+  const due = Number((getMontantEncaisseProfil(row) * 0.5).toFixed(2));
+  if (due > 0) return Math.min(row.partAgence, due);
+
+  // Fallback for legacy rows where collected profile amount is missing.
+  if (row.statut !== 'Facturation annulée') return row.partAgence;
+  return 0;
+};
+
+const getCommissionAgenceEncaissee = (row: FacturationRow): number => {
+  if (row.encaissePar === 'Agence') {
+    const partProfilDue = getPartProfilDueFromAgence(row);
+    return Math.max(getMontantPaye(row) - partProfilDue, 0);
+  }
+
+  if (row.reglementInterne === 'Réglé') {
+    return getPartAgenceDueFromProfil(row);
+  }
+
+  return 0;
+};
+
 const formatDateFR = (value?: string): string => {
   if (!value) return '—';
   if (value.includes('/')) return value;
@@ -301,11 +351,17 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   const montant = Number(demande?.prix ?? 0);
   const partAgence = Number((montant * 0.5).toFixed(2));
   const partProfil = Number((montant - partAgence).toFixed(2));
-  const statutPaiement = item.paiement_client_statut || demande?.statut_paiement || 'non_paye';
+  const rawMontantPaye = item.montant_paye !== undefined ? Number(item.montant_paye) : 0;
+  const statutPaiement = item.paiement_client_statut
+    || (rawMontantPaye >= montant && montant > 0
+      ? 'effectue'
+      : rawMontantPaye > 0
+        ? 'en_attente'
+        : 'non_paye');
   const paiement: FacturationRow['paiement'] =
-    statutPaiement === 'integral' || statutPaiement === 'effectue'
+    statutPaiement === 'effectue'
       ? 'paye'
-      : statutPaiement === 'partiel' || statutPaiement === 'acompte' || statutPaiement === 'en_attente'
+      : statutPaiement === 'en_attente'
         ? 'partiellement_paye'
         : 'non_paye';
 
@@ -332,10 +388,15 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
         ? Number((montant * 0.5).toFixed(2))
         : 0;
 
+  const montantEncaisseProfil = encaissePar === 'Profil'
+    ? (item.montant_encaisse_profil !== undefined ? Number(item.montant_encaisse_profil) : montantPaye)
+    : 0;
+
   const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
 
   return {
     missionId: item.id,
+    demandeId: demande?.id,
     clientId: demande?.client,
     profilId: agent?.id,
     missionNo: `MSN-${String(item.id).padStart(6, '0')}`,
@@ -354,8 +415,10 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     statut,
     reglementInterne,
     montantPaye,
+    montantEncaisseProfil,
     datePaiement: item.date_paiement ? formatDateFR(item.date_paiement) : (paiement === 'non_paye' ? '—' : formatDateFR(demande?.date_intervention)),
     modePaiementReel: modeLabelFromCode(item.mode_paiement_reel) || demande?.mode_paiement_label || '—',
+    commercialName: demande?.assigned_to_name || '—',
     partProfilVersee,
     dateVersementProfil: encaissePar === 'Agence'
       ? (item.date_versement_profil ? formatDateFR(item.date_versement_profil) : '—')
@@ -365,6 +428,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 
 export default function VueGlobale() {
   const navigate = useNavigate();
+  const addToast = useToastStore((state) => state.addToast);
   const [activeTab, setActiveTab] = useState<FinanceSubTab>('vue-globale');
   const [displayMode, setDisplayMode] = useState<ProfileDisplayMode>('cards');
   const [showNewMissionModal, setShowNewMissionModal] = useState(false);
@@ -428,6 +492,10 @@ export default function VueGlobale() {
   const [suiviSegmentFilter, setSuiviSegmentFilter] = useState('Tous les segments');
   const [facturationData, setFacturationData] = useState<FacturationRow[]>([]);
   const [profileAccountsData, setProfileAccountsData] = useState<ProfileAccount[]>([]);
+  const [invoicePreview, setInvoicePreview] = useState<{ url: string; type: 'devis' | 'png'; name: string; demandeId: number } | null>(null);
+  const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
+  const [isSendingInvoice, setIsSendingInvoice] = useState(false);
+  const [showInvoicePreviewPopup, setShowInvoicePreviewPopup] = useState(false);
 
   const loadFinanceData = useCallback(async () => {
     const missions: MissionApiItem[] = [];
@@ -522,10 +590,16 @@ export default function VueGlobale() {
       const encaissePar = item.encaisse_par === 'profil' || item.demande_detail?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
       if (encaissePar === 'Agence') {
         if (item.part_profil_versee) {
-          profile.verseAuProfil += partProfil;
+          const montantPaye = item.montant_paye !== undefined ? Number(item.montant_paye) : montant;
+          const partProfilDue = Math.min(partProfil, Number((montantPaye * 0.5).toFixed(2)));
+          profile.verseAuProfil += partProfilDue;
         }
       } else if (item.part_agence_reversee) {
-        profile.recuDuProfil += partAgence;
+        const montantEncaisseProfil = item.montant_encaisse_profil !== undefined
+          ? Number(item.montant_encaisse_profil)
+          : (item.montant_paye !== undefined ? Number(item.montant_paye) : montant);
+        const partAgenceDue = Math.min(partAgence, Number((montantEncaisseProfil * 0.5).toFixed(2)));
+        profile.recuDuProfil += partAgenceDue;
       }
     }
 
@@ -583,10 +657,12 @@ export default function VueGlobale() {
     });
   }, [facturationData, globalTableDateFrom, globalTableDateTo, globalTableSearch]);
 
-  const suiviBaseRows = useMemo(
-    () => facturationData.filter((row) => row.statut !== 'Facturation annulée'),
-    [facturationData]
-  );
+  const suiviBaseRows = useMemo(() => {
+    if (suiviStatutFilter === 'Facturation annulée') {
+      return facturationData.filter((row) => row.statut === 'Facturation annulée');
+    }
+    return facturationData.filter((row) => row.statut !== 'Facturation annulée');
+  }, [facturationData, suiviStatutFilter]);
 
   const filteredSuiviRows = useMemo(() => {
     return suiviBaseRows.filter((row) => {
@@ -618,12 +694,16 @@ export default function VueGlobale() {
   }, [suiviBaseRows, suiviDateFrom, suiviDateTo, suiviPaiementFilter, suiviSearch, suiviSegmentFilter, suiviStatutFilter]);
 
   const agenceNonPayeAmount = useMemo(
-    () => facturationData.filter((row) => row.encaissePar === 'Profil' && row.reglementInterne !== 'Réglé').reduce((sum, row) => sum + row.partAgence, 0),
+    () => facturationData
+      .filter((row) => row.encaissePar === 'Profil' && row.reglementInterne !== 'Réglé')
+      .reduce((sum, row) => sum + getPartAgenceDueFromProfil(row), 0),
     [facturationData]
   );
 
   const profilNonPayeAmount = useMemo(
-    () => facturationData.filter((row) => row.encaissePar === 'Agence' && row.reglementInterne !== 'Réglé').reduce((sum, row) => sum + row.partProfil, 0),
+    () => facturationData
+      .filter((row) => row.encaissePar === 'Agence' && row.reglementInterne !== 'Réglé')
+      .reduce((sum, row) => sum + getPartProfilDueFromAgence(row), 0),
     [facturationData]
   );
 
@@ -665,11 +745,12 @@ export default function VueGlobale() {
     const chiffreAffaires = filteredSuiviRows.reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
     const commissionEncaissementAgence = filteredSuiviRows.reduce((sum, row) => {
       if (row.encaissePar !== 'Agence') return sum;
-      return sum + Math.max((row.montantPaye ?? 0) - row.partProfil, 0);
+      const partProfilDue = getPartProfilDueFromAgence(row);
+      return sum + Math.max(getMontantPaye(row) - partProfilDue, 0);
     }, 0);
     const commissionEncaissementProfil = filteredSuiviRows.reduce((sum, row) => {
       if (row.encaissePar !== 'Profil' || row.reglementInterne !== 'Réglé') return sum;
-      return sum + row.partAgence;
+      return sum + getPartAgenceDueFromProfil(row);
     }, 0);
     const commissionAgence = commissionEncaissementAgence + commissionEncaissementProfil;
 
@@ -689,15 +770,16 @@ export default function VueGlobale() {
   }, [facturationData]);
 
   const globalKpis = useMemo(() => {
-    const missions = facturationData.filter((row) => row.statut !== 'Facturation annulée').length;
+    const missions = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée').length;
     const chiffreAffaires = periodFilteredRows.reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
     const commissionEncaissementAgence = periodFilteredRows.reduce((sum, row) => {
       if (row.encaissePar !== 'Agence') return sum;
-      return sum + Math.max((row.montantPaye ?? 0) - row.partProfil, 0);
+      const partProfilDue = getPartProfilDueFromAgence(row);
+      return sum + Math.max(getMontantPaye(row) - partProfilDue, 0);
     }, 0);
     const commissionEncaissementProfil = periodFilteredRows.reduce((sum, row) => {
       if (row.encaissePar !== 'Profil' || row.reglementInterne !== 'Réglé') return sum;
-      return sum + row.partAgence;
+      return sum + getPartAgenceDueFromProfil(row);
     }, 0);
     const commissionAgence = commissionEncaissementAgence + commissionEncaissementProfil;
     const facturationAnnulee = periodFilteredRows
@@ -705,7 +787,7 @@ export default function VueGlobale() {
       .reduce((sum, row) => sum + row.partProfil, 0);
 
     return { missions, chiffreAffaires, commissionAgence, facturationAnnulee };
-  }, [facturationData, periodFilteredRows]);
+  }, [periodFilteredRows]);
 
   const debitRows = useMemo(
     () => facturationData.filter((row) => row.encaissePar === 'Profil'),
@@ -752,7 +834,7 @@ export default function VueGlobale() {
   }, [creditRows, creditPaymentFilter]);
 
   const debitTotal = useMemo(
-    () => filteredDebitRows.reduce((sum, row) => sum + row.partAgence, 0),
+    () => filteredDebitRows.reduce((sum, row) => sum + getPartAgenceDueFromProfil(row), 0),
     [filteredDebitRows]
   );
 
@@ -762,7 +844,7 @@ export default function VueGlobale() {
   );
 
   const creditTotal = useMemo(
-    () => filteredCreditRows.reduce((sum, row) => sum + row.partProfil, 0),
+    () => filteredCreditRows.reduce((sum, row) => sum + getPartProfilDueFromAgence(row), 0),
     [filteredCreditRows]
   );
 
@@ -770,7 +852,7 @@ export default function VueGlobale() {
     const map = new Map<string, number>();
     for (const row of facturationData) {
       if (row.encaissePar !== 'Profil' || row.reglementInterne === 'Réglé') continue;
-      map.set(row.profil, (map.get(row.profil) || 0) + row.partAgence);
+      map.set(row.profil, (map.get(row.profil) || 0) + getPartAgenceDueFromProfil(row));
     }
     return Array.from(map.entries())
       .map(([name, amount]) => ({ name, amount }))
@@ -781,7 +863,7 @@ export default function VueGlobale() {
     const map = new Map<string, number>();
     for (const row of facturationData) {
       if (row.encaissePar !== 'Agence' || row.reglementInterne === 'Réglé') continue;
-      map.set(row.profil, (map.get(row.profil) || 0) + row.partProfil);
+      map.set(row.profil, (map.get(row.profil) || 0) + getPartProfilDueFromAgence(row));
     }
     return Array.from(map.entries())
       .map(([name, amount]) => ({ name, amount }))
@@ -791,9 +873,9 @@ export default function VueGlobale() {
   const globalTableTotals = useMemo(() => {
     return globalTableRows.reduce(
       (acc, row) => {
-        if (row.encaissePar === 'Profil') acc.debit += row.partAgence;
-        if (row.encaissePar === 'Agence') acc.credit += row.partProfil;
-        acc.commission += row.partAgence;
+        if (row.encaissePar === 'Profil') acc.debit += getPartAgenceDueFromProfil(row);
+        if (row.encaissePar === 'Agence') acc.credit += getPartProfilDueFromAgence(row);
+        acc.commission += getCommissionAgenceEncaissee(row);
         return acc;
       },
       { debit: 0, credit: 0, commission: 0 }
@@ -822,6 +904,11 @@ export default function VueGlobale() {
   };
 
   const closeMissionDetails = () => {
+    if (invoicePreview?.url) {
+      URL.revokeObjectURL(invoicePreview.url);
+    }
+    setShowInvoicePreviewPopup(false);
+    setInvoicePreview(null);
     setSelectedMission(null);
   };
 
@@ -887,6 +974,56 @@ export default function VueGlobale() {
     });
 
     await loadFinanceData();
+  };
+
+  const handleGenerateInvoicePreview = async () => {
+    if (!selectedMission?.demandeId) {
+      addToast('Aucune demande liée à cette mission', 'error');
+      return;
+    }
+
+    const type: 'devis' | 'png' = selectedMission.segment === 'Entreprise' ? 'devis' : 'png';
+    setIsGeneratingInvoice(true);
+    try {
+      const response = await generateDocument(selectedMission.demandeId, type);
+      const doc = response.data;
+      const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
+
+      if (invoicePreview?.url) {
+        URL.revokeObjectURL(invoicePreview.url);
+      }
+
+      setInvoicePreview({
+        url: blobUrl,
+        type,
+        name: doc.nom,
+        demandeId: selectedMission.demandeId,
+      });
+      setShowInvoicePreviewPopup(true);
+
+      addToast('Facture générée et prête en prévisualisation', 'success');
+    } catch {
+      addToast('Erreur lors de la génération de la facture', 'error');
+    } finally {
+      setIsGeneratingInvoice(false);
+    }
+  };
+
+  const handleSendInvoice = async () => {
+    if (!invoicePreview) {
+      addToast('Générez la facture puis vérifiez la prévisualisation', 'info');
+      return;
+    }
+
+    setIsSendingInvoice(true);
+    try {
+      await sendWhatsApp(invoicePreview.demandeId, invoicePreview.type);
+      addToast('Facture envoyée au client', 'success');
+    } catch {
+      addToast('Erreur lors de l’envoi de la facture', 'error');
+    } finally {
+      setIsSendingInvoice(false);
+    }
   };
 
   const handleSaveMissionEdit = async () => {
@@ -1102,22 +1239,22 @@ export default function VueGlobale() {
             <article className="fg-global-kpi blue">
               <p className="fg-global-kpi-title">Nombre de missions</p>
               <p className="fg-global-kpi-value">{globalKpis.missions}</p>
-              <p className="fg-global-kpi-subtitle">missions en cours (temps réel)</p>
+              <p className="fg-global-kpi-subtitle">missions non annulées (période)</p>
             </article>
             <article className="fg-global-kpi green">
-              <p className="fg-global-kpi-title">Chiffre d'affaires</p>
+              <p className="fg-global-kpi-title">Encaissements clients</p>
               <p className="fg-global-kpi-value">{money(globalKpis.chiffreAffaires)}</p>
-              <p className="fg-global-kpi-subtitle">paiements reçus des clients</p>
+              <p className="fg-global-kpi-subtitle">montant réellement encaissé (période)</p>
             </article>
             <article className="fg-global-kpi green">
-              <p className="fg-global-kpi-title">Commission Agence</p>
+              <p className="fg-global-kpi-title">Part Agence encaissée</p>
               <p className="fg-global-kpi-value">{money(globalKpis.commissionAgence)}</p>
-              <p className="fg-global-kpi-subtitle">part agence (mensuelle)</p>
+              <p className="fg-global-kpi-subtitle">part agence sur encaissements réels</p>
             </article>
             <article className="fg-global-kpi red">
-              <p className="fg-global-kpi-title">Facturation annulée</p>
+              <p className="fg-global-kpi-title">Perte sur annulations</p>
               <p className="fg-global-kpi-value">{money(globalKpis.facturationAnnulee)}</p>
-              <p className="fg-global-kpi-subtitle">perte totale</p>
+              <p className="fg-global-kpi-subtitle">part profil déjà versée puis annulée</p>
             </article>
           </div>
 
@@ -1220,7 +1357,7 @@ export default function VueGlobale() {
                     <th>Profil</th>
                     <th>Débit</th>
                     <th>Crédit</th>
-                    <th>Commission agence</th>
+                    <th>Commission agence encaissée</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1237,10 +1374,10 @@ export default function VueGlobale() {
                           <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>{row.profil || '—'}</button>
                         ) : (row.profil || '—')}
                       </td>
-                      <td className="fg-text-red fw-semibold">{row.encaissePar === 'Profil' ? money(row.partAgence) : '—'}</td>
-                      <td className="fg-text-orange fw-semibold">{row.encaissePar === 'Agence' ? money(row.partProfil) : '—'}</td>
+                      <td className="fg-text-red fw-semibold">{row.encaissePar === 'Profil' ? money(getPartAgenceDueFromProfil(row)) : '—'}</td>
+                      <td className="fg-text-orange fw-semibold">{row.encaissePar === 'Agence' ? money(getPartProfilDueFromAgence(row)) : '—'}</td>
                       <td className="fg-text-green fw-semibold">
-                        {money(row.partAgence)}
+                        {money(getCommissionAgenceEncaissee(row))}
                       </td>
                     </tr>
                   ))}
@@ -1272,7 +1409,7 @@ export default function VueGlobale() {
               <p className="fg-global-kpi-value">{debitProfilesCount}</p>
             </article>
             <article className="fg-global-kpi red">
-              <p className="fg-global-kpi-title">Total montant</p>
+              <p className="fg-global-kpi-title">Total dû à l'agence</p>
               <p className="fg-global-kpi-value">{money(debitTotal)}</p>
             </article>
           </div>
@@ -1330,11 +1467,10 @@ export default function VueGlobale() {
                     <th>Nom du profil</th>
                     <th>Service</th>
                     <th>Segment</th>
-                    <th>Montant reçu du client</th>
-                    <th>Doit à l'agence</th>
+                    <th>Montant encaissé (profil)</th>
+                    <th>Doit à l'agence (réel)</th>
                     <th>Part du profil</th>
                     <th>Statut du paiement</th>
-                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -1354,8 +1490,8 @@ export default function VueGlobale() {
                       </td>
                       <td>{row.service}</td>
                       <td><span className="fg-pill fg-pill-blue">{row.segment}</span></td>
-                      <td className="fw-semibold">{money(row.montant)}</td>
-                      <td className="fg-text-red fw-bold">{money(row.partAgence)}</td>
+                      <td className="fw-semibold">{money(getMontantEncaisseProfil(row))}</td>
+                      <td className="fg-text-red fw-bold">{money(getPartAgenceDueFromProfil(row))}</td>
                       <td>{money(row.partProfil)}</td>
                       <td>
                         <label className="fg-select-wrap fg-compact-select">
@@ -1369,12 +1505,11 @@ export default function VueGlobale() {
                           <ChevronDown size={14} />
                         </label>
                       </td>
-                      <td><button className="icon-btn" title="Voir" onClick={() => openMissionDetails(row)}><Eye size={14} /></button></td>
                     </tr>
                   ))}
                   {filteredDebitRows.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="empty-row">Aucune ligne pour ce filtre.</td>
+                      <td colSpan={9} className="empty-row">Aucune ligne pour ce filtre.</td>
                     </tr>
                   )}
                 </tbody>
@@ -1392,7 +1527,7 @@ export default function VueGlobale() {
               <p className="fg-global-kpi-value">{filteredCreditRows.length}</p>
             </article>
             <article className="fg-global-kpi blue">
-              <p className="fg-global-kpi-title">Total montant</p>
+              <p className="fg-global-kpi-title">Total dû au profil</p>
               <p className="fg-global-kpi-value">{money(creditTotal)}</p>
             </article>
           </div>
@@ -1422,11 +1557,10 @@ export default function VueGlobale() {
                     <th>Service</th>
                     <th>Mission</th>
                     <th>Segment</th>
-                    <th>Montant reçu du client</th>
+                    <th>Montant TTC</th>
                     <th>Part de l'agence</th>
-                    <th>Doit au profil</th>
+                    <th>Doit au profil (réel)</th>
                     <th>Statut paiement</th>
-                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -1454,7 +1588,7 @@ export default function VueGlobale() {
                       <td><span className="fg-pill fg-pill-blue">{row.segment}</span></td>
                       <td className="fw-semibold">{money(row.montant)}</td>
                       <td>{money(row.partAgence)}</td>
-                      <td className="fg-text-blue fw-bold">{money(row.partProfil)}</td>
+                      <td className="fg-text-blue fw-bold">{money(getPartProfilDueFromAgence(row))}</td>
                       <td>
                         <label className="fg-select-wrap fg-compact-select">
                           <select
@@ -1467,12 +1601,11 @@ export default function VueGlobale() {
                           <ChevronDown size={14} />
                         </label>
                       </td>
-                      <td><button className="icon-btn" title="Voir" onClick={() => openMissionDetails(row)}><Eye size={14} /></button></td>
                     </tr>
                   ))}
                   {filteredCreditRows.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="empty-row">Aucune ligne pour ce filtre.</td>
+                      <td colSpan={10} className="empty-row">Aucune ligne pour ce filtre.</td>
                     </tr>
                   )}
                 </tbody>
@@ -1496,10 +1629,10 @@ export default function VueGlobale() {
           </section>
 
           <div className="fg-hero-stats">
-            <article><FileText size={20} /><div><strong>{suiviRecap.totalFacture}</strong><span>Total facturé (payé)</span></div></article>
-            <article><BarChart3 size={20} /><div><strong>{money(suiviRecap.chiffreAffaires)}</strong><span>Chiffre d'affaires</span></div></article>
-            <article><Clock3 size={20} /><div><strong>{money(suiviRecap.commissionAgence)}</strong><span>Commission agence</span></div></article>
-            <article><Users size={20} /><div><strong>{suiviRecap.paiementsEnAttente}</strong><span>Paiements en attente</span></div></article>
+            <article><FileText size={20} /><div><strong>{suiviRecap.totalFacture}</strong><span>Missions totalement payées</span></div></article>
+            <article><BarChart3 size={20} /><div><strong>{money(suiviRecap.chiffreAffaires)}</strong><span>Encaissements clients</span></div></article>
+            <article><Clock3 size={20} /><div><strong>{money(suiviRecap.commissionAgence)}</strong><span>Part agence encaissée</span></div></article>
+            <article><Users size={20} /><div><strong>{suiviRecap.paiementsEnAttente}</strong><span>Paiements partiels</span></div></article>
           </div>
 
           <div className="fg-facturation-filters">
@@ -2143,22 +2276,22 @@ export default function VueGlobale() {
 
             <div className="fg-mission-kpis">
               <div>
-                <p>Montant mission</p>
-                <strong>{money(selectedMission.montant)}</strong>
+                <p>Montant HT</p>
+                <strong>{money(Number((selectedMission.montant / 1.2).toFixed(2)))}</strong>
               </div>
               <div>
-                <p>Part agence (50%)</p>
-                <strong className="fg-text-green">{money(selectedMission.partAgence)}</strong>
+                <p>TVA</p>
+                <strong className="fg-text-orange">{money(Number((selectedMission.montant - Number((selectedMission.montant / 1.2).toFixed(2))).toFixed(2)))}</strong>
               </div>
               <div>
-                <p>Part profil</p>
-                <strong className="fg-text-blue">{money(selectedMission.partProfil)}</strong>
+                <p>Montant TTC</p>
+                <strong className="fg-text-blue">{money(selectedMission.montant)}</strong>
               </div>
             </div>
 
             <div className="fg-mission-tabs">
               <button className={missionDetailTab === 'infos' ? 'active' : ''} onClick={() => setMissionDetailTab('infos')}>Informations</button>
-              <button className={missionDetailTab === 'paiement' ? 'active' : ''} onClick={() => setMissionDetailTab('paiement')}>Paiement client</button>
+              <button className={missionDetailTab === 'paiement' ? 'active' : ''} onClick={() => setMissionDetailTab('paiement')}>Paiement</button>
               <button className={missionDetailTab === 'repartition' ? 'active' : ''} onClick={() => setMissionDetailTab('repartition')}>Répartition interne</button>
             </div>
 
@@ -2166,9 +2299,10 @@ export default function VueGlobale() {
               {missionDetailTab === 'infos' && (
                 <>
                   <div className="fg-mission-info-grid">
+                    <div className="fg-mission-info-card"><span>Commercial</span><strong>{selectedMission.commercialName || '—'}</strong></div>
                     <div className="fg-mission-info-card"><span>Type de service</span><strong>{selectedMission.service}</strong></div>
                     <div className="fg-mission-info-card"><span>Segment</span><strong>{selectedMission.segment}</strong></div>
-                    <div className="fg-mission-info-card"><span>Paiement prévu</span><strong>{selectedMission.modePaiement}</strong></div>
+                    <div className="fg-mission-info-card"><span>Mode de paiement</span><strong>{selectedMission.modePaiement}</strong></div>
                     <div className="fg-mission-info-card"><span>Encaissement par</span><strong>{selectedMission.encaissePar === 'Agence' ? "L'agence" : 'Le profil'}</strong></div>
                     <div className="fg-mission-info-card"><span>Profil assigné</span><strong>{selectedMission.profil}</strong></div>
                   </div>
@@ -2186,6 +2320,7 @@ export default function VueGlobale() {
                 <div className="fg-mission-info-grid two-col">
                   <div className="fg-mission-info-card"><span>Montant payé</span><strong>{money(selectedMission.montantPaye ?? 0)}</strong></div>
                   <div className="fg-mission-info-card"><span>Reste à payer</span><strong className="fg-text-orange">{money(Math.max(selectedMission.montant - (selectedMission.montantPaye ?? 0), 0))}</strong></div>
+                  <div className="fg-mission-info-card"><span>Statut du paiement</span><strong>{paiementLabel(selectedMission.paiement)}</strong></div>
                   <div className="fg-mission-info-card"><span>Mode de paiement réel</span><strong>{selectedMission.modePaiementReel ?? '—'}</strong></div>
                   <div className="fg-mission-info-card"><span>Date de paiement</span><strong>{selectedMission.datePaiement ?? '—'}</strong></div>
                 </div>
@@ -2198,20 +2333,75 @@ export default function VueGlobale() {
                     <div className="fg-mission-share-card profile"><span>Part profil</span><strong>{money(selectedMission.partProfil)}</strong></div>
                   </div>
                   <div className="fg-mission-internal-box">
-                    <h4>Encaissé par l'agence</h4>
+                    <h4>Répartition et encaissement</h4>
                     <div>
+                      <p>Paiement encaissé par<br /><strong>{selectedMission.encaissePar === 'Agence' ? "L'agence" : 'Le profil'}</strong></p>
                       <p>Part profil versée<br /><strong>{selectedMission.partProfilVersee ? 'Oui' : 'Non'}</strong></p>
                       <p>Date versement profil<br /><strong>{selectedMission.dateVersementProfil ?? '—'}</strong></p>
                     </div>
                   </div>
                 </>
               )}
+
             </div>
 
             <footer className="fg-mission-footer">
               <button type="button" className="btn btn-secondary" onClick={openMissionEditModal}>Modifier</button>
+              <button type="button" className="btn btn-secondary" onClick={handleGenerateInvoicePreview} disabled={isGeneratingInvoice}>
+                {isGeneratingInvoice ? 'Génération...' : 'Générer la facture'}
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleSendInvoice} disabled={!invoicePreview || isSendingInvoice}>
+                {isSendingInvoice ? 'Envoi...' : 'Envoyer au client'}
+              </button>
               <button type="button" className="btn btn-secondary" onClick={closeMissionDetails}>Fermer</button>
             </footer>
+          </div>
+        </div>
+      )}
+
+      {showInvoicePreviewPopup && invoicePreview && (
+        <div className="modal-overlay z-[100]" onClick={() => setShowInvoicePreviewPopup(false)}>
+          <div
+            className="modal-content max-w-[1200px]"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '95%', height: '90vh', display: 'flex', flexDirection: 'column', backgroundColor: 'white', borderRadius: '8px', padding: '24px' }}
+          >
+            <div className="modal-header border-b-0 pb-2 mb-4 flex justify-between items-center">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-teal-900">
+                <Eye size={24} className="text-teal-700" /> Aperçu — {invoicePreview.type === 'devis' ? 'Devis' : 'Récapitulatif'}
+              </h2>
+              <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowInvoicePreviewPopup(false)}>
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body bg-slate-800 rounded-md border border-slate-700 shadow-inner" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+              {invoicePreview.type === 'devis' ? (
+                <iframe src={invoicePreview.url} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Apercu" />
+              ) : (
+                <div style={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '24px', backgroundColor: '#ffffff' }}>
+                  <img src={invoicePreview.url} alt="Recapitulatif" style={{ maxWidth: '100%', width: 'auto', height: 'auto', objectFit: 'contain', boxShadow: '0 4px 24px rgba(0,0,0,0.15)', borderRadius: '8px', display: 'block' }} />
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer border-t-0 pt-0 mt-6 bg-white flex justify-center sm:justify-end gap-3 flex-wrap">
+              <button className="btn transition-all" style={{ border: '1px solid #e2e8f0', backgroundColor: 'transparent', color: '#475569', fontWeight: 500, padding: '10px 24px', borderRadius: '6px' }} onClick={() => setShowInvoicePreviewPopup(false)}>
+                Fermer
+              </button>
+              <a href={invoicePreview.url} download={invoicePreview.name} target="_blank" rel="noreferrer" className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }}>
+                <Download size={18} /> Télécharger
+              </a>
+              <button
+                className="btn transition-all flex items-center gap-2"
+                style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none', opacity: isSendingInvoice ? 0.7 : 1 }}
+                onClick={handleSendInvoice}
+                disabled={isSendingInvoice}
+              >
+                {isSendingInvoice ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
+                {isSendingInvoice ? 'Envoi...' : 'Envoyer au client'}
+              </button>
+            </div>
           </div>
         </div>
       )}
