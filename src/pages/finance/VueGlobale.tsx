@@ -200,8 +200,6 @@ const statutClass = (value: FacturationRow['statut']): string => {
   return 'fg-pill fg-pill-pink';
 };
 
-const reglementClass = (value: string): string => (value === 'Réglé' ? 'fg-pill fg-pill-lime' : 'fg-pill fg-pill-yellow');
-
 const paiementLabel = (value: FacturationRow['paiement']): string => {
   if (value === 'partiellement_paye') return 'partiellement payé';
   return value.replace('_', ' ');
@@ -211,18 +209,6 @@ const shortMissionNo = (missionNo: string): string => {
   const match = missionNo.match(/(\d+)$/);
   if (!match) return missionNo;
   return `M-${parseInt(match[1], 10)}`;
-};
-
-const reglementDetail = (row: FacturationRow): string => {
-  if (row.reglementInterne === 'Réglé') {
-    return row.encaissePar === 'Agence'
-      ? `Agence -> Profil : ${money(row.partProfil)}`
-      : `Profil -> Agence : ${money(row.partAgence)}`;
-  }
-
-  return row.encaissePar === 'Agence'
-    ? `Agence doit ${money(row.partProfil)}`
-    : `Profil doit ${money(row.partAgence)}`;
 };
 
 const creditPaymentLabel = (row: FacturationRow): 'Payé' | 'Non payé' => {

@@ -335,9 +335,9 @@ export default function Dashboard() {
         const clientPhone = demande.formulaire_data?.whatsapp_phone || demande.formulaire_data?.phone || demande.client_phone;
         if (clientPhone) {
           try {
-            // Trigger WhatsApp with profile info (Mode PJ/PNG)
-            await sendWhatsApp(demande.id, 'png');
-            addToast('Profil envoyé au client via WhatsApp (PJ)', 'success');
+            // Trigger WhatsApp with profile info
+            await sendWhatsApp(demande.id, 'cao_profil');
+            addToast('Profil envoyé au client via WhatsApp', 'success');
           } catch (err) {
             console.error('WhatsApp Error:', err);
             addToast('Erreur lors de l\'envoi WhatsApp', 'error');
@@ -481,9 +481,7 @@ export default function Dashboard() {
         try {
           const clientPhone = editFormData.client_whatsapp || editFormData.client_phone || previousFormData.whatsapp_phone;
           if (clientPhone) {
-            // Note: sendWhatsApp in client.ts only takes (id, type). 
-            // In a real scenario we'd use a generic message or a specific type.
-            await sendWhatsApp(selectedDemande.id, 'devis'); 
+            await sendWhatsApp(selectedDemande.id, 'feedback'); 
             addToast('Lien de satisfaction envoyé au client via WhatsApp', 'success');
           }
         } catch (waErr) {
@@ -671,10 +669,6 @@ export default function Dashboard() {
   const montantProfilDoit = toNumber(editFormData.montant_profil_doit);
 
   const partsRepartition: PartRepartitionItem[] = asArray<PartRepartitionItem>(editFormData.parts_repartition, []);
-  const partAgence = toNumber(editFormData.part_agence);
-  const totalPartsProfils = roundMoney(partsRepartition.reduce((sum, item) => sum + toNumber(item.amount), 0));
-  const totalReparti = roundMoney(partAgence + totalPartsProfils);
-  const resteARepartir = roundMoney(montantTTC - totalReparti);
 
   return (
     <div className="page">

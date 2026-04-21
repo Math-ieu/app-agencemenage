@@ -113,7 +113,7 @@ export const confirmerCAO = (id: number) =>
 export const generateDocument = (id: number, type: 'devis' | 'png') =>
   apiClient.post(`/api/demandes/${id}/generate_document/`, { type });
 
-export const sendWhatsApp = (id: number, type: 'devis' | 'png') =>
+export const sendWhatsApp = (id: number, type: 'devis' | 'png' | 'cao_profil' | 'feedback') =>
   apiClient.post(`/api/demandes/${id}/send_whatsapp/`, { type });
 
 /**
