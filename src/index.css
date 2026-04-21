@@ -1516,7 +1516,9 @@ body {
 
 /* Dashboard table: compact layout without horizontal scroll and sticky head */
 .dashboard-table-wrapper {
-  overflow: visible !important;
+  overflow-x: hidden;
+  overflow-y: auto !important;
+  max-height: 480px; /* ~8 lignes (header + rows) */
 }
 
 .dashboard-table {
