@@ -40,16 +40,17 @@ interface AuditLogItem {
 interface PartRepartitionItem {
   profile_id: number | '';
   amount: number;
+  is_delegate?: boolean;
 }
 
 const PAYMENT_STATUS_OPTIONS = [
-  { value: 'non_confirme', apiValue: 'non_paye', label: 'Non confirme' },
+  { value: 'non_confirme', apiValue: 'non_paye', label: 'Non confirmé' },
   { value: 'paiement_en_attente', apiValue: 'acompte', label: 'Paiement en attente' },
-  { value: 'agence_payee_client', apiValue: 'partiel', label: 'Agence payee / Client' },
-  { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil paye / Client' },
-  { value: 'paye', apiValue: 'integral', label: 'Paye' },
+  { value: 'agence_payee_client', apiValue: 'partiel', label: 'Agence payé / Client' },
+  { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
-  { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Facturation annulee' },
+  { value: 'paye', apiValue: 'integral', label: 'Payé' },
+  { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Facturation annulée' },
 ];
 
 const getPaymentUiValue = (statutPaiement: string, facturationAnnulee: boolean, fallback?: string): string => {
