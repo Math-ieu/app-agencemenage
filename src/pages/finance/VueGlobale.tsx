@@ -352,18 +352,22 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   const partAgence = Number((montant * 0.5).toFixed(2));
   const partProfil = Number((montant - partAgence).toFixed(2));
   const rawMontantPaye = item.montant_paye !== undefined ? Number(item.montant_paye) : 0;
-  const statutPaiement = item.paiement_client_statut
-    || (rawMontantPaye >= montant && montant > 0
-      ? 'effectue'
-      : rawMontantPaye > 0
-        ? 'en_attente'
-        : 'non_paye');
+  
+  // Rétrocompatibilité : si la mission n'a pas de statut métier propre ni de montant,
+  // on se fie au statut de la demande.
+  const legacyStatut = (item.paiement_client_statut === 'non_paye' || !item.paiement_client_statut) 
+    && demande?.statut_paiement && demande.statut_paiement !== 'non_paye'
+    ? demande.statut_paiement
+    : item.paiement_client_statut;
+
+  const rawStatutPaiement = legacyStatut === 'integral' || legacyStatut === 'effectue' || (rawMontantPaye >= montant && montant > 0)
+    ? 'effectue'
+    : legacyStatut === 'partiel' || legacyStatut === 'acompte' || legacyStatut === 'en_attente' || rawMontantPaye > 0
+      ? 'en_attente'
+      : 'non_paye';
+
   const paiement: FacturationRow['paiement'] =
-    statutPaiement === 'effectue'
-      ? 'paye'
-      : statutPaiement === 'en_attente'
-        ? 'partiellement_paye'
-        : 'non_paye';
+    rawStatutPaiement === 'effectue' ? 'paye' : rawStatutPaiement === 'en_attente' ? 'partiellement_paye' : 'non_paye';
 
   const missionStatus = item.statut;
   const statut: FacturationRow['statut'] =
@@ -380,17 +384,17 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     ? (item.part_profil_versee ?? false)
     : (item.part_agence_reversee ?? false);
 
-  const montantPaye = item.montant_paye !== undefined
-    ? Number(item.montant_paye)
-    : paiement === 'paye'
-      ? montant
-      : paiement === 'partiellement_paye'
-        ? Number((montant * 0.5).toFixed(2))
-        : 0;
+  // Rétrocompatibilité montant : si la BDD renvoie 0.00 mais que le statut est "payé", on calcule le dû réel
+  let montantPaye = rawMontantPaye;
+  if (montantPaye === 0) {
+    if (paiement === 'paye') montantPaye = montant;
+    else if (paiement === 'partiellement_paye') montantPaye = Number((montant * 0.5).toFixed(2));
+  }
 
-  const montantEncaisseProfil = encaissePar === 'Profil'
-    ? (item.montant_encaisse_profil !== undefined ? Number(item.montant_encaisse_profil) : montantPaye)
-    : 0;
+  let montantEncaisseProfil = item.montant_encaisse_profil !== undefined ? Number(item.montant_encaisse_profil) : 0;
+  if (encaissePar === 'Profil' && montantEncaisseProfil === 0 && montantPaye > 0) {
+    montantEncaisseProfil = montantPaye;
+  }
 
   const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
 
