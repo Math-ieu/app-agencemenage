@@ -1619,8 +1619,8 @@ export default function VueGlobale() {
         <>
           <section className="fg-hero">
             <div>
-              <h2>Historique des Missions</h2>
-              <p>Suivi complet de toutes les interventions</p>
+              <h2>Suivi Facturation</h2>
+              <p>Suivi complet de toutes les factures</p>
             </div>
             <div className="fg-export-actions">
               <button className="btn btn-secondary" onClick={exportSuiviReportPdf}>Exporter PDF</button>
