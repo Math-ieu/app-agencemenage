@@ -291,7 +291,7 @@ export default function Clients() {
     if (latest.statut_paiement === 'integral') return <span className="badge badge-status-paye">Payé</span>;
     if (latest.statut === 'annule') return <span className="badge badge-status-annulee">Annulée</span>;
     if (latest.statut === 'termine') return <span className="badge badge-status-effectuee">Prestation effectuée</span>;
-    if (latest.statut === 'en_cours') return <span className="badge badge-status-encours">En cours</span>;
+    if (latest.statut === 'en_cours') return <span className="badge-nouveau"><span>Nouveau</span><span>besoin</span></span>;
     return <span className="badge badge-status-attente">{latest.statut}</span>;
   };
 

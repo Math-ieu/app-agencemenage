@@ -22,8 +22,8 @@ interface Demande {
 }
 
 const getSegmentLabel = (segment: string): string => {
-  if (segment === 'particulier') return 'SPP';
-  if (segment === 'entreprise') return 'SPE';
+  if (segment === 'particulier') return 'PARTICULIER';
+  if (segment === 'entreprise') return 'ENTREPRISE';
   return segment || '—';
 };
 
@@ -160,7 +160,7 @@ export default function Historique() {
                   </td>
                   <td>{d.service}</td>
                   <td>
-                    <span className="badge badge-dark-teal">
+                    <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>
                       {getSegmentLabel(d.segment)}
                     </span>
                   </td>

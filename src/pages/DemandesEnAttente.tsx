@@ -580,8 +580,8 @@ export default function DemandesEnAttente() {
                 <div className="pending-card-header">
                   <div>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
-                        {d.segment === 'particulier' ? 'SPP' : 'SPE'}
+                      <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>
+                        {d.segment === 'particulier' ? 'PARTICULIER' : 'ENTREPRISE'}
                       </span>
                       <span className="text-muted text-xs"># {d.id}</span>
                     </div>
@@ -713,8 +713,8 @@ export default function DemandesEnAttente() {
                 <div className="mobile-card-header">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-2">
-                      <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
-                        {d.segment === 'particulier' ? 'SPP' : 'SPE'}
+                      <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>
+                        {d.segment === 'particulier' ? 'PARTICULIER' : 'ENTREPRISE'}
                       </span>
                       <span className="text-muted text-xs">#{d.id}</span>
                     </div>

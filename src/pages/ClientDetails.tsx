@@ -576,7 +576,7 @@ export default function ClientDetails() {
               </tr></thead>
               <tbody>
                 {demandes.flatMap(d => (d.documents || []).map(doc => {
-                  const statusLabel = d.statut === 'en_cours' ? 'En cours' : d.statut === 'termine' ? 'Prestation effectuée' : 'En attente';
+                  const statusLabel = d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : d.statut === 'termine' ? 'Prestation effectuée' : 'En attente';
                   const statusBg = d.statut === 'termine' ? C.orange : (d.statut === 'en_cours' ? '#3B82F6' : '#94A3B8');
                   const fileName = doc.nom || (doc.type_document === 'devis' ? 'Devis PDF' : 'Récapitulatif PNG');
 

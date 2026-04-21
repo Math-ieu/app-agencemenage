@@ -269,7 +269,7 @@ export default function ProfilDetails() {
   const getStatutBadge = (statut: string) => {
     const map: Record<string, { label: string; bg: string; color: string }> = {
       en_attente: { label: 'En attente', bg: '#fef3c7', color: '#92400e' },
-      en_cours:   { label: 'En cours',   bg: '#dcfce7', color: '#166534' },
+      en_cours:   { label: 'Nouveau besoin',   bg: '#3b82f6', color: '#ffffff' },
       termine:    { label: 'Terminée',   bg: '#f1f5f9', color: '#475569' },
       annule:     { label: 'Annulée',    bg: '#fee2e2', color: '#991b1b' },
     };
@@ -390,7 +390,7 @@ export default function ProfilDetails() {
     const map: Record<string, string> = {
       en_attente: 'En attente',
       confirmee: 'Confirmée',
-      en_cours: 'En cours',
+      en_cours: 'Nouveau besoin',
       terminee: 'Terminée',
       annulee: 'Annulée',
     };
@@ -844,9 +844,7 @@ export default function ProfilDetails() {
                             <span style={{ fontWeight: 700, color: '#1e293b', fontSize: 15 }}>{d.client_name || 'Client inconnu'}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 4, background: d.segment === 'particulier' ? '#dbeafe' : '#f3e8ff', color: d.segment === 'particulier' ? '#1e40af' : '#6b21a8' }}>
-                              {d.segment === 'particulier' ? 'SPP' : 'SPE'}
-                            </span>
+                            <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>{d.segment === 'particulier' ? 'PARTICULIER' : 'ENTREPRISE'}</span>
                             <span>•</span>
                             <span>{d.client_details?.city || d.formulaire_data?.ville || 'N/A'}</span>
                           </div>

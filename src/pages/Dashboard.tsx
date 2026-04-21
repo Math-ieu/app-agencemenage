@@ -774,8 +774,8 @@ export default function Dashboard() {
                       <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
                       <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</td>
                       <td>
-                        <span className={`badge ${d.statut === 'en_cours' ? 'badge-blue' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`}>
-                          {d.statut === 'en_cours' ? 'En cours' : d.statut === 'termine' ? 'Terminé' : 'En attente'}
+                        <span className={`badge ${d.statut === 'en_cours' ? 'badge-nouveau' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`}>
+                          {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : d.statut === 'termine' ? 'Terminé' : 'En attente'}
                         </span>
                       </td>
                       <td>
@@ -799,7 +799,7 @@ export default function Dashboard() {
                       </td>
                       <td>{d.service}</td>
                       <td>
-                        <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
+                        <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>
                           {d.segment === 'particulier' ? 'SPP' : 'SPE'}
                         </span>
                       </td>
@@ -947,7 +947,7 @@ export default function Dashboard() {
                       </span>
                     </h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className={`badge ${d.segment === 'particulier' ? 'badge-blue' : 'badge-purple'}`}>
+                      <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>
                         {d.segment === 'particulier' ? 'SPP' : 'SPE'}
                       </span>
                       <div className="relative">
@@ -1067,8 +1067,8 @@ export default function Dashboard() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                    <span className={`badge ${d.statut === 'en_cours' ? 'badge-blue' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`} style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px' }}>
-                      {d.statut === 'en_cours' ? 'En cours' : d.statut === 'termine' ? 'Terminé' : 'En attente'}
+                    <span className={`badge ${d.statut === 'en_cours' ? 'badge-nouveau' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`} style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px' }}>
+                      {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : d.statut === 'termine' ? 'Terminé' : 'En attente'}
                     </span>
                     {d.avec_produit && (
                       <span className="badge" style={{ backgroundColor: '#f1f5f9', color: '#10b981', padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px', fontWeight: 'bold' }}>
@@ -1555,7 +1555,7 @@ export default function Dashboard() {
                             <label>Statut du besoin</label>
                             <select value={editFormData.statut} onChange={e => setEditFormData({ ...editFormData, statut: e.target.value })} className="edit-input">
                               <option value="en_attente">Nouveau besoin</option>
-                              <option value="en_cours">En cours</option>
+                              <option value="en_cours">Nouveau besoin</option>
                               <option value="termine">Terminé</option>
                               <option value="annule">Annulé</option>
                             </select>

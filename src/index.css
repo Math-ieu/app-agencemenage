@@ -1516,8 +1516,7 @@ body {
 
 /* Dashboard table: compact layout without horizontal scroll and sticky head */
 .dashboard-table-wrapper {
-  overflow-x: hidden;
-  overflow-y: visible;
+  overflow: visible !important;
 }
 
 .dashboard-table {
@@ -4507,4 +4506,51 @@ input:checked+.slider:before {
     grid-template-columns: 1fr;
     gap: 20px;
   }
+}
+.badge-nouveau {
+  background-color: #3b82f6; /* Tailwind blue-500 */
+  color: #ffffff;
+  border-radius: 9999px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-transform: none;
+  letter-spacing: normal;
+  border: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.badge-spp {
+  background-color: #0f4f4c;
+  color: #ffecd1;
+  border-radius: 9999px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.badge-spe {
+  background-color: #d4f298;
+  color: #2a4a15;
+  border-radius: 9999px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
