@@ -526,6 +526,26 @@ export default function Dashboard() {
 
   useEffect(() => { fetchData(); }, []);
 
+  // Ferme les menus d'action lorsqu'on clique ailleurs
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (target.closest && (target.closest('.action-menu') || target.closest('.icon-btn'))) {
+        return;
+      }
+      setActiveMenu(null);
+      setActiveMoreMenu(null);
+    };
+
+    if (activeMenu !== null || activeMoreMenu !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activeMenu, activeMoreMenu]);
+
   const filtered = useMemo(() => {
     return demandes.filter((d) => {
       // Filtre Onglet (Besoins vs Abonnements)
@@ -709,7 +729,7 @@ export default function Dashboard() {
       ) : (
         <>
           {viewMode === 'list' ? (
-            <div className="table-wrapper dashboard-table-wrapper">
+            <div className={`table-wrapper dashboard-table-wrapper ${filtered.length >= 8 ? 'enable-table-scroll' : 'disable-table-scroll'}`}>
               <table className="data-table dashboard-table">
                 <thead>
                   <tr>
@@ -731,7 +751,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((d) => (
+                  {filtered.map((d, index) => (
                     <tr key={d.id} className={!d.cao && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000 ? 'row-alert' : ''}>
                       <td className="relative">
                         <button
@@ -746,7 +766,9 @@ export default function Dashboard() {
                         </button>
 
                         {activeMenu === d.id && (
-                          <div className="action-menu">
+                          <div className="action-menu" style={{ 
+                            ...(filtered.length >= 8 && index >= filtered.length - 2 ? { top: 'auto', bottom: '100%' } : {})
+                          }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
@@ -850,7 +872,7 @@ export default function Dashboard() {
                         </button>
 
                         {activeMoreMenu === d.id && (
-                          <div className="action-menu" style={{ right: 0, left: 'auto', top: '100%', minWidth: '180px' }}>
+                          <div className="action-menu" style={{ right: 0, left: 'auto', minWidth: '180px', ...(filtered.length >= 8 && index >= filtered.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>

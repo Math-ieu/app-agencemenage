@@ -1515,10 +1515,14 @@ body {
 }
 
 /* Dashboard table: compact layout without horizontal scroll and sticky head */
-.dashboard-table-wrapper {
+.dashboard-table-wrapper.enable-table-scroll {
   overflow-x: hidden;
   overflow-y: auto !important;
-  max-height: 480px; /* ~8 lignes (header + rows) */
+  max-height: 480px; 
+}
+
+.dashboard-table-wrapper.disable-table-scroll {
+  overflow: visible !important;
 }
 
 .dashboard-table {
