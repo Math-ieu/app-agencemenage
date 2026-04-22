@@ -63,6 +63,7 @@ export interface Agent {
   photo?: string;
   cin_file?: string;
   attestation_file?: string;
+  fiche_antropometrique?: string;
   operator_notes?: string;
   created_at: string;
   updated_at: string;

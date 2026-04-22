@@ -6,7 +6,7 @@
  */
 import React, { useState } from 'react';
 import { createAgent, updateAgent } from '../api/client';
-import { Search, Plus, RotateCw, Calendar, User, Save, XCircle } from 'lucide-react';
+import { Search, Plus, RotateCw, Calendar, User, Save, XCircle, FileText } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { Agent } from '../types';
 
@@ -61,13 +61,14 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
     tasks: [] as string[],
     has_allergies: false,
   });
-  const [files, setFiles] = useState<{ photo: File | null; cin_file: File | null; attestation_file: File | null }>({
-    photo: null, cin_file: null, attestation_file: null,
+  const [files, setFiles] = useState<{ photo: File | null; cin_file: File | null; attestation_file: File | null; fiche_antropometrique: File | null }>({
+    photo: null, cin_file: null, attestation_file: null, fiche_antropometrique: null,
   });
 
   const photoInputRef = React.useRef<HTMLInputElement>(null);
   const cinInputRef = React.useRef<HTMLInputElement>(null);
   const attestationInputRef = React.useRef<HTMLInputElement>(null);
+  const antropometriqueInputRef = React.useRef<HTMLInputElement>(null);
 
   const toggleLanguage = (lang: string) => {
     setFormData(prev => ({
@@ -109,6 +110,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
       if (files.photo) data.append('photo', files.photo);
       if (files.cin_file) data.append('cin_file', files.cin_file);
       if (files.attestation_file) data.append('attestation_file', files.attestation_file);
+      if (files.fiche_antropometrique) data.append('fiche_antropometrique', files.fiche_antropometrique);
       if (isEditing && initialAgent) {
         await updateAgent(initialAgent.id, data as any);
         addToast('Profil mis à jour avec succès !', 'success');
@@ -136,6 +138,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
           <input type="file" ref={photoInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('photo', e)} />
           <input type="file" ref={cinInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('cin_file', e)} />
           <input type="file" ref={attestationInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('attestation_file', e)} />
+          <input type="file" ref={antropometriqueInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('fiche_antropometrique', e)} />
 
           {/* ── Informations personnelles ── */}
           <div className="form-section">
@@ -359,7 +362,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               <Save size={18} className="text-teal-600" />
               Média
             </h3>
-            <div className="form-grid grid-cols-3">
+            <div className="form-grid grid-cols-2">
               <div className="form-group">
                 <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Photo de profil {files.photo && <span className="text-teal-500">✓</span>}</label>
                 <button className="upload-box w-full" onClick={() => photoInputRef.current?.click()}>
@@ -377,8 +380,15 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               <div className="form-group">
                 <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Attestation {files.attestation_file && <span className="text-teal-500">✓</span>}</label>
                 <button className="upload-box w-full" onClick={() => attestationInputRef.current?.click()}>
-                  <Plus size={16} />
+                  <RotateCw size={16} />
                   <span className="text-xs">{files.attestation_file ? files.attestation_file.name : 'Choisir'}</span>
+                </button>
+              </div>
+              <div className="form-group">
+                <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Fiche antropométrique {files.fiche_antropometrique && <span className="text-teal-500">✓</span>}</label>
+                <button className="upload-box w-full" onClick={() => antropometriqueInputRef.current?.click()}>
+                  <FileText size={16} />
+                  <span className="text-xs">{files.fiche_antropometrique ? files.fiche_antropometrique.name : 'Choisir'}</span>
                 </button>
               </div>
             </div>

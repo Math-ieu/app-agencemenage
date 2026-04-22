@@ -633,6 +633,16 @@ export default function ProfilDetails() {
                 <Download size={14} /> Télécharger
               </button>
             </div>
+            {/* Fiche Antropométrique */}
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>FICHE ANTROPOMÉTRIQUE</p>
+              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <FileText size={40} color="#cbd5e1" />
+              </div>
+              <button onClick={() => agent.fiche_antropometrique && handleDownload(agent.fiche_antropometrique)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                <Download size={14} /> Télécharger
+              </button>
+            </div>
           </div>
         </Accordion>
 
