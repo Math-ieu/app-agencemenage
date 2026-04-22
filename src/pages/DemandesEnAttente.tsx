@@ -1332,7 +1332,7 @@ export default function DemandesEnAttente() {
                         <option value="non_paye">Non payé</option>
                         <option value="acompte">Acompte versé</option>
                         <option value="partiel">Paiement partiel</option>
-                        <option value="integral">Paiement intégral</option>
+                        <option value="integral">Payé</option>
                       </select>
                     </div>
                   </div>

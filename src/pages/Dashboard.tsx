@@ -262,6 +262,7 @@ export default function Dashboard() {
   const [showDetail, setShowDetail] = useState(false);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
   const [activeMoreMenu, setActiveMoreMenu] = useState<number | null>(null);
+  const [menuDirection, setMenuDirection] = useState<'up' | 'down'>('down');
   const [isAgencyExpanded, setIsAgencyExpanded] = useState(true);
   const [showPartsSection, setShowPartsSection] = useState(true);
   const [showHistorySection, setShowHistorySection] = useState(true);
@@ -823,7 +824,10 @@ export default function Dashboard() {
                       <td className="relative">
                         <button
                           className="icon-btn"
-                          onClick={() => {
+                          onClick={(e) => {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            const spaceBelow = window.innerHeight - rect.bottom;
+                            setMenuDirection(spaceBelow < 300 ? 'up' : 'down');
                             setActiveMenu(activeMenu === d.id ? null : d.id);
                             setActiveMoreMenu(null);
                           }}
@@ -834,7 +838,9 @@ export default function Dashboard() {
 
                         {activeMenu === d.id && (
                           <div className="action-menu" style={{ 
-                            ...(filtered.length >= 8 && index >= filtered.length - 2 ? { top: 'auto', bottom: '100%' } : {})
+                            left: 0, 
+                            right: 'auto',
+                            ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
@@ -933,7 +939,10 @@ export default function Dashboard() {
                       <td className="relative">
                         <button
                           className="icon-btn"
-                          onClick={() => {
+                          onClick={(e) => {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            const spaceBelow = window.innerHeight - rect.bottom;
+                            setMenuDirection(spaceBelow < 350 ? 'up' : 'down');
                             setActiveMoreMenu(activeMoreMenu === d.id ? null : d.id);
                             setActiveMenu(null);
                           }}
@@ -942,7 +951,12 @@ export default function Dashboard() {
                         </button>
 
                         {activeMoreMenu === d.id && (
-                          <div className="action-menu" style={{ right: 0, left: 'auto', minWidth: '180px', ...(filtered.length >= 8 && index >= filtered.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
+                          <div className="action-menu" style={{ 
+                            right: 0, 
+                            left: 'auto', 
+                            minWidth: '180px', 
+                            ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' }) 
+                          }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
@@ -1045,7 +1059,10 @@ export default function Dashboard() {
                       <div className="relative">
                         <button
                           className="icon-btn"
-                          onClick={() => {
+                          onClick={(e) => {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            const spaceBelow = window.innerHeight - rect.bottom;
+                            setMenuDirection(spaceBelow < 350 ? 'up' : 'down');
                             setActiveMoreMenu(activeMoreMenu === d.id ? null : d.id);
                             setActiveMenu(null);
                           }}
@@ -1054,7 +1071,13 @@ export default function Dashboard() {
                         </button>
 
                         {activeMoreMenu === d.id && (
-                          <div className="action-menu" style={{ right: 0, left: 'auto', top: '100%', zIndex: 50, minWidth: '180px' }}>
+                          <div className="action-menu" style={{ 
+                            right: 0, 
+                            left: 'auto', 
+                            minWidth: '180px',
+                            zIndex: 50,
+                            ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
+                          }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Edit2 size={14} /> Éditer le besoin
                             </button>
@@ -1174,7 +1197,10 @@ export default function Dashboard() {
                       <button
                         className="btn"
                         style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', borderRadius: '8px', padding: '6px 12px', fontSize: '0.875rem' }}
-                        onClick={() => {
+                        onClick={(e) => {
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          const spaceBelow = window.innerHeight - rect.bottom;
+                          setMenuDirection(spaceBelow < 300 ? 'up' : 'down');
                           setActiveMenu(activeMenu === d.id ? null : d.id);
                           setActiveMoreMenu(null);
                         }}
@@ -1184,7 +1210,13 @@ export default function Dashboard() {
                       </button>
 
                       {activeMenu === d.id && (
-                        <div className="action-menu shadow-lg border" style={{ right: 'auto', left: 0, bottom: '100%', top: 'auto', marginBottom: '8px', zIndex: 50, minWidth: '180px' }}>
+                        <div className="action-menu shadow-lg border" style={{ 
+                          right: 'auto', 
+                          left: 0, 
+                          zIndex: 50, 
+                          minWidth: '180px',
+                          ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
+                        }}>
                           <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                             <Edit2 size={14} /> Éditer le besoin
                           </button>
