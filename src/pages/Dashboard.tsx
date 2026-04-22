@@ -819,7 +819,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((d, index) => (
+                  {filtered.map((d) => (
                     <tr key={d.id} className={!d.cao && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000 ? 'row-alert' : ''}>
                       <td className="relative">
                         <button
