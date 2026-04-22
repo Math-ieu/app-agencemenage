@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
   CheckCircle, UserCheck, MessageSquare, AlertTriangle,
-  Check, ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle, Calendar, Trash2, Plus
+  Check, ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle, Calendar, Trash2, Plus, Pencil
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
@@ -326,14 +326,17 @@ export default function Dashboard() {
 
   const getRowClass = (d: Demande) => {
     const classes = [];
-    if (!d.cao && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000) {
+    if (!d.cao && d.date_intervention && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000) {
       classes.push('row-alert');
     }
     
-    if (d.statut_paiement === 'integral') classes.push('row-status-paye');
-    else if (d.statut_paiement === 'partiel') classes.push('row-status-partielle');
+    // Color according to demand status (statut)
+    if (d.statut === 'en_cours') classes.push('row-status-nouveau');
+    else if (d.statut === 'en_attente') classes.push('row-status-attente');
+    else if (d.statut === 'pres_en_cours') classes.push('row-status-pres-en-cours');
+    else if (d.statut === 'pres_terminee') classes.push('row-status-pres-terminee');
+    else if (d.statut === 'termine') classes.push('row-status-termine');
     else if (d.statut === 'annule') classes.push('row-status-annulee');
-    else if (d.statut === 'en_cours' || d.statut === 'en_attente') classes.push('row-status-encours');
     
     return classes.join(' ');
   };
@@ -886,8 +889,18 @@ export default function Dashboard() {
                       <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
                       <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</td>
                       <td>
-                        <span className={`badge ${d.statut === 'en_cours' ? 'badge-nouveau' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`}>
-                          {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : d.statut === 'termine' ? 'Terminé' : 'En attente'}
+                        <span className={`badge ${
+                          d.statut === 'en_cours' ? 'badge-nouveau' : 
+                          d.statut === 'termine' ? 'badge-green' : 
+                          d.statut === 'pres_en_cours' ? 'badge-purple' :
+                          d.statut === 'pres_terminee' ? 'badge-orange' :
+                          'badge-orange'
+                        }`}>
+                          {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : 
+                           d.statut === 'termine' ? 'Terminé' : 
+                           d.statut === 'pres_en_cours' ? 'Pres. en cours' :
+                           d.statut === 'pres_terminee' ? 'Pres. terminée' :
+                           'En attente'}
                         </span>
                       </td>
                       <td>
@@ -965,38 +978,47 @@ export default function Dashboard() {
                         </button>
 
                         {activeMoreMenu === d.id && (
-                          <div className="action-menu" style={{ 
+                          <div className="action-menu shadow-xl border-0" style={{ 
                             right: 0, 
                             left: 'auto', 
-                            minWidth: '180px', 
+                            minWidth: '220px', 
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' }) 
                           }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
-                              <Edit2 size={14} /> Éditer le besoin
+                              <Pencil size={16} /> Éditer le besoin
                             </button>
 
                             <button className="menu-item" onClick={() => {
                               setShowNoteModal({ demandeId: d.id, type: 'commercial', note: d.note_commercial || '' });
                               setActiveMoreMenu(null);
                             }}>
-                              <MessageSquare size={14} /> Note commerciale
+                              <MessageSquare size={16} /> Note commerciale
                             </button>
                             <button className="menu-item" onClick={() => {
                               setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: d.note_operationnel || '' });
                               setActiveMoreMenu(null);
                             }}>
-                              <MessageSquare size={14} /> Note opérationnelle
+                              <MessageSquare size={16} /> Note opérationnelle
                             </button>
 
                             <div className="menu-divider" />
 
-                            <button className="menu-item text-blue" onClick={async () => {
-                              await updateDemande(d.id, { statut: 'termine' });
-                              addToast('Statut mis à jour : Prestation effectuée', 'success');
+                            <button className="menu-item text-purple" onClick={async () => {
+                              await updateDemande(d.id, { statut: 'pres_en_cours' });
+                              addToast('Statut mis à jour : Prestation en cours', 'success');
                               fetchData();
                               setActiveMoreMenu(null);
                             }}>
-                              <CheckCircle size={14} /> Prestation effectuée
+                              <CheckCircle size={16} /> Pres. en cours
+                            </button>
+
+                            <button className="menu-item text-orange" onClick={async () => {
+                              await updateDemande(d.id, { statut: 'pres_terminee' });
+                              addToast('Statut mis à jour : Prestation terminée', 'success');
+                              fetchData();
+                              setActiveMoreMenu(null);
+                            }}>
+                              <CheckCircle size={16} /> Pres. terminée
                             </button>
 
                             <div className="menu-divider" />
@@ -1009,7 +1031,7 @@ export default function Dashboard() {
                               fetchData();
                               setActiveMoreMenu(null);
                             }}>
-                              <XCircle size={14} /> Rejeté / Annulé
+                              <XCircle size={16} /> Rejeté / Annulé
                             </button>
                             
                             <button className="menu-item text-orange" onClick={async () => {
@@ -1020,7 +1042,7 @@ export default function Dashboard() {
                                 setActiveMoreMenu(null);
                               }
                             }}>
-                              <XCircle size={14} /> Facturation annulée
+                              <XCircle size={16} /> Facturation annulée
                             </button>
 
                             <button className="menu-item text-red" onClick={async () => {
@@ -1035,7 +1057,7 @@ export default function Dashboard() {
                                 }
                               }
                             }}>
-                              <Trash2 size={14} /> Supprimer
+                              <Trash2 size={16} /> Supprimer
                             </button>
                           </div>
                         )}
@@ -1085,39 +1107,48 @@ export default function Dashboard() {
                         </button>
 
                         {activeMoreMenu === d.id && (
-                          <div className="action-menu" style={{ 
+                          <div className="action-menu shadow-xl border-0" style={{ 
                             right: 0, 
                             left: 'auto', 
-                            minWidth: '180px',
+                            minWidth: '220px',
                             zIndex: 50,
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
-                              <Edit2 size={14} /> Éditer le besoin
+                              <Pencil size={16} /> Éditer le besoin
                             </button>
 
                             <button className="menu-item" onClick={() => {
                               setShowNoteModal({ demandeId: d.id, type: 'commercial', note: d.note_commercial || '' });
                               setActiveMoreMenu(null);
                             }}>
-                              <MessageSquare size={14} /> Note commerciale
+                              <MessageSquare size={16} /> Note commerciale
                             </button>
                             <button className="menu-item" onClick={() => {
                               setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: d.note_operationnel || '' });
                               setActiveMoreMenu(null);
                             }}>
-                              <MessageSquare size={14} /> Note opérationnelle
+                              <MessageSquare size={16} /> Note opérationnelle
                             </button>
 
                             <div className="menu-divider" />
 
-                            <button className="menu-item text-blue" onClick={async () => {
-                              await updateDemande(d.id, { statut: 'termine' });
-                              addToast('Statut mis à jour : Prestation effectuée', 'success');
+                            <button className="menu-item text-purple" onClick={async () => {
+                              await updateDemande(d.id, { statut: 'pres_en_cours' });
+                              addToast('Statut mis à jour : Prestation en cours', 'success');
                               fetchData();
                               setActiveMoreMenu(null);
                             }}>
-                              <CheckCircle size={14} /> Prestation effectuée
+                              <CheckCircle size={16} /> Pres. en cours
+                            </button>
+
+                            <button className="menu-item text-orange" onClick={async () => {
+                              await updateDemande(d.id, { statut: 'pres_terminee' });
+                              addToast('Statut mis à jour : Prestation terminée', 'success');
+                              fetchData();
+                              setActiveMoreMenu(null);
+                            }}>
+                              <CheckCircle size={16} /> Pres. terminée
                             </button>
 
                             <div className="menu-divider" />
@@ -1130,7 +1161,7 @@ export default function Dashboard() {
                               fetchData();
                               setActiveMoreMenu(null);
                             }}>
-                              <XCircle size={14} /> Rejeté / Annulé
+                              <XCircle size={16} /> Rejeté / Annulé
                             </button>
 
                             <button className="menu-item text-orange" onClick={async () => {
@@ -1141,7 +1172,7 @@ export default function Dashboard() {
                                 setActiveMoreMenu(null);
                               }
                             }}>
-                              <XCircle size={14} /> Facturation annulée
+                              <XCircle size={16} /> Facturation annulée
                             </button>
 
                             <button className="menu-item text-red" onClick={async () => {
@@ -1156,7 +1187,7 @@ export default function Dashboard() {
                                 }
                               }
                             }}>
-                              <Trash2 size={14} /> Supprimer
+                              <Trash2 size={16} /> Supprimer
                             </button>
                           </div>
                         )}
@@ -1196,8 +1227,18 @@ export default function Dashboard() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                    <span className={`badge ${d.statut === 'en_cours' ? 'badge-nouveau' : d.statut === 'termine' ? 'badge-green' : 'badge-orange'}`} style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px' }}>
-                      {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : d.statut === 'termine' ? 'Terminé' : 'En attente'}
+                    <span className={`badge ${
+                      d.statut === 'en_cours' ? 'badge-nouveau' : 
+                      d.statut === 'termine' ? 'badge-green' : 
+                      d.statut === 'pres_en_cours' ? 'badge-purple' :
+                      d.statut === 'pres_terminee' ? 'badge-orange' :
+                      'badge-orange'
+                    }`} style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px' }}>
+                      {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : 
+                       d.statut === 'termine' ? 'Terminé' : 
+                       d.statut === 'pres_en_cours' ? 'Pres. en cours' :
+                       d.statut === 'pres_terminee' ? 'Pres. terminée' :
+                       'En attente'}
                     </span>
                     {d.avec_produit && (
                       <span className="badge" style={{ backgroundColor: '#f1f5f9', color: '#10b981', padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px', fontWeight: 'bold' }}>
@@ -1223,40 +1264,60 @@ export default function Dashboard() {
                         Actions
                       </button>
 
-                      {activeMenu === d.id && (
-                        <div className="action-menu shadow-lg border" style={{ 
-                          right: 'auto', 
-                          left: 0, 
-                          zIndex: 50, 
-                          minWidth: '180px',
-                          ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
-                        }}>
-                          <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
-                            <Edit2 size={14} /> Éditer le besoin
-                          </button>
+                        {activeMenu === d.id && (
+                          <div className="action-menu shadow-xl border-0" style={{ 
+                            right: 'auto', 
+                            left: 0, 
+                            zIndex: 50, 
+                            minWidth: '220px',
+                            ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
+                          }}>
+                            <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
+                              <Pencil size={16} /> Éditer le besoin
+                            </button>
 
-                          <button
-                            className="menu-item w-full"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowCAOModal(d);
-                              setCaoDecision(null);
+                            <button
+                              className="menu-item w-full"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowCAOModal(d);
+                                setCaoDecision(null);
+                                setActiveMenu(null);
+                              }}
+                            >
+                              <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> {d.cao ? 'Confirmation avant opération' : 'Confirmation avant opération'}
+                            </button>
+
+                            <Link
+                              to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
+                              className="menu-item"
+                              onClick={() => setActiveMenu(null)}
+                              style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}
+                            >
+                              <UserCheck size={16} /> Compte Client
+                            </Link>
+
+                            <div className="menu-divider" />
+
+                            <button className="menu-item text-purple" onClick={async () => {
+                              await updateDemande(d.id, { statut: 'pres_en_cours' });
+                              addToast('Statut mis à jour : Prestation en cours', 'success');
+                              fetchData();
                               setActiveMenu(null);
-                            }}
-                          >
-                            <CheckCircle size={14} className={d.cao ? 'text-green-500' : ''} /> {d.cao ? 'Confirmation avant opération' : 'Confirmation avant opération'}
-                          </button>
+                            }}>
+                              <CheckCircle size={16} /> Pres. en cours
+                            </button>
 
-                          <Link
-                            to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
-                            className="menu-item"
-                            onClick={() => setActiveMenu(null)}
-                            style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}
-                          >
-                            <UserCheck size={14} /> Compte Client
-                          </Link>
-                        </div>
-                      )}
+                            <button className="menu-item text-orange" onClick={async () => {
+                              await updateDemande(d.id, { statut: 'pres_terminee' });
+                              addToast('Statut mis à jour : Prestation terminée', 'success');
+                              fetchData();
+                              setActiveMenu(null);
+                            }}>
+                              <CheckCircle size={16} /> Pres. terminée
+                            </button>
+                          </div>
+                        )}
                     </div>
                   </div>
                 </div>
