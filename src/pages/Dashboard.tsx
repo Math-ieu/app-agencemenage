@@ -324,6 +324,20 @@ export default function Dashboard() {
     }
   };
 
+  const getRowClass = (d: Demande) => {
+    const classes = [];
+    if (!d.cao && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000) {
+      classes.push('row-alert');
+    }
+    
+    if (d.statut_paiement === 'integral') classes.push('row-status-paye');
+    else if (d.statut_paiement === 'partiel') classes.push('row-status-partielle');
+    else if (d.statut === 'annule') classes.push('row-status-annulee');
+    else if (d.statut === 'en_cours' || d.statut === 'en_attente') classes.push('row-status-encours');
+    
+    return classes.join(' ');
+  };
+
   const handleCAOUpdate = async (demande: Demande, status: 'confirmed' | 'postponed' | 'cancelled') => {
     try {
       if (status === 'confirmed') {
@@ -820,7 +834,7 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {filtered.map((d) => (
-                    <tr key={d.id} className={!d.cao && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000 ? 'row-alert' : ''}>
+                    <tr key={d.id} className={getRowClass(d)}>
                       <td className="relative">
                         <button
                           className="icon-btn"
@@ -1034,7 +1048,7 @@ export default function Dashboard() {
           ) : (
             <div className="demandes-grid">
               {filtered.map((d) => (
-                <div key={d.id} className={`demande-card-detail table-row-matching ${!d.cao && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000 ? 'row-alert' : ''}`}>
+                <div key={d.id} className={`demande-card-detail table-row-matching ${getRowClass(d)}`}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
                     <h3 className="client-name" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
                       <span className="client-link-group">

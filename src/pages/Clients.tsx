@@ -307,7 +307,7 @@ export default function Clients() {
     if (latest.statut_paiement === 'partiel') return 'row-status-partielle';
     if (latest.statut_paiement === 'integral') return 'row-status-paye';
     if (latest.statut === 'annule') return 'row-status-annulee';
-    if (latest.statut === 'en_cours') return 'row-status-encours';
+    if (latest.statut === 'en_cours' || latest.statut === 'en_attente') return 'row-status-encours';
     return '';
   };
 

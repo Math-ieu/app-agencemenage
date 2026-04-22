@@ -131,6 +131,14 @@ export default function DemandesEnAttente() {
     }
   }, [location.state, demandes, editingDemande, navigate, location.pathname]);
 
+  const getRowClass = (d: Demande) => {
+    if (d.statut_paiement === 'integral') return 'row-status-paye';
+    if (d.statut_paiement === 'partiel') return 'row-status-partielle';
+    if (d.statut === 'annule') return 'row-status-annulee';
+    // For pending view, almost everything is 'en_attente' so we use Blue row status
+    return 'row-status-encours';
+  };
+
   const handleAffecter = async (demandeId: number, commercialId: number) => {
     try {
       await affecterDemande(demandeId, commercialId);
@@ -574,7 +582,7 @@ export default function DemandesEnAttente() {
       ) : (
         <div className="pending-grid">
           {demandes.map((d) => (
-            <div key={d.id} className="pending-card-container">
+            <div key={d.id} className={`pending-card-container ${getRowClass(d)}`}>
               {/* DESKTOP VERSION */}
               <div className="pending-card desktop-card">
                 <div className="pending-card-header">

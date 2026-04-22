@@ -74,6 +74,14 @@ export default function Historique() {
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState('');
 
+  const getRowClass = (d: Demande) => {
+    if (d.statut_paiement === 'integral' || d.statut === 'termine') return 'row-status-paye';
+    if (d.statut_paiement === 'partiel') return 'row-status-partielle';
+    if (d.statut === 'annule') return 'row-status-annulee';
+    if (d.statut === 'en_attente') return 'row-status-encours';
+    return '';
+  };
+
   const fetchHistorique = async () => {
     setLoading(true);
     try {
@@ -146,7 +154,7 @@ export default function Historique() {
             </thead>
             <tbody>
               {demandes.map((d) => (
-                <tr key={d.id}>
+                <tr key={d.id} className={getRowClass(d)}>
                   <td className="text-sm">#{d.id}</td>
                   <td>{formatCreationDate(d.created_at)}</td>
                   <td className="fw-medium">
