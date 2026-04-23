@@ -417,7 +417,7 @@ export default function Qualite() {
               </tr>
             </thead>
             <tbody>
-              {filteredFeedbacks.map((f, idx) => {
+              {filteredFeedbacks.map((f) => {
                 const satKey = getSatisfactionLabel(f.note_agence, f.note_intervenant);
                 const sat = SATISFACTION_CONFIG[satKey];
                 return (
