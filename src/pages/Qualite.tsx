@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import {
   getFeedbacks,
   getFeedbackStats,
-  deleteFeedback
+  deleteFeedback,
+  sendWhatsApp
 } from '../api/client';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -54,6 +55,31 @@ export default function Qualite() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const handleShare = async (demandeId: number) => {
+    if (!demandeId) {
+      addToast('Aucune demande associée pour l\'envoi', 'error');
+      return;
+    }
+    try {
+      addToast('Envoi du lien feedback WhatsApp...', 'info');
+      await sendWhatsApp(demandeId, 'feedback');
+      addToast('Lien WhatsApp envoyé avec succès !', 'success');
+    } catch (err) {
+      addToast('Erreur lors de l\'envoi WhatsApp', 'error');
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Voulez-vous vraiment supprimer ce feedback ?')) return;
+    try {
+      await deleteFeedback(id);
+      addToast('Feedback supprimé', 'success');
+      fetchData();
+    } catch {
+      addToast('Erreur lors de la suppression', 'error');
+    }
+  };
 
   const filteredFeedbacks = useMemo(() => {
     return feedbacks.filter(f => {
@@ -524,15 +550,14 @@ export default function Qualite() {
                     <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: 4 }}>
                         {[
-                          { Icon: Share2, hoverBg: '#eff6ff', hoverColor: '#3b82f6', title: 'Partager', onClick: () => {} },
+                          { 
+                            Icon: Share2, hoverBg: '#eff6ff', hoverColor: '#3b82f6', title: 'Partager', 
+                            onClick: () => handleShare(f.demande) 
+                          },
                           { Icon: Eye, hoverBg: '#eff6ff', hoverColor: '#3b82f6', title: 'Voir détails', onClick: () => {} },
                           {
                             Icon: Trash2, hoverBg: '#fff1f2', hoverColor: '#ef4444', title: 'Supprimer',
-                            onClick: () => {
-                              if (confirm('Supprimer ce feedback ?')) {
-                                deleteFeedback(f.id).then(() => fetchData());
-                              }
-                            }
+                            onClick: () => handleDelete(f.id)
                           },
                         ].map(({ Icon, hoverBg, hoverColor, title, onClick }, i) => (
                           <button
