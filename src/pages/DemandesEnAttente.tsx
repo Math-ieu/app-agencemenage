@@ -367,6 +367,18 @@ export default function DemandesEnAttente() {
         ? (formData.contact_person || formData.entity_name || formData.nom)
         : formData.nom;
 
+      // Fix phone indicator: Add +212 if not present
+      const formatPhone = (p: string) => {
+        if (!p) return "";
+        let cleaned = p.replace(/\s+/g, '');
+        if (cleaned.startsWith('0')) cleaned = cleaned.substring(1);
+        if (!cleaned.startsWith('+')) return `+212${cleaned}`;
+        return cleaned;
+      };
+
+      const finalPhone = formatPhone(directPhone);
+      const finalWhatsApp = formatPhone(whatsappPhone);
+
       const additionalServices = {
         produitsEtOutils: Boolean(formData.produits),
         torchonsEtSerpierres: Boolean(formData.torchons),
@@ -374,7 +386,8 @@ export default function DemandesEnAttente() {
 
       const payload = {
         client_name: clientDisplayName,
-        client_phone: directPhone,
+        client_phone: finalPhone,
+        client_whatsapp: finalWhatsApp,
         service: selectedService,
         segment: activeSegment,
         date_intervention: formData.date || null,
@@ -436,8 +449,8 @@ export default function DemandesEnAttente() {
           accommodationState: formData.accommodation_state,
           cleanlinessType: formData.cleanliness_type,
           // Contact
-          whatsapp_phone: whatsappPhone,
-          whatsappNumber: whatsappPhone,
+          whatsapp_phone: finalWhatsApp,
+          whatsappNumber: finalWhatsApp,
           notes: formData.notes,
           // Detailed rooms
           rooms: formData.rooms
