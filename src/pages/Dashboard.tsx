@@ -1070,24 +1070,29 @@ export default function Dashboard() {
           ) : (
             <div className="demandes-grid">
               {filtered.map((d) => (
-                <div key={d.id} className={`demande-card-detail table-row-matching ${getRowClass(d)}`}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-                    <h3 className="client-name" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                      <span className="client-link-group">
-                        {d.client ? (
-                          <Link to={`/clients/${encodeId(d.client)}`} className="client-link">
-                            {d.client_name || d.formulaire_data?.nom || '—'}
-                          </Link>
-                        ) : (
-                          <span>{d.client_name || d.formulaire_data?.nom || '—'}</span>
-                        )}
-                        {(d.client_name || d.formulaire_data?.nom) && (
-                          <span className="client-demandes-count">
-                            x{clientDemandeCounts[getClientKey(d)] || 1}
-                          </span>
-                        )}
-                      </span>
-                    </h3>
+                <div key={d.id} className={`demande-card-detail ${getRowClass(d)}`}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <h3 className="client-name" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: '1.2' }}>
+                        <span className="client-link-group">
+                          {d.client ? (
+                            <Link to={`/clients/${encodeId(d.client)}`} className="client-link">
+                              {d.client_name || d.formulaire_data?.nom || '—'}
+                            </Link>
+                          ) : (
+                            <span>{d.client_name || d.formulaire_data?.nom || '—'}</span>
+                          )}
+                          {(d.client_name || d.formulaire_data?.nom) && (
+                            <span className="client-demandes-count">
+                              x{clientDemandeCounts[getClientKey(d)] || 1}
+                            </span>
+                          )}
+                        </span>
+                      </h3>
+                      <div className="text-muted text-xs font-semibold mt-1">
+                        # {d.id} · {d.service}
+                      </div>
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>
                         {d.segment === 'particulier' ? 'SPP' : 'SPE'}
@@ -1164,17 +1169,6 @@ export default function Dashboard() {
                               <XCircle size={16} /> Rejeté / Annulé
                             </button>
 
-                            <button className="menu-item text-orange" onClick={async () => {
-                              if (confirm('Confirmer l\'annulation de la facturation ?')) {
-                                await updateDemande(d.id, { statut_paiement: 'annule' });
-                                addToast('Facturation annulée', 'success');
-                                fetchData();
-                                setActiveMoreMenu(null);
-                              }
-                            }}>
-                              <XCircle size={16} /> Facturation annulée
-                            </button>
-
                             <button className="menu-item text-red" onClick={async () => {
                               if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
                                 try {
@@ -1195,63 +1189,59 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '8px', fontWeight: '500' }}>
-                    # {d.id} · {d.service}
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px', fontSize: '0.875rem', marginBottom: '8px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: '0.875rem', margin: '12px 0' }}>
                     <div>
-                      <span style={{ color: '#64748b', marginRight: '4px' }}>Date :</span>
+                      <span className="text-muted" style={{ marginRight: '4px' }}>Date :</span>
                       <span style={{ fontWeight: '500' }}>
                         {d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}
                       </span>
                     </div>
                     <div>
-                      <span style={{ color: '#64748b', marginRight: '4px' }}>Heures :</span>
+                      <span className="text-muted" style={{ marginRight: '4px' }}>Heures :</span>
                       <span style={{ fontWeight: '500' }}>
                         {d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '—'}
                       </span>
                     </div>
                     <div>
-                      <span style={{ color: '#64748b', marginRight: '4px' }}>Lieu :</span>
-                      <span style={{ fontWeight: '500' }}>
-                        {[d.formulaire_data?.quartier || d.client_neighborhood, d.formulaire_data?.ville || d.client_city].filter(Boolean).join(', ') || d.neighborhood_city || '—'}
+                      <span className="text-muted" style={{ marginRight: '4px' }}>Lieu :</span>
+                      <span className="truncate" style={{ fontWeight: '500' }} title={d.neighborhood_city}>
+                        {d.neighborhood_city || '—'}
                       </span>
                     </div>
                     <div>
-                      <span style={{ color: '#64748b', marginRight: '4px' }}>Tarif :</span>
-                      <span style={{ fontWeight: '600' }}>
+                      <span className="text-muted" style={{ marginRight: '4px' }}>Tarif :</span>
+                      <span className="fw-bold">
                         {typeof d.prix === 'number' && d.prix > 0 ? `${d.prix.toLocaleString('fr-FR')} MAD` : (d.prix && d.prix !== '0' ? `${d.prix} MAD` : '—')}
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  <div className="flex gap-2 mb-4 items-center flex-wrap">
+                    {(d.avec_produit || d.formulaire_data?.produits) && (
+                      <span className="badge badge-teal" style={{ padding: '4px 10px', borderRadius: '8px' }}>
+                        Produits
+                      </span>
+                    )}
                     <span className={`badge ${
                       d.statut === 'en_cours' ? 'badge-nouveau' : 
                       d.statut === 'termine' ? 'badge-green' : 
                       d.statut === 'pres_en_cours' ? 'badge-purple' :
                       d.statut === 'pres_terminee' ? 'badge-orange' :
                       'badge-orange'
-                    }`} style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px' }}>
+                    }`} style={{ padding: '4px 12px', borderRadius: '8px' }}>
                       {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : 
                        d.statut === 'termine' ? 'Terminé' : 
                        d.statut === 'pres_en_cours' ? 'Pres. en cours' :
                        d.statut === 'pres_terminee' ? 'Pres. terminée' :
                        'En attente'}
                     </span>
-                    {d.avec_produit && (
-                      <span className="badge" style={{ backgroundColor: '#f1f5f9', color: '#10b981', padding: '4px 10px', fontSize: '0.75rem', borderRadius: '12px', fontWeight: 'bold' }}>
-                        + Produit
-                      </span>
-                    )}
                   </div>
 
-                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '12px', display: 'flex', justifyContent: 'flex-start' }}>
+                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px', display: 'flex', justifyContent: 'flex-start' }}>
                     <div className="relative">
                       <button
-                        className="btn"
-                        style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', borderRadius: '8px', padding: '6px 12px', fontSize: '0.875rem' }}
+                        className="icon-btn border"
+                        style={{ backgroundColor: 'white', color: 'var(--primary)', borderRadius: '4px', width: '36px', height: '36px' }}
                         onClick={(e) => {
                           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                           const spaceBelow = window.innerHeight - rect.bottom;
@@ -1260,64 +1250,42 @@ export default function Dashboard() {
                           setActiveMoreMenu(null);
                         }}
                       >
-                        <Settings size={14} />
-                        Actions
+                        <Settings size={18} />
                       </button>
 
-                        {activeMenu === d.id && (
-                          <div className="action-menu shadow-xl border-0" style={{ 
-                            right: 'auto', 
-                            left: 0, 
-                            zIndex: 50, 
-                            minWidth: '220px',
-                            ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
+                      {activeMenu === d.id && (
+                        <div className="action-menu shadow-xl border-0" style={{ 
+                          right: 'auto', left: 0, zIndex: 50, minWidth: '220px',
+                          ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
+                        }}>
+                          <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
+                            <Pencil size={16} /> Éditer le besoin
+                          </button>
+                          <button className="menu-item w-full" onClick={(e) => { e.stopPropagation(); setShowCAOModal(d); setCaoDecision(null); setActiveMenu(null); }}>
+                            <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> Confirmation CAO
+                          </button>
+                          <Link to={d.client ? `/clients/${encodeId(d.client)}` : '#'} className="menu-item" onClick={() => setActiveMenu(null)} style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}>
+                            <UserCheck size={16} /> Compte Client
+                          </Link>
+                          <div className="menu-divider" />
+                          <button className="menu-item text-purple" onClick={async () => {
+                            await updateDemande(d.id, { statut: 'pres_en_cours' });
+                            addToast('Statut mis à jour : Prestation en cours', 'success');
+                            fetchData();
+                            setActiveMenu(null);
                           }}>
-                            <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
-                              <Pencil size={16} /> Éditer le besoin
-                            </button>
-
-                            <button
-                              className="menu-item w-full"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowCAOModal(d);
-                                setCaoDecision(null);
-                                setActiveMenu(null);
-                              }}
-                            >
-                              <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> {d.cao ? 'Confirmation avant opération' : 'Confirmation avant opération'}
-                            </button>
-
-                            <Link
-                              to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
-                              className="menu-item"
-                              onClick={() => setActiveMenu(null)}
-                              style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}
-                            >
-                              <UserCheck size={16} /> Compte Client
-                            </Link>
-
-                            <div className="menu-divider" />
-
-                            <button className="menu-item text-purple" onClick={async () => {
-                              await updateDemande(d.id, { statut: 'pres_en_cours' });
-                              addToast('Statut mis à jour : Prestation en cours', 'success');
-                              fetchData();
-                              setActiveMenu(null);
-                            }}>
-                              <CheckCircle size={16} /> Pres. en cours
-                            </button>
-
-                            <button className="menu-item text-orange" onClick={async () => {
-                              await updateDemande(d.id, { statut: 'pres_terminee' });
-                              addToast('Statut mis à jour : Prestation terminée', 'success');
-                              fetchData();
-                              setActiveMenu(null);
-                            }}>
-                              <CheckCircle size={16} /> Pres. terminée
-                            </button>
-                          </div>
-                        )}
+                            <CheckCircle size={16} /> Pres. en cours
+                          </button>
+                          <button className="menu-item text-orange" onClick={async () => {
+                            await updateDemande(d.id, { statut: 'pres_terminee' });
+                            addToast('Statut mis à jour : Prestation terminée', 'success');
+                            fetchData();
+                            setActiveMenu(null);
+                          }}>
+                            <CheckCircle size={16} /> Pres. terminée
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
