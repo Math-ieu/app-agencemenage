@@ -63,13 +63,15 @@ export default function Qualite() {
         f.commentaire.toLowerCase().includes(search.toLowerCase());
       const matchesNoteAgence = noteAgenceFilter === 'toutes' || f.note_agence === parseInt(noteAgenceFilter);
       const matchesNoteProfil = noteProfilFilter === 'toutes' || f.note_intervenant === parseInt(noteProfilFilter);
-      const matchesCity = cityFilter === 'toutes' || f.city.toLowerCase().includes(cityFilter.toLowerCase());
+      const matchesCity = cityFilter === 'toutes' || (f.city || '').toLowerCase().includes(cityFilter.toLowerCase());
       return matchesSearch && matchesNoteAgence && matchesNoteProfil && matchesCity;
     });
   }, [feedbacks, search, noteAgenceFilter, noteProfilFilter, cityFilter]);
 
-  const getSatisfactionLabel = (noteAgence: number, noteProfil: number) => {
-    const mean = (noteAgence + noteProfil) / 2;
+  const getSatisfactionLabel = (noteAgence: number | null, noteProfil: number | null) => {
+    const nA = noteAgence || 0;
+    const nP = noteProfil || 0;
+    const mean = (nA + nP) / ( (noteAgence ? 1 : 0) + (noteProfil ? 1 : 0) || 1 );
     if (mean >= 4.5) return 'Très satisfait';
     if (mean >= 3.5) return 'Satisfait';
     if (mean >= 2.5) return 'Moyen';
