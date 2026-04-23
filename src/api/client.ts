@@ -205,6 +205,12 @@ export const updateCaisseMouvement = (id: number, data: FormData | Record<string
 export const getFeedbacks = (params?: Record<string, string | number>) =>
   apiClient.get('/api/feedback/', { params });
 
+export const getFeedbackStats = () =>
+  apiClient.get('/api/feedback/stats/');
+
+export const deleteFeedback = (id: number) =>
+  apiClient.delete(`/api/feedback/${id}/`);
+
 // ─── Users ───────────────────────────────────────────────────────────────────
 export const getUsers = (params?: Record<string, string | number>) =>
   apiClient.get('/api/users/', { params });

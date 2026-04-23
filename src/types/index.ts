@@ -123,3 +123,23 @@ export interface Document {
   created_at: string;
   download_url: string | null;
 }
+
+export interface Feedback {
+  id: number;
+  demande: number;
+  client: number | null;
+  note_intervenant: number;
+  note_agence: number;
+  commentaire: string;
+  opt_out: boolean;
+  date: string;
+  source: string;
+  client_name: string;
+  agent_name: string;
+  agent_id: number | null;
+  service: string;
+  city: string;
+  neighborhood: string;
+  segment: string;
+  date_prestation: string | null;
+}
