@@ -182,6 +182,12 @@ export default function Dashboard() {
   const [showNoteModal, setShowNoteModal] = useState<{ demandeId: number; type: 'commercial' | 'operationnel'; note: string } | null>(null);
   const [showCAOModal, setShowCAOModal] = useState<Demande | null>(null);
   const [caoDecision, setCaoDecision] = useState<'confirmed' | 'postponed' | 'cancelled' | null>(null);
+  const [caoCancelReason, setCaoCancelReason] = useState('');
+  const [caoPostponedDate, setCaoPostponedDate] = useState('');
+  const [caoNote, setCaoNote] = useState('');
+  const [caoMenuOpen, setCaoMenuOpen] = useState(false);
+  const [sendingCaoWhatsApp, setSendingCaoWhatsApp] = useState(false);
+  const [caoPreviewIndex, setCaoPreviewIndex] = useState(0);
 
   // Filtres
   const [search, setSearch] = useState('');
@@ -353,36 +359,138 @@ export default function Dashboard() {
         // Mark CAO as confirmed (cao = true)
         await confirmerCAO(demande.id);
         // Change status to "en_cours" (Confirmé intervention)
-        const updateData: any = { statut: 'en_cours', cao: true };
+        const updateData: any = { statut: 'en_cours', cao: true, note_operationnel: caoNote || '' };
         await updateDemande(demande.id, updateData);
-        
-        const clientPhone = demande.formulaire_data?.whatsapp_phone || demande.formulaire_data?.phone || demande.client_phone;
-        if (clientPhone) {
-          try {
-            // Trigger WhatsApp with profile info
-            await sendWhatsApp(demande.id, 'cao_profil');
-            addToast('Profil envoyé au client via WhatsApp', 'success');
-          } catch (err) {
-            console.error('WhatsApp Error:', err);
-            addToast('Erreur lors de l\'envoi WhatsApp', 'error');
-          }
-        }
-        addToast('Besoin confirmé intervention avec succès', 'success');
+
+        addToast('Besoin confirmé intervention avec succès (sans envoi WhatsApp automatique)', 'success');
       } else if (status === 'postponed') {
+        if (!caoPostponedDate) {
+          addToast('Veuillez renseigner une nouvelle date proposée', 'warning');
+          return;
+        }
+
         // Reste dans le dashboard (statut en_cours) mais CAO redevient "NON" (Nouveau besoin en UI)
-        await updateDemande(demande.id, { statut: 'en_cours', cao: false });
+        await updateDemande(demande.id, {
+          statut: 'en_cours',
+          cao: false,
+          date_intervention: caoPostponedDate,
+          note_operationnel: caoNote || '',
+        });
         addToast('CAO reporté : La demande reste dans le dashboard', 'info');
       } else if (status === 'cancelled') {
+        if (!caoCancelReason.trim()) {
+          addToast('Le motif d\'annulation est requis', 'warning');
+          return;
+        }
+
         // Statut devient "demande annulée" (annule - no accent for backend)
-        await updateDemande(demande.id, { statut: 'annule' });
+        await annulerDemande(demande.id, caoCancelReason.trim());
+        if (caoNote.trim()) {
+          await updateDemande(demande.id, { note_operationnel: caoNote });
+        }
         addToast('Demande annulée', 'warning');
       }
       setShowCAOModal(null);
       setCaoDecision(null);
+      setCaoCancelReason('');
+      setCaoPostponedDate('');
+      setCaoNote('');
+      setCaoMenuOpen(false);
       fetchData();
     } catch (err) {
       console.error(err);
       addToast('Erreur lors de la mise à jour CAO', 'error');
+    }
+  };
+
+  const openCAOModal = (demande: Demande) => {
+    setShowCAOModal(demande);
+    setCaoDecision(null);
+    setCaoCancelReason('');
+    setCaoPostponedDate((demande.date_intervention || '').slice(0, 10));
+    setCaoNote(demande.note_operationnel || '');
+    setCaoMenuOpen(false);
+    setCaoPreviewIndex(0);
+  };
+
+  const closeCAOModal = () => {
+    setShowCAOModal(null);
+    setCaoDecision(null);
+    setCaoCancelReason('');
+    setCaoPostponedDate('');
+    setCaoNote('');
+    setCaoMenuOpen(false);
+    setCaoPreviewIndex(0);
+  };
+
+  const copyProfileShareLink = async (demande: Demande) => {
+    const profileLink = demande.profil_share_link || '';
+    if (!profileLink) {
+      addToast('Aucun lien profil disponible pour cette demande', 'warning');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(profileLink);
+      addToast('Lien profil copié', 'success');
+    } catch (error) {
+      window.prompt('Copiez ce lien profil :', profileLink);
+    }
+  };
+
+  const copyText = async (value: string, successMessage: string) => {
+    if (!value) {
+      addToast('Valeur introuvable', 'warning');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(value);
+      addToast(successMessage, 'success');
+    } catch (error) {
+      window.prompt('Copiez la valeur :', value);
+    }
+  };
+
+  const getCaoProfileLinks = (demande: Demande) => {
+    const links = Array.isArray(demande.profil_share_links) ? demande.profil_share_links : [];
+    if (links.length > 0) return links;
+
+    if (demande.profil_share_link) {
+      return [{
+        agent_id: demande.profils_envoyes?.[demande.profils_envoyes.length - 1]?.id || 0,
+        agent_name:
+          demande.profils_envoyes?.[demande.profils_envoyes.length - 1]?.full_name ||
+          [
+            demande.profils_envoyes?.[demande.profils_envoyes.length - 1]?.first_name,
+            demande.profils_envoyes?.[demande.profils_envoyes.length - 1]?.last_name,
+          ].filter(Boolean).join(' ') ||
+          'Candidat',
+        link: demande.profil_share_link,
+      }];
+    }
+
+    return [];
+  };
+
+  const handleSendCaoWhatsApp = async (demande: Demande) => {
+    if (!demande.profils_envoyes?.length) {
+      addToast('Aucun candidat assigné pour cet envoi', 'warning');
+      return;
+    }
+
+    setSendingCaoWhatsApp(true);
+    try {
+      const response = await sendWhatsApp(demande.id, 'cao_profil');
+      const sentCount = Number(response?.data?.sent_count || 0);
+      const totalCount = Number(response?.data?.total || demande.profils_envoyes.length || 0);
+      addToast(`${sentCount}/${totalCount} message(s) profil envoyé(s) via WhatsApp`, 'success');
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast('Erreur lors de l\'envoi WhatsApp de la candidature', 'error');
+    } finally {
+      setSendingCaoWhatsApp(false);
     }
   };
 
@@ -888,8 +996,7 @@ export default function Dashboard() {
                               className="menu-item w-full"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setShowCAOModal(d);
-                                setCaoDecision(null);
+                                openCAOModal(d);
                                 setActiveMenu(null);
                               }}
                             >
@@ -1281,7 +1388,7 @@ export default function Dashboard() {
                           <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                             <Pencil size={16} /> Éditer le besoin
                           </button>
-                          <button className="menu-item w-full" onClick={(e) => { e.stopPropagation(); setShowCAOModal(d); setCaoDecision(null); setActiveMenu(null); }}>
+                          <button className="menu-item w-full" onClick={(e) => { e.stopPropagation(); openCAOModal(d); setActiveMenu(null); }}>
                             <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> Confirmation CAO
                           </button>
                           <Link to={d.client ? `/clients/${encodeId(d.client)}` : '#'} className="menu-item" onClick={() => setActiveMenu(null)} style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}>
@@ -2432,7 +2539,7 @@ export default function Dashboard() {
       {showCAOModal && (
         <div
           className="modal-overlay z-[120]"
-          onClick={() => { setShowCAOModal(null); setCaoDecision(null); }}
+          onClick={closeCAOModal}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           <div
@@ -2442,8 +2549,12 @@ export default function Dashboard() {
               borderRadius: '20px',
               width: '440px',
               maxWidth: '95vw',
+              maxHeight: '88vh',
               boxShadow: '0 8px 40px 0 rgba(0,0,0,0.18)',
               position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
             }}
           >
             {/* Header */}
@@ -2452,7 +2563,7 @@ export default function Dashboard() {
                 Confirmation avant opération — #{showCAOModal.id}
               </h3>
               <button
-                onClick={() => { setShowCAOModal(null); setCaoDecision(null); }}
+                onClick={closeCAOModal}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: '2px', lineHeight: 1, marginLeft: '12px', flexShrink: 0, fontSize: '16px' }}
               >
                 ✕
@@ -2460,7 +2571,7 @@ export default function Dashboard() {
             </div>
 
             {/* Body */}
-            <div style={{ padding: '16px 24px 20px 24px' }}>
+            <div style={{ padding: '16px 24px 20px 24px', overflowY: 'auto', flex: 1 }}>
               {/* Info card */}
               <div style={{ backgroundColor: '#f1f5f9', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2477,13 +2588,10 @@ export default function Dashboard() {
 
                 {/* Trigger */}
                 <div
-                  onClick={() => {
-                    const menu = document.getElementById('cao-decision-menu');
-                    if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-                  }}
+                  onClick={() => setCaoMenuOpen((prev) => !prev)}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '10px 14px', border: '2px solid #0d9488', borderRadius: '10px',
+                    padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: '10px',
                     cursor: 'pointer', backgroundColor: '#ffffff', userSelect: 'none',
                   }}
                 >
@@ -2497,23 +2605,25 @@ export default function Dashboard() {
                 <div
                   id="cao-decision-menu"
                   style={{
-                    display: 'none', position: 'absolute', left: 0, right: 0, top: 'calc(100% + 4px)',
+                    display: caoMenuOpen ? 'block' : 'none', position: 'absolute', left: 0, right: 0, top: 'calc(100% + 4px)',
                     backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e5e7eb',
                     boxShadow: '0 4px 16px rgba(0,0,0,0.10)', overflow: 'hidden', zIndex: 9999,
                   }}
                 >
                   <button
-                    onClick={() => { setCaoDecision('confirmed'); const m = document.getElementById('cao-decision-menu'); if (m) m.style.display = 'none'; }}
+                    onClick={() => { setCaoDecision('confirmed'); setCaoMenuOpen(false); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
-                      padding: '12px 16px', backgroundColor: '#a3e635', border: 'none',
-                      cursor: 'pointer', fontSize: '14px', fontWeight: 700, color: '#1a1a2e', textAlign: 'left',
+                      padding: '12px 16px', backgroundColor: '#ffffff', border: 'none',
+                      cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#065f46', textAlign: 'left',
                     }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#ecfdf5')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#ffffff')}
                   >
-                    <CheckCircle size={18} style={{ color: '#4d7c0f' }} /> Confirmé
+                    <CheckCircle size={18} style={{ color: '#059669' }} /> Confirmé
                   </button>
                   <button
-                    onClick={() => { setCaoDecision('postponed'); const m = document.getElementById('cao-decision-menu'); if (m) m.style.display = 'none'; }}
+                    onClick={() => { setCaoDecision('postponed'); setCaoMenuOpen(false); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
                       padding: '12px 16px', backgroundColor: '#ffffff', border: 'none', borderTop: '1px solid #f3f4f6',
@@ -2525,7 +2635,7 @@ export default function Dashboard() {
                     <AlertTriangle size={18} style={{ color: '#f59e0b' }} /> Reporté
                   </button>
                   <button
-                    onClick={() => { setCaoDecision('cancelled'); const m = document.getElementById('cao-decision-menu'); if (m) m.style.display = 'none'; }}
+                    onClick={() => { setCaoDecision('cancelled'); setCaoMenuOpen(false); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
                       padding: '12px 16px', backgroundColor: '#ffffff', border: 'none', borderTop: '1px solid #f3f4f6',
@@ -2538,12 +2648,232 @@ export default function Dashboard() {
                   </button>
                 </div>
               </div>
+
+              {caoDecision === 'postponed' && (
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>
+                    Nouvelle date proposée
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="date"
+                      value={caoPostponedDate}
+                      onChange={(e) => setCaoPostponedDate(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '10px',
+                        fontSize: '14px',
+                        color: '#1f2937',
+                      }}
+                    />
+                    <Calendar size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
+                  </div>
+                  <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#6b7280' }}>Le commercial sera alerté du changement de date.</p>
+                </div>
+              )}
+
+              {caoDecision === 'cancelled' && (
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>
+                    Motif d'annulation *
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={caoCancelReason}
+                    onChange={(e) => setCaoCancelReason(e.target.value)}
+                    placeholder="Saisir le motif d'annulation..."
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '10px',
+                      fontSize: '14px',
+                      color: '#1f2937',
+                      resize: 'vertical',
+                      minHeight: '84px',
+                    }}
+                  />
+                </div>
+              )}
+
+              {caoDecision === 'confirmed' && (
+                <div style={{ marginTop: '16px', border: '1px solid #bbf7d0', backgroundColor: '#f0fdf4', borderRadius: '10px', padding: '12px' }}>
+                  <p style={{ margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', fontWeight: 700, color: '#065f46' }}>
+                    <CheckCircle size={16} /> Opération confirmée avec le client
+                  </p>
+
+                  <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #d1d5db', padding: '10px 12px', marginBottom: '10px' }}>
+                    <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Fiche candidat
+                    </p>
+                    <p style={{ margin: '8px 0 4px 0', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                      {showCAOModal.profils_envoyes?.length
+                        ? `${showCAOModal.profils_envoyes[showCAOModal.profils_envoyes.length - 1].full_name || `${showCAOModal.profils_envoyes[showCAOModal.profils_envoyes.length - 1].first_name} ${showCAOModal.profils_envoyes[showCAOModal.profils_envoyes.length - 1].last_name}`}`
+                        : 'Aucun candidat assigné'}
+                    </p>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+                      {showCAOModal.profils_envoyes?.length
+                        ? `Tel: ${showCAOModal.profils_envoyes[showCAOModal.profils_envoyes.length - 1].phone || '—'}`
+                        : 'Affectez un profil pour préparer la suite opérationnelle.'}
+                    </p>
+                  </div>
+
+                  {(() => {
+                    const links = getCaoProfileLinks(showCAOModal);
+
+                    if (!links.length) {
+                      return (
+                        <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px dashed #cbd5e1', padding: '10px 12px', marginBottom: '10px', fontSize: '13px', color: '#6b7280' }}>
+                          Aucun lien profil disponible. Assignez au moins un profil à la demande.
+                        </div>
+                      );
+                    }
+
+                    const currentIndex = Math.min(caoPreviewIndex, links.length - 1);
+                    const item = links[currentIndex];
+
+                    return (
+                      <div style={{ marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <button
+                            onClick={() => setCaoPreviewIndex((prev) => Math.max(prev - 1, 0))}
+                            disabled={currentIndex === 0}
+                            style={{
+                              border: '1px solid #d1d5db',
+                              backgroundColor: currentIndex === 0 ? '#f3f4f6' : '#ffffff',
+                              color: '#374151',
+                              borderRadius: '8px',
+                              width: '34px',
+                              height: '34px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+
+                          <span style={{ fontSize: '12px', color: '#4b5563', fontWeight: 600 }}>
+                            Aperçu {currentIndex + 1}/{links.length}
+                          </span>
+
+                          <button
+                            onClick={() => setCaoPreviewIndex((prev) => Math.min(prev + 1, links.length - 1))}
+                            disabled={currentIndex >= links.length - 1}
+                            style={{
+                              border: '1px solid #d1d5db',
+                              backgroundColor: currentIndex >= links.length - 1 ? '#f3f4f6' : '#ffffff',
+                              color: '#374151',
+                              borderRadius: '8px',
+                              width: '34px',
+                              height: '34px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: currentIndex >= links.length - 1 ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                          </button>
+                        </div>
+
+                        <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px dashed #cbd5e1', padding: '10px 12px' }}>
+                          <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                            Aperçu du message - {item.agent_name}
+                          </p>
+                          <div style={{ marginTop: '8px', fontSize: '13px', color: '#1f2937', lineHeight: 1.55, whiteSpace: 'pre-line' }}>
+                            {`Bonjour ${showCAOModal.client_name || showCAOModal.formulaire_data?.nom || 'Client'},\n\n`}
+                            {`Dans le cadre de votre réservation de ménage, nous avons le plaisir de vous transmettre le profil de ${item.agent_name || 'la candidate'} qui assurera l'intervention chez vous. Nous vous invitons à cliquer sur le lien suivant pour consulter plus de détails.\n\n`}
+                            {item.link}
+                            {`\n\nCordialement,\nL'équipe Agence Ménage`}
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '10px' }}>
+                            <button
+                              onClick={() => window.open(item.link, '_blank')}
+                              style={{
+                                width: '100%',
+                                border: '1px solid #d1d5db',
+                                backgroundColor: '#ffffff',
+                                color: '#065f46',
+                                borderRadius: '8px',
+                                padding: '9px 10px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Voir la fiche profil en ligne
+                            </button>
+                            <button
+                              onClick={() => copyText(item.link, `Lien profil copié (${item.agent_name})`)}
+                              style={{
+                                width: '100%',
+                                border: '1px solid #059669',
+                                backgroundColor: '#059669',
+                                color: '#ffffff',
+                                borderRadius: '8px',
+                                padding: '9px 10px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Copier le lien profil
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <button
+                    disabled={sendingCaoWhatsApp || !showCAOModal.profils_envoyes?.length}
+                    onClick={() => handleSendCaoWhatsApp(showCAOModal)}
+                    style={{
+                      width: '100%',
+                      marginTop: '10px',
+                      border: '1px solid #059669',
+                      backgroundColor: sendingCaoWhatsApp ? '#6ee7b7' : '#059669',
+                      color: '#ffffff',
+                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      fontWeight: 700,
+                      cursor: sendingCaoWhatsApp || !showCAOModal.profils_envoyes?.length ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {sendingCaoWhatsApp ? 'Envoi en cours...' : 'Envoyer la candidature via WhatsApp'}
+                  </button>
+
+                  <div style={{ marginTop: '12px' }}>
+                    <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: '#166534', marginBottom: '8px' }}>
+                      Note opérationnelle
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={caoNote}
+                      onChange={(e) => setCaoNote(e.target.value)}
+                      placeholder="Ajouter une note pour le service opération..."
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '10px',
+                        fontSize: '14px',
+                        color: '#1f2937',
+                        resize: 'vertical',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer */}
             <div style={{ padding: '14px 24px 20px 24px', display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid #f1f5f9' }}>
               <button
-                onClick={() => { setShowCAOModal(null); setCaoDecision(null); }}
+                onClick={closeCAOModal}
                 style={{
                   padding: '9px 22px', borderRadius: '8px', border: '1px solid #e5e7eb',
                   backgroundColor: '#ffffff', color: '#374151', fontWeight: 600, fontSize: '14px', cursor: 'pointer',
@@ -2552,17 +2882,25 @@ export default function Dashboard() {
                 Annuler
               </button>
               <button
-                disabled={!caoDecision}
+                disabled={!caoDecision || (caoDecision === 'postponed' && !caoPostponedDate) || (caoDecision === 'cancelled' && !caoCancelReason.trim())}
                 onClick={() => handleCAOUpdate(showCAOModal, caoDecision!)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
                   padding: '9px 22px', borderRadius: '8px', border: 'none',
-                  backgroundColor: caoDecision ? '#0d9488' : '#d1d5db',
+                  backgroundColor: (!caoDecision || (caoDecision === 'postponed' && !caoPostponedDate) || (caoDecision === 'cancelled' && !caoCancelReason.trim())) ? '#d1d5db' : '#0d9488',
                   color: '#ffffff', fontWeight: 700, fontSize: '14px',
-                  cursor: caoDecision ? 'pointer' : 'not-allowed', transition: 'background 0.2s',
+                  cursor: (!caoDecision || (caoDecision === 'postponed' && !caoPostponedDate) || (caoDecision === 'cancelled' && !caoCancelReason.trim())) ? 'not-allowed' : 'pointer', transition: 'background 0.2s',
                 }}
-                onMouseEnter={e => { if (caoDecision) e.currentTarget.style.backgroundColor = '#0f766e'; }}
-                onMouseLeave={e => { if (caoDecision) e.currentTarget.style.backgroundColor = '#0d9488'; }}
+                onMouseEnter={e => {
+                  if (caoDecision && !(caoDecision === 'postponed' && !caoPostponedDate) && !(caoDecision === 'cancelled' && !caoCancelReason.trim())) {
+                    e.currentTarget.style.backgroundColor = '#0f766e';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (caoDecision && !(caoDecision === 'postponed' && !caoPostponedDate) && !(caoDecision === 'cancelled' && !caoCancelReason.trim())) {
+                    e.currentTarget.style.backgroundColor = '#0d9488';
+                  }
+                }}
               >
                 <Check size={16} /> Valider
               </button>

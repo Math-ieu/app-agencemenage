@@ -106,6 +106,12 @@ export interface Demande {
   statut_paiement: string;
   statut_paiement_label?: string;
   profils_envoyes?: Agent[];
+  profil_share_link?: string;
+  profil_share_links?: Array<{
+    agent_id: number;
+    agent_name: string;
+    link: string;
+  }>;
   cao: boolean;
   prochaine_alerte_cao?: string;
   note_commercial?: string;
