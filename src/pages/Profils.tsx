@@ -6,13 +6,9 @@ import { Agent } from '../types';
 import { encodeId } from '../utils/obfuscation';
 import AddProfileModal from './ProfilEditModal';
 import { useToastStore } from '../store/toast';
+import { PROFIL_FILTER_TABS } from '../lib/profil-form-constants';
 
-const TABS = [
-  { id: 'tout', label: 'Tout' },
-  { id: 'grand_menage', label: 'Grand ménage' },
-  { id: 'menage_chantier', label: 'Ménage chantier' },
-  { id: 'nettoyage_vitres', label: 'Nettoyage de vitres' }
-];
+const TABS = PROFIL_FILTER_TABS.map(tab => ({ id: tab.value, label: tab.label }));
 
 // ── Filter bar styles ────────────────────────────────────────────────────────
 const filterBarStyle: React.CSSProperties = {
@@ -94,7 +90,7 @@ export default function Profils() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('tout');
+  const [activeTab, setActiveTab] = useState('all');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -106,7 +102,7 @@ export default function Profils() {
     try {
       const params: Record<string, string> = {};
       if (search) params.search = search;
-      if (activeTab !== 'tout') params.poste = activeTab;
+      if (activeTab !== 'all') params.poste = activeTab;
       if (dateDebut) params.date_debut = dateDebut;
       if (dateFin) params.date_fin = dateFin;
 

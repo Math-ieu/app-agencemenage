@@ -9,12 +9,42 @@ import { createAgent, updateAgent } from '../api/client';
 import { Search, Plus, RotateCw, Calendar, User, Save, XCircle, FileText } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { Agent } from '../types';
+import {
+  NIVEAUX_ETUDE,
+  SITUATIONS_MATRIMONIALES,
+  NATIONALITES,
+  PRESENTATIONS_PHYSIQUES,
+  CORPULENCES,
+  TYPES_PROFIL,
+  TYPES_POSTE_EXPERIENCE,
+  LIEUX_TRAVAIL,
+  TACHES_MENAGE,
+  STATUT_PROFIL_OPTIONS,
+} from '../lib/profil-form-constants';
 
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
   initialAgent?: Agent;
 }
+
+const normalizePhysicalAppearance = (value: string): string => {
+  if (!value) return '';
+  const v = value.toLowerCase();
+  if (v === 'correcte' || v === 'presentable') return 'presentable';
+  if (v === 'moyenne' || v === 'passable') return 'passable';
+  if (v === 'excellente' || v === 'tres_presentable' || v === 'très présentable') return 'tres_presentable';
+  return value;
+};
+
+const normalizeCorpulence = (value: string): string => {
+  if (!value) return '';
+  const v = value.toLowerCase();
+  if (v === 'moyenne' || v === 'normale') return 'normale';
+  if (v === 'forte') return 'forte';
+  if (v === 'mince' || v === 'petite') return 'petite';
+  return value;
+};
 
 export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Props) {
   const isEditing = Boolean(initialAgent);
@@ -40,8 +70,8 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
     training_details: initialAgent?.training_details || '',
     can_read_write: initialAgent?.can_read_write ?? false,
     health_issues: initialAgent?.health_issues || '',
-    physical_appearance: initialAgent?.physical_appearance || '',
-    corpulence: initialAgent?.corpulence || '',
+    physical_appearance: normalizePhysicalAppearance(initialAgent?.physical_appearance || ''),
+    corpulence: normalizeCorpulence(initialAgent?.corpulence || ''),
     avail_emergencies: initialAgent?.avail_emergencies ?? false,
     avail_7_7: initialAgent?.avail_7_7 ?? false,
     avail_day: initialAgent?.avail_day ?? false,
@@ -127,7 +157,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content modal-large">
+      <div className="modal-content modal-large profile-form-modal">
         <div className="modal-header">
           <h2 className="text-xl font-bold text-slate-800">{isEditing ? 'Modifier le profil' : 'Ajouter un profil'}</h2>
           <button className="modal-close" onClick={onClose}>&times;</button>
@@ -205,10 +235,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                 <label>Situation matrimoniale <span className="text-red-500">*</span></label>
                 <select value={formData.situation} onChange={e => { setFormData({ ...formData, situation: e.target.value }); if (errors.situation) setErrors({ ...errors, situation: false }); }} className={`form-select ${errors.situation ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
-                  <option>Célibataire</option>
-                  <option>Marié(e)</option>
-                  <option>Divorcé(e)</option>
-                  <option>Veuf/Veuve</option>
+                  {SITUATIONS_MATRIMONIALES.map(option => <option key={option} value={option}>{option}</option>)}
                 </select>
               </div>
               <div className="form-group flex items-center pt-6">
@@ -220,10 +247,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               <div className="form-group">
                 <label>Nationalité <span className="text-red-500">*</span></label>
                 <select value={formData.nationality} onChange={e => { setFormData({ ...formData, nationality: e.target.value }); if (errors.nationality) setErrors({ ...errors, nationality: false }); }} className={`form-select ${errors.nationality ? 'form-input-error' : ''}`}>
-                  <option>Marocaine</option>
-                  <option>Ivoirienne</option>
-                  <option>Sénégalaise</option>
-                  <option>Autre</option>
+                  {NATIONALITES.map(option => <option key={option} value={option}>{option}</option>)}
                 </select>
               </div>
             </div>
@@ -244,15 +268,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                 <label>Niveau d'étude <span className="text-red-500">*</span></label>
                 <select value={formData.education_level} onChange={e => { setFormData({ ...formData, education_level: e.target.value }); if (errors.education_level) setErrors({ ...errors, education_level: false }); }} className={`form-select ${errors.education_level ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
-                  <option>Sans diplôme</option>
-                  <option>Primaire</option>
-                  <option>Collège</option>
-                  <option>Lycée</option>
-                  <option>Bac</option>
-                  <option>Bac+2</option>
-                  <option>Bac+3</option>
-                  <option>Bac+5</option>
-                  <option>Autre</option>
+                  {NIVEAUX_ETUDE.map(option => <option key={option} value={option}>{option}</option>)}
                 </select>
               </div>
               <div className="form-group">
@@ -269,18 +285,14 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               <div className="form-group">
                 <label>Statut profil</label>
                 <select value={formData.statut} onChange={e => setFormData({ ...formData, statut: e.target.value })} className="form-select">
-                  <option value="disponible">Disponible</option>
-                  <option value="non_disponible">Non disponible</option>
+                  {STATUT_PROFIL_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label>Type de profil <span className="text-red-500">*</span></label>
                 <select value={formData.type_profil} onChange={e => { setFormData({ ...formData, type_profil: e.target.value }); if (errors.type_profil) setErrors({ ...errors, type_profil: false }); }} className={`form-select ${errors.type_profil ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
-                  <option>Femme de ménage</option>
-                  <option>Garde malade</option>
-                  <option>Auxiliaire de vie</option>
-                  <option>Nounou</option>
+                  {TYPES_PROFIL.map(option => <option key={option} value={option}>{option}</option>)}
                 </select>
               </div>
             </div>
@@ -311,9 +323,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                 <label>Présentation physique <span className="text-red-500">*</span></label>
                 <select value={formData.physical_appearance} onChange={e => { setFormData({ ...formData, physical_appearance: e.target.value }); if (errors.physical_appearance) setErrors({ ...errors, physical_appearance: false }); }} className={`form-select ${errors.physical_appearance ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
-                  <option>Correcte</option>
-                  <option>Moyenne</option>
-                  <option>Excellente</option>
+                  {PRESENTATIONS_PHYSIQUES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
             </div>
@@ -322,9 +332,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                 <label>Corpulence <span className="text-red-500">*</span></label>
                 <select value={formData.corpulence} onChange={e => { setFormData({ ...formData, corpulence: e.target.value }); if (errors.corpulence) setErrors({ ...errors, corpulence: false }); }} className={`form-select ${errors.corpulence ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
-                  <option>Mince</option>
-                  <option>Moyenne</option>
-                  <option>Forte</option>
+                  {CORPULENCES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
             </div>
@@ -414,10 +422,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                     <label>Poste</label>
                     <select value={currentExp.position} onChange={e => setCurrentExp({ ...currentExp, position: e.target.value })} className="form-select">
                       <option value="">Choisir le poste</option>
-                      <option>Femme de ménage</option>
-                      <option>Garde malade</option>
-                      <option>Auxiliaire de vie</option>
-                      <option>Nounou</option>
+                      {TYPES_POSTE_EXPERIENCE.map(option => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </div>
                   {currentExp.position && (
@@ -441,7 +446,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                     <div className="form-group mb-4">
                       <label>Lieux de travail</label>
                       <div className="flex flex-wrap gap-2 mt-1">
-                        {['Hôtel', 'Riad', 'Entreprise', 'Villa', 'Appartement', 'Duplex'].map(loc => (
+                        {LIEUX_TRAVAIL.map(loc => (
                           <button key={loc} type="button" onClick={() => {
                             const locations = currentExp.work_locations.includes(loc)
                               ? currentExp.work_locations.filter(l => l !== loc)
@@ -457,14 +462,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                     <div className="form-group mb-4">
                       <label className="mb-3 block">Tâches</label>
                       <div className="task-grid">
-                        {[
-                          'Faire le lit', "Passer l'aspirateur",
-                          'Laver le sol', 'Dépoussiérer les meubles',
-                          'Nettoyer les vitres et miroirs', "Nettoyer le plan de travail et l'évier",
-                          'Nettoyer le réfrigérateur et les appareils électroménagers', 'Nettoyage douche',
-                          'Nettoyage terrasse et balcon', 'Repasser et plier les vêtements',
-                          'Ranger les placards', 'Grand ménage',
-                        ].map(task => (
+                        {TACHES_MENAGE.map(task => (
                           <label key={task} className="checkbox-container">
                             <input type="checkbox" checked={currentExp.tasks.includes(task)} onChange={() => {
                               const tasks = currentExp.tasks.includes(task)

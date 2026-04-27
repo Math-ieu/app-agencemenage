@@ -82,6 +82,7 @@ export interface Demande {
   assigned_to_name: string;
   assigned_to_id?: number;
   commercial_name?: string;
+  nrp_count?: number;
   service: string;
   type_prestation?: string;
   segment: 'particulier' | 'entreprise';

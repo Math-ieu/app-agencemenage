@@ -18,6 +18,9 @@ const isDevisRequired = (d: Demande | null) => {
   return devisParticuliers.includes(d.service);
 };
 
+const normalizeServiceLabel = (value: string) =>
+  (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
 
 export default function DemandesEnAttente() {
   const location = useLocation();
@@ -68,6 +71,7 @@ export default function DemandesEnAttente() {
     montant: '',
     mode_paiement: '',
     statut_paiement: 'non_paye',
+    heard_about_us: '',
     notes: '',
     // Champs spécifiques Grand Ménage
     // Champs spécifiques Placement & Gestion
@@ -105,6 +109,19 @@ export default function DemandesEnAttente() {
 
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string, demandeId: number } | null>(null);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+
+  const selectedServiceKey = normalizeServiceLabel(selectedService);
+  const isAuxiliaireService = selectedServiceKey.includes('auxiliaire de vie');
+  const isPlacementGestionService = selectedServiceKey.includes('placement & gestion') || selectedServiceKey.includes('placement et gestion');
+  const isCleaningService = selectedServiceKey.includes('menage') || selectedServiceKey.includes('nettoyage');
+  const isMenageBureauxService = selectedServiceKey.includes('menage bureaux');
+  const isPostSinistreService = selectedServiceKey.includes('post-sinistre') || selectedServiceKey.includes('post sinistre');
+  const isPostDemenagementService = selectedServiceKey.includes('post-demenagement') || selectedServiceKey.includes('post demenagement');
+  const isMenageStandardService = selectedServiceKey.includes('menage standard');
+  const isGrandMenageService = selectedServiceKey.includes('grand menage');
+  const isMenageAirBnBService = selectedServiceKey.includes('air bnb') || selectedServiceKey.includes('airbnb');
+  const isFinChantierService = selectedServiceKey.includes('fin de chantier') || selectedServiceKey.includes('fin chantier');
+  const minDuree = isGrandMenageService ? 6 : isMenageBureauxService ? 2 : 4;
 
   // Fecth Commerciaux for Assignation
   useEffect(() => {
@@ -266,8 +283,18 @@ export default function DemandesEnAttente() {
         addToast('Demande validée !', 'success');
       }
       else if (action === 'nrp') {
-        await nrpDemande(id);
-        addToast('Statut NRP enregistré', 'info');
+        const response = await nrpDemande(id);
+        const serverCount = Number(response?.data?.nrp_count);
+        setDemandes(prev => prev.map(d => {
+          if (d.id !== id) return d;
+          const fallbackCount = (d.nrp_count ?? 0) + 1;
+          return {
+            ...d,
+            nrp_count: Number.isFinite(serverCount) ? serverCount : fallbackCount,
+          };
+        }));
+        addToast('NRP incrémenté', 'info');
+        return;
       }
       else if (action === 'annuler') {
         const reason = prompt('Motif d\'annulation :');
@@ -291,7 +318,7 @@ export default function DemandesEnAttente() {
       nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: '', heure: '',
       scheduling_type: 'fixed', preference_horaire: '', type_habitation: '', frequence: '', intervention_nature: 'sinistre', accommodation_state: '', cleanliness_type: '', nb_intervenants: 1,
       surface: 50, details_pieces: '', duree: 4, produits: false, torchons: false,
-      montant: '', mode_paiement: '', statut_paiement: 'non_paye', notes: '',
+      montant: '', mode_paiement: '', statut_paiement: 'non_paye', heard_about_us: '', notes: '',
       service_type: 'flexible', structure_type: '', nb_personnel: 1,
       lieu_garde: 'domicile', age_personne: '', sexe_personne: '',
       mobilite: '', situation_medicale: '', nb_jours: 1,
@@ -338,6 +365,7 @@ export default function DemandesEnAttente() {
       montant: d.prix?.toString() || d.formulaire_data?.montant || '',
       mode_paiement: normalizePayment(d.mode_paiement || d.formulaire_data?.mode_paiement || ''),
       statut_paiement: normalizePayment(d.statut_paiement || d.formulaire_data?.statut_paiement || 'non_paye'),
+      heard_about_us: d.formulaire_data?.heard_about_us || d.formulaire_data?.comment_connu || d.formulaire_data?.lead_source || '',
       notes: d.formulaire_data?.notes || '',
       service_type: d.formulaire_data?.service_type || 'flexible',
       structure_type: normalizeStructure(d.formulaire_data?.structure_type || ''),
@@ -427,6 +455,9 @@ export default function DemandesEnAttente() {
           produits: formData.produits,
           torchons: formData.torchons,
           additionalServices,
+          heard_about_us: formData.heard_about_us,
+          comment_connu: formData.heard_about_us,
+          lead_source: formData.heard_about_us,
           // Placement & gestion
           structure_type: formData.structure_type,
           structureType: formData.structure_type,
@@ -733,7 +764,9 @@ export default function DemandesEnAttente() {
                 </div>
 
                 <div className="pt-3 mt-1 flex gap-2">
-                  <button className="btn btn-nrp flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
+                  <button className="btn btn-nrp flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'nrp')}>
+                    NRP ({d.nrp_count ?? 0})
+                  </button>
                   <button className="btn btn-cancel flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
                   <button className="btn btn-validate flex-[1.5] leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
                   <button className="btn btn-edit flex-1 flex justify-center items-center px-1 py-2 text-[13px] text-center" title="Modifier" onClick={() => openEditModal(d)}>
@@ -824,7 +857,9 @@ export default function DemandesEnAttente() {
                     <CheckCircle size={18} /> Valider
                   </button>
                   <div className="flex gap-2">
-                    <button className="btn btn-nrp flex-1" onClick={() => handleAction(d.id, 'nrp')}>NRP</button>
+                    <button className="btn btn-nrp flex-1" onClick={() => handleAction(d.id, 'nrp')}>
+                      NRP ({d.nrp_count ?? 0})
+                    </button>
                     <button className="btn btn-cancel flex-1" onClick={() => handleAction(d.id, 'annuler')}>Annuler</button>
                     <button className="btn btn-edit flex-none px-3" title="Modifier" onClick={() => openEditModal(d)}>
                       <Edit size={16} />
@@ -865,7 +900,7 @@ export default function DemandesEnAttente() {
               <form className={`${formSubmitted ? 'submitted' : ''}`} id="create-request-form" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
                 {/* ====== CONDITIONAL SERVICE SECTIONS ====== */}
-                {(selectedService === 'Auxiliaire de vie') ? (
+                {isAuxiliaireService ? (
                   /* Auxiliaire de vie - Service sur mesure */
                   <div className="ws-form-block">
                     <div className="ws-section-header">Service sur mesure — {selectedService}</div>
@@ -933,7 +968,7 @@ export default function DemandesEnAttente() {
                       </div>
                     </div>
                   </div>
-                ) : selectedService === 'Placement & gestion' ? (
+                ) : isPlacementGestionService ? (
                   /* Placement & gestion - Service sur mesure */
                   <div className="ws-form-block">
                     <div className="ws-section-header">Service sur mesure — {selectedService}</div>
@@ -989,13 +1024,13 @@ export default function DemandesEnAttente() {
                   /* ====== STANDARD MÉNAGE SERVICES ====== */
                   <>
                     {/* Type d'habitation */}
-                    {(selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage')) && (
+                    {isCleaningService && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">
-                          {selectedService === 'Ménage bureaux' ? "Type de local professionnel" : "Type d'habitation"}
+                          {isMenageBureauxService ? "Type de local professionnel" : "Type d'habitation"}
                         </div>
                         <div className="ws-radio-pills">
-                          {(selectedService === 'Ménage bureaux'
+                          {(isMenageBureauxService
                             ? ['Bureau', 'Magasin', 'Restaurant', 'Clinique', 'Hôtel', 'Entrepôt']
                             : ['Studio', 'Appartement', 'Duplex', 'Villa', 'Maison']
                           ).map(type => (
@@ -1009,7 +1044,7 @@ export default function DemandesEnAttente() {
                     )}
 
                     {/* Nature d'intervention (Post-sinistre) */}
-                    {selectedService.toLowerCase().includes('post-sinistre') && (
+                    {isPostSinistreService && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">Nature de l'intervention</div>
                         <div className="ws-nature-cards">
@@ -1028,7 +1063,7 @@ export default function DemandesEnAttente() {
                     )}
 
                     {/* État du logement (Déménagement) */}
-                    {selectedService.toLowerCase().includes('post-déménagement') && (
+                    {isPostDemenagementService && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">État du logement</div>
                         <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
@@ -1084,7 +1119,7 @@ export default function DemandesEnAttente() {
                     </div>
 
                     {/* Détails des pièces (Ménage Standard uniquement) */}
-                    {selectedService === 'Ménage standard' && (
+                    {isMenageStandardService && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">Merci de nous décrire votre domicile</div>
                         <p style={{ color: '#ef4444', fontSize: '0.75rem', textAlign: 'right', fontWeight: 700, marginBottom: '0.5rem' }}>
@@ -1120,7 +1155,7 @@ export default function DemandesEnAttente() {
                     )}
 
                     {/* Surface (Grand Ménage, Fin Chantier, Déménagement) */}
-                    {(selectedService === 'Grand ménage' || selectedService.toLowerCase().includes('fin de chantier') || selectedService.toLowerCase().includes('fin chantier') || selectedService.toLowerCase().includes('post-déménagement')) && (
+                    {(isGrandMenageService || isFinChantierService || isPostDemenagementService) && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">Superficie de votre bien en m²</div>
                         <div className="ws-slider-container">
@@ -1136,7 +1171,7 @@ export default function DemandesEnAttente() {
                     )}
 
                     {/* Surface bureau (cards) */}
-                    {selectedService === 'Ménage bureaux' && (
+                    {isMenageBureauxService && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">Superficie de vos locaux</div>
                         <div className="ws-surface-cards">
@@ -1155,14 +1190,14 @@ export default function DemandesEnAttente() {
                     )}
 
                     {/* Durée */}
-                    {(selectedService === 'Ménage standard' || selectedService === 'Grand ménage' || selectedService === 'Ménage Air BnB' || selectedService === 'Ménage bureaux') && (
+                    {(isMenageStandardService || isGrandMenageService || isMenageAirBnBService || isMenageBureauxService) && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">Précisez le temps qui vous convient</div>
                         <p style={{ color: '#ef4444', fontSize: '0.65rem', textAlign: 'center', marginBottom: '0.5rem' }}>
-                          La durée minimale est de {selectedService === 'Grand ménage' ? '6' : selectedService === 'Ménage bureaux' ? '2' : '4'} heures
+                          La durée minimale est de {minDuree} heures
                         </p>
                         <div className="ws-counter">
-                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: Math.max(selectedService === 'Grand ménage' ? 6 : selectedService === 'Ménage bureaux' ? 2 : 4, formData.duree - 1) })} disabled={formData.duree <= (selectedService === 'Grand ménage' ? 6 : selectedService === 'Ménage bureaux' ? 2 : 4)}>−</button>
+                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: Math.max(minDuree, formData.duree - 1) })} disabled={formData.duree <= minDuree}>−</button>
                           <span className="ws-counter-value">{formData.duree}</span>
                           <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: formData.duree + 1 })}>+</button>
                         </div>
@@ -1170,7 +1205,7 @@ export default function DemandesEnAttente() {
                     )}
 
                     {/* Nombre de personnes */}
-                    {(selectedService === 'Ménage standard' || selectedService === 'Grand ménage' || selectedService === 'Ménage Air BnB' || selectedService === 'Ménage bureaux') && (
+                    {(isMenageStandardService || isGrandMenageService || isMenageAirBnBService || isMenageBureauxService) && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">Nombre de personne</div>
                         <div className="ws-counter">
@@ -1216,7 +1251,7 @@ export default function DemandesEnAttente() {
                     </div>
 
                     {/* Services optionnels */}
-                    {(selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage')) && !selectedService.toLowerCase().includes('fin de chantier') && !selectedService.toLowerCase().includes('fin chantier') && (
+                    {isCleaningService && !isFinChantierService && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">Services optionnels</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem' }}>
@@ -1248,7 +1283,7 @@ export default function DemandesEnAttente() {
 
                 {/* ====== LOCALISATION (all services) ====== */}
                 <div className="ws-form-block">
-                  <div className="ws-section-header">Où aura lieu votre {selectedService.toLowerCase().includes('ménage') || selectedService.toLowerCase().includes('nettoyage') ? 'ménage' : 'intervention'} ?</div>
+                  <div className="ws-section-header">Où aura lieu votre {isCleaningService ? 'ménage' : 'intervention'} ?</div>
                   <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
                     <div className="form-group">
                       <label className="label-teal">Ville *</label>
@@ -1346,6 +1381,21 @@ export default function DemandesEnAttente() {
                     <div className="form-group">
                       <label className="label-teal">Email</label>
                       <input type="email" placeholder="nom@domaine.com" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label-teal">Comment le client a connu l'agence ?</label>
+                      <select className="ws-select" value={formData.heard_about_us} onChange={e => setFormData({ ...formData, heard_about_us: e.target.value })}>
+                        <option value="">Choisir...</option>
+                        <option value="google">Recherche Google</option>
+                        <option value="facebook">Facebook</option>
+                        <option value="instagram">Instagram</option>
+                        <option value="tiktok">TikTok</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="recommandation">Bouche-à-oreille / Recommandation</option>
+                        <option value="partenariat">Partenariat</option>
+                        <option value="passage">Passage devant l'agence</option>
+                        <option value="autre">Autre</option>
+                      </select>
                     </div>
                   </div>
                 </div>

@@ -4496,6 +4496,65 @@ input:checked+.slider:before {
   margin-top: 1rem;
 }
 
+/* Profile form premium refinements (scoped) */
+.profile-form-modal {
+  border-radius: 24px;
+  border: 1px solid #d9ece8;
+  box-shadow: 0 30px 60px -20px rgba(15, 23, 42, 0.45);
+}
+
+.profile-form-modal .modal-header {
+  background: linear-gradient(180deg, #f9fdfc 0%, #f1faf8 100%);
+  border-bottom: 1px solid #d6ebe6;
+}
+
+.profile-form-modal .modal-body {
+  background: linear-gradient(180deg, #fbfefd 0%, #f8fcfb 100%);
+}
+
+.profile-form-modal .modal-footer {
+  background: #f7fbfa;
+  border-top: 1px solid #d6ebe6;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+
+.profile-form-modal .form-section {
+  border: 1px solid #e2efec;
+  border-radius: 16px;
+  padding: 1.15rem 1.25rem;
+  margin-top: 1rem;
+  background: #ffffff;
+  box-shadow: 0 8px 24px -20px rgba(15, 23, 42, 0.35);
+  border-top: 1px solid #e2efec;
+}
+
+.profile-form-modal .section-title {
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #0f3d3a;
+}
+
+.profile-form-modal .form-group label:not(.checkbox-container) {
+  color: #48626e;
+}
+
+.profile-form-modal .form-input,
+.profile-form-modal .form-select,
+.profile-form-modal .form-textarea {
+  border-color: #d7e4e8;
+  background: #fcfefe;
+}
+
+.profile-form-modal .form-input:focus,
+.profile-form-modal .form-select:focus,
+.profile-form-modal .form-textarea:focus {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.12);
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
