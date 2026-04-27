@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Megaphone, Ticket, TrendingUp, Plus, Trash2, Pencil, Send, Copy } from 'lucide-react';
-import { TYPES_GESTE, CANAUX_CAMPAGNE, CIBLES_CAMPAGNE, STATUTS_CAMPAGNE, SEGMENTS_CLIENT } from '@/lib/marketing-constants';
+import { TYPES_GESTE, CANAUX_CAMPAGNE, CIBLES_CAMPAGNE, SEGMENTS_CLIENT } from '@/lib/marketing-constants';
 import { CreateOffreModal, type PromoFormState } from './marketing/CreateOffreModal';
 import { CreateGesteModal, type GesteFormState } from './marketing/CreateGesteModal';
 import { CreateCampagneModal, type CampagneFormState } from './marketing/CreateCampagneModal';
@@ -287,7 +287,6 @@ export default function Marketing() {
 
     const cibleLabel = CIBLES_CAMPAGNE.find((c) => c.value === campaignForm.cible)?.label || campaignForm.cible;
     const canalLabel = campaignForm.canal.map((c) => CANAUX_CAMPAGNE.find((x) => x.value === c)?.label || c).join(', ');
-    const statutLabel = STATUTS_CAMPAGNE.find((s) => s.value === campaignForm.statut);
 
     const item: CampaignItem = {
       id: Date.now(),

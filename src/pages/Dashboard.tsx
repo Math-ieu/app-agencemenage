@@ -423,21 +423,6 @@ export default function Dashboard() {
     setCaoPreviewIndex(0);
   };
 
-  const copyProfileShareLink = async (demande: Demande) => {
-    const profileLink = demande.profil_share_link || '';
-    if (!profileLink) {
-      addToast('Aucun lien profil disponible pour cette demande', 'warning');
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(profileLink);
-      addToast('Lien profil copié', 'success');
-    } catch (error) {
-      window.prompt('Copiez ce lien profil :', profileLink);
-    }
-  };
-
   const copyText = async (value: string, successMessage: string) => {
     if (!value) {
       addToast('Valeur introuvable', 'warning');
