@@ -19,6 +19,7 @@ interface Demande {
   created_at: string;
   profil_name: string;
   motif: string;
+  cao?: boolean;
 }
 
 const getSegmentLabel = (segment: string): string => {
@@ -30,7 +31,7 @@ const getSegmentLabel = (segment: string): string => {
 const getStatutBesoinLabel = (demande: Demande): string => {
   if (demande.statut_besoin_label) return demande.statut_besoin_label;
   if (demande.statut === 'en_attente') return 'Nouveau besoin';
-  if (demande.statut === 'en_cours') return 'En attente';
+  if (demande.statut === 'en_cours') return demande.cao ? 'Confirmé' : 'En attente';
   if (demande.statut === 'termine') return 'Paye';
   if (demande.statut === 'annule') return 'Annule';
   return (demande.statut || '').replace(/_/g, ' ');

@@ -346,8 +346,8 @@ export default function Dashboard() {
       if (status === 'confirmed') {
         // Mark CAO as confirmed (cao = true)
         await confirmerCAO(demande.id);
-        // Change status to "en_cours" (which represents Confirmé intervention)
-        const updateData: any = { statut: 'en_cours' };
+        // Change status to "en_cours" (Confirmé intervention)
+        const updateData: any = { statut: 'en_cours', cao: true };
         await updateDemande(demande.id, updateData);
         
         const clientPhone = demande.formulaire_data?.whatsapp_phone || demande.formulaire_data?.phone || demande.client_phone;
@@ -363,9 +363,9 @@ export default function Dashboard() {
         }
         addToast('Besoin confirmé intervention avec succès', 'success');
       } else if (status === 'postponed') {
-        // Statut redevient "Nouveau besoin" (en_attente)
-        await updateDemande(demande.id, { statut: 'en_attente' });
-        addToast('Statut réinitialisé : Nouveau besoin', 'info');
+        // Reste dans le dashboard (statut en_cours) mais CAO redevient "NON" (Nouveau besoin en UI)
+        await updateDemande(demande.id, { statut: 'en_cours', cao: false });
+        addToast('CAO reporté : La demande reste dans le dashboard', 'info');
       } else if (status === 'cancelled') {
         // Statut devient "demande annulée" (annule - no accent for backend)
         await updateDemande(demande.id, { statut: 'annule' });
@@ -428,7 +428,10 @@ export default function Dashboard() {
       if (editFormData.statut === 'termine' && selectedDemande.statut !== 'termine') {
         finalStatutPaiementUi = 'paiement_en_attente';
         triggerSatisfactionWhatsApp = true;
+      } else if (editFormData.statut === 'pres_terminee' && selectedDemande.statut !== 'pres_terminee') {
+        finalStatutPaiementUi = 'paiement_en_attente';
       }
+
 
       const paymentOption = PAYMENT_STATUS_OPTIONS.find((option) => option.value === finalStatutPaiementUi);
       updateData.statut_paiement = paymentOption?.apiValue || editFormData.statut_paiement || 'non_paye';
@@ -890,17 +893,17 @@ export default function Dashboard() {
                       <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</td>
                       <td>
                         <span className={`badge ${
-                          d.statut === 'en_cours' ? 'badge-nouveau' : 
+                          d.statut === 'en_cours' ? (d.cao ? 'badge-green' : 'badge-nouveau') : 
                           d.statut === 'termine' ? 'badge-green' : 
                           d.statut === 'pres_en_cours' ? 'badge-purple' :
                           d.statut === 'pres_terminee' ? 'badge-orange' :
                           'badge-orange'
                         }`}>
-                          {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : 
+                          {d.statut === 'en_cours' ? (d.cao ? 'Confirmé' : (<><span>Nouveau</span><span>besoin</span></>)) : 
                            d.statut === 'termine' ? 'Terminé' : 
                            d.statut === 'pres_en_cours' ? 'Pres. en cours' :
                            d.statut === 'pres_terminee' ? 'Pres. terminée' :
-                           'En attente'}
+                           'Nouveau besoin'}
                         </span>
                       </td>
                       <td>
