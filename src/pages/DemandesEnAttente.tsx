@@ -9,6 +9,7 @@ import {
   FileText, Save, Download, Eye, Plus, ChevronDown, ChevronUp, CheckCircle, Edit, UserPlus, Send
 } from 'lucide-react';
 import { Demande } from '../types';
+import { normalizeFrequence, normalizePayment, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 
 const isDevisRequired = (d: Demande | null) => {
   if (!d) return false;
@@ -312,39 +313,39 @@ export default function DemandesEnAttente() {
     setSyncWhatsApp(!d.formulaire_data?.whatsapp_phone || d.formulaire_data?.whatsapp_phone === d.client_phone);
 
     setFormData({
-      nom: d.client_name,
+      nom: d.client_name || d.formulaire_data?.nom || d.formulaire_data?.fullName || '',
       email: d.formulaire_data?.email || d.client_details?.email || '',
       entity_name: d.formulaire_data?.entityName || d.formulaire_data?.entity_name || '',
       contact_person: d.formulaire_data?.contactPerson || d.formulaire_data?.contact_person || '',
       ville: d.formulaire_data?.ville || d.client_city || 'Casablanca',
-      quartier: d.formulaire_data?.quartier || d.client_neighborhood || '',
+      quartier: normalizeQuartier(d.formulaire_data?.quartier || d.client_neighborhood || ''),
       adresse: d.formulaire_data?.adresse || '',
-      date: d.date_intervention || '',
-      heure: d.heure_intervention || d.formulaire_data?.fixedTime || '',
-      scheduling_type: d.heure_intervention || d.formulaire_data?.fixedTime ? 'fixed' : 'flexible',
-      preference_horaire: d.formulaire_data?.preference_horaire || (d.formulaire_data?.schedulingTime === 'morning' ? 'matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? 'apres_midi' : ''),
-      type_habitation: d.formulaire_data?.type_habitation || '',
-      frequence: d.frequency_label || (d.frequency === 'oneshot' ? 'ponctuel' : 'mensuel'),
+      date: d.date_intervention || d.formulaire_data?.date || d.formulaire_data?.scheduledDate || '',
+      heure: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime || '',
+      scheduling_type: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime ? 'fixed' : 'flexible',
+      preference_horaire: normalizeTimePref(d.preference_horaire || d.formulaire_data?.preference_horaire || (d.formulaire_data?.schedulingTime === 'morning' ? 'matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? 'apres_midi' : '')),
+      type_habitation: normalizeStructure(d.formulaire_data?.type_habitation || ''),
+      frequence: normalizeFrequence(d.frequency_label || d.formulaire_data?.frequence || (d.frequency === 'oneshot' ? 'une fois' : 'mensuel')),
       intervention_nature: d.formulaire_data?.interventionNature || d.formulaire_data?.intervention_nature || 'sinistre',
       accommodation_state: d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '',
       cleanliness_type: d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '',
-      nb_intervenants: d.formulaire_data?.nb_intervenants || 1,
+      nb_intervenants: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || 1,
       surface: d.formulaire_data?.surface || 50,
       details_pieces: d.formulaire_data?.details_pieces || '',
-      duree: d.formulaire_data?.duree || 4,
-      produits: d.formulaire_data?.produits || false,
-      torchons: d.formulaire_data?.torchons || false,
-      montant: d.prix?.toString() || '',
-      mode_paiement: d.mode_paiement || '',
-      statut_paiement: d.statut_paiement || 'non_paye',
+      duree: d.formulaire_data?.duree || d.formulaire_data?.nb_heures || 4,
+      produits: d.formulaire_data?.produits || d.formulaire_data?.produitsEtOutils || false,
+      torchons: d.formulaire_data?.torchons || d.formulaire_data?.torchonsEtSerpierres || false,
+      montant: d.prix?.toString() || d.formulaire_data?.montant || '',
+      mode_paiement: normalizePayment(d.mode_paiement || d.formulaire_data?.mode_paiement || ''),
+      statut_paiement: normalizePayment(d.statut_paiement || d.formulaire_data?.statut_paiement || 'non_paye'),
       notes: d.formulaire_data?.notes || '',
       service_type: d.formulaire_data?.service_type || 'flexible',
-      structure_type: d.formulaire_data?.structure_type || '',
+      structure_type: normalizeStructure(d.formulaire_data?.structure_type || ''),
       nb_personnel: d.formulaire_data?.nb_personnel || 1,
       lieu_garde: d.formulaire_data?.lieu_garde || 'domicile',
       age_personne: d.formulaire_data?.age_personne || '',
-      sexe_personne: d.formulaire_data?.sexe_personne || '',
-      mobilite: d.formulaire_data?.mobilite || '',
+      sexe_personne: normalizeSexe(d.formulaire_data?.sexe_personne || ''),
+      mobilite: normalizeMobilite(d.formulaire_data?.mobilite || ''),
       situation_medicale: d.formulaire_data?.situation_medicale || '',
       nb_jours: d.formulaire_data?.nb_jours || 1,
       rooms: d.formulaire_data?.rooms || {
@@ -361,7 +362,7 @@ export default function DemandesEnAttente() {
     if (!form?.checkValidity()) return;
 
     try {
-      const frequencyValue = formData.frequence === 'ponctuel' ? 'oneshot' : 'abonnement';
+      const frequencyValue = formData.frequence === 'une fois' ? 'oneshot' : 'abonnement';
       const isFixedSchedule = formData.scheduling_type === 'fixed';
       const clientDisplayName = activeSegment === 'entreprise'
         ? (formData.contact_person || formData.entity_name || formData.nom)
@@ -412,8 +413,8 @@ export default function DemandesEnAttente() {
           preference_horaire: isFixedSchedule ? '' : formData.preference_horaire,
           schedulingType: formData.scheduling_type,
           schedulingDate: formData.date || null,
-          fixedTime: formData.heure || '',
-          schedulingTime: formData.preference_horaire === 'matin' ? 'morning' : formData.preference_horaire === 'apres_midi' ? 'afternoon' : '',
+          fixedTime: isFixedSchedule ? (formData.heure || '') : '',
+          schedulingTime: isFixedSchedule ? '' : (formData.preference_horaire === 'matin' ? 'morning' : formData.preference_horaire === 'apres_midi' ? 'afternoon' : ''),
           type_habitation: formData.type_habitation,
           propertyType: formData.type_habitation ? formData.type_habitation.toLowerCase() : '',
           surface: formData.surface,
@@ -632,7 +633,7 @@ export default function DemandesEnAttente() {
                       <div className="accordion-content">
                         <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value text-main-teal fw-bold">{d.service}</span></div>
                         <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">{d.formulaire_data?.type_habitation || d.formulaire_data?.structure_type || '—'}</span></div>
-                        <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency_label || d.frequency || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency_label || (d.frequency === 'oneshot' ? 'Une fois' : 'Abonnement')}</span></div>
                         <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.formulaire_data?.duree ? `${d.formulaire_data.duree}h` : (d.formulaire_data?.duration ? `${d.formulaire_data.duration}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—'))}</span></div>
                         <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || '—'}</span></div>
                         {d.service.includes('Auxiliaire') ? (
@@ -673,10 +674,30 @@ export default function DemandesEnAttente() {
                     {isExpanded(d.id, 'lieux') && (
                       <div className="accordion-content">
                         <div className="detail-item"><span className="detail-label">Date :</span> <span className="detail-value">{d.date_intervention || d.formulaire_data?.schedulingDate || '—'}</span></div>
-                        <div className="detail-item"><span className="detail-label">Heure :</span> <span className="detail-value">{d.heure_intervention || d.formulaire_data?.fixedTime || (d.formulaire_data?.schedulingTime === 'morning' ? 'Le matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? "L'après-midi" : d.formulaire_data?.schedulingTime) || '—'}</span></div>
+                        {(() => {
+                          const hasSchedulingType = !!d.formulaire_data?.schedulingType;
+                          const isFixed = hasSchedulingType 
+                            ? d.formulaire_data?.schedulingType === 'fixed'
+                            : !!(d.heure_intervention && d.heure_intervention !== '—') || !!(d.formulaire_data?.fixedTime && d.formulaire_data?.fixedTime !== '');
+                          
+                          const fixedTime = d.heure_intervention || d.formulaire_data?.fixedTime;
+                          const pref = d.preference_horaire || d.formulaire_data?.preference_horaire || d.formulaire_data?.schedulingTime;
+                          
+                          if (isFixed && fixedTime && fixedTime !== '—') {
+                            return <div className="detail-item"><span className="detail-label">Heure :</span> <span className="detail-value">{fixedTime}</span></div>;
+                          } else if (!isFixed && pref && pref !== '—') {
+                            let prefText = pref;
+                            if (pref.toLowerCase() === 'matin' || pref.toLowerCase() === 'morning') prefText = 'Matin (08h–12h)';
+                            else if (pref.toLowerCase() === 'aprem' || pref.toLowerCase().includes('apr') || pref.toLowerCase() === 'afternoon') prefText = 'Après-midi (14h–18h)';
+                            return <div className="detail-item"><span className="detail-label">Préférence horaire :</span> <span className="detail-value">{prefText}</span></div>;
+                          } else if (isFixed) {
+                            return <div className="detail-item"><span className="detail-label">Heure :</span> <span className="detail-value">—</span></div>;
+                          } else {
+                            return <div className="detail-item"><span className="detail-label">Préférence horaire :</span> <span className="detail-value">—</span></div>;
+                          }
+                        })()}
                         <div className="detail-item"><span className="detail-label">Ville :</span> <span className="detail-value">{d.formulaire_data?.ville || d.formulaire_data?.city || d.client_city || '—'}</span></div>
                         <div className="detail-item"><span className="detail-label">Quartier :</span> <span className="detail-value">{d.formulaire_data?.quartier || d.formulaire_data?.neighborhood || d.client_neighborhood || '—'}</span></div>
-                        <div className="detail-item"><span className="detail-label">Préférence horaire :</span> <span className="detail-value">{d.formulaire_data?.preference_horaire ? (d.formulaire_data.preference_horaire === 'matin' ? 'Matin (08h–12h)' : 'Après-midi (14h–18h)') : '—'}</span></div>
                         <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Adresse :</span> <span className="detail-value">{d.formulaire_data?.adresse || '—'}</span></div>
                       </div>
                     )}
@@ -866,7 +887,7 @@ export default function DemandesEnAttente() {
                         <label className="label-teal">Fréquence *</label>
                         <select className="ws-select" required value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })}>
                           <option value="">Sélectionner...</option>
-                          <option value="ponctuel">Une fois - Tranche 24h</option>
+                          <option value="une fois">Une fois - Tranche 24h</option>
                           <option value="1/sem">Abonnement - 1 fois / semaine</option>
                           <option value="quotidien">Abonnement - Quotidien</option>
                         </select>
@@ -946,7 +967,7 @@ export default function DemandesEnAttente() {
                         <label className="label-teal">Fréquence *</label>
                         <select className="ws-select" required value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })}>
                           <option value="">Sélectionner...</option>
-                          <option value="ponctuel">Une fois</option>
+                          <option value="une fois">Une fois</option>
                           <option value="1/sem">1 fois / semaine</option>
                           <option value="2/sem">2 fois / semaine</option>
                           <option value="3/sem">3 fois / semaine</option>
@@ -1035,14 +1056,14 @@ export default function DemandesEnAttente() {
                     <div className="ws-form-block">
                       <div className="ws-section-header">Choisissez la fréquence</div>
                       <div className="ws-freq-toggle">
-                        <button type="button" className={formData.frequence === 'ponctuel' || !formData.frequence ? 'active' : ''} onClick={() => setFormData({ ...formData, frequence: 'ponctuel' })}>
+                        <button type="button" className={formData.frequence === 'une fois' || !formData.frequence ? 'active' : ''} onClick={() => setFormData({ ...formData, frequence: 'une fois' })}>
                           Une fois
                         </button>
-                        <button type="button" className={formData.frequence !== 'ponctuel' && formData.frequence ? 'active' : ''} onClick={() => setFormData({ ...formData, frequence: '1/sem' })}>
+                        <button type="button" className={formData.frequence !== 'une fois' && formData.frequence ? 'active' : ''} onClick={() => setFormData({ ...formData, frequence: '1/sem' })}>
                           Abonnement
                         </button>
                       </div>
-                      {formData.frequence && formData.frequence !== 'ponctuel' && (
+                      {formData.frequence && formData.frequence !== 'une fois' && (
                         <div style={{ maxWidth: '380px', margin: '0 auto' }}>
                           <div className="ws-discount-badge">-10 % de réduction sur l'abonnement</div>
                           <select className="ws-select" value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })}>

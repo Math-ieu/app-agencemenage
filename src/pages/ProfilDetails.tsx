@@ -240,7 +240,7 @@ export default function ProfilDetails() {
   useEffect(() => {
     if (!showPostulerModal) return;
     setDemandesLoading(true);
-    getDemandes({})
+    getDemandes({ exclude_statut: 'en_attente' })
       .then(res => {
         const data = res.data;
         setAllDemandes(Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []));

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
   CheckCircle, UserCheck, MessageSquare, AlertTriangle,
@@ -11,6 +11,7 @@ import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, aff
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
+import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 
 // Services qui nécessitent un devis PDF (les autres ont un récapitulatif PNG)
 const isDevisRequired = (d: Demande | null): boolean => {
@@ -195,6 +196,8 @@ export default function Dashboard() {
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string, demandeId: number } | null>(null);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
+  const navigate = useNavigate();
+  const [blinkNouveau, setBlinkNouveau] = useState(false);
 
   const { addToast } = useToastStore();
   const { user } = useAuthStore();
@@ -331,7 +334,10 @@ export default function Dashboard() {
     }
     
     // Color according to demand status (statut)
-    if (d.statut === 'en_cours') classes.push('row-status-nouveau');
+    if (d.statut === 'en_cours') {
+      if (blinkNouveau && !d.cao) classes.push('blink-animation');
+      else classes.push('row-status-nouveau');
+    }
     else if (d.statut === 'en_attente') classes.push('row-status-attente');
     else if (d.statut === 'pres_en_cours') classes.push('row-status-pres-en-cours');
     else if (d.statut === 'pres_terminee') classes.push('row-status-pres-terminee');
@@ -391,7 +397,7 @@ export default function Dashboard() {
 
       const normalizedFrequence = (editFormData.frequence || '').toString().toLowerCase();
       const frequency = normalizedFrequence
-        ? (normalizedFrequence === 'ponctuel' ? 'oneshot' : 'abonnement')
+        ? (normalizedFrequence === 'une fois' ? 'oneshot' : 'abonnement')
         : selectedDemande.frequency;
 
       const partsRepartition = asArray<PartRepartitionItem>(editFormData.parts_repartition, [])
@@ -566,7 +572,7 @@ export default function Dashboard() {
       service: d.service,
       segment: d.segment,
       frequency: d.frequency,
-      frequence: formData.frequence || d.frequency_label || (d.frequency === 'oneshot' ? 'ponctuel' : '1/sem'),
+      frequence: normalizeFrequence(formData.frequence || d.frequency_label || (d.frequency === 'oneshot' ? 'une fois' : '1/sem')),
       client_name: d.client_name || formData.nom || '',
       client_phone: d.client_phone || formData.whatsapp_phone || '',
       client_whatsapp: d.client_whatsapp || formData.whatsapp_phone || '',
@@ -574,16 +580,16 @@ export default function Dashboard() {
       neighborhood: d.neighborhood_city || 'Casablanca',
       is_devis: d.is_devis,
       statut: d.statut,
-      type_habitation: formData.type_habitation || formData.structure_type || '',
-      structure_type: formData.structure_type || '',
+      type_habitation: normalizeStructure(formData.type_habitation || formData.structure_type || ''),
+      structure_type: normalizeStructure(formData.structure_type || ''),
       service_type: formData.service_type || 'flexible',
       nb_personnel: formData.nb_personnel || 1,
       surface: formData.surface || formData.surfaceArea || 0,
       details_pieces: formData.details_pieces || '',
       ville: formData.ville || '',
-      quartier: formData.quartier || '',
+      quartier: normalizeQuartier(formData.quartier || ''),
       adresse: formData.adresse || '',
-      preference_horaire: formData.preference_horaire || '',
+      preference_horaire: normalizeTimePref(formData.preference_horaire || ''),
       nb_intervenants: formData.nb_intervenants || formData.numberOfPeople || ((d.nb_heures || 0) > 0 ? 1 : 0),
       rooms: formData.rooms || {
         cuisine: 1,
@@ -601,8 +607,8 @@ export default function Dashboard() {
       avec_torchons: formData.torchons || false,
       lieu_garde: formData.lieu_garde || 'domicile',
       age_personne: formData.age_personne || '',
-      sexe_personne: formData.sexe_personne || '',
-      mobilite: formData.mobilite || '',
+      sexe_personne: normalizeSexe(formData.sexe_personne || ''),
+      mobilite: normalizeMobilite(formData.mobilite || ''),
       situation_medicale: formData.situation_medicale || '',
       nb_jours: formData.nb_jours || 1,
       regenerer_devis: false,
@@ -706,7 +712,14 @@ export default function Dashboard() {
 
       {/* Stats cards */}
       <div className="stats-grid">
-        <div className="stat-card" style={{ backgroundColor: '#edba54', color: 'white' }}>
+        <div 
+          className="stat-card" 
+          style={{ backgroundColor: '#edba54', color: 'white', cursor: 'pointer' }}
+          onClick={() => {
+            setBlinkNouveau(true);
+            setTimeout(() => setBlinkNouveau(false), 3000);
+          }}
+        >
           <div className="stat-icon" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><ClipboardCheck size={22} /></div>
           <div>
             <p className="stat-value">{stats.en_cours}</p>
@@ -716,7 +729,11 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
-        <div className="stat-card" style={{ backgroundColor: '#d9c532', color: 'white' }}>
+        <div 
+          className="stat-card" 
+          style={{ backgroundColor: '#d9c532', color: 'white', cursor: 'pointer' }}
+          onClick={() => navigate('/demandes')}
+        >
           <div className="stat-icon" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><Clock size={22} /></div>
           <div>
             <p className="stat-value">{stats.en_attente}</p>
@@ -1450,7 +1467,7 @@ export default function Dashboard() {
                               onChange={e => setEditFormData({ ...editFormData, frequence: e.target.value })}
                               className="edit-input"
                             >
-                              <option value="ponctuel">Une fois</option>
+                              <option value="une fois">Une fois</option>
                               <option value="1/sem">Abonnement - 1 fois / semaine</option>
                               <option value="2/sem">Abonnement - 2 fois / semaine</option>
                               <option value="3/sem">Abonnement - 3 fois / semaine</option>
@@ -2156,7 +2173,7 @@ export default function Dashboard() {
                       <div className="detail-item"><span>Service:</span> {selectedDemande.service}</div>
                       <div className="detail-item"><span>Date:</span> {selectedDemande.date_intervention ? new Date(selectedDemande.date_intervention).toLocaleDateString('fr-FR') : (selectedDemande.formulaire_data?.date_intervention || selectedDemande.formulaire_data?.date || '—')}</div>
                       <div className="detail-item"><span>Heures:</span> {selectedDemande.nb_heures || selectedDemande.formulaire_data?.duree || selectedDemande.formulaire_data?.nb_heures || '—'}h</div>
-                      <div className="detail-item"><span>Fréquence:</span> {selectedDemande.frequency}</div>
+                      <div className="detail-item"><span>Fréquence:</span> {selectedDemande.frequency_label || (selectedDemande.frequency === 'oneshot' ? 'Une fois' : 'Abonnement')}</div>
                       <div className="detail-item"><span>Avec produit:</span> {selectedDemande.avec_produit ? `Oui (${selectedDemande.tarif_produit} MAD)` : 'Non'}</div>
                     </div>
                   </div>

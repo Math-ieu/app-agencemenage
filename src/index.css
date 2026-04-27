@@ -5351,3 +5351,20 @@ input:checked+.slider:before {
 .data-table tr:hover .sticky-col {
   background: #f8fafc;
 }
+@keyframes highlight-blink {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(237, 186, 84, 0.4); } 
+}
+
+.blink-animation {
+  animation: highlight-blink 1s ease-in-out infinite;
+}
+
+@keyframes highlight-blink-fixed {
+  0%, 100% { background-color: #eff6ff; }
+  50% { background-color: rgba(237, 186, 84, 0.6); } 
+}
+
+.blink-animation {
+  animation: highlight-blink-fixed 1s ease-in-out infinite !important;
+}
