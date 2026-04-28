@@ -5427,3 +5427,16 @@ input:checked+.slider:before {
 .blink-animation {
   animation: highlight-blink-fixed 1s ease-in-out infinite !important;
 }
+
+.blink-animation td {
+  animation: highlight-blink-fixed 1s ease-in-out infinite !important;
+}
+
+.blink-animation .badge-nouveau {
+  animation: badge-pulse 1s ease-in-out infinite !important;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.1); filter: brightness(1.3); box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+}

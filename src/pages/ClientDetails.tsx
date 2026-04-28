@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  getClient, getDemandes, getFeedbacks, getMissions,
+  getClient, getDemandes, getFeedbacks,
   updateDemande, fetchSecureDocBlob
 } from '../api/client';
-import { decodeId } from '../utils/obfuscation';
+import { decodeId, encodeId } from '../utils/obfuscation';
 import {
   ChevronDown, User, Calendar, FileText,
   MessageSquare, History, ArrowLeft, RefreshCw, Slash,
@@ -167,12 +167,11 @@ export default function ClientDetails() {
   const [client, setClient] = useState<Client | null>(null);
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
-  const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     info: true, fidelite: false, frequence: false,
-    besoin: false, documents: false, candidats: false,
+    besoin: false, documents: false,
     feedback: false, historique: false,
     avisComm: true, avisOp: true,
   });
@@ -195,18 +194,16 @@ export default function ClientDetails() {
     }
     setLoading(true);
     try {
-      const [clientRes, demandesRes, feedbacksRes, missionsRes] = await Promise.all([
+      const [clientRes, demandesRes, feedbacksRes] = await Promise.all([
         getClient(realId),
         getDemandes({ client: realId.toString() }),
         getFeedbacks({ client: realId.toString() }),
-        getMissions({ client: realId.toString() }),
       ]);
       setClient(clientRes.data);
       const list = Array.isArray(demandesRes.data?.results) ? demandesRes.data.results : (Array.isArray(demandesRes.data) ? demandesRes.data : []);
       setDemandes(list);
       if (list[0]) { setAvisComm(list[0].note_commercial || ''); setAvisOp(list[0].note_operationnel || ''); }
       setFeedbacks(Array.isArray(feedbacksRes.data?.results) ? feedbacksRes.data.results : (Array.isArray(feedbacksRes.data) ? feedbacksRes.data : []));
-      setMissions(Array.isArray(missionsRes.data?.results) ? missionsRes.data.results : (Array.isArray(missionsRes.data) ? missionsRes.data : []));
     } catch (err) { console.error('Error fetching client details:', err); }
     finally { setLoading(false); }
   };
@@ -332,8 +329,23 @@ export default function ClientDetails() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#a0aec0' }}>#{client.id}</span>
                   <Badge bg={C.lime} color="white">{client.segment}</Badge>
-                  {latest?.statut_paiement === 'partiel' && (
-                    <Badge bg={C.orange} color="white">Facturation partielle</Badge>
+                  {latest && (
+                    <Badge 
+                      bg={
+                        latest.statut === 'annule' ? '#E53E3E' : 
+                        latest.statut === 'termine' ? '#2F855A' :
+                        latest.statut === 'en_cours' ? (latest.cao ? '#2F855A' : '#3B82F6') :
+                        '#DD6B20'
+                      } 
+                      color="white"
+                    >
+                      {latest.statut === 'en_cours' ? (latest.cao ? 'Confirmé' : 'Nouveau besoin') :
+                       latest.statut === 'termine' ? 'Terminé' :
+                       latest.statut === 'annule' ? 'Annulée' :
+                       latest.statut === 'pres_en_cours' ? 'Pres. en cours' :
+                       latest.statut === 'pres_terminee' ? 'Pres. terminée' :
+                       'Nouveau besoin'}
+                    </Badge>
                   )}
                 </div>
               </div>
@@ -385,7 +397,7 @@ export default function ClientDetails() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
-                  <Th>Date</Th><Th>Nom du service</Th><Th>Segment</Th><Th>Statut</Th><Th center>Actions</Th>
+                  <Th>Date</Th><Th>Nom du service</Th><Th>Profils proposés</Th><Th>Segment</Th><Th>Statut</Th><Th center>Actions</Th>
                 </tr></thead>
                 <tbody>
                   {demandes.map(d => (
@@ -393,22 +405,88 @@ export default function ClientDetails() {
                       <Td>{new Date(d.created_at).toLocaleDateString('fr-FR')}</Td>
                       <Td bold color="#1e293b">{d.service}</Td>
                       <Td>
+                        {(d.profils_envoyes?.length ?? 0) > 0 ? (
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {d.profils_envoyes?.map(p => (
+                              <Link 
+                                key={p.id} 
+                                to={`/profils/${encodeId(p.id)}`} 
+                                style={{ 
+                                  textDecoration: 'none',
+                                  padding: '2px 8px',
+                                  backgroundColor: '#f1f5f9',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: 6,
+                                  fontSize: 12,
+                                  color: C.teal,
+                                  fontWeight: 600,
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                                title={p.full_name}
+                              >
+                                {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()}
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>
+                        )}
+                      </Td>
+                      <Td>
                         <Badge bg={d.segment === 'entreprise' ? C.lime : C.teal} color="white">
                           {d.segment === 'entreprise' ? 'Entreprise' : 'Particulier'}
                         </Badge>
                       </Td>
                       <Td>
-                        <Badge bg={d.statut_paiement === 'integral' ? '#2F855A' : C.orange} color="white">
-                          {d.statut_paiement === 'integral' ? 'Payé' : 'Facturation partielle'}
+                        <Badge 
+                          bg={
+                            d.statut === 'annule' ? '#E53E3E' : 
+                            d.statut === 'termine' ? '#2F855A' :
+                            d.statut === 'en_cours' ? (d.cao ? '#2F855A' : '#3B82F6') :
+                            '#DD6B20'
+                          } 
+                          color="white"
+                        >
+                          {d.statut === 'en_cours' ? (d.cao ? 'Confirmé' : 'Nouveau besoin') :
+                           d.statut === 'termine' ? 'Terminé' :
+                           d.statut === 'annule' ? 'Annulée' :
+                           d.statut === 'pres_en_cours' ? 'Pres. en cours' :
+                           d.statut === 'pres_terminee' ? 'Pres. terminée' :
+                           'Nouveau besoin'}
                         </Badge>
                       </Td>
                       <Td center>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-                          <button style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>
+                          <button 
+                            onClick={async () => {
+                              try {
+                                addToast('Relance de la demande...', 'info');
+                                await updateDemande(d.id, { statut: 'en_cours', cao: false });
+                                addToast('Demande relancée avec succès', 'success');
+                                fetchData();
+                              } catch (err) {
+                                addToast('Erreur lors de la relance', 'error');
+                              }
+                            }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}
+                          >
                             <RefreshCw size={15} color={C.teal} /> Renouveler
                           </button>
                           {d.frequency === 'abonnement' && (
-                            <button style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  addToast('Relance de l\'abonnement...', 'info');
+                                  await updateDemande(d.id, { statut: 'en_cours', cao: false });
+                                  addToast('Abonnement relancé avec succès', 'success');
+                                  fetchData();
+                                } catch (err) {
+                                  addToast('Erreur lors de la relance', 'error');
+                                }
+                              }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}
+                            >
                               <RefreshCw size={15} color={C.teal} /> Abonnement
                             </button>
                           )}
@@ -626,32 +704,7 @@ export default function ClientDetails() {
           </div>
         </Accordion>
 
-        {/* ── 7. Candidats Proposés ── */}
-        <Accordion title="Candidats Proposés" icon={<User size={18} />} isOpen={openSections.candidats} onToggle={() => toggle('candidats')} color={C.sage} badge={missions.length}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>
-                <Th>Date d'intervention</Th><Th>Nom du profil</Th><Th>Statut profil</Th><Th>Statut paiement</Th><Th center>Note du profil</Th>
-              </tr></thead>
-              <tbody>
-                {missions.map(m => (
-                  <tr key={m.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <Td>{m.date_debut ? new Date(m.date_debut).toLocaleDateString('fr-FR') : 'Non planifiée'}</Td>
-                    <Td bold color={C.teal}>{m.agent_name || m.agent?.full_name || 'Agent non assigné'}</Td>
-                    <Td><Badge bg="#EBF8FF" color="#2B6CB0">Présenté</Badge></Td>
-                    <Td><Badge bg="#FFF5F5" color="#C53030">Non payé</Badge></Td>
-                    <Td center>
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
-                        {[1, 2, 3, 4, 5].map(s => <Star key={s} size={14} color="#e2e8f0" fill="#e2e8f0" />)}
-                      </div>
-                    </Td>
-                  </tr>
-                ))}
-                {missions.length === 0 && <EmptyState text="Aucun candidat proposé" colSpan={5} />}
-              </tbody>
-            </table>
-          </div>
-        </Accordion>
+
 
         {/* ── 8. Feedback Client ── */}
         <Accordion title="Feedback Client" icon={<Star size={18} />} isOpen={openSections.feedback} onToggle={() => toggle('feedback')} color={C.coral} badge={feedbacks.length}>

@@ -25,6 +25,7 @@ interface DashboardStats {
   en_cours: number;
   en_cours_particulier: number;
   en_cours_entreprise: number;
+  en_cours_nouveau: number;
   en_attente: number;
 }
 
@@ -174,7 +175,7 @@ const SERVICES_LIST = {
 export default function Dashboard() {
 
   const [demandes, setDemandes] = useState<Demande[]>([]);
-  const [stats, setStats] = useState<DashboardStats>({ en_cours: 0, en_cours_particulier: 0, en_cours_entreprise: 0, en_attente: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ en_cours: 0, en_cours_particulier: 0, en_cours_entreprise: 0, en_cours_nouveau: 0, en_attente: 0 });
   const [clientDemandeCounts, setClientDemandeCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'besoins' | 'abonnements'>('besoins');
@@ -309,6 +310,7 @@ export default function Dashboard() {
       const enCours = results.filter(d => d.statut === 'en_cours');
       const enCoursParticulier = enCours.filter(d => d.segment === 'particulier').length;
       const enCoursEntreprise = enCours.filter(d => d.segment === 'entreprise').length;
+      const enCoursNouveau = enCours.filter(d => !d.cao).length;
 
       const counts = allResults
         .filter(d => d.statut !== 'annule')
@@ -323,6 +325,7 @@ export default function Dashboard() {
         en_cours: enCours.length,
         en_cours_particulier: enCoursParticulier,
         en_cours_entreprise: enCoursEntreprise,
+        en_cours_nouveau: enCoursNouveau,
         en_attente: enAttenteList.length,
       });
     } catch (err) {
@@ -810,7 +813,7 @@ export default function Dashboard() {
           style={{ backgroundColor: '#edba54', color: 'white', cursor: 'pointer' }}
           onClick={() => {
             setBlinkNouveau(true);
-            setTimeout(() => setBlinkNouveau(false), 3000);
+            setTimeout(() => setBlinkNouveau(false), 5000);
           }}
         >
           <div className="stat-icon" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}><ClipboardCheck size={22} /></div>
@@ -818,7 +821,7 @@ export default function Dashboard() {
             <p className="stat-value">{stats.en_cours}</p>
             <p className="stat-label">Demandes en cours</p>
             <p className="text-sm" style={{ color: 'rgba(255,255,255,0.92)' }}>
-              {stats.en_cours_particulier} particulier(s) - {stats.en_cours_entreprise} entreprise(s)
+              {stats.en_cours_particulier} part. - {stats.en_cours_entreprise} ent. ({stats.en_cours_nouveau} nouveaux)
             </p>
           </div>
         </div>

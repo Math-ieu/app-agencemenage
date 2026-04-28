@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getDemandesHistorique } from '../api/client';
-import { Search, CalendarDays, History as HistoryIcon } from 'lucide-react';
+import { getDemandesHistorique, updateDemande } from '../api/client';
+import { Search, CalendarDays, History as HistoryIcon, RefreshCw } from 'lucide-react';
 import { encodeId } from '../utils/obfuscation';
+import { useToastStore } from '../store/toast';
 
 interface Demande {
   id: number;
@@ -74,6 +75,18 @@ export default function Historique() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const addToast = useToastStore(state => state.addToast);
+
+  const handleRelancer = async (id: number) => {
+    try {
+      addToast('Relance de la demande...', 'info');
+      await updateDemande(id, { statut: 'en_cours', cao: false });
+      addToast('Demande relancée avec succès', 'success');
+      fetchHistorique();
+    } catch (err) {
+      addToast('Erreur lors de la relance', 'error');
+    }
+  };
 
   const getRowClass = (d: Demande) => {
     if (d.statut_paiement === 'integral' || d.statut === 'termine') return 'row-status-paye';
@@ -151,6 +164,7 @@ export default function Historique() {
                 <th>Statut besoin</th>
                 <th>Statut paiement</th>
                 <th>Motif</th>
+                <th className="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -193,11 +207,20 @@ export default function Historique() {
                   <td>
                     {d.motif || '—'}
                   </td>
+                  <td className="text-center">
+                    <button 
+                       onClick={() => handleRelancer(d.id)}
+                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#037265' }}
+                       title="Relancer cette demande (Nouveau besoin)"
+                    >
+                      <RefreshCw size={16} />
+                    </button>
+                  </td>
                 </tr>
               ))}
               {demandes.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="empty-row">Aucun historique trouvé.</td>
+                  <td colSpan={10} className="empty-row">Aucun historique trouvé.</td>
                 </tr>
               )}
             </tbody>
