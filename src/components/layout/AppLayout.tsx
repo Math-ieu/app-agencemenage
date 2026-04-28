@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore, useNotificationStore } from '../../store/auth';
 import logoUrl from '../../assets/LOGO-AGENCE-MENAGE.png';
+import { NotificationBell } from './NotificationBell';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Tableau de bord' },
@@ -175,6 +176,20 @@ export default function AppLayout() {
 
       {/* Main content */}
       <main className="main-content">
+        <header style={{ 
+          height: '60px', 
+          backgroundColor: '#fff', 
+          borderBottom: '1px solid #e2e8f0', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'flex-end', 
+          padding: '0 24px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10
+        }}>
+          <NotificationBell />
+        </header>
         <Outlet />
       </main>
     </div>

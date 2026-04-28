@@ -78,6 +78,9 @@ export const getMe = () => apiClient.get('/api/auth/me/');
 export const getDemandes = (params?: Record<string, string | number>) =>
   apiClient.get('/api/demandes/', { params });
 
+export const getNotificationsUrgentes = () =>
+  apiClient.get('/api/demandes/notifications_urgentes/');
+
 export const getDemandesHistorique = (params?: Record<string, string | number>) =>
   apiClient.get('/api/demandes/historique/', { params });
 
