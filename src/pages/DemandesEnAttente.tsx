@@ -672,13 +672,13 @@ export default function DemandesEnAttente() {
                             <div className="detail-item"><span className="detail-label">Âge / Sexe :</span> <span className="detail-value">{d.formulaire_data?.age_personne ? `${d.formulaire_data.age_personne} ans` : '—'} / {d.formulaire_data?.sexe_personne || '—'}</span></div>
                             <div className="detail-item"><span className="detail-label">Mobilité :</span> <span className="detail-value">{d.formulaire_data?.mobilite || '—'}</span></div>
                             <div className="detail-item" style={{ gridColumn: 'span 2' }}>
-                              <span className="detail-label">Médical :</span> 
+                              <span className="detail-label">Médical :</span>
                               <span className="detail-value">{d.formulaire_data?.situation_medicale || '—'}</span>
                             </div>
                           </>
                         ) : (
                           <div className="detail-item">
-                            <span className="detail-label">Surface :</span> 
+                            <span className="detail-label">Surface :</span>
                             <span className="detail-value">{d.formulaire_data?.surface ? `${d.formulaire_data.surface} m²` : (d.formulaire_data?.officeSurface ? `${d.formulaire_data.officeSurface} m²` : (d.formulaire_data?.surfaceArea ? `${d.formulaire_data.surfaceArea} m²` : '—'))}</span>
                           </div>
                         )}
@@ -707,13 +707,13 @@ export default function DemandesEnAttente() {
                         <div className="detail-item"><span className="detail-label">Date :</span> <span className="detail-value">{d.date_intervention || d.formulaire_data?.schedulingDate || '—'}</span></div>
                         {(() => {
                           const hasSchedulingType = !!d.formulaire_data?.schedulingType;
-                          const isFixed = hasSchedulingType 
+                          const isFixed = hasSchedulingType
                             ? d.formulaire_data?.schedulingType === 'fixed'
                             : !!(d.heure_intervention && d.heure_intervention !== '—') || !!(d.formulaire_data?.fixedTime && d.formulaire_data?.fixedTime !== '');
-                          
+
                           const fixedTime = d.heure_intervention || d.formulaire_data?.fixedTime;
                           const pref = d.preference_horaire || d.formulaire_data?.preference_horaire || d.formulaire_data?.schedulingTime;
-                          
+
                           if (isFixed && fixedTime && fixedTime !== '—') {
                             return <div className="detail-item"><span className="detail-label">Heure :</span> <span className="detail-value">{fixedTime}</span></div>;
                           } else if (!isFixed && pref && pref !== '—') {
@@ -1024,7 +1024,7 @@ export default function DemandesEnAttente() {
                   /* ====== STANDARD MÉNAGE SERVICES ====== */
                   <>
                     {/* Type d'habitation */}
-                    {isCleaningService && (
+                    {isCleaningService && !isGrandMenageService && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">
                           {isMenageBureauxService ? "Type de local professionnel" : "Type d'habitation"}
@@ -1310,7 +1310,7 @@ export default function DemandesEnAttente() {
                   </div>
                   {['Bouskoura', 'Dar Bouazza', 'Mansouria', 'Almaz', 'Sidi Rahal', 'Benslimane', 'Mohammédia', 'Ville Verte'].includes(formData.ville) && (
                     <div className="ws-surcharge-notice">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                       <p>Un supplément de <strong>50 MAD</strong> sera facturé pour cette zone géographique.</p>
                     </div>
                   )}
@@ -1427,7 +1427,7 @@ export default function DemandesEnAttente() {
                 </div>
 
                 {editingDemande && (
-                <div className="form-section full-width mt-8 pt-4 mb-2">
+                  <div className="form-section full-width mt-8 pt-4 mb-2">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                       <h3 style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>Historique des documents</h3>
                       {editingDemande.documents && editingDemande.documents.length > 0 && (
@@ -1548,17 +1548,17 @@ export default function DemandesEnAttente() {
               </h2>
               <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowPreviewModal(null)}><XCircle size={20} /></button>
             </div>
-            
+
             <div className="modal-body bg-slate-800 rounded-md border border-slate-700 shadow-inner" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
-               {showPreviewModal.type === 'devis' ? (
-                 <iframe src={showPreviewModal.url} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Apercu" />
-               ) : (
-                 <div style={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '24px', backgroundColor: '#ffffff' }}>
-                   <img src={showPreviewModal.url} alt="Recapitulatif" style={{ maxWidth: '100%', width: 'auto', height: 'auto', objectFit: 'contain', boxShadow: '0 4px 24px rgba(0,0,0,0.15)', borderRadius: '8px', display: 'block' }} />
-                 </div>
-               )}
+              {showPreviewModal.type === 'devis' ? (
+                <iframe src={showPreviewModal.url} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Apercu" />
+              ) : (
+                <div style={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '24px', backgroundColor: '#ffffff' }}>
+                  <img src={showPreviewModal.url} alt="Recapitulatif" style={{ maxWidth: '100%', width: 'auto', height: 'auto', objectFit: 'contain', boxShadow: '0 4px 24px rgba(0,0,0,0.15)', borderRadius: '8px', display: 'block' }} />
+                </div>
+              )}
             </div>
-            
+
             <div className="modal-footer border-t-0 pt-0 mt-6 bg-white flex justify-center sm:justify-end gap-3 flex-wrap">
               <button className="btn transition-all" style={{ border: '1px solid #e2e8f0', backgroundColor: 'transparent', color: '#475569', fontWeight: 500, padding: '10px 24px', borderRadius: '6px' }} onClick={() => setShowPreviewModal(null)}>
                 Fermer
@@ -1566,13 +1566,13 @@ export default function DemandesEnAttente() {
               <a href={showPreviewModal.url} download={showPreviewModal.name} target="_blank" rel="noreferrer" className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }}>
                 <Download size={18} /> Télécharger
               </a>
-              <button 
-                className="btn transition-all flex items-center gap-2" 
-                style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none', opacity: sendingWhatsApp ? 0.7 : 1 }} 
+              <button
+                className="btn transition-all flex items-center gap-2"
+                style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none', opacity: sendingWhatsApp ? 0.7 : 1 }}
                 onClick={handleSendWhatsApp}
                 disabled={sendingWhatsApp}
               >
-                {sendingWhatsApp ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />} 
+                {sendingWhatsApp ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
                 {sendingWhatsApp ? 'Envoi...' : 'Envoyer au client'}
               </button>
             </div>
@@ -1627,7 +1627,7 @@ export default function DemandesEnAttente() {
             </div>
 
             <div className="mt-8 flex justify-end">
-              <button 
+              <button
                 className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
                 onClick={() => setShowAssignmentModal(null)}
               >
