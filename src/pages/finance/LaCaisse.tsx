@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X } from 'lucide-react';
 import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement } from '../../api/client';
 import './LaCaisse.css';
 
 interface CashRow {
   id: number;
   date: string;
-  type: 'Entrée' | 'Sortie';
-  typeCode: 'entree' | 'sortie';
+  type: 'Entrée' | 'Sortie' | 'Alimentation de la caisse';
+  typeCode: 'entree' | 'sortie' | 'alimentation';
   libelle: string;
   client: string;
   modePaiement: string;
@@ -19,7 +19,7 @@ interface CashRow {
 }
 
 const paymentModes = ['Espèces', 'Virement', 'Chèque', 'Paiement agence'];
-const operationTypes = ['Entrée', 'Sortie'];
+const operationTypes = ['Entrée', 'Sortie', 'Alimentation de la caisse'];
 
 const todayInputDate = (): string => new Date().toISOString().slice(0, 10);
 const moneyFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -38,8 +38,16 @@ const paymentLabelToCode = (value: string): 'especes' | 'virement' | 'cheque' | 
   return 'especes';
 };
 
-const typeCodeToLabel = (value: string): 'Entrée' | 'Sortie' => (value === 'sortie' ? 'Sortie' : 'Entrée');
-const typeLabelToCode = (value: string): 'entree' | 'sortie' => (value === 'Sortie' ? 'sortie' : 'entree');
+const typeCodeToLabel = (value: string): 'Entrée' | 'Sortie' | 'Alimentation de la caisse' => {
+  if (value === 'sortie') return 'Sortie';
+  if (value === 'alimentation') return 'Alimentation de la caisse';
+  return 'Entrée';
+};
+const typeLabelToCode = (value: string): 'entree' | 'sortie' | 'alimentation' => {
+  if (value === 'Sortie') return 'sortie';
+  if (value === 'Alimentation de la caisse') return 'alimentation';
+  return 'entree';
+};
 
 const toDisplayDate = (value: string): string => {
   if (!value) return '—';
@@ -131,7 +139,7 @@ export default function LaCaisse() {
           client: String(item.client_display || item.client_nom || '—'),
           modePaiement: paymentCodeToLabel(modeCode),
           modePaiementCode: modeCode,
-          montant: `${typeCode === 'entree' ? '+' : '-'}${moneyFormatter.format(Math.abs(montant))} DH`,
+          montant: `${typeCode === 'sortie' ? '-' : '+'}${moneyFormatter.format(Math.abs(montant))} DH`,
           montantNumber: montant,
           utilisateur: String(item.utilisateur || '—'),
           document: item.document_file ? 'Fichier' : '—',
@@ -278,15 +286,18 @@ export default function LaCaisse() {
         <article className="lc-stat-card lc-stat-green">
           <p>TOTAL ENTRÉES</p>
           <strong>{moneyFormatter.format(stats.total_entrees)} DH</strong>
+          <ArrowDownRight size={18} className="lc-stat-arrow lc-arrow-green" />
         </article>
         <article className="lc-stat-card lc-stat-red">
           <p>TOTAL SORTIES</p>
           <strong>{moneyFormatter.format(stats.total_sorties)} DH</strong>
+          <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-red" />
         </article>
         <article className="lc-stat-card lc-stat-amber">
-          <p>SOLDE DU JOUR</p>
+          <p>COMMISSION AGENCE</p>
           <strong>{moneyFormatter.format(stats.solde_jour)} DH</strong>
-          <Calendar size={16} className="lc-stat-icon" />
+          <span className="lc-stat-subtitle">commissions – solde caisse</span>
+          <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-green" />
         </article>
       </section>
 
@@ -296,6 +307,7 @@ export default function LaCaisse() {
             <option value="all">Tous les types</option>
             <option value="entree">Entrée</option>
             <option value="sortie">Sortie</option>
+            <option value="alimentation">Alimentation de la caisse</option>
           </select>
         </label>
 

@@ -597,12 +597,12 @@ export default function Dashboard() {
       const response = await updateDemande(selectedDemande.id, updateData);
 
       // Automated Action: Satisfaction WhatsApp
-      if (triggerSatisfactionWhatsApp) {
+      if (triggerSatisfactionWhatsApp || (editFormData.statut === 'pres_terminee' && selectedDemande.statut !== 'pres_terminee')) {
         try {
           const clientPhone = editFormData.client_whatsapp || editFormData.client_phone || previousFormData.whatsapp_phone;
           if (clientPhone) {
             await sendWhatsApp(selectedDemande.id, 'feedback'); 
-            addToast('Lien de satisfaction envoyé au client via WhatsApp', 'success');
+            addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
           }
         } catch (waErr) {
           console.error("WhatsApp error:", waErr);
@@ -1127,6 +1127,7 @@ export default function Dashboard() {
                             <button className="menu-item text-orange" onClick={async () => {
                               await updateDemande(d.id, { statut: 'pres_terminee' });
                               addToast('Statut mis à jour : Prestation terminée', 'success');
+                              addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
                               fetchData();
                               setActiveMoreMenu(null);
                             }}>
@@ -1262,6 +1263,7 @@ export default function Dashboard() {
                             <button className="menu-item text-orange" onClick={async () => {
                               await updateDemande(d.id, { statut: 'pres_terminee' });
                               addToast('Statut mis à jour : Prestation terminée', 'success');
+                              addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
                               fetchData();
                               setActiveMoreMenu(null);
                             }}>
@@ -1391,6 +1393,7 @@ export default function Dashboard() {
                           <button className="menu-item text-orange" onClick={async () => {
                             await updateDemande(d.id, { statut: 'pres_terminee' });
                             addToast('Statut mis à jour : Prestation terminée', 'success');
+                            addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
                             fetchData();
                             setActiveMenu(null);
                           }}>
@@ -2539,7 +2542,7 @@ export default function Dashboard() {
               position: 'relative',
               display: 'flex',
               flexDirection: 'column',
-              overflow: 'hidden',
+              overflow: 'visible',
             }}
           >
             {/* Header */}

@@ -116,11 +116,26 @@
   color: #c7700a;
 }
 
-.lc-stat-icon {
+.lc-stat-arrow {
   position: absolute;
   right: 0.82rem;
-  top: 0.86rem;
-  color: #f59e0b;
+  top: 0.78rem;
+}
+
+.lc-arrow-green {
+  color: #10b981;
+}
+
+.lc-arrow-red {
+  color: #ef4444;
+}
+
+.lc-stat-subtitle {
+  display: block;
+  font-size: 0.68rem;
+  color: #8a7a5a;
+  font-weight: 600;
+  margin-top: 0.1rem;
 }
 
 .lc-filters-row {

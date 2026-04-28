@@ -229,7 +229,7 @@
 }
 
 .mk-modal {
-  width: min(900px, 100%);
+  width: min(600px, 100%);
   border-radius: 14px;
   border: 1px solid #c9d8e0;
   background: #f4f9fb;

@@ -231,16 +231,18 @@ const getMontantEncaisseProfil = (row: FacturationRow): number => {
 };
 
 const getPartProfilDueFromAgence = (row: FacturationRow): number => {
-  if (row.encaissePar !== 'Agence') return 0;
-  
-  // Use explicit amount from Dashboard if set
-  if (row.montantAgenceDoitProfil !== undefined && row.montantAgenceDoitProfil > 0) {
-    return row.montantAgenceDoitProfil;
+  if (row.statutPaiementUi === 'agence_payee_client') {
+    return Number(row.montantAgenceDoitProfil || 0);
   }
 
-  // Handle cancellation case
-  if (row.statut === 'Facturation annulée') {
-    return row.profilSeraPaye ? (row.montantProfilAnnulation ?? 0) : 0;
+  if (row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée') {
+    return row.profilSeraPaye ? Number(row.montantProfilAnnulation || 0) : 0;
+  }
+
+  if (row.encaissePar !== 'Agence') return 0;
+  
+  if (row.montantAgenceDoitProfil !== undefined && row.montantAgenceDoitProfil > 0) {
+    return row.montantAgenceDoitProfil;
   }
 
   const due = Number((getMontantPaye(row) * 0.5).toFixed(2));
@@ -250,16 +252,18 @@ const getPartProfilDueFromAgence = (row: FacturationRow): number => {
 };
 
 const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
-  if (row.encaissePar !== 'Profil') return 0;
-
-  // Use explicit amount from Dashboard if set
-  if (row.montantProfilDoitAgence !== undefined && row.montantProfilDoitAgence > 0) {
-    return row.montantProfilDoitAgence;
+  if (row.statutPaiementUi === 'profil_paye_client') {
+    return Number(row.montantProfilDoitAgence || 0);
   }
 
-  // Handle cancellation case
-  if (row.statut === 'Facturation annulée') {
-    return 0; // Usually agency doesn't take part if cancelled, or it stays as 0
+  if (row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée') {
+    return 0; 
+  }
+
+  if (row.encaissePar !== 'Profil') return 0;
+
+  if (row.montantProfilDoitAgence !== undefined && row.montantProfilDoitAgence > 0) {
+    return row.montantProfilDoitAgence;
   }
 
   const due = Number((getMontantEncaisseProfil(row) * 0.5).toFixed(2));
@@ -269,6 +273,18 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
 };
 
 const getCommissionAgenceEncaissee = (row: FacturationRow): number => {
+  if (row.statutPaiementUi === 'facturation_annulee') {
+    return row.profilSeraPaye ? -(Number(row.montantProfilAnnulation) || 0) : 0;
+  }
+
+  if (row.statutPaiementUi === 'agence_payee_client') {
+    return getMontantPaye(row) - Number(row.montantAgenceDoitProfil || 0);
+  }
+
+  if (row.statutPaiementUi === 'profil_paye_client') {
+    return Number(row.montantProfilDoitAgence || 0);
+  }
+
   if (row.encaissePar === 'Agence') {
     const partProfilDue = getPartProfilDueFromAgence(row);
     return Math.max(getMontantPaye(row) - partProfilDue, 0);
@@ -510,8 +526,14 @@ export default function VueGlobale() {
   const [searchProfiles, setSearchProfiles] = useState('');
   const [suiviSearch, setSuiviSearch] = useState('');
   const [creditPaymentFilter, setCreditPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Non payé');
-  const [suiviDateFrom, setSuiviDateFrom] = useState('');
-  const [suiviDateTo, setSuiviDateTo] = useState('');
+  const [suiviDateFrom, setSuiviDateFrom] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [suiviDateTo, setSuiviDateTo] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+  });
   const [suiviStatutFilter, setSuiviStatutFilter] = useState('Tous les statuts');
   const [suiviPaiementFilter, setSuiviPaiementFilter] = useState('Tous les paiements');
   const [suiviSegmentFilter, setSuiviSegmentFilter] = useState('Tous les segments');
@@ -777,16 +799,7 @@ export default function VueGlobale() {
   const suiviRecap = useMemo(() => {
     const totalFacture = filteredSuiviRows.filter((row) => row.paiement === 'paye').length;
     const chiffreAffaires = filteredSuiviRows.reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
-    const commissionEncaissementAgence = filteredSuiviRows.reduce((sum, row) => {
-      if (row.encaissePar !== 'Agence') return sum;
-      const partProfilDue = getPartProfilDueFromAgence(row);
-      return sum + Math.max(getMontantPaye(row) - partProfilDue, 0);
-    }, 0);
-    const commissionEncaissementProfil = filteredSuiviRows.reduce((sum, row) => {
-      if (row.encaissePar !== 'Profil' || row.reglementInterne !== 'Réglé') return sum;
-      return sum + getPartAgenceDueFromProfil(row);
-    }, 0);
-    const commissionAgence = commissionEncaissementAgence + commissionEncaissementProfil;
+    const commissionAgence = filteredSuiviRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
 
     // Pending only tracks partial/waiting statuses. Non confirme + Paye are excluded.
     const paiementsEnAttente = filteredSuiviRows.filter((row) => row.paiement === 'partiellement_paye').length;
@@ -804,27 +817,22 @@ export default function VueGlobale() {
   }, [facturationData]);
 
   const globalKpis = useMemo(() => {
-    const missions = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée').length;
+    const missions = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee').length;
     const chiffreAffaires = periodFilteredRows.reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
-    const commissionEncaissementAgence = periodFilteredRows.reduce((sum, row) => {
-      if (row.encaissePar !== 'Agence') return sum;
-      const partProfilDue = getPartProfilDueFromAgence(row);
-      return sum + Math.max(getMontantPaye(row) - partProfilDue, 0);
-    }, 0);
-    const commissionEncaissementProfil = periodFilteredRows.reduce((sum, row) => {
-      if (row.encaissePar !== 'Profil' || row.reglementInterne !== 'Réglé') return sum;
-      return sum + getPartAgenceDueFromProfil(row);
-    }, 0);
-    const commissionAgence = commissionEncaissementAgence + commissionEncaissementProfil;
+    const commissionAgence = periodFilteredRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
+    
     const facturationAnnulee = periodFilteredRows
-      .filter((row) => row.statut === 'Facturation annulée' && row.partProfilVersee)
-      .reduce((sum, row) => sum + row.partProfil, 0);
+      .filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee')
+      .reduce((sum, row) => sum + (row.profilSeraPaye ? Number(row.montantProfilAnnulation || 0) : 0), 0);
 
     return { missions, chiffreAffaires, commissionAgence, facturationAnnulee };
   }, [periodFilteredRows]);
 
   const debitRows = useMemo(
-    () => facturationData.filter((row) => row.encaissePar === 'Profil'),
+    () => facturationData.filter((row) => 
+      row.statutPaiementUi === 'profil_paye_client' || 
+      (!row.statutPaiementUi && row.encaissePar === 'Profil')
+    ),
     [facturationData]
   );
 
@@ -842,8 +850,8 @@ export default function VueGlobale() {
       if (debitPaymentFilter === 'Non payé' && row.reglementInterne === 'Réglé') return false;
       if (debitPaymentFilter === 'Payé' && row.reglementInterne !== 'Réglé') return false;
 
-      if (debitMissionFilter === 'Facturation annulée' && row.statut !== 'Facturation annulée') return false;
-      if (debitMissionFilter === 'Facturée' && row.statut === 'Facturation annulée') return false;
+      if (debitMissionFilter === 'Facturation annulée' && row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee') return false;
+      if (debitMissionFilter === 'Facturée' && (row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee')) return false;
 
       if (debitSearch.trim()) {
         const needle = debitSearch.toLowerCase();
@@ -856,7 +864,11 @@ export default function VueGlobale() {
   }, [debitDateFrom, debitDateTo, debitMissionFilter, debitPaymentFilter, debitRows, debitSearch, debitSegmentFilter]);
 
   const creditRows = useMemo(
-    () => facturationData.filter((row) => row.encaissePar === 'Agence'),
+    () => facturationData.filter((row) => 
+      row.statutPaiementUi === 'agence_payee_client' || 
+      (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
+      (!row.statutPaiementUi && row.encaissePar === 'Agence')
+    ),
     [facturationData]
   );
 
@@ -885,7 +897,8 @@ export default function VueGlobale() {
   const agenceNonPayeByProfile = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of facturationData) {
-      if (row.encaissePar !== 'Profil' || row.reglementInterne === 'Réglé') continue;
+      const isDebit = row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
+      if (!isDebit || row.reglementInterne === 'Réglé') continue;
       map.set(row.profil, (map.get(row.profil) || 0) + getPartAgenceDueFromProfil(row));
     }
     return Array.from(map.entries())
@@ -896,7 +909,8 @@ export default function VueGlobale() {
   const profilNonPayeByProfile = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of facturationData) {
-      if (row.encaissePar !== 'Agence' || row.reglementInterne === 'Réglé') continue;
+      const isCredit = row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence');
+      if (!isCredit || row.reglementInterne === 'Réglé') continue;
       map.set(row.profil, (map.get(row.profil) || 0) + getPartProfilDueFromAgence(row));
     }
     return Array.from(map.entries())
@@ -907,8 +921,11 @@ export default function VueGlobale() {
   const globalTableTotals = useMemo(() => {
     return globalTableRows.reduce(
       (acc, row) => {
-        if (row.encaissePar === 'Profil') acc.debit += getPartAgenceDueFromProfil(row);
-        if (row.encaissePar === 'Agence') acc.credit += getPartProfilDueFromAgence(row);
+        const isDebit = row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
+        const isCredit = row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence');
+        
+        if (isDebit) acc.debit += getPartAgenceDueFromProfil(row);
+        if (isCredit) acc.credit += getPartProfilDueFromAgence(row);
         acc.commission += getCommissionAgenceEncaissee(row);
         return acc;
       },
@@ -1271,24 +1288,24 @@ export default function VueGlobale() {
 
           <div className="fg-global-kpis">
             <article className="fg-global-kpi blue">
-              <p className="fg-global-kpi-title">Nombre de missions</p>
+              <p className="fg-global-kpi-title">NOMBRE DE MISSIONS</p>
               <p className="fg-global-kpi-value">{globalKpis.missions}</p>
-              <p className="fg-global-kpi-subtitle">missions non annulées (période)</p>
+              <p className="fg-global-kpi-subtitle">missions en cours (temps réel)</p>
             </article>
             <article className="fg-global-kpi green">
-              <p className="fg-global-kpi-title">Encaissements clients</p>
+              <p className="fg-global-kpi-title">CHIFFRE D'AFFAIRES</p>
               <p className="fg-global-kpi-value">{money(globalKpis.chiffreAffaires)}</p>
-              <p className="fg-global-kpi-subtitle">montant réellement encaissé (période)</p>
+              <p className="fg-global-kpi-subtitle">paiements reçus des clients</p>
             </article>
             <article className="fg-global-kpi green">
-              <p className="fg-global-kpi-title">Part Agence encaissée</p>
+              <p className="fg-global-kpi-title">COMMISSION AGENCE</p>
               <p className="fg-global-kpi-value">{money(globalKpis.commissionAgence)}</p>
-              <p className="fg-global-kpi-subtitle">part agence sur encaissements réels</p>
+              <p className="fg-global-kpi-subtitle">part agence (mensuelle)</p>
             </article>
             <article className="fg-global-kpi red">
-              <p className="fg-global-kpi-title">Perte sur annulations</p>
+              <p className="fg-global-kpi-title">FACTURATION ANNULÉE</p>
               <p className="fg-global-kpi-value">{money(globalKpis.facturationAnnulee)}</p>
-              <p className="fg-global-kpi-subtitle">part profil déjà versée puis annulée</p>
+              <p className="fg-global-kpi-subtitle">perte totale</p>
             </article>
           </div>
 
@@ -1408,8 +1425,14 @@ export default function VueGlobale() {
                           <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>{row.profil || '—'}</button>
                         ) : (row.profil || '—')}
                       </td>
-                      <td className="fg-text-red fw-semibold">{row.encaissePar === 'Profil' ? money(getPartAgenceDueFromProfil(row)) : '—'}</td>
-                      <td className="fg-text-orange fw-semibold">{row.encaissePar === 'Agence' ? money(getPartProfilDueFromAgence(row)) : '—'}</td>
+                      <td className="fg-text-red fw-semibold">
+                        {(row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil'))
+                          ? money(getPartAgenceDueFromProfil(row)) : '—'}
+                      </td>
+                      <td className="fg-text-orange fw-semibold">
+                        {(row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence'))
+                          ? money(getPartProfilDueFromAgence(row)) : '—'}
+                      </td>
                       <td className="fg-text-green fw-semibold">
                         {money(getCommissionAgenceEncaissee(row))}
                       </td>
@@ -1664,8 +1687,8 @@ export default function VueGlobale() {
 
           <div className="fg-hero-stats">
             <article><FileText size={20} /><div><strong>{suiviRecap.totalFacture}</strong><span>Missions totalement payées</span></div></article>
-            <article><BarChart3 size={20} /><div><strong>{money(suiviRecap.chiffreAffaires)}</strong><span>Encaissements clients</span></div></article>
-            <article><Clock3 size={20} /><div><strong>{money(suiviRecap.commissionAgence)}</strong><span>Part agence encaissée</span></div></article>
+            <article><BarChart3 size={20} /><div><strong>{money(suiviRecap.chiffreAffaires)}</strong><span>CHIFFRE D'AFFAIRES</span></div></article>
+            <article><Clock3 size={20} /><div><strong>{money(suiviRecap.commissionAgence)}</strong><span>COMMISSION AGENCE</span></div></article>
             <article><Users size={20} /><div><strong>{suiviRecap.paiementsEnAttente}</strong><span>Paiements partiels</span></div></article>
           </div>
 
