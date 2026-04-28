@@ -338,7 +338,7 @@ export default function Dashboard() {
     if (!d.cao && d.date_intervention && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000) {
       classes.push('row-alert');
     }
-    
+
     // Color according to demand status (statut)
     if (d.statut === 'en_cours') {
       if (blinkNouveau && !d.cao) classes.push('blink-animation');
@@ -349,7 +349,7 @@ export default function Dashboard() {
     else if (d.statut === 'pres_terminee') classes.push('row-status-pres-terminee');
     else if (d.statut === 'termine') classes.push('row-status-termine');
     else if (d.statut === 'annule') classes.push('row-status-annulee');
-    
+
     return classes.join(' ');
   };
 
@@ -519,7 +519,7 @@ export default function Dashboard() {
       };
 
       const paymentUiValue = editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee));
-      
+
       // Logic: Status transitions
       let finalStatutPaiementUi = paymentUiValue;
       let triggerSatisfactionWhatsApp = false;
@@ -601,7 +601,7 @@ export default function Dashboard() {
         try {
           const clientPhone = editFormData.client_whatsapp || editFormData.client_phone || previousFormData.whatsapp_phone;
           if (clientPhone) {
-            await sendWhatsApp(selectedDemande.id, 'feedback'); 
+            await sendWhatsApp(selectedDemande.id, 'feedback');
             addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
           }
         } catch (waErr) {
@@ -731,7 +731,7 @@ export default function Dashboard() {
     if (activeMenu !== null || activeMoreMenu !== null) {
       document.addEventListener('mousedown', handleClickOutside);
     }
-    
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -785,7 +785,7 @@ export default function Dashboard() {
 
   const montantHT = toNumber(editFormData.montant_ht ?? editFormData.prix);
   const montantTTC = roundMoney(editFormData.tva_active ? montantHT * 1.2 : montantHT);
-// const montantVerse = toNumber(editFormData.montant_verse);
+  // const montantVerse = toNumber(editFormData.montant_verse);
   const montantProfilDoit = toNumber(editFormData.montant_profil_doit);
 
   const partsRepartition: PartRepartitionItem[] = asArray<PartRepartitionItem>(editFormData.parts_repartition, []);
@@ -805,8 +805,8 @@ export default function Dashboard() {
 
       {/* Stats cards */}
       <div className="stats-grid">
-        <div 
-          className="stat-card" 
+        <div
+          className="stat-card"
           style={{ backgroundColor: '#edba54', color: 'white', cursor: 'pointer' }}
           onClick={() => {
             setBlinkNouveau(true);
@@ -822,8 +822,8 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
-        <div 
-          className="stat-card" 
+        <div
+          className="stat-card"
           style={{ backgroundColor: '#d9c532', color: 'white', cursor: 'pointer' }}
           onClick={() => navigate('/demandes')}
         >
@@ -967,8 +967,8 @@ export default function Dashboard() {
                         </button>
 
                         {activeMenu === d.id && (
-                          <div className="action-menu" style={{ 
-                            left: 0, 
+                          <div className="action-menu" style={{
+                            left: 0,
                             right: 'auto',
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
@@ -1001,18 +1001,17 @@ export default function Dashboard() {
                       <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
                       <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</td>
                       <td>
-                        <span className={`badge ${
-                          d.statut === 'en_cours' ? (d.cao ? 'badge-green' : 'badge-nouveau') : 
-                          d.statut === 'termine' ? 'badge-green' : 
-                          d.statut === 'pres_en_cours' ? 'badge-purple' :
-                          d.statut === 'pres_terminee' ? 'badge-orange' :
-                          'badge-orange'
-                        }`}>
-                          {d.statut === 'en_cours' ? (d.cao ? 'Confirmé' : (<><span>Nouveau</span><span>besoin</span></>)) : 
-                           d.statut === 'termine' ? 'Terminé' : 
-                           d.statut === 'pres_en_cours' ? 'Pres. en cours' :
-                           d.statut === 'pres_terminee' ? 'Pres. terminée' :
-                           'Nouveau besoin'}
+                        <span className={`badge ${d.statut === 'en_cours' ? (d.cao ? 'badge-green' : 'badge-nouveau') :
+                            d.statut === 'termine' ? 'badge-green' :
+                              d.statut === 'pres_en_cours' ? 'badge-purple' :
+                                d.statut === 'pres_terminee' ? 'badge-orange' :
+                                  'badge-orange'
+                          }`}>
+                          {d.statut === 'en_cours' ? (d.cao ? 'Confirmé' : (<><span>Nouveau</span><span>besoin</span></>)) :
+                            d.statut === 'termine' ? 'Terminé' :
+                              d.statut === 'pres_en_cours' ? 'Pres. en cours' :
+                                d.statut === 'pres_terminee' ? 'Pres. terminée' :
+                                  'Nouveau besoin'}
                         </span>
                       </td>
                       <td>
@@ -1090,11 +1089,11 @@ export default function Dashboard() {
                         </button>
 
                         {activeMoreMenu === d.id && (
-                          <div className="action-menu shadow-xl border-0" style={{ 
-                            right: 0, 
-                            left: 'auto', 
-                            minWidth: '220px', 
-                            ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' }) 
+                          <div className="action-menu shadow-xl border-0" style={{
+                            right: 0,
+                            left: 'auto',
+                            minWidth: '220px',
+                            ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
                             <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Pencil size={16} /> Éditer le besoin
@@ -1146,7 +1145,7 @@ export default function Dashboard() {
                             }}>
                               <XCircle size={16} /> Rejeté / Annulé
                             </button>
-                            
+
                             <button className="menu-item text-orange" onClick={async () => {
                               if (confirm('Confirmer l\'annulation de la facturation ?')) {
                                 await updateDemande(d.id, { statut_paiement: 'annule' });
@@ -1225,9 +1224,9 @@ export default function Dashboard() {
                         </button>
 
                         {activeMoreMenu === d.id && (
-                          <div className="action-menu shadow-xl border-0" style={{ 
-                            right: 0, 
-                            left: 'auto', 
+                          <div className="action-menu shadow-xl border-0" style={{
+                            right: 0,
+                            left: 'auto',
                             minWidth: '220px',
                             zIndex: 50,
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
@@ -1336,18 +1335,17 @@ export default function Dashboard() {
                         Produits
                       </span>
                     )}
-                    <span className={`badge ${
-                      d.statut === 'en_cours' ? 'badge-nouveau' : 
-                      d.statut === 'termine' ? 'badge-green' : 
-                      d.statut === 'pres_en_cours' ? 'badge-purple' :
-                      d.statut === 'pres_terminee' ? 'badge-orange' :
-                      'badge-orange'
-                    }`} style={{ padding: '4px 12px', borderRadius: '8px' }}>
-                      {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : 
-                       d.statut === 'termine' ? 'Terminé' : 
-                       d.statut === 'pres_en_cours' ? 'Pres. en cours' :
-                       d.statut === 'pres_terminee' ? 'Pres. terminée' :
-                       'En attente'}
+                    <span className={`badge ${d.statut === 'en_cours' ? 'badge-nouveau' :
+                        d.statut === 'termine' ? 'badge-green' :
+                          d.statut === 'pres_en_cours' ? 'badge-purple' :
+                            d.statut === 'pres_terminee' ? 'badge-orange' :
+                              'badge-orange'
+                      }`} style={{ padding: '4px 12px', borderRadius: '8px' }}>
+                      {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) :
+                        d.statut === 'termine' ? 'Terminé' :
+                          d.statut === 'pres_en_cours' ? 'Pres. en cours' :
+                            d.statut === 'pres_terminee' ? 'Pres. terminée' :
+                              'En attente'}
                     </span>
                   </div>
 
@@ -1368,7 +1366,7 @@ export default function Dashboard() {
                       </button>
 
                       {activeMenu === d.id && (
-                        <div className="action-menu shadow-xl border-0" style={{ 
+                        <div className="action-menu shadow-xl border-0" style={{
                           right: 'auto', left: 0, zIndex: 50, minWidth: '220px',
                           ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
                         }}>
@@ -1438,7 +1436,7 @@ export default function Dashboard() {
                   <p style={{ margin: 0, fontSize: '13px', color: '#64748b', marginTop: '2px' }}>Saisie des informations de la demande</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => setShowNoteModal(null)}
                 style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
                 onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; }}
@@ -1447,7 +1445,7 @@ export default function Dashboard() {
                 <XCircle size={16} />
               </button>
             </div>
-            
+
             {/* Body */}
             <div style={{ padding: '24px' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Détails de la note</label>
@@ -1461,10 +1459,10 @@ export default function Dashboard() {
                 onBlur={(e) => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)'; }}
               />
             </div>
-            
+
             {/* Footer */}
             <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px', backgroundColor: '#ffffff' }}>
-              <button 
+              <button
                 onClick={() => setShowNoteModal(null)}
                 style={{ padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#475569', backgroundColor: 'white', border: '1px solid #cbd5e1', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
                 onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#0f172a'; }}
@@ -1472,10 +1470,10 @@ export default function Dashboard() {
               >
                 Annuler
               </button>
-              <button 
+              <button
                 onClick={async () => {
                   try {
-                    const payload = showNoteModal.type === 'commercial' 
+                    const payload = showNoteModal.type === 'commercial'
                       ? { note_commercial: showNoteModal.note }
                       : { note_operationnel: showNoteModal.note };
                     await updateDemande(showNoteModal.demandeId, payload);
@@ -1943,8 +1941,8 @@ export default function Dashboard() {
                           <div className="cancellation-block p-4 bg-red-50 rounded-xl border border-red-100 my-4">
                             <div className="form-group">
                               <label className="text-red-700">Raison de l'annulation</label>
-                              <textarea 
-                                value={editFormData.annulation_raison || ''} 
+                              <textarea
+                                value={editFormData.annulation_raison || ''}
                                 onChange={e => setEditFormData({ ...editFormData, annulation_raison: e.target.value })}
                                 className="edit-input w-full"
                                 placeholder="Indiquez la raison..."
@@ -1953,10 +1951,10 @@ export default function Dashboard() {
                             <div className="flex items-center gap-4 mt-4">
                               <label className="text-red-700">Le profil sera payé ?</label>
                               <label className="switch">
-                                <input 
-                                  type="checkbox" 
-                                  checked={Boolean(editFormData.profil_sera_paye)} 
-                                  onChange={e => setEditFormData({ ...editFormData, profil_sera_paye: e.target.checked })} 
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(editFormData.profil_sera_paye)}
+                                  onChange={e => setEditFormData({ ...editFormData, profil_sera_paye: e.target.checked })}
                                 />
                                 <span className="slider round"></span>
                               </label>
@@ -1965,10 +1963,10 @@ export default function Dashboard() {
                             {editFormData.profil_sera_paye && (
                               <div className="form-group mt-4">
                                 <label className="text-red-700">Montant à payer au profil (MAD)</label>
-                                <input 
-                                  type="number" 
-                                  value={editFormData.montant_profil_annulation} 
-                                  onChange={e => setEditFormData({ ...editFormData, montant_profil_annulation: e.target.value })} 
+                                <input
+                                  type="number"
+                                  value={editFormData.montant_profil_annulation}
+                                  onChange={e => setEditFormData({ ...editFormData, montant_profil_annulation: e.target.value })}
                                   className="edit-input"
                                 />
                               </div>
@@ -1981,10 +1979,10 @@ export default function Dashboard() {
                             <p className="text-teal-800 font-semibold mb-2">L'agence doit au profil</p>
                             <div className="form-group mb-0">
                               <label>Montant (MAD)</label>
-                              <input 
-                                type="number" 
-                                value={editFormData.montant_agence_doit_profil} 
-                                onChange={e => setEditFormData({ ...editFormData, montant_agence_doit_profil: e.target.value })} 
+                              <input
+                                type="number"
+                                value={editFormData.montant_agence_doit_profil}
+                                onChange={e => setEditFormData({ ...editFormData, montant_agence_doit_profil: e.target.value })}
                                 className="edit-input"
                                 placeholder="Part du profil à reverser..."
                               />
@@ -1997,10 +1995,10 @@ export default function Dashboard() {
                             <p className="text-orange-800 font-semibold mb-2">Le profil doit à l'agence</p>
                             <div className="form-group mb-0">
                               <label>Montant (MAD)</label>
-                              <input 
-                                type="number" 
-                                value={editFormData.montant_profil_doit_agence} 
-                                onChange={e => setEditFormData({ ...editFormData, montant_profil_doit_agence: e.target.value })} 
+                              <input
+                                type="number"
+                                value={editFormData.montant_profil_doit_agence}
+                                onChange={e => setEditFormData({ ...editFormData, montant_profil_doit_agence: e.target.value })}
                                 className="edit-input"
                                 placeholder="Part de l'agence à récupérer..."
                               />
@@ -2019,8 +2017,8 @@ export default function Dashboard() {
                         <button
                           type="button"
                           className={`btn btn-secondary ${editFormData.facturation_annulee ? 'facturation-annulee-active' : ''}`}
-                          onClick={() => setEditFormData({ 
-                            ...editFormData, 
+                          onClick={() => setEditFormData({
+                            ...editFormData,
                             facturation_annulee: !editFormData.facturation_annulee,
                             statut_paiement_ui: !editFormData.facturation_annulee ? 'facturation_annulee' : 'non_confirme'
                           })}
@@ -2041,19 +2039,19 @@ export default function Dashboard() {
                               <label className="text-sm font-medium">Qui a encaissé le client ?</label>
                               <div className="flex gap-4">
                                 <label className="flex items-center gap-2 cursor-pointer">
-                                  <input 
-                                    type="radio" 
-                                    name="encaisse_par" 
-                                    checked={editFormData.encaisse_par === 'agence' || !editFormData.encaisse_par} 
+                                  <input
+                                    type="radio"
+                                    name="encaisse_par"
+                                    checked={editFormData.encaisse_par === 'agence' || !editFormData.encaisse_par}
                                     onChange={() => setEditFormData({ ...editFormData, encaisse_par: 'agence' })}
                                   />
                                   <span>L'Agence</span>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer">
-                                  <input 
-                                    type="radio" 
-                                    name="encaisse_par" 
-                                    checked={editFormData.encaisse_par === 'profil'} 
+                                  <input
+                                    type="radio"
+                                    name="encaisse_par"
+                                    checked={editFormData.encaisse_par === 'profil'}
                                     onChange={() => setEditFormData({ ...editFormData, encaisse_par: 'profil' })}
                                   />
                                   <span>Le Profil</span>
@@ -2068,10 +2066,10 @@ export default function Dashboard() {
                               </div>
                               <div className="form-group">
                                 <label>{editFormData.encaisse_par === 'profil' ? "Part de l'agence (Calculée)" : "Part de l'agence (MAD)"}</label>
-                                <input 
-                                  type="number" 
-                                  value={editFormData.part_agence} 
-                                  onChange={e => setEditFormData({ ...editFormData, part_agence: e.target.value })} 
+                                <input
+                                  type="number"
+                                  value={editFormData.part_agence}
+                                  onChange={e => setEditFormData({ ...editFormData, part_agence: e.target.value })}
                                   readOnly={editFormData.encaisse_par === 'profil'}
                                   className={`edit-input ${editFormData.encaisse_par === 'profil' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                 />
@@ -2106,12 +2104,12 @@ export default function Dashboard() {
                                       onChange={e => {
                                         const next = [...partsRepartition];
                                         next[idx] = { ...line, amount: toNumber(e.target.value) };
-                                        
+
                                         // Case 1 logic: if profile collected, agency part is TTC - sum(profile parts)
                                         if (editFormData.encaisse_par === 'profil') {
                                           const totalProfils = next.reduce((acc, p) => acc + toNumber(p.amount), 0);
-                                          setEditFormData({ 
-                                            ...editFormData, 
+                                          setEditFormData({
+                                            ...editFormData,
                                             parts_repartition: next,
                                             part_agence: roundMoney(toNumber(montantTTC) - totalProfils)
                                           });
@@ -2168,15 +2166,14 @@ export default function Dashboard() {
                               <div className="flex justify-between items-center pt-2 border-t">
                                 <span className="text-sm font-bold">Total réparti :</span>
                                 <div className="flex items-center gap-2">
-                                  <span className={`text-sm font-black p-1 px-3 rounded-full ${
-                                    Math.abs((partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)) - toNumber(montantTTC)) < 0.01
+                                  <span className={`text-sm font-black p-1 px-3 rounded-full ${Math.abs((partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)) - toNumber(montantTTC)) < 0.01
                                       ? 'bg-green-100 text-green-700'
                                       : 'bg-red-100 text-red-700'
-                                  }`}>
+                                    }`}>
                                     {(partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)).toFixed(2)} MAD
                                   </span>
-                                  {Math.abs((partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)) - toNumber(montantTTC)) < 0.01 
-                                    ? <CheckCircle size={16} className="text-green-500" /> 
+                                  {Math.abs((partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)) - toNumber(montantTTC)) < 0.01
+                                    ? <CheckCircle size={16} className="text-green-500" />
                                     : <XCircle size={16} className="text-red-500" />
                                   }
                                 </div>
@@ -2451,13 +2448,13 @@ export default function Dashboard() {
               <a href={showPreviewModal.url} download={showPreviewModal.name} target="_blank" rel="noreferrer" className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }}>
                 <Download size={18} /> Télécharger
               </a>
-              <button 
-                className="btn transition-all flex items-center gap-2" 
-                style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none', opacity: sendingWhatsApp ? 0.7 : 1 }} 
+              <button
+                className="btn transition-all flex items-center gap-2"
+                style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none', opacity: sendingWhatsApp ? 0.7 : 1 }}
                 onClick={handleSendWhatsApp}
                 disabled={sendingWhatsApp}
               >
-                {sendingWhatsApp ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />} 
+                {sendingWhatsApp ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
                 {sendingWhatsApp ? 'Envoi...' : 'Envoyer au client'}
               </button>
             </div>
@@ -2593,9 +2590,10 @@ export default function Dashboard() {
                 <div
                   id="cao-decision-menu"
                   style={{
-                    display: caoMenuOpen ? 'block' : 'none', position: 'absolute', left: 0, right: 0, top: 'calc(100% + 4px)',
+                    display: caoMenuOpen ? 'block' : 'none',
+                    marginTop: '8px',
                     backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #e5e7eb',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.10)', overflow: 'hidden', zIndex: 9999,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.10)', overflow: 'hidden', zIndex: 10,
                   }}
                 >
                   <button
