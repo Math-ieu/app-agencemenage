@@ -206,7 +206,7 @@ export default function DemandesEnAttente() {
   const fetchDemandes = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await getDemandes({ statut: 'en_attente' });
+      const response = await getDemandes({ statut: 'en_attente', no_page: 'true' });
       const data = response.data;
       const results = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
 

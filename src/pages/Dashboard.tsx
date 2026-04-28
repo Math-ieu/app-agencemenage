@@ -298,7 +298,7 @@ export default function Dashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await getDemandes();
+      const response = await getDemandes({ no_page: 'true' });
       const data = response.data;
       const allResults: Demande[] = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
 
