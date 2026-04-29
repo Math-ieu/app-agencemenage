@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
@@ -185,10 +185,12 @@ export default function Dashboard() {
   const [caoDecision, setCaoDecision] = useState<'confirmed' | 'postponed' | 'cancelled' | null>(null);
   const [caoCancelReason, setCaoCancelReason] = useState('');
   const [caoPostponedDate, setCaoPostponedDate] = useState('');
+  const [caoPostponedTime, setCaoPostponedTime] = useState('');
   const [caoNote, setCaoNote] = useState('');
   const [caoMenuOpen, setCaoMenuOpen] = useState(false);
   const [sendingCaoWhatsApp, setSendingCaoWhatsApp] = useState(false);
   const [caoPreviewIndex, setCaoPreviewIndex] = useState(0);
+  const [allProfils, setAllProfils] = useState<any[]>([]);
 
   // Filtres
   const [search, setSearch] = useState('');
@@ -274,9 +276,9 @@ export default function Dashboard() {
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
   const [activeMoreMenu, setActiveMoreMenu] = useState<number | null>(null);
   const [menuDirection, setMenuDirection] = useState<'up' | 'down'>('down');
-  const [isAgencyExpanded, setIsAgencyExpanded] = useState(true);
-  const [showPartsSection, setShowPartsSection] = useState(true);
-  const [showHistorySection, setShowHistorySection] = useState(true);
+  const [isAgencyExpanded, setIsAgencyExpanded] = useState(false);
+  const [showPartsSection, setShowPartsSection] = useState(false);
+  const [showHistorySection, setShowHistorySection] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
 
@@ -300,9 +302,22 @@ export default function Dashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await getDemandes({ no_page: 'true' });
-      const data = response.data;
+      const [resDemandes, resAgents] = await Promise.all([
+        getDemandes({ no_page: 'true' }),
+        getAgents({ limit: 1000 })
+      ]);
+      const data = resDemandes.data;
       const allResults: Demande[] = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
+
+      if (resAgents.data) {
+        const agents = resAgents.data.results || [];
+        agents.sort((a: any, b: any) => {
+          const nameA = (a.full_name || `${a.first_name || ''} ${a.last_name || ''}`).trim().toLowerCase();
+          const nameB = (b.full_name || `${b.first_name || ''} ${b.last_name || ''}`).trim().toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        setAllProfils(agents);
+      }
 
       const enAttenteList = allResults.filter(d => d.statut === 'en_attente');
       const results = allResults.filter(d => d.statut !== 'en_attente' && d.statut !== 'annule');
@@ -357,6 +372,21 @@ export default function Dashboard() {
     return classes.join(' ');
   };
 
+  const renderPaymentStatus = (d: Demande) => {
+    const facturation = d.formulaire_data?.facturation || {};
+    const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
+    
+    const option = PAYMENT_STATUS_OPTIONS.find(o => o.value === statutUi);
+    const label = option ? option.label : (d.statut_paiement_label || d.statut_paiement || 'Non payé');
+    
+    let badgeClass = 'badge-red';
+    if (statutUi === 'paye' || statutUi === 'integral') badgeClass = 'badge-green';
+    else if (['agence_payee_client', 'profil_paye_client', 'paiement_partiel', 'paiement_en_attente'].includes(statutUi)) badgeClass = 'badge-orange';
+    else if (statutUi === 'facturation_annulee') badgeClass = 'badge-red';
+    
+    return <span className={`badge ${badgeClass}`}>{label}</span>;
+  };
+
   const handleCAOUpdate = async (demande: Demande, status: 'confirmed' | 'postponed' | 'cancelled') => {
     try {
       if (status === 'confirmed') {
@@ -378,6 +408,7 @@ export default function Dashboard() {
           statut: 'en_cours',
           cao: false,
           date_intervention: caoPostponedDate,
+          heure_intervention: caoPostponedTime,
           note_operationnel: caoNote || '',
         });
         addToast('CAO reporté : La demande reste dans le dashboard', 'info');
@@ -398,6 +429,7 @@ export default function Dashboard() {
       setCaoDecision(null);
       setCaoCancelReason('');
       setCaoPostponedDate('');
+      setCaoPostponedTime('');
       setCaoNote('');
       setCaoMenuOpen(false);
       fetchData();
@@ -409,9 +441,19 @@ export default function Dashboard() {
 
   const openCAOModal = (demande: Demande) => {
     setShowCAOModal(demande);
-    setCaoDecision(null);
+    
+    // Initialiser la décision selon l'état actuel de la demande
+    let initialDecision: 'confirmed' | 'postponed' | 'cancelled' | null = null;
+    if (demande.cao || ['pres_en_cours', 'pres_terminee', 'termine'].includes(demande.statut)) {
+      initialDecision = 'confirmed';
+    } else if (demande.statut === 'annule') {
+      initialDecision = 'cancelled';
+    }
+
+    setCaoDecision(initialDecision);
     setCaoCancelReason('');
     setCaoPostponedDate((demande.date_intervention || '').slice(0, 10));
+    setCaoPostponedTime(demande.heure_intervention || '');
     setCaoNote(demande.note_operationnel || '');
     setCaoMenuOpen(false);
     setCaoPreviewIndex(0);
@@ -422,6 +464,7 @@ export default function Dashboard() {
     setCaoDecision(null);
     setCaoCancelReason('');
     setCaoPostponedDate('');
+    setCaoPostponedTime('');
     setCaoNote('');
     setCaoMenuOpen(false);
     setCaoPreviewIndex(0);
@@ -501,6 +544,7 @@ export default function Dashboard() {
         .map((item) => ({
           profile_id: item.profile_id,
           amount: toNumber(item.amount),
+          is_delegate: Boolean(item.is_delegate),
         }))
         .filter((item) => item.profile_id !== '');
 
@@ -588,9 +632,10 @@ export default function Dashboard() {
           montant_profil_doit: toNumber(editFormData.montant_profil_doit),
           facturation_annulee: finalStatutPaiementUi === 'facturation_annulee',
           statut_paiement_ui: finalStatutPaiementUi,
+          mode_paiement: editFormData.mode_paiement || '',
+          encaisse_par: editFormData.encaisse_par || '',
           part_agence: partAgence,
           parts_repartition: partsRepartition,
-          // New fields
           annulation_raison: editFormData.annulation_raison || '',
           profil_sera_paye: Boolean(editFormData.profil_sera_paye),
           montant_profil_annulation: toNumber(editFormData.montant_profil_annulation),
@@ -651,6 +696,16 @@ export default function Dashboard() {
       facturationData.statut_paiement_ui
     );
 
+    // Pre-populate parts_repartition from profils_envoyes when no saved repartition exists
+    let savedParts = asArray<PartRepartitionItem>(facturationData.parts_repartition || formData.parts_repartition, []);
+    if (savedParts.length === 0 && d.profils_envoyes && d.profils_envoyes.length > 0) {
+      savedParts = d.profils_envoyes.map((p: any, idx: number) => ({
+        profile_id: p.id,
+        amount: 0,
+        is_delegate: idx === 0,
+      }));
+    }
+
     setSelectedDemande(d);
     setIsEditing(true);
     setEditFormData({
@@ -661,10 +716,16 @@ export default function Dashboard() {
       montant_profil_doit: toNumber(facturationData.montant_profil_doit),
       facturation_annulee: Boolean(facturationData.facturation_annulee),
       part_agence: toNumber(facturationData.part_agence || formData.part_agence),
-      parts_repartition: asArray<PartRepartitionItem>(facturationData.parts_repartition || formData.parts_repartition, []),
-      mode_paiement: d.mode_paiement,
+      parts_repartition: savedParts,
+      mode_paiement: facturationData.mode_paiement || d.mode_paiement || '',
       statut_paiement: d.statut_paiement,
       statut_paiement_ui: paymentUiValue,
+      encaisse_par: facturationData.encaisse_par || '',
+      annulation_raison: facturationData.annulation_raison || '',
+      profil_sera_paye: Boolean(facturationData.profil_sera_paye),
+      montant_profil_annulation: toNumber(facturationData.montant_profil_annulation),
+      montant_agence_doit_profil: toNumber(facturationData.montant_agence_doit_profil),
+      montant_profil_doit_agence: toNumber(facturationData.montant_profil_doit_agence),
       nb_heures: d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '',
       duree: formData.duree || d.nb_heures || formData.duration || '',
       date_intervention: d.date_intervention || formData.date || '',
@@ -725,10 +786,10 @@ export default function Dashboard() {
       regenerer_devis: false,
       envoyer_whatsapp: false
     });
-    setIsFormExpanded(true);
-    setIsAgencyExpanded(true);
-    setShowPartsSection(true);
-    setShowHistorySection(true);
+    setIsFormExpanded(false);
+    setIsAgencyExpanded(false);
+    setShowPartsSection(false);
+    setShowHistorySection(false);
     fetchAuditHistory(d.id);
     setShowDetail(true);
   };
@@ -816,7 +877,7 @@ export default function Dashboard() {
   const montantHT = toNumber(editFormData.montant_ht ?? editFormData.prix);
   const montantTTC = roundMoney(editFormData.tva_active ? montantHT * 1.2 : montantHT);
   // const montantVerse = toNumber(editFormData.montant_verse);
-  const montantProfilDoit = toNumber(editFormData.montant_profil_doit);
+  // const montantProfilDoit = toNumber(editFormData.montant_profil_doit);
 
   const partsRepartition: PartRepartitionItem[] = asArray<PartRepartitionItem>(editFormData.parts_repartition, []);
 
@@ -1100,9 +1161,7 @@ export default function Dashboard() {
                         </div>
                       </td>
                       <td>
-                        <span className={`badge ${['paye', 'integral'].includes(d.statut_paiement) ? 'badge-green' : d.statut_paiement === 'partiel' ? 'badge-orange' : 'badge-red'}`}>
-                          {d.statut_paiement_label || d.statut_paiement || 'Non payé'}
-                        </span>
+                        {renderPaymentStatus(d)}
                       </td>
                       <td className="relative">
                         <button
@@ -2038,32 +2097,25 @@ export default function Dashboard() {
                       {isAgencyExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
 
-                    {isAgencyExpanded && <div className="form-section-content">
-                      <div className="agency-block agency-block-besoin">
-                        <h4>Besoin</h4>
+                    {isAgencyExpanded && <div className="form-section-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                      {/* ── Besoin ── */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px', background: 'rgba(3,114,101,0.08)', border: '1px solid rgba(3,114,101,0.15)', marginBottom: '12px' }}>
+                          <ClipboardList size={18} style={{ color: '#037265' }} />
+                          <span style={{ fontSize: '16px', fontWeight: 700, color: '#037265' }}>Besoin</span>
+                        </div>
                         <div className="form-grid-3 gap-4">
                           <div className="form-group">
                             <label>Statut du besoin</label>
-                            <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px', color: '#0F766E', fontWeight: '500', fontSize: '14px', height: '38px' }}>
-                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: selectedDemande?.statut === 'annule' ? '#E53E3E' : selectedDemande?.statut === 'termine' ? '#2F855A' : selectedDemande?.statut === 'en_cours' ? (selectedDemande?.cao ? '#2F855A' : '#3B82F6') : selectedDemande?.statut === 'pres_en_cours' ? '#8B5CF6' : selectedDemande?.statut === 'pres_terminee' ? '#ED8936' : '#3B82F6' }}></div>
-                              {selectedDemande?.statut === 'en_cours' ? (selectedDemande?.cao ? 'Confirmé' : 'Nouveau besoin') : selectedDemande?.statut === 'termine' ? 'Terminé' : selectedDemande?.statut === 'annule' ? 'Annulé' : selectedDemande?.statut === 'pres_en_cours' ? 'Pres. en cours' : selectedDemande?.statut === 'pres_terminee' ? 'Pres. terminée' : 'Nouveau besoin'}
+                            <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, fontSize: '14px', height: '38px' }}>
+                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: selectedDemande?.statut === 'annule' ? '#E53E3E' : selectedDemande?.statut === 'termine' ? '#2F855A' : selectedDemande?.statut === 'en_cours' ? (selectedDemande?.cao ? '#2F855A' : '#3B82F6') : selectedDemande?.statut === 'pres_en_cours' ? '#8B5CF6' : selectedDemande?.statut === 'pres_terminee' ? '#ED8936' : '#3B82F6' }} />
+                              <span style={{ color: '#0F766E' }}>{selectedDemande?.statut === 'en_cours' ? (selectedDemande?.cao ? 'Confirmé' : 'Nouveau besoin') : selectedDemande?.statut === 'termine' ? 'Terminé' : selectedDemande?.statut === 'annule' ? 'Annulé' : selectedDemande?.statut === 'pres_en_cours' ? 'Pres. en cours' : selectedDemande?.statut === 'pres_terminee' ? 'Pres. terminée' : 'Nouveau besoin'}</span>
                             </div>
                           </div>
                           <div className="form-group">
                             <label>Segment</label>
-                            <select
-                              value={editFormData.segment}
-                              onChange={e => {
-                                const newSegment = e.target.value as keyof typeof SERVICES_LIST;
-                                const services = SERVICES_LIST[newSegment] || [];
-                                setEditFormData({
-                                  ...editFormData,
-                                  segment: newSegment,
-                                  service: services.includes(editFormData.service) ? editFormData.service : (services[0] || ''),
-                                });
-                              }}
-                              className="edit-input"
-                            >
+                            <select value={editFormData.segment} onChange={e => { const ns = e.target.value as keyof typeof SERVICES_LIST; const svcs = SERVICES_LIST[ns] || []; setEditFormData({ ...editFormData, segment: ns, service: svcs.includes(editFormData.service) ? editFormData.service : (svcs[0] || '') }); }} className="edit-input">
                               <option value="particulier">Particulier</option>
                               <option value="entreprise">Entreprise</option>
                             </select>
@@ -2071,16 +2123,18 @@ export default function Dashboard() {
                           <div className="form-group">
                             <label>Type de service</label>
                             <select value={editFormData.service} onChange={e => setEditFormData({ ...editFormData, service: e.target.value })} className="edit-input">
-                              {(SERVICES_LIST[editFormData.segment as keyof typeof SERVICES_LIST] || []).map(s => (
-                                <option key={s} value={s}>{s}</option>
-                              ))}
+                              {(SERVICES_LIST[editFormData.segment as keyof typeof SERVICES_LIST] || []).map(s => (<option key={s} value={s}>{s}</option>))}
                             </select>
                           </div>
                         </div>
                       </div>
 
-                      <div className="agency-block agency-block-facturation">
-                        <h4>Facturation</h4>
+                      {/* ── Facturation ── */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px', background: '#FFFBEB', border: '1px solid #FDE68A', marginBottom: '12px' }}>
+                          <FileText size={18} style={{ color: '#D97706' }} />
+                          <span style={{ fontSize: '16px', fontWeight: 700, color: '#B45309' }}>Facturation</span>
+                        </div>
                         <div className="form-grid-3 gap-4">
                           <div className="form-group">
                             <label>Montant HT (MAD)</label>
@@ -2088,330 +2142,173 @@ export default function Dashboard() {
                           </div>
                           <div className="form-group">
                             <label>TVA (20%)</label>
-                            <label className="switch-inline">
-                              <label className="switch">
-                                <input type="checkbox" checked={Boolean(editFormData.tva_active)} onChange={e => setEditFormData({ ...editFormData, tva_active: e.target.checked })} />
-                                <span className="slider round"></span>
-                              </label>
-                              <span>{editFormData.tva_active ? 'Oui' : 'Non'}</span>
-                            </label>
+                            <label className="switch-inline"><label className="switch"><input type="checkbox" checked={Boolean(editFormData.tva_active)} onChange={e => setEditFormData({ ...editFormData, tva_active: e.target.checked })} /><span className="slider round" /></label><span>{editFormData.tva_active ? 'Oui' : 'Non'}</span></label>
+                            {!editFormData.tva_active && <p style={{ fontSize: '11px', color: '#DC2626', fontWeight: 600, marginTop: '4px' }}>Montant sans TVA</p>}
                           </div>
                           <div className="form-group">
                             <label>Montant TTC (MAD)</label>
-                            <input type="text" readOnly value={montantTTC.toFixed(2)} className="edit-input" />
+                            <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 600 }}>{montantTTC.toFixed(2)}</div>
                           </div>
                         </div>
-
-                        <div className="form-grid-3 gap-4">
+                        <div className="form-grid-3 gap-4" style={{ marginTop: '16px' }}>
                           <div className="form-group">
                             <label>Mode de paiement</label>
                             <select value={editFormData.mode_paiement} onChange={e => setEditFormData({ ...editFormData, mode_paiement: e.target.value })} className="edit-input">
-                              <option value="">Choisir...</option>
-                              <option value="virement">Virement</option>
-                              <option value="cheque">Par chèque</option>
-                              <option value="agence">À l'agence</option>
-                              <option value="sur_place">Sur place</option>
+                              <option value="">Choisir...</option><option value="virement">Virement</option><option value="cheque">Par chèque</option><option value="agence">À l'agence</option><option value="sur_place">Sur place</option>
                             </select>
                           </div>
                           <div className="form-group">
                             <label>Statut de paiement</label>
-                            <select
-                              value={editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee))}
-                              onChange={e => {
-                                const value = e.target.value;
-                                setEditFormData({
-                                  ...editFormData,
-                                  statut_paiement_ui: value,
-                                  facturation_annulee: value === 'facturation_annulee',
-                                });
-                              }}
-                              className="edit-input"
-                            >
-                              {PAYMENT_STATUS_OPTIONS.map(option => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                              ))}
+                            <select value={editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee))} onChange={e => {
+                              const v = e.target.value;
+                              const updates: any = { ...editFormData, statut_paiement_ui: v, facturation_annulee: v === 'facturation_annulee' };
+                              // Auto-set encaisse_par based on payment status
+                              if (v === 'agence_payee_client' || v === 'paye') updates.encaisse_par = 'agence';
+                              else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
+                              setEditFormData(updates);
+                            }} className="edit-input">
+                              {PAYMENT_STATUS_OPTIONS.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
                             </select>
                           </div>
                           <div className="form-group">
                             <label>Montant versé (MAD)</label>
                             <input type="number" value={editFormData.montant_verse} onChange={e => setEditFormData({ ...editFormData, montant_verse: e.target.value })} className="edit-input" />
+                            {toNumber(montantTTC) > 0 && toNumber(editFormData.montant_verse) > 0 && (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) > 0 && (
+                              <p style={{ fontSize: '11px', color: '#DC2626', fontWeight: 600, marginTop: '4px' }}>Reste à payer : {(toNumber(montantTTC) - toNumber(editFormData.montant_verse)).toFixed(2)} MAD</p>
+                            )}
                           </div>
                         </div>
 
-                        {(editFormData.statut_paiement_ui === 'paiement_partiel' || (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) > 0) && (
-                          <div className="payment-alert-info">
-                            <label>Reste à payer : </label>
-                            <span className="text-red-500 font-bold ml-2">{(toNumber(montantTTC) - toNumber(editFormData.montant_verse)).toFixed(2)} MAD</span>
-                          </div>
-                        )}
-
-                        {editFormData.statut_paiement_ui === 'facturation_annulee' && (
-                          <div className="cancellation-block p-4 bg-red-50 rounded-xl border border-red-100 my-4">
-                            <div className="form-group">
-                              <label className="text-red-700">Raison de l'annulation</label>
-                              <textarea
-                                value={editFormData.annulation_raison || ''}
-                                onChange={e => setEditFormData({ ...editFormData, annulation_raison: e.target.value })}
-                                className="edit-input w-full"
-                                placeholder="Indiquez la raison..."
-                              />
+                        {editFormData.statut_paiement_ui === 'profil_paye_client' && (
+                          <div style={{ marginTop: '16px', padding: '16px', borderRadius: '10px', border: '1px solid #FECACA', background: '#FEF2F2' }}>
+                            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#B91C1C', margin: '0 0 8px' }}>Profil doit</h4>
+                            <div className="form-group mb-0" style={{ maxWidth: '280px' }}>
+                              <label style={{ color: '#B91C1C' }}>Montant (MAD)</label>
+                              <input type="number" value={editFormData.montant_profil_doit_agence || ''} onChange={e => {
+                                const val = toNumber(e.target.value);
+                                // Auto-dispatch: profil doit = part_agence, profil part = TTC - part_agence
+                                const nextParts = partsRepartition.length > 0 ? partsRepartition.map((p, i) => i === 0 ? { ...p, amount: roundMoney(montantTTC - val) } : p) : partsRepartition;
+                                setEditFormData({ ...editFormData, montant_profil_doit_agence: e.target.value, part_agence: val, parts_repartition: nextParts });
+                              }} className="edit-input" placeholder="0" style={{ borderColor: '#FECACA', color: '#B91C1C', fontWeight: 600 }} />
                             </div>
-                            <div className="flex items-center gap-4 mt-4">
-                              <label className="text-red-700">Le profil sera payé ?</label>
-                              <label className="switch">
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(editFormData.profil_sera_paye)}
-                                  onChange={e => setEditFormData({ ...editFormData, profil_sera_paye: e.target.checked })}
-                                />
-                                <span className="slider round"></span>
-                              </label>
-                              <span>{editFormData.profil_sera_paye ? 'Oui' : 'Non'}</span>
-                            </div>
-                            {editFormData.profil_sera_paye && (
-                              <div className="form-group mt-4">
-                                <label className="text-red-700">Montant à payer au profil (MAD)</label>
-                                <input
-                                  type="number"
-                                  value={editFormData.montant_profil_annulation}
-                                  onChange={e => setEditFormData({ ...editFormData, montant_profil_annulation: e.target.value })}
-                                  className="edit-input"
-                                />
-                              </div>
-                            )}
                           </div>
                         )}
 
                         {editFormData.statut_paiement_ui === 'agence_payee_client' && (
-                          <div className="agency-alert-card bg-teal-50 border-teal-100 my-4">
-                            <p className="text-teal-800 font-semibold mb-2">L'agence doit au profil</p>
-                            <div className="form-group mb-0">
-                              <label>Montant (MAD)</label>
-                              <input
-                                type="number"
-                                value={editFormData.montant_agence_doit_profil}
-                                onChange={e => setEditFormData({ ...editFormData, montant_agence_doit_profil: e.target.value })}
-                                className="edit-input"
-                                placeholder="Part du profil à reverser..."
-                              />
+                          <div style={{ marginTop: '16px', padding: '16px', borderRadius: '10px', border: '1px solid #FED7AA', background: '#FFF7ED' }}>
+                            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#C2410C', margin: '0 0 8px' }}>Agence doit</h4>
+                            <div className="form-group mb-0" style={{ maxWidth: '280px' }}>
+                              <label style={{ color: '#C2410C' }}>Montant (MAD)</label>
+                              <input type="number" value={editFormData.montant_agence_doit_profil || ''} onChange={e => {
+                                const val = toNumber(e.target.value);
+                                // Auto-dispatch: agence doit = profil part, agence part = TTC - profil part
+                                const nextParts = partsRepartition.length > 0 ? partsRepartition.map((p, i) => i === 0 ? { ...p, amount: val } : p) : partsRepartition;
+                                setEditFormData({ ...editFormData, montant_agence_doit_profil: e.target.value, part_agence: roundMoney(montantTTC - val), parts_repartition: nextParts });
+                              }} className="edit-input" placeholder="0" style={{ borderColor: '#FED7AA', color: '#C2410C', fontWeight: 600 }} />
                             </div>
                           </div>
                         )}
 
-                        {editFormData.statut_paiement_ui === 'profil_paye_client' && (
-                          <div className="agency-alert-card bg-orange-50 border-orange-100 my-4">
-                            <p className="text-orange-800 font-semibold mb-2">Le profil doit à l'agence</p>
-                            <div className="form-group mb-0">
-                              <label>Montant (MAD)</label>
-                              <input
-                                type="number"
-                                value={editFormData.montant_profil_doit_agence}
-                                onChange={e => setEditFormData({ ...editFormData, montant_profil_doit_agence: e.target.value })}
-                                className="edit-input"
-                                placeholder="Part de l'agence à récupérer..."
-                              />
-                            </div>
+                        {editFormData.statut_paiement_ui === 'paye' && (
+                          <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '10px', border: '1px solid #A7F3D0', background: '#ECFDF5' }}>
+                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#047857', margin: 0 }}>✓ Paiement complet — la demande sera retirée du tableau de bord</p>
                           </div>
                         )}
-                        <div className="agency-alert-card">
-                          <p>Profil doit (Général)</p>
-                          <div className="form-group mb-0">
-                            <label>Montant (MAD)</label>
-                            <input type="number" value={montantProfilDoit} onChange={e => setEditFormData({ ...editFormData, montant_profil_doit: e.target.value })} className="edit-input" />
-                          </div>
-                        </div>
 
-                          <button
-                            type="button"
-                            className={`btn btn-secondary ${editFormData.facturation_annulee ? 'facturation-annulee-active' : ''}`}
-                            onClick={() => setEditFormData({
-                              ...editFormData,
-                              facturation_annulee: !editFormData.facturation_annulee,
-                              statut_paiement_ui: !editFormData.facturation_annulee ? 'facturation_annulee' : 'non_confirme'
-                            })}
-                          >
-                            <XCircle size={14} /> Facturation annulée
-                          </button>
-                      </div>
-
-                      <div className="agency-block agency-block-parts">
-                        <button type="button" className="agency-collapse-btn" onClick={() => setShowPartsSection(!showPartsSection)}>
-                          <span>Gestion des parts</span>
-                          {showPartsSection ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </button>
-
-                        {showPartsSection && (
-                          <>
-                            <div className="encaissement-selector flex gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
-                              <label className="text-sm font-medium">Qui a encaissé le client ?</label>
-                              <div className="flex gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name="encaisse_par"
-                                    checked={editFormData.encaisse_par === 'agence' || !editFormData.encaisse_par}
-                                    onChange={() => setEditFormData({ ...editFormData, encaisse_par: 'agence' })}
-                                  />
-                                  <span>L'Agence</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name="encaisse_par"
-                                    checked={editFormData.encaisse_par === 'profil'}
-                                    onChange={() => setEditFormData({ ...editFormData, encaisse_par: 'profil' })}
-                                  />
-                                  <span>Le Profil</span>
-                                </label>
-                              </div>
-                            </div>
-
-                            <div className="form-grid-2 gap-4 mb-4">
-                              <div className="form-group">
-                                <label>Montant total TTC (MAD)</label>
-                                <input type="text" readOnly value={montantTTC.toFixed(2)} className="edit-input" />
-                              </div>
-                              <div className="form-group">
-                                <label>{editFormData.encaisse_par === 'profil' ? "Part de l'agence (Calculée)" : "Part de l'agence (MAD)"}</label>
-                                <input
-                                  type="number"
-                                  value={editFormData.part_agence}
-                                  onChange={e => setEditFormData({ ...editFormData, part_agence: e.target.value })}
-                                  readOnly={editFormData.encaisse_par === 'profil'}
-                                  className={`edit-input ${editFormData.encaisse_par === 'profil' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="parts-lines">
-                              {partsRepartition.map((line, idx) => (
-                                <div key={`${line.profile_id}-${idx}`} className="form-grid-4 gap-4 mb-3 items-end">
-                                  <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                                    <label>Nom du profil</label>
-                                    <select
-                                      value={line.profile_id}
-                                      onChange={e => {
-                                        const next = [...partsRepartition];
-                                        next[idx] = { ...line, profile_id: e.target.value ? parseInt(e.target.value, 10) : '' };
-                                        setEditFormData({ ...editFormData, parts_repartition: next });
-                                      }}
-                                      className="edit-input"
-                                    >
-                                      <option value="">Sélectionner un profil...</option>
-                                      {(selectedDemande?.profils_envoyes || []).map(profile => (
-                                        <option key={profile.id} value={profile.id}>{profile.full_name}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <div className="form-group">
-                                    <label>Part (MAD)</label>
-                                    <input
-                                      type="number"
-                                      value={line.amount}
-                                      onChange={e => {
-                                        const next = [...partsRepartition];
-                                        next[idx] = { ...line, amount: toNumber(e.target.value) };
-
-                                        // Case 1 logic: if profile collected, agency part is TTC - sum(profile parts)
-                                        if (editFormData.encaisse_par === 'profil') {
-                                          const totalProfils = next.reduce((acc, p) => acc + toNumber(p.amount), 0);
-                                          setEditFormData({
-                                            ...editFormData,
-                                            parts_repartition: next,
-                                            part_agence: roundMoney(toNumber(montantTTC) - totalProfils)
-                                          });
-                                        } else {
-                                          setEditFormData({ ...editFormData, parts_repartition: next });
-                                        }
-                                      }}
-                                      className="edit-input"
-                                    />
-                                  </div>
-                                  <div className="form-group pb-2 flex flex-col items-center">
-                                    <label className="text-[10px] uppercase text-gray-400 mb-1">Délégué</label>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const next = partsRepartition.map((p, i) => ({
-                                          ...p,
-                                          is_delegate: i === idx ? !p.is_delegate : false
-                                        }));
-                                        setEditFormData({ ...editFormData, parts_repartition: next });
-                                      }}
-                                      className={`p-1 rounded-full transition-colors ${line.is_delegate ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}
-                                      title="Désigner comme délégué"
-                                    >
-                                      <UserCheck size={18} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-
-                            <button
-                              type="button"
-                              className="btn btn-outline btn-sm w-full mb-4"
-                              onClick={() => setEditFormData({
-                                ...editFormData,
-                                parts_repartition: [...partsRepartition, { profile_id: '', amount: 0, is_delegate: false }]
-                              })}
-                            >
-                              <Plus size={14} /> Ajouter un profil
+                        {editFormData.statut_paiement_ui !== 'facturation_annulee' && (
+                          <div style={{ marginTop: '16px' }}>
+                            <button type="button" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', border: '1px solid #FDA4AF', color: '#BE123C', background: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setEditFormData({ ...editFormData, facturation_annulee: true, statut_paiement_ui: 'facturation_annulee' })}>
+                              <XCircle size={14} /> Facturation annulée
                             </button>
+                          </div>
+                        )}
 
-                            <div className="parts-summary p-3 bg-white rounded-lg border border-gray-100">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-sm font-medium">Somme des parts profils :</span>
-                                <span className="text-sm font-bold text-gray-700">
-                                  {partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0).toFixed(2)} MAD
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center mb-3">
-                                <span className="text-sm font-medium">Part de l'agence :</span>
-                                <span className="text-sm font-bold text-gray-700">{toNumber(editFormData.part_agence).toFixed(2)} MAD</span>
-                              </div>
-                              <div className="flex justify-between items-center pt-2 border-t">
-                                <span className="text-sm font-bold">Total réparti :</span>
-                                <div className="flex items-center gap-2">
-                                  <span className={`text-sm font-black p-1 px-3 rounded-full ${Math.abs((partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)) - toNumber(montantTTC)) < 0.01
-                                    ? 'bg-green-100 text-green-700'
-                                    : 'bg-red-100 text-red-700'
-                                    }`}>
-                                    {(partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)).toFixed(2)} MAD
-                                  </span>
-                                  {Math.abs((partsRepartition.reduce((acc, p) => acc + toNumber(p.amount), 0) + toNumber(editFormData.part_agence)) - toNumber(montantTTC)) < 0.01
-                                    ? <CheckCircle size={16} className="text-green-500" />
-                                    : <XCircle size={16} className="text-red-500" />
-                                  }
-                                </div>
+                        {editFormData.statut_paiement_ui === 'facturation_annulee' && (
+                          <div style={{ marginTop: '16px', padding: '16px', borderRadius: '10px', border: '1px solid #FECDD3', background: '#FFF1F2' }}>
+                            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#BE123C', display: 'flex', alignItems: 'center', gap: '6px', margin: '0 0 12px' }}><XCircle size={14} /> Facturation annulée</h4>
+                            <div className="form-group">
+                              <label style={{ color: '#BE123C' }}>Raison de l'annulation</label>
+                              <textarea value={editFormData.annulation_raison || ''} onChange={e => setEditFormData({ ...editFormData, annulation_raison: e.target.value })} className="edit-input w-full" placeholder="Indiquer la raison de l'annulation..." style={{ borderColor: '#FECDD3' }} />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '12px' }}>
+                              <label style={{ color: '#BE123C', fontWeight: 600, fontSize: '13px' }}>Le profil sera payé ?</label>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button type="button" onClick={() => setEditFormData({ ...editFormData, profil_sera_paye: true })} style={{ padding: '4px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: editFormData.profil_sera_paye ? '#059669' : '#E2E8F0', color: editFormData.profil_sera_paye ? 'white' : '#64748B' }}>Oui</button>
+                                <button type="button" onClick={() => setEditFormData({ ...editFormData, profil_sera_paye: false })} style={{ padding: '4px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: !editFormData.profil_sera_paye ? '#BE123C' : '#E2E8F0', color: !editFormData.profil_sera_paye ? 'white' : '#64748B' }}>Non</button>
                               </div>
                             </div>
-                          </>
+                            {editFormData.profil_sera_paye && (
+                              <div className="form-group" style={{ marginTop: '12px', maxWidth: '280px' }}>
+                                <label style={{ color: '#BE123C' }}>Montant à payer au profil (MAD)</label>
+                                <input type="number" value={editFormData.montant_profil_annulation || ''} onChange={e => setEditFormData({ ...editFormData, montant_profil_annulation: e.target.value })} className="edit-input" placeholder="0" style={{ borderColor: '#FECDD3' }} />
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
 
-                      <div className="form-grid-2 gap-4 mb-4">
+                      {/* ── Gestion des parts ── */}
+                      <div>
+                        <button type="button" onClick={() => setShowPartsSection(!showPartsSection)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 16px', borderRadius: '10px', background: '#ECFDF5', border: '1px solid #A7F3D0', marginBottom: '12px', cursor: 'pointer' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><UserCheck size={18} style={{ color: '#059669' }} /><span style={{ fontSize: '16px', fontWeight: 700, color: '#047857' }}>Gestion des parts</span></div>
+                          {showPartsSection ? <ChevronUp size={16} style={{ color: '#059669' }} /> : <ChevronDown size={16} style={{ color: '#059669' }} />}
+                        </button>
+                        {showPartsSection && (<div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                          <div className="form-grid-2 gap-4">
+                            <div className="form-group"><label>Montant total TTC (MAD)</label><div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 600 }}>{montantTTC.toFixed(2)}</div></div>
+                            <div className="form-group"><label>Part de l'agence (MAD)</label><input type="number" value={editFormData.part_agence} onChange={e => setEditFormData({ ...editFormData, part_agence: e.target.value })} className="edit-input" /></div>
+                          </div>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>Profils intervenants</span>
+                              <button type="button" onClick={() => setEditFormData({ ...editFormData, parts_repartition: [...partsRepartition, { profile_id: '', amount: 0, is_delegate: false }] })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'white', fontSize: '12px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}><Plus size={14} /> Ajouter un autre profil</button>
+                            </div>
+                            {partsRepartition.map((line, idx) => (
+                              <div key={`${line.profile_id}-${idx}`} style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', marginBottom: '12px' }}>
+                                <div style={{ flex: 1 }}>
+                                  <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>Nom du profil{line.is_delegate && partsRepartition.length > 1 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 6px' }}>Délégué</span>}</label>
+                                    <select value={line.profile_id} onChange={e => { const next = [...partsRepartition]; next[idx] = { ...line, profile_id: e.target.value ? parseInt(e.target.value, 10) : '' }; setEditFormData({ ...editFormData, parts_repartition: next }); }} className="edit-input">
+                                      <option value="">Sélectionner un profil...</option>
+                                      {allProfils.map(p => (<option key={p.id} value={p.id}>{p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`}</option>))}
+                                    </select>
+                                </div>
+                                <div style={{ width: '120px' }}>
+                                  <label style={{ fontSize: '12px' }}>Part (MAD)</label>
+                                  <input type="number" value={line.amount} onChange={e => { const next = [...partsRepartition]; next[idx] = { ...line, amount: toNumber(e.target.value) }; if (editFormData.encaisse_par === 'profil') { const tp = next.reduce((a, p) => a + toNumber(p.amount), 0); setEditFormData({ ...editFormData, parts_repartition: next, part_agence: roundMoney(toNumber(montantTTC) - tp) }); } else { setEditFormData({ ...editFormData, parts_repartition: next }); } }} className="edit-input" />
+                                </div>
+                                {partsRepartition.length > 1 && <button type="button" onClick={() => { const next = partsRepartition.map((p, i) => ({ ...p, is_delegate: i === idx ? !p.is_delegate : false })); setEditFormData({ ...editFormData, parts_repartition: next }); }} style={{ height: '38px', padding: '0 12px', borderRadius: '8px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', background: line.is_delegate ? '#F59E0B' : '#F1F5F9', color: line.is_delegate ? 'white' : '#64748B' }} title="Désigner comme délégué"><UserCheck size={16} />{line.is_delegate ? 'Délégué' : 'Désigner'}</button>}
+                                {partsRepartition.length > 1 && <button type="button" onClick={() => { const f = partsRepartition.filter((_, i) => i !== idx); if (!f.some(p => p.is_delegate) && f.length > 0) f[0] = { ...f[0], is_delegate: true }; setEditFormData({ ...editFormData, parts_repartition: f }); }} style={{ height: '38px', width: '38px', borderRadius: '8px', border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={16} /></button>}
+                              </div>
+                            ))}
+                          </div>
+                          {(() => { const tp = partsRepartition.reduce((a, p) => a + toNumber(p.amount), 0); const tr = tp + toNumber(editFormData.part_agence); const r = toNumber(montantTTC) - tr; const ok = Math.abs(r) < 0.01; return (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: '10px', border: `1px solid ${ok ? '#A7F3D0' : '#FECACA'}`, background: ok ? '#ECFDF5' : '#FEF2F2' }}>
+                              <div style={{ display: 'flex', gap: '24px', fontSize: '13px' }}><span>Total réparti : <strong>{tr.toFixed(2)} MAD</strong></span><span>Reste à répartir : <strong style={{ color: ok ? '#059669' : '#DC2626' }}>{r.toFixed(2)} MAD</strong></span></div>
+                              <span style={{ fontSize: '12px', fontWeight: 600, color: ok ? '#059669' : '#DC2626' }}>{ok ? '✓ Répartition correcte' : '⚠ Répartition incorrecte'}</span>
+                            </div>); })()}
+                        </div>)}
+                      </div>
+
+                      {/* ── Notes ── */}
+                      <div className="form-grid-2 gap-4">
                         <div className="form-group">
                           <label>Note commercial</label>
                           <textarea value={editFormData.note_commercial} onChange={e => setEditFormData({ ...editFormData, note_commercial: e.target.value })} className="edit-textarea" rows={3} placeholder="Notes du commercial..." />
+                          <button type="button" className="btn btn-outline btn-xs mt-2" style={{ width: 'fit-content', padding: '4px 20px', fontSize: '12px' }} onClick={async () => { try { await updateDemande(selectedDemande.id, { note_commercial: editFormData.note_commercial }); addToast('Note commerciale enregistrée', 'success'); fetchData(); } catch { addToast("Erreur lors de l'enregistrement", 'error'); } }}>Entrer</button>
                         </div>
                         <div className="form-group">
                           <label>Note opération</label>
                           <textarea value={editFormData.note_operationnel} onChange={e => setEditFormData({ ...editFormData, note_operationnel: e.target.value })} className="edit-textarea" rows={3} placeholder="Notes opérationnelles..." />
+                          <button type="button" className="btn btn-outline btn-xs mt-2" style={{ width: 'fit-content', padding: '4px 20px', fontSize: '12px' }} onClick={async () => { try { await updateDemande(selectedDemande.id, { note_operationnel: editFormData.note_operationnel }); addToast('Note opérationnelle enregistrée', 'success'); fetchData(); } catch { addToast("Erreur lors de l'enregistrement", 'error'); } }}>Entrer</button>
                         </div>
                       </div>
 
+                      {/* ── WhatsApp ── */}
                       <div className="whatsapp-toggle-card">
                         <div className="flex items-center gap-4">
-                          <label className="switch">
-                            <input type="checkbox" checked={editFormData.envoyer_whatsapp} onChange={e => setEditFormData({ ...editFormData, envoyer_whatsapp: e.target.checked, regenerer_devis: e.target.checked })} />
-                            <span className="slider round"></span>
-                          </label>
+                          <label className="switch"><input type="checkbox" checked={editFormData.envoyer_whatsapp} onChange={e => setEditFormData({ ...editFormData, envoyer_whatsapp: e.target.checked, regenerer_devis: e.target.checked })} /><span className="slider round" /></label>
                           <div className="flex flex-col">
-                            <div className="flex items-center gap-2 text-teal-dark fw-bold">
-                              <MessageSquare size={18} />
-                              Régénérer le devis et renvoyer au client via WhatsApp
-                            </div>
+                            <div className="flex items-center gap-2 text-teal-dark fw-bold"><MessageSquare size={18} />Régénérer le devis et renvoyer au client via WhatsApp</div>
                             <p className="text-xs text-muted">Le devis sera régénéré et envoyé automatiquement au numéro WhatsApp du client.</p>
                           </div>
                         </div>
@@ -2482,7 +2379,12 @@ export default function Dashboard() {
                     <div className="detail-grid">
                       <div className="detail-item"><span>Total:</span> {selectedDemande.prix} MAD</div>
                       <div className="detail-item"><span>Mode:</span> {selectedDemande.mode_paiement_label || selectedDemande.mode_paiement}</div>
-                      <div className="detail-item"><span>Statut:</span> {selectedDemande.statut_paiement_label || selectedDemande.statut_paiement}</div>
+                      <div className="detail-item"><span>Statut paie:</span> {(() => {
+                        const facturation = selectedDemande.formulaire_data?.facturation || {};
+                        const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(selectedDemande.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
+                        const option = PAYMENT_STATUS_OPTIONS.find(o => o.value === statutUi);
+                        return option ? option.label : (selectedDemande.statut_paiement_label || selectedDemande.statut_paiement || 'Non payé');
+                      })()}</div>
                       <div className="detail-item"><span>CAO:</span> {selectedDemande.cao ? 'Confirmé' : 'Non confirmé'}</div>
                     </div>
                   </div>
@@ -2843,27 +2745,50 @@ export default function Dashboard() {
               </div>
 
               {caoDecision === 'postponed' && (
-                <div style={{ marginTop: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>
-                    Nouvelle date proposée
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="date"
-                      value={caoPostponedDate}
-                      onChange={(e) => setCaoPostponedDate(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '10px',
-                        fontSize: '14px',
-                        color: '#1f2937',
-                      }}
-                    />
-                    <Calendar size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
+                <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>
+                      Nouvelle date
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="date"
+                        value={caoPostponedDate}
+                        onChange={(e) => setCaoPostponedDate(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '10px',
+                          fontSize: '14px',
+                          color: '#1f2937',
+                        }}
+                      />
+                      <Calendar size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
+                    </div>
                   </div>
-                  <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#6b7280' }}>Le commercial sera alerté du changement de date.</p>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>
+                      Nouvelle heure
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="time"
+                        value={caoPostponedTime}
+                        onChange={(e) => setCaoPostponedTime(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '10px',
+                          fontSize: '14px',
+                          color: '#1f2937',
+                        }}
+                      />
+                      <Clock size={16} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
+                    </div>
+                  </div>
+                  <p style={{ gridColumn: 'span 2', margin: '4px 0 0 0', fontSize: '12px', color: '#6b7280' }}>Le commercial sera alerté du changement de date et heure.</p>
                 </div>
               )}
 

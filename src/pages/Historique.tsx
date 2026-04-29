@@ -124,28 +124,51 @@ export default function Historique() {
         <h1 className="text-2xl fw-bold text-teal-800">Historique</h1>
       </div>
 
-      <div className="flex gap-3 mb-6" style={{ maxWidth: '760px' }}>
-        <div className="search-box" style={{ flex: 1, maxWidth: '420px' }}>
+      <div className="flex flex-wrap gap-3 mb-6" style={{ maxWidth: '900px', alignItems: 'center' }}>
+        <div className="search-box" style={{ flex: 1, minWidth: '300px', maxWidth: '420px' }}>
           <Search size={16} className="search-icon" />
           <input
             type="text"
-            placeholder="Rechercher..."
+            placeholder="Rechercher par client, service ou réf #..."
             className="search-input"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        <label className="btn btn-secondary" style={{ minWidth: '240px', justifyContent: 'flex-start', cursor: 'pointer' }}>
-          <CalendarDays size={16} />
-          <span>{dateFilter ? new Date(dateFilter).toLocaleDateString('fr-FR') : 'Filtrer par date'}</span>
-          <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
-          />
-        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="relative" style={{ position: 'relative' }}>
+            <button 
+              className="btn btn-secondary" 
+              style={{ minWidth: '220px', justifyContent: 'flex-start', cursor: 'pointer', position: 'relative' }}
+              onClick={() => (document.getElementById('history-date-picker') as HTMLInputElement)?.showPicker?.()}
+            >
+              <CalendarDays size={16} />
+              <span>{dateFilter ? new Date(dateFilter).toLocaleDateString('fr-FR') : 'Filtrer par date'}</span>
+              <input
+                id="history-date-picker"
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                style={{ position: 'absolute', opacity: 0, inset: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+              />
+            </button>
+            {dateFilter && (
+              <button 
+                onClick={() => setDateFilter('')}
+                style={{ 
+                  position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                  background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '20px', height: '20px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                  fontSize: '14px', color: '#64748b', fontWeight: 'bold'
+                }}
+                title="Effacer la date"
+              >
+                &times;
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {loading ? (

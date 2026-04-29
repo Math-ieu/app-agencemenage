@@ -10,7 +10,7 @@ import {
   ChevronDown, User, FileText,
   MessageSquare, History, ArrowLeft,
   Download, Eye, Star, Briefcase, ShieldAlert,
-  ClipboardCheck, Search, Send
+  ClipboardCheck, Search, Send, PlusCircle, AlertTriangle
 } from 'lucide-react';
 import { Agent } from '../types';
 import { useToastStore } from '../store/toast';
@@ -298,6 +298,18 @@ export default function ProfilDetails() {
     return action;
   };
 
+  const isAgentBusy = useMemo(() => {
+    // L'agent est considéré comme occupé s'il a au moins une mission active.
+    // Une mission est active si son statut n'est pas 'terminee' ou 'annulee'.
+    // On vérifie aussi le statut de la demande associée (doit être 'pres_terminee' ou 'termine' ou 'annule').
+    return missions.some(m => {
+      const missionActive = !['terminee', 'annulee'].includes(m.statut);
+      const demandeStatut = m.demande_detail?.statut;
+      const demandeActive = !['pres_terminee', 'termine', 'annule'].includes(demandeStatut);
+      return missionActive || demandeActive;
+    });
+  }, [missions]);
+
   const filteredHistory = history.filter(log => {
     if (!historySearch) return true;
     const q = historySearch.toLowerCase();
@@ -494,6 +506,7 @@ export default function ProfilDetails() {
               <FileText size={16} color={C.teal} /> Éditer
             </button>
             <button
+              disabled={isAgentBusy}
               onClick={() => {
                 setShowPostulerModal(true);
                 setSelectedDemande(null);
@@ -501,12 +514,17 @@ export default function ProfilDetails() {
               }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
-                padding: '10px 20px', backgroundColor: C.teal, color: 'white',
+                padding: '10px 20px', 
+                backgroundColor: isAgentBusy ? '#94a3b8' : C.teal, 
+                color: 'white',
                 borderRadius: 8, border: 'none', fontWeight: 700,
-                fontSize: 14, cursor: 'pointer',
+                fontSize: 14, cursor: isAgentBusy ? 'not-allowed' : 'pointer',
+                opacity: isAgentBusy ? 0.8 : 1,
               }}
+              title={isAgentBusy ? "Ce profil est déjà affecté à une prestation en cours" : ""}
             >
-              <PlusCircleIcon size={16} /> Postuler
+              {isAgentBusy ? <AlertTriangle size={16} /> : <PlusCircle size={16} />} 
+              {isAgentBusy ? 'Déjà affecté' : 'Postuler'}
             </button>
             <button style={{
               display: 'flex', alignItems: 'center', gap: 8,
