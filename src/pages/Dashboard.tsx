@@ -1777,8 +1777,8 @@ export default function Dashboard() {
                               )}
                             </div>
 
-                            {/* Détails des pièces (Ménage Standard uniquement) */}
-                            {isMenageStandardService && (
+                            {/* Détails des pièces (Ménage Standard & Grand Ménage) */}
+                            {(isMenageStandardService || isGrandMenageService) && (
                               <div className="ws-form-block">
                                 <div className="ws-section-header">Merci de nous décrire votre domicile</div>
                                 <p style={{ color: '#ef4444', fontSize: '0.75rem', textAlign: 'right', fontWeight: 700, marginBottom: '0.5rem' }}>
