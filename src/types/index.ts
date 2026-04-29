@@ -58,6 +58,7 @@ export interface Agent {
   avail_7_7: boolean;
   avail_day: boolean;
   avail_holidays: boolean;
+  average_rating?: number;
   avail_evening: boolean;
   city: string;
   neighborhood: string;

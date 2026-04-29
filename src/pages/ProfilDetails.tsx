@@ -99,12 +99,13 @@ function InfoField({ label, value }: { label: string; value?: string | number | 
 }
 
 /* ─── Badge ─── */
-function Badge({ children, bg, color: textColor }: { children: React.ReactNode; bg: string; color: string }) {
+function Badge({ children, bg, color: textColor, style }: { children: React.ReactNode; bg: string; color: string; style?: React.CSSProperties }) {
   return (
     <span style={{
       display: 'inline-block', padding: '4px 14px', borderRadius: 99,
       fontSize: 12, fontWeight: 700, backgroundColor: bg, color: textColor,
       boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+      ...style,
     }}>
       {children}
     </span>
@@ -457,6 +458,11 @@ export default function ProfilDetails() {
                   <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a202c', margin: 0 }}>
                     {agent.last_name} {agent.first_name}
                   </h1>
+                  {agent.average_rating !== undefined && agent.average_rating !== null && (
+                    <Badge bg="#FEF3C7" color="#D97706" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Star size={12} fill="#D97706" /> {agent.average_rating}/5
+                    </Badge>
+                  )}
                   <Badge bg="#DCFCE7" color="#166534">
                     {agent.statut === 'disponible' ? 'Disponible' : 'Indisponible'}
                   </Badge>
@@ -678,15 +684,26 @@ export default function ProfilDetails() {
               <tbody>
                 {feedbacks.map((f, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <Td>{new Date(f.created_at).toLocaleDateString('fr-FR')}</Td>
+                    <Td>{f.date ? new Date(f.date).toLocaleDateString('fr-FR') : '—'}</Td>
                     <Td bold color={C.teal}>{f.client_name || 'Client'}</Td>
                     <Td>
                       <div style={{ display: 'flex', gap: 2 }}>
-                        {[...Array(5)].map((_, j) => <Star key={j} size={14} fill={j < f.note ? '#F6E05E' : 'none'} color={j < f.note ? '#F6E05E' : '#e2e8f0'} />)}
+                        {[...Array(5)].map((_, j) => {
+                          const note = f.note_intervenant || 0;
+                          return <Star key={j} size={14} fill={j < note ? '#F6E05E' : 'none'} color={j < note ? '#F6E05E' : '#e2e8f0'} />;
+                        })}
                       </div>
                     </Td>
-                    <Td><Badge bg="#F0FFF4" color="#2F855A">Satisfait</Badge></Td>
-                    <Td><Badge bg="#F0FFF4" color="#2F855A">Positif</Badge></Td>
+                    <Td>
+                      {f.note_intervenant >= 4 ? <Badge bg="#F0FFF4" color="#2F855A">Satisfait</Badge> : 
+                       f.note_intervenant === 3 ? <Badge bg="#FEF3C7" color="#D97706">Moyen</Badge> : 
+                       <Badge bg="#FFF5F5" color="#C53030">Pas satisfait</Badge>}
+                    </Td>
+                    <Td>
+                      {f.note_intervenant >= 4 ? <Badge bg="#F0FFF4" color="#2F855A">Positif</Badge> : 
+                       f.note_intervenant === 3 ? <Badge bg="#FEF3C7" color="#D97706">Neutre</Badge> : 
+                       <Badge bg="#FFF5F5" color="#C53030">Négatif</Badge>}
+                    </Td>
                     <Td center><Eye size={17} color="#94a3b8" cursor="pointer" /></Td>
                   </tr>
                 ))}
