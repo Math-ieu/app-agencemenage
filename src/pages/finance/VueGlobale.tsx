@@ -539,7 +539,7 @@ export default function VueGlobale() {
   const [suiviSegmentFilter, setSuiviSegmentFilter] = useState('Tous les segments');
   const [facturationData, setFacturationData] = useState<FacturationRow[]>([]);
   const [profileAccountsData, setProfileAccountsData] = useState<ProfileAccount[]>([]);
-  const [invoicePreview, setInvoicePreview] = useState<{ url: string; type: 'devis' | 'png'; name: string; demandeId: number } | null>(null);
+  const [invoicePreview, setInvoicePreview] = useState<{ url: string; type: 'devis' | 'png' | 'facture'; name: string; demandeId: number } | null>(null);
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const [isSendingInvoice, setIsSendingInvoice] = useState(false);
   const [showInvoicePreviewPopup, setShowInvoicePreviewPopup] = useState(false);
@@ -1033,7 +1033,7 @@ export default function VueGlobale() {
       return;
     }
 
-    const type: 'devis' | 'png' = selectedMission.segment === 'Entreprise' ? 'devis' : 'png';
+    const type: 'devis' | 'png' | 'facture' = 'facture';
     setIsGeneratingInvoice(true);
     try {
       const response = await generateDocument(selectedMission.demandeId, type);
@@ -2447,7 +2447,7 @@ export default function VueGlobale() {
           >
             <div className="modal-header border-b-0 pb-2 mb-4 flex justify-between items-center">
               <h2 className="text-xl font-bold flex items-center gap-2 text-teal-900">
-                <Eye size={24} className="text-teal-700" /> Aperçu — {invoicePreview.type === 'devis' ? 'Devis' : 'Récapitulatif'}
+                <Eye size={24} className="text-teal-700" /> Aperçu — {invoicePreview.type === 'devis' ? 'Devis' : (invoicePreview.type === 'facture' ? 'Facture' : 'Récapitulatif')}
               </h2>
               <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowInvoicePreviewPopup(false)}>
                 <XCircle size={20} />
@@ -2455,7 +2455,7 @@ export default function VueGlobale() {
             </div>
 
             <div className="modal-body bg-slate-800 rounded-md border border-slate-700 shadow-inner" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
-              {invoicePreview.type === 'devis' ? (
+              {invoicePreview.type === 'devis' || invoicePreview.type === 'facture' ? (
                 <iframe src={invoicePreview.url} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Apercu" />
               ) : (
                 <div style={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '24px', backgroundColor: '#ffffff' }}>

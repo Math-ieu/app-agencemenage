@@ -113,12 +113,12 @@ export const sendProfilToDemande = (demandeId: number, agentId: number) =>
 export const confirmerCAO = (id: number) =>
   apiClient.post(`/api/demandes/${id}/confirmer_cao/`);
 
-export const generateDocument = (id: number, type: 'devis' | 'png') =>
+export const generateDocument = (id: number, type: 'devis' | 'png' | 'facture') =>
   apiClient.post(`/api/demandes/${id}/generate_document/`, { type });
 
 export const sendWhatsApp = (
   id: number,
-  type: 'devis' | 'png' | 'cao_profil' | 'feedback',
+  type: 'devis' | 'png' | 'facture' | 'cao_profil' | 'feedback',
   profileAgentId?: number
 ) =>
   apiClient.post(`/api/demandes/${id}/send_whatsapp/`, {

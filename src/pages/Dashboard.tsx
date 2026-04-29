@@ -200,7 +200,7 @@ export default function Dashboard() {
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
 
-  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string, demandeId: number } | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png' | 'facture', name: string, demandeId: number } | null>(null);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const navigate = useNavigate();
@@ -228,10 +228,11 @@ export default function Dashboard() {
     }
   };
 
-  const handlePreviewDocument = async (type: 'devis' | 'png') => {
+  const handlePreviewDocument = async (type: 'devis' | 'png' | 'facture') => {
     if (!selectedDemande) return;
     try {
-      addToast(`Génération du ${type === 'devis' ? 'devis' : 'récapitulatif'} sur le serveur...`, 'info');
+      const typeLabel = type === 'devis' ? 'devis' : (type === 'facture' ? 'de la facture' : 'du récapitulatif');
+      addToast(`Génération ${typeLabel} sur le serveur...`, 'info');
       const response = await generateDocument(selectedDemande.id, type);
       const doc = response.data;
 
@@ -1682,7 +1683,7 @@ export default function Dashboard() {
                           /* ====== STANDARD MÉNAGE SERVICES ====== */
                           <>
                             {/* Type d'habitation */}
-                            {isCleaningService && !isGrandMenageService && (
+                            {isCleaningService && (
                               <div className="ws-form-block">
                                 <div className="ws-section-header">
                                   {isMenageBureauxService ? "Type de local professionnel" : "Type d'habitation"}
@@ -2040,12 +2041,10 @@ export default function Dashboard() {
                         <div className="form-grid-3 gap-4">
                           <div className="form-group">
                             <label>Statut du besoin</label>
-                            <select value={editFormData.statut} onChange={e => setEditFormData({ ...editFormData, statut: e.target.value })} className="edit-input">
-                              <option value="en_attente">Nouveau besoin</option>
-                              <option value="en_cours">Nouveau besoin</option>
-                              <option value="termine">Terminé</option>
-                              <option value="annule">Annulé</option>
-                            </select>
+                            <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px', color: '#0F766E', fontWeight: '500', fontSize: '14px', height: '38px' }}>
+                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: selectedDemande?.statut === 'annule' ? '#E53E3E' : selectedDemande?.statut === 'termine' ? '#2F855A' : selectedDemande?.statut === 'en_cours' ? (selectedDemande?.cao ? '#2F855A' : '#3B82F6') : selectedDemande?.statut === 'pres_en_cours' ? '#8B5CF6' : selectedDemande?.statut === 'pres_terminee' ? '#ED8936' : '#3B82F6' }}></div>
+                              {selectedDemande?.statut === 'en_cours' ? (selectedDemande?.cao ? 'Confirmé' : 'Nouveau besoin') : selectedDemande?.statut === 'termine' ? 'Terminé' : selectedDemande?.statut === 'annule' ? 'Annulé' : selectedDemande?.statut === 'pres_en_cours' ? 'Pres. en cours' : selectedDemande?.statut === 'pres_terminee' ? 'Pres. terminée' : 'Nouveau besoin'}
+                            </div>
                           </div>
                           <div className="form-group">
                             <label>Segment</label>
@@ -2211,7 +2210,6 @@ export default function Dashboard() {
                             </div>
                           </div>
                         )}
-
                         <div className="agency-alert-card">
                           <p>Profil doit (Général)</p>
                           <div className="form-group mb-0">
@@ -2220,17 +2218,17 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          className={`btn btn-secondary ${editFormData.facturation_annulee ? 'facturation-annulee-active' : ''}`}
-                          onClick={() => setEditFormData({
-                            ...editFormData,
-                            facturation_annulee: !editFormData.facturation_annulee,
-                            statut_paiement_ui: !editFormData.facturation_annulee ? 'facturation_annulee' : 'non_confirme'
-                          })}
-                        >
-                          <XCircle size={14} /> Facturation annulée
-                        </button>
+                          <button
+                            type="button"
+                            className={`btn btn-secondary ${editFormData.facturation_annulee ? 'facturation-annulee-active' : ''}`}
+                            onClick={() => setEditFormData({
+                              ...editFormData,
+                              facturation_annulee: !editFormData.facturation_annulee,
+                              statut_paiement_ui: !editFormData.facturation_annulee ? 'facturation_annulee' : 'non_confirme'
+                            })}
+                          >
+                            <XCircle size={14} /> Facturation annulée
+                          </button>
                       </div>
 
                       <div className="agency-block agency-block-parts">
@@ -2632,13 +2630,13 @@ export default function Dashboard() {
           <div className="modal-content max-w-[1200px]" onClick={e => e.stopPropagation()} style={{ width: '95%', height: '90vh', display: 'flex', flexDirection: 'column', backgroundColor: 'white', borderRadius: '8px', padding: '24px' }}>
             <div className="modal-header border-b-0 pb-2 mb-4 flex justify-between items-center">
               <h2 className="text-xl font-bold flex items-center gap-2 text-teal-900">
-                <Eye size={24} className="text-teal-700" /> Aperçu — {showPreviewModal.type === 'devis' ? 'Devis' : 'Récapitulatif'}
+                <Eye size={24} className="text-teal-700" /> Aperçu — {showPreviewModal.type === 'devis' ? 'Devis' : (showPreviewModal.type === 'facture' ? 'Facture' : 'Récapitulatif')}
               </h2>
               <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={() => setShowPreviewModal(null)}><XCircle size={20} /></button>
             </div>
 
             <div className="modal-body bg-slate-800 rounded-md border border-slate-700 shadow-inner" style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
-              {showPreviewModal.type === 'devis' ? (
+              {showPreviewModal.type === 'devis' || showPreviewModal.type === 'facture' ? (
                 <iframe src={showPreviewModal.url} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} title="Apercu" />
               ) : (
                 <div style={{ width: '100%', height: '100%', overflowY: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '24px', backgroundColor: '#ffffff' }}>
