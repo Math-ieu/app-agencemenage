@@ -113,6 +113,12 @@ export const sendProfilToDemande = (demandeId: number, agentId: number) =>
 export const confirmerCAO = (id: number) =>
   apiClient.post(`/api/demandes/${id}/confirmer_cao/`);
 
+export const confirmerClient = (id: number) =>
+  apiClient.post(`/api/demandes/${id}/confirmer_client/`);
+
+export const nouveauClient = (id: number) =>
+  apiClient.post(`/api/demandes/${id}/nouveau_client/`);
+
 export const generateDocument = (id: number, type: 'devis' | 'png' | 'facture') =>
   apiClient.post(`/api/demandes/${id}/generate_document/`, { type });
 

@@ -23,6 +23,8 @@ export interface Client {
   created_at: string;
   avis_commercial?: string;
   avis_operationnel?: string;
+  assigned_commercial?: number;
+  phone_history?: any[];
 }
 
 export interface Agent {
@@ -118,6 +120,9 @@ export interface Demande {
   note_operationnel?: string;
   formulaire_data?: Record<string, any>;
   source?: string;
+  identification_statut: 'nouvelle' | 'existant_valide' | 'verification_requise';
+  potential_duplicate_client?: number;
+  potential_duplicate_detail?: Client;
   documents?: Document[];
   created_at: string;
 }

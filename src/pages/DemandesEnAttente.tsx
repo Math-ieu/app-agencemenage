@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp } from '../api/client';
+import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient } from '../api/client';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import {
   RefreshCw, Search, XCircle,
   Calendar,
-  FileText, Save, Download, Eye, Plus, ChevronDown, ChevronUp, CheckCircle, Edit, UserPlus, Send
+  FileText, Save, Download, Eye, Plus, ChevronDown, ChevronUp, CheckCircle, Edit, UserPlus, Send,
+  AlertTriangle, UserCheck
 } from 'lucide-react';
 import { Demande } from '../types';
 import { normalizeFrequence, normalizePayment, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
@@ -636,6 +637,9 @@ export default function DemandesEnAttente() {
                       <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>
                         {d.segment === 'particulier' ? 'PARTICULIER' : 'ENTREPRISE'}
                       </span>
+                      {d.identification_statut === 'nouvelle' && <span className="badge badge-green" style={{ fontSize: '10px' }}>Nouvelle</span>}
+                      {d.identification_statut === 'existant_valide' && <span className="badge badge-teal" style={{ fontSize: '10px' }}>Client existe déjà</span>}
+                      {d.identification_statut === 'verification_requise' && <span className="badge badge-orange" style={{ fontSize: '10px' }}>Vérification requise</span>}
                       <span className="text-muted text-xs"># {d.id}</span>
                     </div>
                     <h3 className="fw-bold">Nom : <span className="text-main">{d.client_name || d.formulaire_data?.nom || 'Non renseigné'}</span></h3>
@@ -748,6 +752,43 @@ export default function DemandesEnAttente() {
                       </div>
                     )}
                   </div>
+
+                  {/* Duplicate verification block */}
+                  {d.identification_statut === 'verification_requise' && d.potential_duplicate_detail && (
+                    <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div className="flex items-start gap-2 mb-2">
+                        <AlertTriangle size={18} className="text-orange-500 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-bold text-orange-800">Numéro déjà utilisé (vérification requise)</p>
+                          <p className="text-xs text-orange-700">Ce numéro est associé à : <span className="font-bold">{d.potential_duplicate_detail.full_name || d.potential_duplicate_detail.first_name + ' ' + d.potential_duplicate_detail.last_name}</span></p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                        <button className="btn btn-teal text-xs py-1 px-3" onClick={async () => {
+                          try {
+                            await confirmerClient(d.id);
+                            addToast('Client rattaché avec succès', 'success');
+                            fetchDemandes();
+                          } catch (e) { addToast('Erreur lors du rattachement', 'error'); }
+                        }}>C'est le même client</button>
+                        <button className="btn bg-white border border-orange-200 text-orange-700 text-xs py-1 px-3" onClick={async () => {
+                          try {
+                            await nouveauClient(d.id);
+                            addToast('Nouveau client créé (numéro réattribué)', 'success');
+                            fetchDemandes();
+                          } catch (e) { addToast('Erreur', 'error'); }
+                        }}>Nouveau client (réattribué)</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Ownership Alert */}
+                  {d.identification_statut === 'existant_valide' && d.client_details?.assigned_commercial && (
+                    <div className="mt-4 p-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-2">
+                      <UserCheck size={16} className="text-blue-500" />
+                      <p className="text-xs text-blue-700 font-medium">Ce client est déjà suivi par l'agence.</p>
+                    </div>
+                  )}
 
                   <div className="pending-footer">
                     <div className="detail-item">
