@@ -108,6 +108,7 @@ export interface Demande {
   mode_paiement_label?: string;
   statut_paiement: string;
   statut_paiement_label?: string;
+  statut_paiement_ui?: string;
   profils_envoyes?: Agent[];
   profil_share_link?: string;
   profil_share_links?: Array<{

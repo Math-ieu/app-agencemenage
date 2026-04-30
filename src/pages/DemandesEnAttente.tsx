@@ -22,7 +22,15 @@ const isDevisRequired = (d: Demande | null) => {
 const normalizeServiceLabel = (value: string) =>
   (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
-
+const PAYMENT_STATUS_OPTIONS = [
+  { value: 'non_confirme', apiValue: 'non_paye', label: 'Non confirmé' },
+  { value: 'paiement_en_attente', apiValue: 'acompte', label: 'Paiement en attente' },
+  { value: 'agence_payee_client', apiValue: 'partiel', label: 'Agence payée / Client' },
+  { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
+  { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
+  { value: 'paye', apiValue: 'integral', label: 'Payé' },
+  { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Facturation annulée' },
+];
 export default function DemandesEnAttente() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -71,7 +79,7 @@ export default function DemandesEnAttente() {
     torchons: false,
     montant: '',
     mode_paiement: '',
-    statut_paiement: 'non_paye',
+    statut_paiement_ui: 'non_confirme',
     heard_about_us: '',
     notes: '',
     // Champs spécifiques Grand Ménage
@@ -319,7 +327,7 @@ export default function DemandesEnAttente() {
       nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: '', heure: '',
       scheduling_type: 'fixed', preference_horaire: '', type_habitation: '', frequence: '', intervention_nature: 'sinistre', accommodation_state: '', cleanliness_type: '', nb_intervenants: 1,
       surface: 50, details_pieces: '', duree: 4, produits: false, torchons: false,
-      montant: '', mode_paiement: '', statut_paiement: 'non_paye', heard_about_us: '', notes: '',
+      montant: '', mode_paiement: '', statut_paiement_ui: 'non_confirme', heard_about_us: '', notes: '',
       service_type: 'flexible', structure_type: '', nb_personnel: 1,
       lieu_garde: 'domicile', age_personne: '', sexe_personne: '',
       mobilite: '', situation_medicale: '', nb_jours: 1,
@@ -365,7 +373,7 @@ export default function DemandesEnAttente() {
       torchons: d.formulaire_data?.torchons || d.formulaire_data?.torchonsEtSerpierres || false,
       montant: d.prix?.toString() || d.formulaire_data?.montant || '',
       mode_paiement: normalizePayment(d.mode_paiement || d.formulaire_data?.mode_paiement || ''),
-      statut_paiement: normalizePayment(d.statut_paiement || d.formulaire_data?.statut_paiement || 'non_paye'),
+      statut_paiement_ui: d.formulaire_data?.facturation?.statut_paiement_ui || d.formulaire_data?.statut_paiement_ui || d.statut_paiement_ui || (d.statut_paiement === 'integral' ? 'paye' : d.statut_paiement === 'acompte' ? 'paiement_en_attente' : 'non_confirme'),
       heard_about_us: d.formulaire_data?.heard_about_us || d.formulaire_data?.comment_connu || d.formulaire_data?.lead_source || '',
       notes: d.formulaire_data?.notes || '',
       service_type: d.formulaire_data?.service_type || 'flexible',
@@ -414,6 +422,8 @@ export default function DemandesEnAttente() {
         torchonsEtSerpierres: Boolean(formData.torchons),
       };
 
+      const paymentOption = PAYMENT_STATUS_OPTIONS.find(o => o.value === formData.statut_paiement_ui);
+
       const payload = {
         client_name: clientDisplayName,
         client_phone: finalPhone,
@@ -424,10 +434,15 @@ export default function DemandesEnAttente() {
         heure_intervention: isFixedSchedule ? (formData.heure || '') : '',
         prix: formData.montant || null,
         mode_paiement: formData.mode_paiement,
-        statut_paiement: formData.statut_paiement,
+        statut_paiement: paymentOption?.apiValue || 'non_paye',
         frequency: frequencyValue,
         frequency_label: formData.frequence,
         formulaire_data: {
+          facturation: {
+            ...(editingDemande?.formulaire_data?.facturation || {}),
+            statut_paiement_ui: formData.statut_paiement_ui,
+          },
+          statut_paiement_ui: formData.statut_paiement_ui,
           nom: clientDisplayName,
           firstName: activeSegment === 'particulier' ? (formData.nom.split(' ').slice(0, -1).join(' ') || formData.nom) : '',
           lastName: activeSegment === 'particulier' ? (formData.nom.split(' ').slice(-1).join(' ') || formData.nom) : '',
@@ -1451,11 +1466,10 @@ export default function DemandesEnAttente() {
                     </div>
                     <div className="form-group">
                       <label className="label-teal">Statut de paiement</label>
-                      <select className="ws-select" value={formData.statut_paiement} onChange={e => setFormData({ ...formData, statut_paiement: e.target.value })}>
-                        <option value="non_paye">Non payé</option>
-                        <option value="acompte">Acompte versé</option>
-                        <option value="partiel">Paiement partiel</option>
-                        <option value="integral">Payé</option>
+                      <select className="ws-select" value={formData.statut_paiement_ui} onChange={e => setFormData({ ...formData, statut_paiement_ui: e.target.value })}>
+                        {PAYMENT_STATUS_OPTIONS.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
