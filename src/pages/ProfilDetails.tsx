@@ -373,32 +373,61 @@ export default function ProfilDetails() {
     let profilDoitAgence = 0;
     let agenceDoitProfil = 0;
 
+    if (!agent) return { totalCa: 0, nombreMissions: 0, profilDoitAgence: 0, agenceDoitProfil: 0 };
+
     missions.forEach((mission) => {
       const demande = mission?.demande_detail || {};
-      const montant = toNumber(demande.prix);
-      const partAgence = montant * 0.5;
-      const partProfil = montant * 0.5;
-      totalCa += montant;
+      const facturation = demande?.formulaire_data?.facturation || {};
+      const montantTotal = toNumber(facturation.montant_ttc || demande.prix);
 
-      const encaisseParProfil = demande.mode_paiement === 'sur_place';
-      const paiementIntegral = demande.statut_paiement === 'integral';
+      // Chercher la part de CE profil dans parts_repartition
+      const partsRep: any[] = Array.isArray(facturation.parts_repartition) ? facturation.parts_repartition
+        : Array.isArray(demande.parts_repartition) ? demande.parts_repartition : [];
 
-      if (!paiementIntegral) {
-        if (encaisseParProfil) {
-          profilDoitAgence += partAgence;
-        } else {
-          agenceDoitProfil += partProfil;
-        }
+      const myPart = partsRep.find((p: any) => Number(p.profile_id) === agent.id);
+      const partProfil = myPart ? toNumber(myPart.amount) : toNumber(facturation.montant_agence_doit_profil || montantTotal * 0.5);
+
+      const partAgenceVal = toNumber(facturation.part_agence || demande.part_agence || montantTotal * 0.5);
+      const nbProfiles = partsRep.length > 0 ? partsRep.length : 1;
+
+      // CA généré = part du profil + sa proportion de la part agence
+      // (Pour que la somme des CA de tous les profils donne bien le CA total de la demande)
+      totalCa += (partProfil + (partAgenceVal / nbProfiles));
+
+      // Déterminer le statut de paiement
+      const statutUi = facturation.statut_paiement_ui || demande.statut_paiement_ui || '';
+      const encaissePar = facturation.encaisse_par || (mission.encaisse_par === 'profil' ? 'profil' : 'agence');
+
+      // Facturation annulée : ignorer
+      if (statutUi === 'facturation_annulee' || mission.statut === 'annulee') return;
+
+      // Logique de dettes
+      if (statutUi === 'agence_payee_client') {
+        // L'agence a encaissé → elle doit la part du profil
+        agenceDoitProfil += toNumber(facturation.montant_agence_doit_profil || partProfil);
+      } else if (statutUi === 'profil_paye_client') {
+        // Le profil a encaissé → il doit la part de l'agence
+        profilDoitAgence += toNumber(facturation.montant_profil_doit_agence || partAgenceVal);
+      } else if (encaissePar === 'agence') {
+        // Paiement standard via agence → agence doit profil
+        agenceDoitProfil += partProfil;
+      } else if (encaissePar === 'profil') {
+        // Paiement via profil → profil doit agence
+        profilDoitAgence += partAgenceVal;
       }
+
+      // Soustraire si déjà réglé
+      if (mission.part_profil_versee && encaissePar === 'agence') agenceDoitProfil -= partProfil;
+      if (mission.part_agence_reversee && encaissePar === 'profil') profilDoitAgence -= partAgenceVal;
     });
 
     return {
-      totalCa,
+      totalCa: Math.max(0, totalCa),
       nombreMissions: missions.length,
-      profilDoitAgence,
-      agenceDoitProfil,
+      profilDoitAgence: Math.max(0, profilDoitAgence),
+      agenceDoitProfil: Math.max(0, agenceDoitProfil),
     };
-  }, [missions]);
+  }, [agent, missions]);
 
   const formatMissionStatus = (status?: string): string => {
     const map: Record<string, string> = {

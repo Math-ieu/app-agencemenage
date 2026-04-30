@@ -86,6 +86,7 @@ interface FacturationRow {
   statutPaiementUi?: string;
   phone?: string;
   originalDemande?: any;
+  parts_repartition?: any[];
 }
 
 interface ProfileAccount {
@@ -512,6 +513,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     montantProfilDoitAgence: Number((demande as any)?.montant_profil_doit_agence || item.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0),
     statutPaiementUi: rawStatutPaiementUi,
     originalDemande: demande,
+    parts_repartition: Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : Array.isArray(facturationData.parts_repartition) ? facturationData.parts_repartition : undefined,
   };
 };
 
@@ -609,6 +611,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     montantProfilDoitAgence: Number(demande.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0),
     statutPaiementUi: rawStatutPaiementUi,
     originalDemande: demande,
+    parts_repartition: Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : Array.isArray(facturationData.parts_repartition) ? facturationData.parts_repartition : undefined,
   };
 };
 
@@ -779,44 +782,96 @@ export default function VueGlobale() {
     }
 
     for (const item of allRows) {
-      const profileName = item.profil || 'Profil inconnu';
-      const profileId = item.profilId;
-      const accountKey = profileId ? `agent-${profileId}` : `mission-${profileName}`;
-      const montant = item.montant;
-      const partAgence = item.partAgence;
-      const partProfil = item.partProfil;
+      if (item.parts_repartition && item.parts_repartition.length > 0) {
+        // Multi-profile logic
+        const splitPartAgence = item.partAgence / item.parts_repartition.length;
 
-      if (profileName === '—' && !profileId) continue;
+        for (const part of item.parts_repartition) {
+          const profileId = Number(part.profile_id);
+          // If we can't find the name in the part object, we'll try to find it in the agents list
+          const agentObj = agents.find(a => a.id === profileId);
+          const profileName = part.profile_name || (agentObj ? (agentObj.full_name || `${agentObj.first_name || ''} ${agentObj.last_name || ''}`).trim() : 'Profil inconnu');
+          const accountKey = `agent-${profileId}`;
+          const amount = Number(part.amount || 0);
 
-      if (!grouped.has(accountKey)) {
-        grouped.set(accountKey, {
-          id: profileId ?? grouped.size + 1,
-          key: accountKey,
-          name: profileName,
-          city: item.ville || 'Casablanca',
-          phone: item.phone || '—',
-          missions: 0,
-          caTotal: 0,
-          partAgence: 0,
-          partProfil: 0,
-          verseAuProfil: 0,
-          recuDuProfil: 0,
-        });
-      }
+          if (!grouped.has(accountKey)) {
+            grouped.set(accountKey, {
+              id: profileId,
+              key: accountKey,
+              name: profileName,
+              city: item.ville || 'Casablanca',
+              phone: agentObj?.phone || '—',
+              missions: 0,
+              caTotal: 0,
+              partAgence: 0,
+              partProfil: 0,
+              verseAuProfil: 0,
+              recuDuProfil: 0,
+            });
+          }
 
-      const profile = grouped.get(accountKey)!;
-      profile.missions += 1;
-      profile.caTotal += montant;
-      profile.partAgence += partAgence;
-      profile.partProfil += partProfil;
+          const profile = grouped.get(accountKey)!;
+          profile.missions += 1;
+          profile.caTotal += (amount + splitPartAgence); // CA généré = part du profil + sa part de la commission agence
+          profile.partAgence += splitPartAgence;
+          profile.partProfil += amount;
 
-      const encaissePar = item.encaissePar;
-      if (encaissePar === 'Agence') {
-        if (item.reglementInterne === 'Réglé') {
-          profile.verseAuProfil += getPartProfilDueFromAgence(item);
+          const encaissePar = item.encaissePar;
+          // Approximate debts for multi-profile based on their specific amount
+          if (encaissePar === 'Agence') {
+            if (item.reglementInterne === 'Réglé') {
+               // If settled, assume this profile got their part
+               profile.verseAuProfil += amount;
+            } else if (item.statutPaiementUi === 'agence_payee_client' || item.statutPaiementUi === 'Agence payée / Client') {
+               // Agency owes this profile their amount
+               // (Handled by solde calculation later, but we can track versements here)
+            }
+          } else if (item.reglementInterne === 'Réglé') {
+             // If settled, assume this profile gave the agency part
+             profile.recuDuProfil += splitPartAgence;
+          }
         }
-      } else if (item.reglementInterne === 'Réglé') {
-        profile.recuDuProfil += getPartAgenceDueFromProfil(item);
+      } else {
+        // Legacy single profile logic
+        const profileName = item.profil || 'Profil inconnu';
+        const profileId = item.profilId;
+        const accountKey = profileId ? `agent-${profileId}` : `mission-${profileName}`;
+        const montant = item.montant;
+        const partAgence = item.partAgence;
+        const partProfil = item.partProfil;
+
+        if (profileName === '—' && !profileId) continue;
+
+        if (!grouped.has(accountKey)) {
+          grouped.set(accountKey, {
+            id: profileId ?? grouped.size + 1,
+            key: accountKey,
+            name: profileName,
+            city: item.ville || 'Casablanca',
+            phone: item.phone || '—',
+            missions: 0,
+            caTotal: 0,
+            partAgence: 0,
+            partProfil: 0,
+            verseAuProfil: 0,
+            recuDuProfil: 0,
+          });
+        }
+
+        const profile = grouped.get(accountKey)!;
+        profile.missions += 1;
+        profile.caTotal += partProfil; // Align CA Total with the single part as well
+        profile.partAgence += partAgence;
+        profile.partProfil += partProfil;
+
+        const encaissePar = item.encaissePar;
+        if (encaissePar === 'Agence') {
+          if (item.reglementInterne === 'Réglé') {
+            profile.verseAuProfil += getPartProfilDueFromAgence(item);
+          }
+        } else if (item.reglementInterne === 'Réglé') {
+          profile.recuDuProfil += getPartAgenceDueFromProfil(item);
+        }
       }
     }
 
