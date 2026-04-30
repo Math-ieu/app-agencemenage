@@ -968,11 +968,17 @@ export default function VueGlobale() {
 
   const suiviRecap = useMemo(() => {
     const activeRows = filteredSuiviRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
+    const cancelledRows = filteredSuiviRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
+
     const totalFacture = activeRows.filter((row) => row.paiement === 'paye').length;
     const chiffreAffaires = activeRows
       .filter((row) => row.paiement !== 'non_paye')
       .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
-    const commissionAgence = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
+
+    const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
+    const pertes = cancelledRows.reduce((sum, row) => sum + (row.profilSeraPaye ? Number(row.montantProfilAnnulation || 0) : 0), 0);
+    const commissionAgence = commissionBrute - pertes;
+
     const paiementsEnAttente = activeRows.filter((row) => row.paiement === 'partiellement_paye').length;
 
     return { totalFacture, chiffreAffaires, commissionAgence, paiementsEnAttente };
@@ -988,15 +994,23 @@ export default function VueGlobale() {
   }, [facturationData]);
 
   const globalKpis = useMemo(() => {
-    const missions = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee').length;
-    const chiffreAffaires = periodFilteredRows
-      .filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee' && row.paiement !== 'non_paye')
+    const activeRows = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
+    const cancelledRows = periodFilteredRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
+
+    const missions = activeRows.length;
+    const chiffreAffaires = activeRows
+      .filter((row) => row.paiement !== 'non_paye')
       .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
-    const commissionAgence = periodFilteredRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
-    
-    const facturationAnnulee = periodFilteredRows
-      .filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee')
+
+    // Commission brute (hors annulations)
+    const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
+
+    // Perte = total payé au profil pour les facturations annulées
+    const facturationAnnulee = cancelledRows
       .reduce((sum, row) => sum + (row.profilSeraPaye ? Number(row.montantProfilAnnulation || 0) : 0), 0);
+
+    // Commission nette = brute - pertes
+    const commissionAgence = commissionBrute - facturationAnnulee;
 
     return { missions, chiffreAffaires, commissionAgence, facturationAnnulee };
   }, [periodFilteredRows]);
@@ -1552,12 +1566,12 @@ export default function VueGlobale() {
             <article className="fg-global-kpi green">
               <p className="fg-global-kpi-title">COMMISSION AGENCE</p>
               <p className="fg-global-kpi-value">{money(globalKpis.commissionAgence)}</p>
-              <p className="fg-global-kpi-subtitle">part agence (mensuelle)</p>
+              <p className="fg-global-kpi-subtitle">net (après déduction pertes)</p>
             </article>
             <article className="fg-global-kpi red">
-              <p className="fg-global-kpi-title">FACTURATION ANNULÉE</p>
+              <p className="fg-global-kpi-title">FACTURATION ANNULÉE / PERTE</p>
               <p className="fg-global-kpi-value">{money(globalKpis.facturationAnnulee)}</p>
-              <p className="fg-global-kpi-subtitle">perte totale</p>
+              <p className="fg-global-kpi-subtitle">montant payé aux profils</p>
             </article>
           </div>
 

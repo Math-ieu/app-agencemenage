@@ -386,12 +386,6 @@ export default function LaCaisse() {
           <p>SOLDE ACTUEL</p>
           <strong>{moneyFormatter.format(stats.solde)} DH</strong>
         </article>
-        <article className="lc-stat-card lc-stat-amber">
-          <p>COMMISSION AGENCE</p>
-          <strong>{moneyFormatter.format(commissionAgence)} DH</strong>
-          <span className="lc-stat-subtitle">mois en cours</span>
-          <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-green" />
-        </article>
         <article className="lc-stat-card lc-stat-green">
           <p>TOTAL ENTRÉES CAISSE</p>
           <strong>{moneyFormatter.format(stats.total_entrees)} DH</strong>
@@ -401,6 +395,12 @@ export default function LaCaisse() {
           <p>TOTAL SORTIES CAISSE</p>
           <strong>{moneyFormatter.format(stats.total_sorties)} DH</strong>
           <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-red" />
+        </article>
+        <article className="lc-stat-card lc-stat-amber">
+          <p>COMMISSION AGENCE</p>
+          <strong>{moneyFormatter.format(commissionAgence)} DH</strong>
+          <span className="lc-stat-subtitle">mois en cours</span>
+          <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-green" />
         </article>
       </section>
 
