@@ -22,7 +22,7 @@ import {
   XCircle,
   Trash2,
 } from 'lucide-react';
-import { fetchSecureDocBlob, generateDocument, getAgents, getMissions, sendWhatsApp, updateMission } from '../../api/client';
+import { fetchSecureDocBlob, generateDocument, getAgents, getDemandesHistorique, getMissions, sendWhatsApp, updateMission, updateDemande } from '../../api/client';
 import { encodeId } from '../../utils/obfuscation';
 import { useToastStore } from '../../store/toast';
 import './VueGlobale.css';
@@ -44,6 +44,8 @@ interface MissionEditForm {
   encaissePar: 'Agence' | 'Profil';
   partProfilVersee: 'Oui' | 'Non';
   dateVersementProfil: string;
+  partAgence: string;
+  montantAgenceDoitProfil: string;
 }
 
 interface FacturationRow {
@@ -73,6 +75,8 @@ interface FacturationRow {
   commercialName?: string;
   partProfilVersee?: boolean;
   dateVersementProfil?: string;
+  partAgenceReversee?: boolean;
+  dateRemiseAgence?: string;
   // New fields from Dashboard
   annulationRaison?: string;
   profilSeraPaye?: boolean;
@@ -80,6 +84,8 @@ interface FacturationRow {
   montantAgenceDoitProfil?: number;
   montantProfilDoitAgence?: number;
   statutPaiementUi?: string;
+  phone?: string;
+  originalDemande?: any;
 }
 
 interface ProfileAccount {
@@ -113,6 +119,11 @@ interface MissionApiItem {
   date_versement_profil?: string;
   part_agence_reversee?: boolean;
   date_remise_agence?: string;
+  annulation_raison?: string;
+  profil_sera_paye?: boolean;
+  montant_profil_annulation?: string | number;
+  montant_agence_doit_profil?: string | number;
+  montant_profil_doit_agence?: string | number;
   demande_detail?: {
     client?: number;
     id?: number;
@@ -127,6 +138,10 @@ interface MissionApiItem {
     mode_paiement_label?: string;
     statut_paiement?: string;
     reste_a_payer?: string | number;
+    client_phone?: string;
+    client_whatsapp?: string;
+    part_agence?: string | number;
+    parts_repartition?: any[];
   };
   agent_detail?: {
     id?: number;
@@ -231,11 +246,11 @@ const getMontantEncaisseProfil = (row: FacturationRow): number => {
 };
 
 const getPartProfilDueFromAgence = (row: FacturationRow): number => {
-  if (row.statutPaiementUi === 'agence_payee_client') {
+  if (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client') {
     return Number(row.montantAgenceDoitProfil || 0);
   }
 
-  if (row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée') {
+  if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée') {
     return row.profilSeraPaye ? Number(row.montantProfilAnnulation || 0) : 0;
   }
 
@@ -252,7 +267,7 @@ const getPartProfilDueFromAgence = (row: FacturationRow): number => {
 };
 
 const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
-  if (row.statutPaiementUi === 'profil_paye_client') {
+  if (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client') {
     return Number(row.montantProfilDoitAgence || 0);
   }
 
@@ -273,21 +288,29 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
 };
 
 const getCommissionAgenceEncaissee = (row: FacturationRow): number => {
-  if (row.statutPaiementUi === 'facturation_annulee') {
+  if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée') {
     return row.profilSeraPaye ? -(Number(row.montantProfilAnnulation) || 0) : 0;
   }
 
-  if (row.statutPaiementUi === 'agence_payee_client') {
-    return getMontantPaye(row) - Number(row.montantAgenceDoitProfil || 0);
+  // Si le client n'a pas payé, on ne compte pas de commission
+  if (row.paiement !== 'paye') return 0;
+
+  // Agence payée / Client : l'agence a déjà l'argent → commission = partAgence (immédiat)
+  if (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client') {
+    return row.partAgence;
   }
 
-  if (row.statutPaiementUi === 'profil_paye_client') {
-    return Number(row.montantProfilDoitAgence || 0);
+  // Profil payé / Client : le profil a l'argent → commission seulement si le profil a réglé l'agence
+  if (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client') {
+    if (row.reglementInterne === 'Réglé') {
+      return Number(row.montantProfilDoitAgence || row.partAgence || 0);
+    }
+    return 0;
   }
 
   if (row.encaissePar === 'Agence') {
     const partProfilDue = getPartProfilDueFromAgence(row);
-    return Math.max(getMontantPaye(row) - partProfilDue, 0);
+    return Math.max(row.montant - partProfilDue, 0);
   }
 
   if (row.reglementInterne === 'Réglé') {
@@ -377,25 +400,40 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   const demande = item.demande_detail;
   const agent = item.agent_detail;
   const montant = Number(demande?.prix ?? 0);
-  const partAgence = Number((montant * 0.5).toFixed(2));
-  const partProfil = Number((montant - partAgence).toFixed(2));
   const rawMontantPaye = item.montant_paye !== undefined ? Number(item.montant_paye) : 0;
   
-  // Rétrocompatibilité : si la mission n'a pas de statut métier propre ni de montant,
-  // on se fie au statut de la demande.
-  const legacyStatut = (item.paiement_client_statut === 'non_paye' || !item.paiement_client_statut) 
-    && demande?.statut_paiement && demande.statut_paiement !== 'non_paye'
-    ? demande.statut_paiement
-    : item.paiement_client_statut;
+  const facturationData = (demande as any)?.formulaire_data?.facturation || {};
+  
+  // Source de vérité : formulaire_data.facturation.statut_paiement_ui (défini par le Dashboard)
+  // Puis statut mission, puis mapping des valeurs API legacy de statut_paiement
+  const rawStatutPaiementUi = 
+    facturationData.statut_paiement_ui || 
+    item.paiement_client_statut || 
+    (demande?.statut_paiement === 'integral' ? 'paye' : 
+     demande?.statut_paiement === 'acompte' ? 'paiement_en_attente' :
+     demande?.statut_paiement === 'partiel' ? 'paiement_partiel' :
+     'non_paye');
 
-  const rawStatutPaiement = legacyStatut === 'integral' || legacyStatut === 'effectue' || (rawMontantPaye >= montant && montant > 0)
-    ? 'effectue'
-    : legacyStatut === 'partiel' || legacyStatut === 'acompte' || legacyStatut === 'en_attente' || rawMontantPaye > 0
-      ? 'en_attente'
-      : 'non_paye';
+  // Deriver le responsable de l'encaissement en fonction du statut ou de la mission
+  let encaissePar: FacturationRow['encaissePar'] = item.encaisse_par === 'profil' || demande?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
+  if (['profil_paye_client', 'Profil payé / Client'].includes(rawStatutPaiementUi)) {
+    encaissePar = 'Profil';
+  } else if (['agence_payee_client', 'Agence payée / Client'].includes(rawStatutPaiementUi)) {
+    encaissePar = 'Agence';
+  } else if (['paye', 'integral', 'effectue'].includes(rawStatutPaiementUi)) {
+    if (item.part_agence_reversee || facturationData.part_agence_reversee) {
+      encaissePar = 'Profil';
+    } else if (item.part_profil_versee || facturationData.part_profil_versee) {
+      encaissePar = 'Agence';
+    }
+  }
 
   const paiement: FacturationRow['paiement'] =
-    rawStatutPaiement === 'effectue' ? 'paye' : rawStatutPaiement === 'en_attente' ? 'partiellement_paye' : 'non_paye';
+    ['paye', 'agence_payee_client', 'profil_paye_client', 'Agence payée / Client', 'Profil payé / Client', 'effectue', 'integral'].includes(rawStatutPaiementUi) 
+      ? 'paye' 
+      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi) 
+        ? 'partiellement_paye' 
+        : 'non_paye';
 
   const missionStatus = item.statut;
   const statut: FacturationRow['statut'] =
@@ -406,8 +444,6 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
         : missionStatus === 'terminee'
           ? 'Terminée'
           : 'Confirmée';
-
-  const encaissePar: FacturationRow['encaissePar'] = item.encaisse_par === 'profil' || demande?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
   const partProfilVersee = encaissePar === 'Agence'
     ? (item.part_profil_versee ?? false)
     : (item.part_agence_reversee ?? false);
@@ -426,7 +462,17 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 
   const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
 
-  const facturationData = (demande as any)?.formulaire_data?.facturation || {};
+  // Nouveaux champs top-level du modèle Demande (Dashboard)
+  const d_part_agence = (demande as any)?.part_agence;
+  const d_parts_repartition = (demande as any)?.parts_repartition;
+
+  const partAgence = (d_part_agence !== null && d_part_agence !== undefined) 
+    ? Number(d_part_agence) 
+    : Number(facturationData.part_agence ?? (montant * 0.5));
+
+  const partProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
+    ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+    : Number(facturationData.montant_agence_doit_profil ?? facturationData.part_profil ?? (montant - partAgence));
 
   return {
     missionId: item.id,
@@ -453,17 +499,116 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     datePaiement: item.date_paiement ? formatDateFR(item.date_paiement) : (paiement === 'non_paye' ? '—' : formatDateFR(demande?.date_intervention)),
     modePaiementReel: modeLabelFromCode(item.mode_paiement_reel) || demande?.mode_paiement_label || '—',
     commercialName: demande?.assigned_to_name || '—',
+    phone: agent?.phone || demande?.client_phone || '—',
     partProfilVersee,
-    dateVersementProfil: encaissePar === 'Agence'
-      ? (item.date_versement_profil ? formatDateFR(item.date_versement_profil) : '—')
-      : (item.date_remise_agence ? formatDateFR(item.date_remise_agence) : '—'),
+    dateVersementProfil: item.date_versement_profil || '—',
+    partAgenceReversee: item.part_agence_reversee,
+    dateRemiseAgence: item.date_remise_agence || '—',
     // New fields
-    annulationRaison: facturationData.annulation_raison,
-    profilSeraPaye: facturationData.profil_sera_paye,
-    montantProfilAnnulation: facturationData.montant_profil_annulation,
-    montantAgenceDoitProfil: facturationData.montant_agence_doit_profil,
-    montantProfilDoitAgence: facturationData.montant_profil_doit_agence,
-    statutPaiementUi: facturationData.statut_paiement_ui,
+    annulationRaison: (demande as any)?.annulation_raison || item.annulation_raison || facturationData.annulation_raison,
+    profilSeraPaye: (demande as any)?.profil_sera_paye !== undefined ? (demande as any).profil_sera_paye : item.profil_sera_paye,
+    montantProfilAnnulation: Number((demande as any)?.montant_profil_annulation || item.montant_profil_annulation || facturationData.montant_profil_annulation || 0),
+    montantAgenceDoitProfil: Number((demande as any)?.montant_agence_doit_profil || item.montant_agence_doit_profil || facturationData.montant_agence_doit_profil || 0),
+    montantProfilDoitAgence: Number((demande as any)?.montant_profil_doit_agence || item.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0),
+    statutPaiementUi: rawStatutPaiementUi,
+    originalDemande: demande,
+  };
+};
+
+const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
+  const montant = Number(demande?.prix ?? 0);
+  const facturationData = demande?.formulaire_data?.facturation || {};
+  
+  // Nouveaux champs top-level du modèle Demande (Dashboard)
+  const d_part_agence = demande?.part_agence;
+  const d_parts_repartition = demande?.parts_repartition;
+
+  const partAgence = (d_part_agence !== null && d_part_agence !== undefined) 
+    ? Number(d_part_agence) 
+    : Number(facturationData.part_agence ?? (montant * 0.5));
+
+  const partProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
+    ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+    : Number(facturationData.montant_agence_doit_profil ?? facturationData.part_profil ?? (montant - partAgence));
+
+  // Source de vérité : formulaire_data.facturation.statut_paiement_ui (défini par le Dashboard)
+  // Puis champ calculé par le backend (statut_paiement_ui du serializer historique)
+  // Puis mapping des valeurs API legacy de statut_paiement
+  const rawStatutPaiementUi = 
+    facturationData.statut_paiement_ui || 
+    demande.statut_paiement_ui ||
+    (demande.statut_paiement === 'integral' ? 'paye' : 
+     demande.statut_paiement === 'acompte' ? 'paiement_en_attente' :
+     demande.statut_paiement === 'partiel' ? 'paiement_partiel' :
+     'non_confirme');
+  
+  // Deriver le responsable de l'encaissement en fonction du statut ou de la demande
+  let encaissePar: FacturationRow['encaissePar'] = demande?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
+  if (['profil_paye_client', 'Profil payé / Client'].includes(rawStatutPaiementUi)) {
+    encaissePar = 'Profil';
+  } else if (['agence_payee_client', 'Agence payée / Client'].includes(rawStatutPaiementUi)) {
+    encaissePar = 'Agence';
+  } else if (['paye', 'integral', 'effectue'].includes(rawStatutPaiementUi)) {
+    if (facturationData.part_agence_reversee || facturationData.montant_profil_doit_agence > 0) {
+      encaissePar = 'Profil';
+    } else if (facturationData.part_profil_versee || facturationData.montant_agence_doit_profil > 0) {
+      encaissePar = 'Agence';
+    }
+  }
+
+  const paiement: FacturationRow['paiement'] =
+    ['paye', 'agence_payee_client', 'profil_paye_client', 'Agence payée / Client', 'Profil payé / Client', 'integral', 'effectue'].includes(rawStatutPaiementUi) 
+      ? 'paye' 
+      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi) 
+        ? 'partiellement_paye' 
+        : 'non_paye';
+
+  const statut: FacturationRow['statut'] =
+    demande.statut === 'annule' ? 'Facturation annulée' : paiement === 'paye' ? 'Payé' : 'Confirmée';
+  
+  // For demands without missions, we check if payment was marked in formulaire_data
+  const partProfilVersee = Boolean(facturationData.part_profil_versee);
+  const partAgenceReversee = Boolean(facturationData.part_agence_reversee);
+  const reglementInterne = (encaissePar === 'Agence' ? partProfilVersee : partAgenceReversee) ? 'Réglé' : 'Non réglé';
+
+  return {
+    demandeId: demande?.id,
+    clientId: demande?.client,
+    profilId: demande?.profil_id,
+    missionNo: `DEM-${String(demande?.id).padStart(6, '0')}`,
+    date: formatDateFR(demande?.date_intervention) || formatDateFR(demande?.created_at),
+    client: demande?.client_name || '—',
+    ville: demande?.client_city || 'Casablanca',
+    profil: demande?.profil_name || '—',
+    service: demande?.service || 'Service',
+    segment: demande?.segment === 'entreprise' ? 'Entreprise' : 'Particulier',
+    montant,
+    modePaiement: demande?.mode_paiement_label || '—',
+    partAgence,
+    partProfil,
+    encaissePar,
+    paiement,
+    statut,
+    reglementInterne,
+    montantPaye: paiement === 'paye' 
+      ? (Number(facturationData.montant_verse) || montant) 
+      : (paiement === 'partiellement_paye' ? (Number(facturationData.montant_verse) || Number((montant * 0.5).toFixed(2))) : 0),
+    montantEncaisseProfil: 0,
+    datePaiement: '—',
+    modePaiementReel: demande?.mode_paiement_label || '—',
+    commercialName: demande?.assigned_to_name || '—',
+    phone: demande?.client_phone || '—',
+    partProfilVersee,
+    dateVersementProfil: facturationData.date_versement_profil || '—',
+    partAgenceReversee,
+    dateRemiseAgence: facturationData.date_remise_agence || '—',
+    annulationRaison: demande.annulation_raison || demande.motif || facturationData.annulation_raison,
+    profilSeraPaye: demande.profil_sera_paye !== undefined ? demande.profil_sera_paye : facturationData.profil_sera_paye,
+    montantProfilAnnulation: Number(demande.montant_profil_annulation || facturationData.montant_profil_annulation || 0),
+    montantAgenceDoitProfil: Number(demande.montant_agence_doit_profil || facturationData.montant_agence_doit_profil || 0),
+    montantProfilDoitAgence: Number(demande.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0),
+    statutPaiementUi: rawStatutPaiementUi,
+    originalDemande: demande,
   };
 };
 
@@ -490,6 +635,8 @@ export default function VueGlobale() {
     encaissePar: 'Agence',
     partProfilVersee: 'Oui',
     dateVersementProfil: '',
+    partAgence: '0',
+    montantAgenceDoitProfil: '0',
   });
   const [entryMode, setEntryMode] = useState<MissionEntryMode>('demande');
   const [isSourceOpen, setIsSourceOpen] = useState(false);
@@ -520,12 +667,12 @@ export default function VueGlobale() {
   const [debitDateFrom, setDebitDateFrom] = useState('');
   const [debitDateTo, setDebitDateTo] = useState('');
   const [debitSegmentFilter, setDebitSegmentFilter] = useState<'Tous les segments' | 'Particulier' | 'Entreprise'>('Tous les segments');
-  const [debitPaymentFilter, setDebitPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Non payé');
+  const [debitPaymentFilter, setDebitPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Tous');
   const [debitMissionFilter, setDebitMissionFilter] = useState<'Tous' | 'Facturée' | 'Facturation annulée'>('Tous');
   const [debitSearch, setDebitSearch] = useState('');
   const [searchProfiles, setSearchProfiles] = useState('');
   const [suiviSearch, setSuiviSearch] = useState('');
-  const [creditPaymentFilter, setCreditPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Non payé');
+  const [creditPaymentFilter, setCreditPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Tous');
   const [suiviDateFrom, setSuiviDateFrom] = useState(() => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
@@ -547,6 +694,7 @@ export default function VueGlobale() {
   const loadFinanceData = useCallback(async () => {
     const missions: MissionApiItem[] = [];
     const agents: AgentApiItem[] = [];
+    const demands: any[] = [];
 
     try {
       let missionPage = 1;
@@ -559,7 +707,21 @@ export default function VueGlobale() {
         missionPage += 1;
       }
     } catch {
-      // Missions can fail independently; keep profiles load running.
+      // Missions can fail independently
+    }
+
+    try {
+      let demandPage = 1;
+      while (true) {
+        const response = await getDemandesHistorique({ ordering: '-created_at', page: demandPage });
+        const data = response.data;
+        const rows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+        demands.push(...rows);
+        if (!data?.next || rows.length === 0) break;
+        demandPage += 1;
+      }
+    } catch {
+      // Demands can fail independently
     }
 
     try {
@@ -573,10 +735,22 @@ export default function VueGlobale() {
         agentPage += 1;
       }
     } catch {
-      // Agents can fail due to permissions; UI will still show mission-derived accounts.
+      // Agents can fail
     }
 
-    setFacturationData(missions.map(mapMissionToFacturationRow));
+    // Fusionner les données : Missions prioritaires, puis Demandes sans mission
+    const missionDemandeIds = new Set(missions.map(m => m.demande_detail?.id).filter(Boolean));
+    const uniqueDemands = demands.filter(d => !missionDemandeIds.has(d.id));
+
+    const missionRows = missions.map(mapMissionToFacturationRow);
+    const demandRows = uniqueDemands.map(mapDemandeToFacturationRow);
+    const allRows = [...missionRows, ...demandRows].sort((a, b) => {
+      const dateA = parseFrenchDate(a.date)?.getTime() || 0;
+      const dateB = parseFrenchDate(b.date)?.getTime() || 0;
+      return dateB - dateA;
+    });
+
+    setFacturationData(allRows);
 
     const grouped = new Map<string, ProfileAccount>();
 
@@ -604,21 +778,23 @@ export default function VueGlobale() {
       }
     }
 
-    for (const item of missions) {
-      const profileName = item.agent_detail?.full_name || 'Profil inconnu';
-      const profileId = item.agent_detail?.id;
+    for (const item of allRows) {
+      const profileName = item.profil || 'Profil inconnu';
+      const profileId = item.profilId;
       const accountKey = profileId ? `agent-${profileId}` : `mission-${profileName}`;
-      const montant = Number(item.demande_detail?.prix ?? 0);
-      const partAgence = Number((montant * 0.5).toFixed(2));
-      const partProfil = Number((montant - partAgence).toFixed(2));
+      const montant = item.montant;
+      const partAgence = item.partAgence;
+      const partProfil = item.partProfil;
+
+      if (profileName === '—' && !profileId) continue;
 
       if (!grouped.has(accountKey)) {
         grouped.set(accountKey, {
           id: profileId ?? grouped.size + 1,
           key: accountKey,
           name: profileName,
-          city: item.agent_detail?.city || 'Casablanca',
-          phone: item.agent_detail?.phone || '—',
+          city: item.ville || 'Casablanca',
+          phone: item.phone || '—',
           missions: 0,
           caTotal: 0,
           partAgence: 0,
@@ -634,19 +810,13 @@ export default function VueGlobale() {
       profile.partAgence += partAgence;
       profile.partProfil += partProfil;
 
-      const encaissePar = item.encaisse_par === 'profil' || item.demande_detail?.mode_paiement === 'sur_place' ? 'Profil' : 'Agence';
+      const encaissePar = item.encaissePar;
       if (encaissePar === 'Agence') {
-        if (item.part_profil_versee) {
-          const montantPaye = item.montant_paye !== undefined ? Number(item.montant_paye) : montant;
-          const partProfilDue = Math.min(partProfil, Number((montantPaye * 0.5).toFixed(2)));
-          profile.verseAuProfil += partProfilDue;
+        if (item.reglementInterne === 'Réglé') {
+          profile.verseAuProfil += getPartProfilDueFromAgence(item);
         }
-      } else if (item.part_agence_reversee) {
-        const montantEncaisseProfil = item.montant_encaisse_profil !== undefined
-          ? Number(item.montant_encaisse_profil)
-          : (item.montant_paye !== undefined ? Number(item.montant_paye) : montant);
-        const partAgenceDue = Math.min(partAgence, Number((montantEncaisseProfil * 0.5).toFixed(2)));
-        profile.recuDuProfil += partAgenceDue;
+      } else if (item.reglementInterne === 'Réglé') {
+        profile.recuDuProfil += getPartAgenceDueFromProfil(item);
       }
     }
 
@@ -706,10 +876,10 @@ export default function VueGlobale() {
 
   const suiviBaseRows = useMemo(() => {
     if (suiviStatutFilter === 'Facturation annulée') {
-      return facturationData.filter((row) => row.statut === 'Facturation annulée');
+      return periodFilteredRows.filter((row) => row.statut === 'Facturation annulée');
     }
-    return facturationData.filter((row) => row.statut !== 'Facturation annulée');
-  }, [facturationData, suiviStatutFilter]);
+    return periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée');
+  }, [periodFilteredRows, suiviStatutFilter]);
 
   const filteredSuiviRows = useMemo(() => {
     return suiviBaseRows.filter((row) => {
@@ -751,14 +921,14 @@ export default function VueGlobale() {
 
   const agenceNonPayeAmount = useMemo(
     () => facturationData
-      .filter((row) => row.encaissePar === 'Profil' && row.reglementInterne !== 'Réglé')
+      .filter((row) => (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client' || (!row.statutPaiementUi && row.encaissePar === 'Profil')) && row.reglementInterne !== 'Réglé')
       .reduce((sum, row) => sum + getPartAgenceDueFromProfil(row), 0),
     [facturationData]
   );
 
   const profilNonPayeAmount = useMemo(
     () => facturationData
-      .filter((row) => row.encaissePar === 'Agence' && row.reglementInterne !== 'Réglé')
+      .filter((row) => (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence')) && row.reglementInterne !== 'Réglé')
       .reduce((sum, row) => sum + getPartProfilDueFromAgence(row), 0),
     [facturationData]
   );
@@ -797,12 +967,13 @@ export default function VueGlobale() {
   const displayedMissionTotal = filteredSuiviRows.reduce((sum, row) => sum + row.montant, 0);
 
   const suiviRecap = useMemo(() => {
-    const totalFacture = filteredSuiviRows.filter((row) => row.paiement === 'paye').length;
-    const chiffreAffaires = filteredSuiviRows.reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
-    const commissionAgence = filteredSuiviRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
-
-    // Pending only tracks partial/waiting statuses. Non confirme + Paye are excluded.
-    const paiementsEnAttente = filteredSuiviRows.filter((row) => row.paiement === 'partiellement_paye').length;
+    const activeRows = filteredSuiviRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
+    const totalFacture = activeRows.filter((row) => row.paiement === 'paye').length;
+    const chiffreAffaires = activeRows
+      .filter((row) => row.paiement !== 'non_paye')
+      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
+    const commissionAgence = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
+    const paiementsEnAttente = activeRows.filter((row) => row.paiement === 'partiellement_paye').length;
 
     return { totalFacture, chiffreAffaires, commissionAgence, paiementsEnAttente };
   }, [filteredSuiviRows]);
@@ -818,7 +989,9 @@ export default function VueGlobale() {
 
   const globalKpis = useMemo(() => {
     const missions = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee').length;
-    const chiffreAffaires = periodFilteredRows.reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
+    const chiffreAffaires = periodFilteredRows
+      .filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee' && row.paiement !== 'non_paye')
+      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
     const commissionAgence = periodFilteredRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
     
     const facturationAnnulee = periodFilteredRows
@@ -831,6 +1004,8 @@ export default function VueGlobale() {
   const debitRows = useMemo(
     () => facturationData.filter((row) => 
       row.statutPaiementUi === 'profil_paye_client' || 
+      row.statutPaiementUi === 'Profil payé / Client' ||
+      (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
       (!row.statutPaiementUi && row.encaissePar === 'Profil')
     ),
     [facturationData]
@@ -866,7 +1041,10 @@ export default function VueGlobale() {
   const creditRows = useMemo(
     () => facturationData.filter((row) => 
       row.statutPaiementUi === 'agence_payee_client' || 
+      row.statutPaiementUi === 'Agence payée / Client' ||
+      (row.statutPaiementUi === 'paye' && row.encaissePar === 'Agence') ||
       (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
+      (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) ||
       (!row.statutPaiementUi && row.encaissePar === 'Agence')
     ),
     [facturationData]
@@ -897,7 +1075,7 @@ export default function VueGlobale() {
   const agenceNonPayeByProfile = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of facturationData) {
-      const isDebit = row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
+      const isDebit = row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
       if (!isDebit || row.reglementInterne === 'Réglé') continue;
       map.set(row.profil, (map.get(row.profil) || 0) + getPartAgenceDueFromProfil(row));
     }
@@ -909,7 +1087,7 @@ export default function VueGlobale() {
   const profilNonPayeByProfile = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of facturationData) {
-      const isCredit = row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence');
+      const isCredit = row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence');
       if (!isCredit || row.reglementInterne === 'Réglé') continue;
       map.set(row.profil, (map.get(row.profil) || 0) + getPartProfilDueFromAgence(row));
     }
@@ -994,6 +1172,8 @@ export default function VueGlobale() {
       encaissePar: selectedMission.encaissePar,
       partProfilVersee: selectedMission.partProfilVersee ? 'Oui' : 'Non',
       dateVersementProfil: formatDateISO(selectedMission.dateVersementProfil),
+      partAgence: String(selectedMission.partAgence ?? 0),
+      montantAgenceDoitProfil: String(selectedMission.montantAgenceDoitProfil ?? 0),
     });
 
     setShowMissionEditModal(true);
@@ -1004,25 +1184,71 @@ export default function VueGlobale() {
   };
 
   const updateCreditPaymentStatus = async (row: FacturationRow, nextStatus: 'Payé' | 'Non payé') => {
-    if (!row.missionId || row.encaissePar !== 'Agence') return;
-
+    const isPaid = nextStatus === 'Payé';
     const todayIso = new Date().toISOString().slice(0, 10);
-    await updateMission(row.missionId, {
-      part_profil_versee: nextStatus === 'Payé',
-      date_versement_profil: nextStatus === 'Payé' ? todayIso : null,
-    });
+
+    if (row.missionId) {
+      await updateMission(row.missionId, {
+        part_profil_versee: isPaid,
+        date_versement_profil: isPaid ? todayIso : null,
+      });
+    }
+    
+    if (row.demandeId && row.originalDemande) {
+      const originalFormData = row.originalDemande.formulaire_data || {};
+      const facturation = originalFormData.facturation || {};
+      
+      await updateDemande(row.demandeId, {
+        formulaire_data: {
+          ...originalFormData,
+          facturation: {
+            ...facturation,
+            // Sync règlement interne
+            part_profil_versee: isPaid,
+            date_versement_profil: isPaid ? todayIso : null,
+            // Sync statut Dashboard : Payé ou retour à Agence payée / Client
+            statut_paiement_ui: isPaid ? 'paye' : 'agence_payee_client',
+          }
+        },
+        // Sync champ API : integral ou partiel
+        statut_paiement: isPaid ? 'integral' : 'partiel',
+      });
+    }
 
     await loadFinanceData();
   };
 
   const updateDebitPaymentStatus = async (row: FacturationRow, nextStatus: 'Payé' | 'Non payé') => {
-    if (!row.missionId || row.encaissePar !== 'Profil') return;
-
+    const isPaid = nextStatus === 'Payé';
     const todayIso = new Date().toISOString().slice(0, 10);
-    await updateMission(row.missionId, {
-      part_agence_reversee: nextStatus === 'Payé',
-      date_remise_agence: nextStatus === 'Payé' ? todayIso : null,
-    });
+
+    if (row.missionId) {
+      await updateMission(row.missionId, {
+        part_agence_reversee: isPaid,
+        date_remise_agence: isPaid ? todayIso : null,
+      });
+    }
+    
+    if (row.demandeId && row.originalDemande) {
+      const originalFormData = row.originalDemande.formulaire_data || {};
+      const facturation = originalFormData.facturation || {};
+      
+      await updateDemande(row.demandeId, {
+        formulaire_data: {
+          ...originalFormData,
+          facturation: {
+            ...facturation,
+            // Sync règlement interne
+            part_agence_reversee: isPaid,
+            date_remise_agence: isPaid ? todayIso : null,
+            // Sync statut Dashboard : Payé ou retour à Profil payé / Client
+            statut_paiement_ui: isPaid ? 'paye' : 'profil_paye_client',
+          }
+        },
+        // Sync champ API : integral ou partiel
+        statut_paiement: isPaid ? 'integral' : 'partiel',
+      });
+    }
 
     await loadFinanceData();
   };
@@ -1100,6 +1326,32 @@ export default function VueGlobale() {
     setIsSavingMissionEdit(true);
     try {
       await updateMission(selectedMission.missionId, payload);
+      
+      // Synchronisation avec la Demande liée
+      if (selectedMission.demandeId && selectedMission.originalDemande) {
+        const originalFormData = selectedMission.originalDemande.formulaire_data || {};
+        const facturation = originalFormData.facturation || {};
+        
+        await updateDemande(selectedMission.demandeId, {
+          formulaire_data: {
+            ...originalFormData,
+            facturation: {
+              ...facturation,
+              statut_paiement_ui: (payload.paiement_client_statut as string) || facturation.statut_paiement_ui,
+              part_agence: Number(missionEditForm.partAgence || facturation.part_agence || 0),
+              montant_agence_doit_profil: Number(missionEditForm.montantAgenceDoitProfil || facturation.montant_agence_doit_profil || 0),
+              part_profil_versee: payload.part_profil_versee,
+              date_versement_profil: payload.date_versement_profil,
+              part_agence_reversee: payload.part_agence_reversee,
+              date_remise_agence: payload.date_remise_agence,
+            }
+          },
+          // Synchroniser aussi les champs top-level si présents
+          statut_paiement: (payload.paiement_client_statut as string) || undefined,
+          part_agence: missionEditForm.partAgence ? Number(missionEditForm.partAgence) : undefined,
+        });
+      }
+      
       await loadFinanceData();
       closeMissionEditModal();
       closeMissionDetails();
@@ -1532,7 +1784,7 @@ export default function VueGlobale() {
                 </thead>
                 <tbody>
                   {filteredDebitRows.map((row) => (
-                    <tr key={row.missionNo}>
+                    <tr key={row.missionNo} style={row.reglementInterne === 'Réglé' ? { opacity: 0.45 } : undefined}>
                       <td>{row.date || '—'}</td>
                       <td>
                         {row.clientId ? (
@@ -1553,6 +1805,7 @@ export default function VueGlobale() {
                       <td>
                         <label className="fg-select-wrap fg-compact-select">
                           <select
+                            className={`fg-status-select ${row.reglementInterne === 'Réglé' ? 'paid' : 'unpaid'}`}
                             value={row.reglementInterne === 'Réglé' ? 'Payé' : 'Non payé'}
                             onChange={(e) => void updateDebitPaymentStatus(row, e.target.value as 'Payé' | 'Non payé')}
                           >
@@ -1622,7 +1875,7 @@ export default function VueGlobale() {
                 </thead>
                 <tbody>
                   {filteredCreditRows.map((row) => (
-                    <tr key={row.missionNo}>
+                    <tr key={row.missionNo} style={row.reglementInterne === 'Réglé' ? { opacity: 0.45 } : undefined}>
                       <td>{row.date || '—'}</td>
                       <td>
                         {row.clientId ? (

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X } from 'lucide-react';
-import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement } from '../../api/client';
+import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement, getMissions, getDemandesHistorique } from '../../api/client';
 import './LaCaisse.css';
 
 interface CashRow {
@@ -75,6 +75,7 @@ export default function LaCaisse() {
   const [operationsCount, setOperationsCount] = useState(0);
   const [stats, setStats] = useState({ total_entrees: 0, total_sorties: 0, solde: 0, solde_jour: 0 });
   const [loadingRows, setLoadingRows] = useState(true);
+  const [commissionAgence, setCommissionAgence] = useState(0);
 
   const [typeFilter, setTypeFilter] = useState('all');
   const [modeFilter, setModeFilter] = useState('all');
@@ -153,8 +154,110 @@ export default function LaCaisse() {
     }
   };
 
+  // Charger les données de commission et CA depuis les mêmes sources que Vue Globale
+  const fetchFinanceKpis = async () => {
+    try {
+      const missions: any[] = [];
+      const demands: any[] = [];
+
+      try {
+        let page = 1;
+        while (true) {
+          const res = await getMissions({ ordering: '-created_at', page });
+          const data = res.data;
+          const rows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+          missions.push(...rows);
+          if (!data?.next || rows.length === 0) break;
+          page++;
+        }
+      } catch { /* skip */ }
+
+      try {
+        let page = 1;
+        while (true) {
+          const res = await getDemandesHistorique({ ordering: '-created_at', page });
+          const data = res.data;
+          const rows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+          demands.push(...rows);
+          if (!data?.next || rows.length === 0) break;
+          page++;
+        }
+      } catch { /* skip */ }
+
+      const missionDemandeIds = new Set(missions.map((m: any) => m.demande_detail?.id).filter(Boolean));
+      const uniqueDemands = demands.filter((d: any) => !missionDemandeIds.has(d.id));
+
+      // Map and compute commission matching VueGlobale logic
+      let totalCommission = 0;
+      let totalCA = 0;
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+      const processRow = (rawStatutPaiementUi: string, partAgence: number, montant: number, montantPaye: number, montantProfilDoitAgence: number, reglementInterne: string, dateStr: string, statut: string) => {
+        // Period filter: current month
+        if (dateStr) {
+          const parts = dateStr.includes('/') ? dateStr.split('/') : null;
+          const isoDate = parts && parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateStr;
+          const rowMonth = isoDate.slice(0, 7);
+          if (rowMonth !== currentMonth) return;
+        } else return;
+
+        const paiement = ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatutPaiementUi) ? 'paye' : ['paiement_partiel', 'paiement_en_attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi) ? 'partiellement_paye' : 'non_paye';
+
+        if (statut === 'Facturation annulée' || rawStatutPaiementUi === 'facturation_annulee') return;
+        if (paiement !== 'non_paye') totalCA += montantPaye;
+
+        if (paiement !== 'paye') return;
+        if (rawStatutPaiementUi === 'agence_payee_client') {
+          totalCommission += partAgence;
+        } else if (rawStatutPaiementUi === 'profil_paye_client') {
+          if (reglementInterne === 'Réglé') totalCommission += (montantProfilDoitAgence || partAgence);
+        } else {
+          totalCommission += partAgence;
+        }
+      };
+
+      // Process missions
+      for (const m of missions) {
+        const dem = m.demande_detail || {};
+        const fact = dem?.formulaire_data?.facturation || {};
+        const rawStatus = fact.statut_paiement_ui || m.paiement_client_statut || (dem?.statut_paiement === 'integral' ? 'paye' : dem?.statut_paiement === 'acompte' ? 'paiement_en_attente' : 'non_paye');
+        const montant = Number(dem?.prix ?? 0);
+        const partAgence = Number(fact.part_agence ?? montant * 0.5);
+        const montantPaye = Number(m.montant_paye) || (['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? montant : 0);
+        const montantProfilDoitAgence = Number(fact.montant_profil_doit_agence || 0);
+        const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
+        const partProfilVersee = encaissePar === 'Agence' ? Boolean(m.part_profil_versee) : Boolean(m.part_agence_reversee);
+        const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
+        const dateStr = dem?.date_intervention ? toDisplayDate(dem.date_intervention) : '';
+        const statut = m.statut === 'annulee' ? 'Facturation annulée' : 'Confirmée';
+        processRow(rawStatus, partAgence, montant, montantPaye, montantProfilDoitAgence, reglementInterne, dateStr, statut);
+      }
+
+      // Process demands without missions
+      for (const d of uniqueDemands) {
+        const fact = d?.formulaire_data?.facturation || {};
+        const rawStatus = fact.statut_paiement_ui || d.statut_paiement_ui || (d.statut_paiement === 'integral' ? 'paye' : d.statut_paiement === 'acompte' ? 'paiement_en_attente' : 'non_confirme');
+        const montant = Number(d?.prix ?? 0);
+        const partAgence = Number(d?.part_agence ?? fact.part_agence ?? montant * 0.5);
+        const paiement = ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? 'paye' : 'non_paye';
+        const montantPaye = paiement === 'paye' ? (Number(fact.montant_verse) || montant) : 0;
+        const montantProfilDoitAgence = Number(fact.montant_profil_doit_agence || 0);
+        const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
+        const partProfilVersee = encaissePar === 'Agence' ? Boolean(fact.part_profil_versee) : Boolean(fact.part_agence_reversee);
+        const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
+        const dateStr = d?.date_intervention ? toDisplayDate(d.date_intervention) : '';
+        const statut = d.statut === 'annule' ? 'Facturation annulée' : 'Confirmée';
+        processRow(rawStatus, partAgence, montant, montantPaye, montantProfilDoitAgence, reglementInterne, dateStr, statut);
+      }
+
+      setCommissionAgence(totalCommission);
+    } catch { /* skip */ }
+  };
+
   useEffect(() => {
     void fetchStats();
+    void fetchFinanceKpis();
   }, []);
 
   useEffect(() => {
@@ -283,21 +386,21 @@ export default function LaCaisse() {
           <p>SOLDE ACTUEL</p>
           <strong>{moneyFormatter.format(stats.solde)} DH</strong>
         </article>
+        <article className="lc-stat-card lc-stat-amber">
+          <p>COMMISSION AGENCE</p>
+          <strong>{moneyFormatter.format(commissionAgence)} DH</strong>
+          <span className="lc-stat-subtitle">mois en cours</span>
+          <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-green" />
+        </article>
         <article className="lc-stat-card lc-stat-green">
-          <p>TOTAL ENTRÉES</p>
+          <p>TOTAL ENTRÉES CAISSE</p>
           <strong>{moneyFormatter.format(stats.total_entrees)} DH</strong>
           <ArrowDownRight size={18} className="lc-stat-arrow lc-arrow-green" />
         </article>
         <article className="lc-stat-card lc-stat-red">
-          <p>TOTAL SORTIES</p>
+          <p>TOTAL SORTIES CAISSE</p>
           <strong>{moneyFormatter.format(stats.total_sorties)} DH</strong>
           <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-red" />
-        </article>
-        <article className="lc-stat-card lc-stat-amber">
-          <p>COMMISSION AGENCE</p>
-          <strong>{moneyFormatter.format(stats.solde_jour)} DH</strong>
-          <span className="lc-stat-subtitle">commissions – solde caisse</span>
-          <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-green" />
         </article>
       </section>
 
