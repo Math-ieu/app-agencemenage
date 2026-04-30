@@ -270,9 +270,9 @@ export default function ProfilDetails() {
   const getStatutBadge = (statut: string) => {
     const map: Record<string, { label: string; bg: string; color: string }> = {
       en_attente: { label: 'En attente', bg: '#fef3c7', color: '#92400e' },
-      en_cours:   { label: 'Nouveau besoin',   bg: '#3b82f6', color: '#ffffff' },
-      termine:    { label: 'Terminée',   bg: '#f1f5f9', color: '#475569' },
-      annule:     { label: 'Annulée',    bg: '#fee2e2', color: '#991b1b' },
+      en_cours: { label: 'Nouveau besoin', bg: '#3b82f6', color: '#ffffff' },
+      termine: { label: 'Terminée', bg: '#f1f5f9', color: '#475569' },
+      annule: { label: 'Annulée', bg: '#fee2e2', color: '#991b1b' },
     };
     const s = map[statut] || { label: statut, bg: '#f1f5f9', color: '#475569' };
     return (
@@ -299,16 +299,17 @@ export default function ProfilDetails() {
   };
 
   const isAgentBusy = useMemo(() => {
-    // L'agent est considéré comme occupé s'il a au moins une mission active.
-    // Une mission est active si son statut n'est pas 'terminee' ou 'annulee'.
-    // On vérifie aussi le statut de la demande associée (doit être 'pres_terminee' ou 'termine' ou 'annule').
+    // L'agent est occupé s'il est affecté (via profils_envoyes) à une demande active.
+    // Ce champ est calculé côté backend (vérifie profils_envoyes sur les demandes non terminées).
+    if (agent?.is_assigned_active) return true;
+
+    // Fallback: vérifier aussi les missions (si une mission existe sur une demande non terminée)
     return missions.some(m => {
-      const missionActive = !['terminee', 'annulee'].includes(m.statut);
+      if (m.statut === 'annulee') return false;
       const demandeStatut = m.demande_detail?.statut;
-      const demandeActive = !['pres_terminee', 'termine', 'annule'].includes(demandeStatut);
-      return missionActive || demandeActive;
+      return !['termine', 'pres_terminee', 'annule'].includes(demandeStatut);
     });
-  }, [missions]);
+  }, [agent, missions]);
 
   const filteredHistory = history.filter(log => {
     if (!historySearch) return true;
@@ -514,8 +515,8 @@ export default function ProfilDetails() {
               }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
-                padding: '10px 20px', 
-                backgroundColor: isAgentBusy ? '#94a3b8' : C.teal, 
+                padding: '10px 20px',
+                backgroundColor: isAgentBusy ? '#94a3b8' : C.teal,
                 color: 'white',
                 borderRadius: 8, border: 'none', fontWeight: 700,
                 fontSize: 14, cursor: isAgentBusy ? 'not-allowed' : 'pointer',
@@ -523,7 +524,7 @@ export default function ProfilDetails() {
               }}
               title={isAgentBusy ? "Ce profil est déjà affecté à une prestation en cours" : ""}
             >
-              {isAgentBusy ? <AlertTriangle size={16} /> : <PlusCircle size={16} />} 
+              {isAgentBusy ? <AlertTriangle size={16} /> : <PlusCircle size={16} />}
               {isAgentBusy ? 'Déjà affecté' : 'Postuler'}
             </button>
             <button style={{
@@ -713,14 +714,14 @@ export default function ProfilDetails() {
                       </div>
                     </Td>
                     <Td>
-                      {f.note_intervenant >= 4 ? <Badge bg="#F0FFF4" color="#2F855A">Satisfait</Badge> : 
-                       f.note_intervenant === 3 ? <Badge bg="#FEF3C7" color="#D97706">Moyen</Badge> : 
-                       <Badge bg="#FFF5F5" color="#C53030">Pas satisfait</Badge>}
+                      {f.note_intervenant >= 4 ? <Badge bg="#F0FFF4" color="#2F855A">Satisfait</Badge> :
+                        f.note_intervenant === 3 ? <Badge bg="#FEF3C7" color="#D97706">Moyen</Badge> :
+                          <Badge bg="#FFF5F5" color="#C53030">Pas satisfait</Badge>}
                     </Td>
                     <Td>
-                      {f.note_intervenant >= 4 ? <Badge bg="#F0FFF4" color="#2F855A">Positif</Badge> : 
-                       f.note_intervenant === 3 ? <Badge bg="#FEF3C7" color="#D97706">Neutre</Badge> : 
-                       <Badge bg="#FFF5F5" color="#C53030">Négatif</Badge>}
+                      {f.note_intervenant >= 4 ? <Badge bg="#F0FFF4" color="#2F855A">Positif</Badge> :
+                        f.note_intervenant === 3 ? <Badge bg="#FEF3C7" color="#D97706">Neutre</Badge> :
+                          <Badge bg="#FFF5F5" color="#C53030">Négatif</Badge>}
                     </Td>
                     <Td center><Eye size={17} color="#94a3b8" cursor="pointer" /></Td>
                   </tr>
@@ -880,8 +881,8 @@ export default function ProfilDetails() {
                           opacity: isAlreadyAssigned ? 0.75 : 1,
                           transition: 'background 0.15s',
                         }}
-                        onMouseEnter={e => { if(!isAlreadyAssigned) e.currentTarget.style.background = '#f8fafc'; }}
-                        onMouseLeave={e => { if(!isAlreadyAssigned) e.currentTarget.style.background = 'white'; }}
+                        onMouseEnter={e => { if (!isAlreadyAssigned) e.currentTarget.style.background = '#f8fafc'; }}
+                        onMouseLeave={e => { if (!isAlreadyAssigned) e.currentTarget.style.background = 'white'; }}
                       >
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>

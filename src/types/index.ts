@@ -70,6 +70,7 @@ export interface Agent {
   operator_notes?: string;
   created_at: string;
   updated_at: string;
+  is_assigned_active?: boolean;
 }
 
 export interface Demande {
