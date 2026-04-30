@@ -836,7 +836,6 @@ export default function VueGlobale() {
         const profileName = item.profil || 'Profil inconnu';
         const profileId = item.profilId;
         const accountKey = profileId ? `agent-${profileId}` : `mission-${profileName}`;
-        const montant = item.montant;
         const partAgence = item.partAgence;
         const partProfil = item.partProfil;
 
