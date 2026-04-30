@@ -193,7 +193,7 @@ export default function LaCaisse() {
       const now = new Date();
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-      const processRow = (rawStatutPaiementUi: string, partAgence: number, montant: number, montantPaye: number, montantProfilDoitAgence: number, reglementInterne: string, dateStr: string, statut: string) => {
+      const processRow = (rawStatutPaiementUi: string, partAgence: number, montantPaye: number, montantProfilDoitAgence: number, reglementInterne: string, dateStr: string, statut: string, profilSeraPaye: boolean, montantProfilAnnulation: number) => {
         // Period filter: current month
         if (dateStr) {
           const parts = dateStr.includes('/') ? dateStr.split('/') : null;
@@ -204,7 +204,11 @@ export default function LaCaisse() {
 
         const paiement = ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatutPaiementUi) ? 'paye' : ['paiement_partiel', 'paiement_en_attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi) ? 'partiellement_paye' : 'non_paye';
 
-        if (statut === 'Facturation annulée' || rawStatutPaiementUi === 'facturation_annulee') return;
+        if (statut === 'Facturation annulée' || rawStatutPaiementUi === 'facturation_annulee') {
+          if (profilSeraPaye) totalCommission -= montantProfilAnnulation;
+          return;
+        }
+
         if (paiement !== 'non_paye') totalCA += montantPaye;
 
         if (paiement !== 'paye') return;
@@ -231,7 +235,9 @@ export default function LaCaisse() {
         const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
         const dateStr = dem?.date_intervention ? toDisplayDate(dem.date_intervention) : '';
         const statut = m.statut === 'annulee' ? 'Facturation annulée' : 'Confirmée';
-        processRow(rawStatus, partAgence, montant, montantPaye, montantProfilDoitAgence, reglementInterne, dateStr, statut);
+        const profilSeraPaye = dem?.profil_sera_paye !== undefined ? Boolean(dem.profil_sera_paye) : Boolean(m.profil_sera_paye !== undefined ? m.profil_sera_paye : fact.profil_sera_paye);
+        const montantProfilAnnulation = Number(dem?.montant_profil_annulation || m.montant_profil_annulation || fact.montant_profil_annulation || 0);
+        processRow(rawStatus, partAgence, montantPaye, montantProfilDoitAgence, reglementInterne, dateStr, statut, profilSeraPaye, montantProfilAnnulation);
       }
 
       // Process demands without missions
@@ -248,7 +254,9 @@ export default function LaCaisse() {
         const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
         const dateStr = d?.date_intervention ? toDisplayDate(d.date_intervention) : '';
         const statut = d.statut === 'annule' ? 'Facturation annulée' : 'Confirmée';
-        processRow(rawStatus, partAgence, montant, montantPaye, montantProfilDoitAgence, reglementInterne, dateStr, statut);
+        const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(fact.profil_sera_paye);
+        const montantProfilAnnulation = Number(d.montant_profil_annulation || fact.montant_profil_annulation || 0);
+        processRow(rawStatus, partAgence, montantPaye, montantProfilDoitAgence, reglementInterne, dateStr, statut, profilSeraPaye, montantProfilAnnulation);
       }
 
       setCommissionAgence(totalCommission);
