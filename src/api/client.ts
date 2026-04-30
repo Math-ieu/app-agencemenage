@@ -74,6 +74,12 @@ export const logout = () => apiClient.post('/api/auth/logout/');
 
 export const getMe = () => apiClient.get('/api/auth/me/');
 
+export const updateMe = (data: { first_name?: string; last_name?: string }) =>
+  apiClient.patch('/api/auth/me/', data);
+
+export const changePassword = (data: { old_password?: string; new_password?: string }) =>
+  apiClient.post('/api/auth/change-password/', data);
+
 // ─── Demandes ─────────────────────────────────────────────────────────────────
 export const getDemandes = (params?: Record<string, string | number>) =>
   apiClient.get('/api/demandes/', { params });

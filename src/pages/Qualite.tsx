@@ -94,13 +94,11 @@ export default function Qualite() {
     });
   }, [feedbacks, search, noteAgenceFilter, noteProfilFilter, cityFilter]);
 
-  const getSatisfactionLabel = (noteAgence: number | null, noteProfil: number | null) => {
+  const getSatisfactionLabel = (noteAgence: number | null) => {
     const nA = noteAgence || 0;
-    const nP = noteProfil || 0;
-    const mean = (nA + nP) / ( (noteAgence ? 1 : 0) + (noteProfil ? 1 : 0) || 1 );
-    if (mean >= 4.5) return 'Très satisfait';
-    if (mean >= 3.5) return 'Satisfait';
-    if (mean >= 2.5) return 'Moyen';
+    if (nA >= 4.5) return 'Très satisfait';
+    if (nA >= 3.5) return 'Satisfait';
+    if (nA >= 2.5) return 'Moyen';
     return 'Pas satisfait';
   };
 
@@ -446,7 +444,7 @@ export default function Qualite() {
             </thead>
             <tbody>
               {filteredFeedbacks.map((f) => {
-                const satKey = getSatisfactionLabel(f.note_agence, f.note_intervenant);
+                const satKey = getSatisfactionLabel(f.note_agence);
                 const sat = SATISFACTION_CONFIG[satKey];
                 return (
                   <tr
