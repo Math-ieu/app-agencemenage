@@ -299,7 +299,7 @@ export default function DemandesEnAttente() {
           const fallbackCount = (d.nrp_count ?? 0) + 1;
           return {
             ...d,
-            nrp_count: Number.isFinite(serverCount) ? serverCount : fallbackCount,
+            nrp_count: (Number.isFinite(serverCount) && serverCount > (d.nrp_count ?? 0)) ? serverCount : fallbackCount,
           };
         }));
         addToast('NRP incrémenté', 'info');
