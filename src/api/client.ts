@@ -173,11 +173,19 @@ export const getAgent = (id: number) => apiClient.get(`/api/agents/${id}/`);
 
 export const getAgentHistory = (id: number) => apiClient.get(`/api/agents/${id}/history/`);
 
-export const createAgent = (data: Record<string, unknown>) =>
-  apiClient.post('/api/agents/', data);
+export const createAgent = (data: FormData | Record<string, unknown>) => {
+  const isFormData = data instanceof FormData;
+  return apiClient.post('/api/agents/', data, {
+    headers: isFormData ? { 'Content-Type': undefined } : {},
+  });
+};
 
-export const updateAgent = (id: number, data: Record<string, unknown>) =>
-  apiClient.patch(`/api/agents/${id}/`, data);
+export const updateAgent = (id: number, data: FormData | Record<string, unknown>) => {
+  const isFormData = data instanceof FormData;
+  return apiClient.patch(`/api/agents/${id}/`, data, {
+    headers: isFormData ? { 'Content-Type': undefined } : {},
+  });
+};
 
 export const deleteAgent = (id: number) =>
   apiClient.delete(`/api/agents/${id}/`);
@@ -189,7 +197,7 @@ export const getMissions = (params?: Record<string, string | number>) =>
 export const updateMission = (id: number, data: FormData | Record<string, unknown>) => {
   const isFormData = data instanceof FormData;
   return apiClient.patch(`/api/missions/${id}/`, data, {
-    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+    headers: isFormData ? { 'Content-Type': undefined } : {},
   });
 };
 
@@ -212,14 +220,14 @@ export const exportCaisseCsv = (params?: Record<string, string | number>) =>
 export const createCaisseMouvement = (data: FormData | Record<string, unknown>) => {
   const isFormData = data instanceof FormData;
   return apiClient.post('/api/finance/caisse/', data, {
-    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+    headers: isFormData ? { 'Content-Type': undefined } : {},
   });
 };
 
 export const updateCaisseMouvement = (id: number, data: FormData | Record<string, unknown>) => {
   const isFormData = data instanceof FormData;
   return apiClient.patch(`/api/finance/caisse/${id}/`, data, {
-    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+    headers: isFormData ? { 'Content-Type': undefined } : {},
   });
 };
 
@@ -267,14 +275,14 @@ export const getBlogPost = (slug: string) =>
 export const createBlogPost = (data: FormData | Record<string, unknown>) => {
   const isFormData = data instanceof FormData;
   return apiClient.post('/api/blog/posts/', data, {
-    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+    headers: isFormData ? { 'Content-Type': undefined } : {},
   });
 };
 
 export const updateBlogPost = (slug: string, data: FormData | Record<string, unknown>) => {
   const isFormData = data instanceof FormData;
   return apiClient.patch(`/api/blog/posts/${slug}/`, data, {
-    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+    headers: isFormData ? { 'Content-Type': undefined } : {},
   });
 };
 

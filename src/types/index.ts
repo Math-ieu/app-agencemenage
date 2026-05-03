@@ -64,6 +64,9 @@ export interface Agent {
   neighborhood: string;
   statut: string;
   photo?: string;
+  photo2?: string;
+  photo3?: string;
+  active_photo?: string;
   cin_file?: string;
   attestation_file?: string;
   fiche_antropometrique?: string;

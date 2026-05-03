@@ -91,11 +91,15 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
     tasks: [] as string[],
     has_allergies: false,
   });
-  const [files, setFiles] = useState<{ photo: File | null; cin_file: File | null; attestation_file: File | null; fiche_antropometrique: File | null }>({
-    photo: null, cin_file: null, attestation_file: null, fiche_antropometrique: null,
+  const [files, setFiles] = useState<{ photo: File | null; photo2: File | null; photo3: File | null; cin_file: File | null; attestation_file: File | null; fiche_antropometrique: File | null }>({
+    photo: null, photo2: null, photo3: null, cin_file: null, attestation_file: null, fiche_antropometrique: null,
   });
+  const [clearedFiles, setClearedFiles] = useState<Record<string, boolean>>({});
+  const [activePhoto, setActivePhoto] = useState<string>(initialAgent?.active_photo || 'photo');
 
   const photoInputRef = React.useRef<HTMLInputElement>(null);
+  const photo2InputRef = React.useRef<HTMLInputElement>(null);
+  const photo3InputRef = React.useRef<HTMLInputElement>(null);
   const cinInputRef = React.useRef<HTMLInputElement>(null);
   const attestationInputRef = React.useRef<HTMLInputElement>(null);
   const antropometriqueInputRef = React.useRef<HTMLInputElement>(null);
@@ -137,10 +141,23 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
         data.append(key, key === 'languages' ? JSON.stringify(value) : String(value));
       });
       data.append('experiences_json', JSON.stringify(experiences));
+      data.append('active_photo', activePhoto);
+      
+      // Append new files
       if (files.photo) data.append('photo', files.photo);
+      if (files.photo2) data.append('photo2', files.photo2);
+      if (files.photo3) data.append('photo3', files.photo3);
       if (files.cin_file) data.append('cin_file', files.cin_file);
       if (files.attestation_file) data.append('attestation_file', files.attestation_file);
       if (files.fiche_antropometrique) data.append('fiche_antropometrique', files.fiche_antropometrique);
+      
+      // Handle cleared files by sending empty strings
+      Object.entries(clearedFiles).forEach(([key, isCleared]) => {
+        if (isCleared && !files[key as keyof typeof files]) {
+          data.append(key, '');
+        }
+      });
+
       if (isEditing && initialAgent) {
         await updateAgent(initialAgent.id, data as any);
         addToast('Profil mis à jour avec succès !', 'success');
@@ -165,7 +182,9 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
 
         <div className="modal-body">
           {/* Hidden file inputs */}
-          <input type="file" ref={photoInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('photo', e)} />
+          <input type="file" ref={photoInputRef} accept="image/*" style={{ display: 'none' }} onChange={e => handleFileChange('photo', e)} />
+          <input type="file" ref={photo2InputRef} accept="image/*" style={{ display: 'none' }} onChange={e => handleFileChange('photo2', e)} />
+          <input type="file" ref={photo3InputRef} accept="image/*" style={{ display: 'none' }} onChange={e => handleFileChange('photo3', e)} />
           <input type="file" ref={cinInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('cin_file', e)} />
           <input type="file" ref={attestationInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('attestation_file', e)} />
           <input type="file" ref={antropometriqueInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('fiche_antropometrique', e)} />
@@ -368,37 +387,117 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
           <div className="form-section">
             <h3 className="section-title">
               <Save size={18} className="text-teal-600" />
-              Média
+              Média (Documents et Photos)
             </h3>
-            <div className="form-grid grid-cols-2">
-              <div className="form-group">
-                <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Photo de profil {files.photo && <span className="text-teal-500">✓</span>}</label>
-                <button className="upload-box w-full" onClick={() => photoInputRef.current?.click()}>
-                  <User size={16} />
-                  <span className="text-xs">{files.photo ? files.photo.name : 'Choisir'}</span>
-                </button>
-              </div>
-              <div className="form-group">
-                <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">CIN {files.cin_file && <span className="text-teal-500">✓</span>}</label>
-                <button className="upload-box w-full" onClick={() => cinInputRef.current?.click()}>
-                  <Search size={16} />
-                  <span className="text-xs">{files.cin_file ? files.cin_file.name : 'Choisir'}</span>
-                </button>
-              </div>
-              <div className="form-group">
-                <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Attestation {files.attestation_file && <span className="text-teal-500">✓</span>}</label>
-                <button className="upload-box w-full" onClick={() => attestationInputRef.current?.click()}>
-                  <RotateCw size={16} />
-                  <span className="text-xs">{files.attestation_file ? files.attestation_file.name : 'Choisir'}</span>
-                </button>
-              </div>
-              <div className="form-group">
-                <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Fiche antropométrique {files.fiche_antropometrique && <span className="text-teal-500">✓</span>}</label>
-                <button className="upload-box w-full" onClick={() => antropometriqueInputRef.current?.click()}>
-                  <FileText size={16} />
-                  <span className="text-xs">{files.fiche_antropometrique ? files.fiche_antropometrique.name : 'Choisir'}</span>
-                </button>
-              </div>
+            
+            <div className="form-grid grid-cols-3 mb-6">
+              {['photo', 'photo2', 'photo3'].map((field, idx) => {
+                const isPhoto = true;
+                const hasNewFile = Boolean(files[field as keyof typeof files]);
+                const existingFileUrl = initialAgent ? (initialAgent as any)[field] : null;
+                const isCleared = clearedFiles[field];
+                const hasFile = hasNewFile || (existingFileUrl && !isCleared);
+                const refs = { 'photo': photoInputRef, 'photo2': photo2InputRef, 'photo3': photo3InputRef };
+                const ref = refs[field as keyof typeof refs];
+
+                return (
+                  <div key={field} className="form-group flex flex-col">
+                    <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">
+                      Photo {idx + 1} {hasFile && <span className="text-teal-500">✓</span>}
+                    </label>
+                    {hasFile ? (
+                      <div className="flex items-center justify-between p-3 border border-teal-200 bg-teal-50 rounded-lg">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <User size={16} className="text-teal-600 flex-shrink-0" />
+                          <span className="text-xs text-slate-700 truncate">
+                            {hasNewFile ? files[field as keyof typeof files]!.name : 'Image existante'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-red-400 hover:text-red-600 p-1"
+                          onClick={() => {
+                            if (hasNewFile) {
+                              setFiles(prev => ({ ...prev, [field]: null }));
+                            } else if (existingFileUrl) {
+                              setClearedFiles(prev => ({ ...prev, [field]: true }));
+                              if (activePhoto === field) setActivePhoto('photo'); // Reset if active deleted
+                            }
+                          }}
+                        >
+                          <XCircle size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" className="upload-box w-full py-3" onClick={() => ref.current?.click()}>
+                        <User size={16} />
+                        <span className="text-xs">Choisir l'image</span>
+                      </button>
+                    )}
+                    {hasFile && (
+                      <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs text-slate-600">
+                        <input 
+                          type="radio" 
+                          name="active_photo" 
+                          checked={activePhoto === field} 
+                          onChange={() => setActivePhoto(field)} 
+                          className="accent-teal-600"
+                        />
+                        Photo principale
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="form-grid grid-cols-3">
+              {[
+                { field: 'cin_file', label: 'CIN', icon: Search, ref: cinInputRef },
+                { field: 'attestation_file', label: 'Attestation', icon: RotateCw, ref: attestationInputRef },
+                { field: 'fiche_antropometrique', label: 'Fiche antropométrique', icon: FileText, ref: antropometriqueInputRef },
+              ].map(({ field, label, icon: Icon, ref }) => {
+                const hasNewFile = Boolean(files[field as keyof typeof files]);
+                const existingFileUrl = initialAgent ? (initialAgent as any)[field] : null;
+                const isCleared = clearedFiles[field];
+                const hasFile = hasNewFile || (existingFileUrl && !isCleared);
+
+                return (
+                  <div key={field} className="form-group flex flex-col">
+                    <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">
+                      {label} {hasFile && <span className="text-teal-500">✓</span>}
+                    </label>
+                    {hasFile ? (
+                      <div className="flex items-center justify-between p-3 border border-teal-200 bg-teal-50 rounded-lg">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <Icon size={16} className="text-teal-600 flex-shrink-0" />
+                          <span className="text-xs text-slate-700 truncate">
+                            {hasNewFile ? files[field as keyof typeof files]!.name : 'Document existant'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-red-400 hover:text-red-600 p-1"
+                          onClick={() => {
+                            if (hasNewFile) {
+                              setFiles(prev => ({ ...prev, [field]: null }));
+                            } else if (existingFileUrl) {
+                              setClearedFiles(prev => ({ ...prev, [field]: true }));
+                            }
+                          }}
+                        >
+                          <XCircle size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" className="upload-box w-full py-3" onClick={() => ref.current?.click()}>
+                        <Icon size={16} />
+                        <span className="text-xs">Choisir un fichier</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
