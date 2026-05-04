@@ -182,6 +182,8 @@ export default function Dashboard() {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [showNoteModal, setShowNoteModal] = useState<{ demandeId: number; type: 'commercial' | 'operationnel'; note: string } | null>(null);
   const [showCAOModal, setShowCAOModal] = useState<Demande | null>(null);
+  const [showAnnulationModal, setShowAnnulationModal] = useState<{ demandeId: number } | null>(null);
+  const [annulationReason, setAnnulationReason] = useState('');
   const [caoDecision, setCaoDecision] = useState<'confirmed' | 'postponed' | 'cancelled' | null>(null);
   const [caoCancelReason, setCaoCancelReason] = useState('');
   const [caoPostponedDate, setCaoPostponedDate] = useState('');
@@ -1224,12 +1226,9 @@ export default function Dashboard() {
 
                             <div className="menu-divider" />
 
-                            <button className="menu-item text-red" onClick={async () => {
-                              const reason = prompt('Motif d\'annulation :');
-                              if (reason === null) return;
-                              await annulerDemande(d.id, reason);
-                              addToast('Demande rejetée / annulée', 'success');
-                              fetchData();
+                            <button className="menu-item text-red" onClick={() => {
+                              setAnnulationReason('');
+                              setShowAnnulationModal({ demandeId: d.id });
                               setActiveMoreMenu(null);
                             }}>
                               <XCircle size={16} /> Rejeté / Annulé
@@ -1363,12 +1362,9 @@ export default function Dashboard() {
 
                             <div className="menu-divider" />
 
-                            <button className="menu-item text-red" onClick={async () => {
-                              const reason = prompt('Motif d\'annulation :');
-                              if (reason === null) return;
-                              await annulerDemande(d.id, reason);
-                              addToast('Demande rejetée / annulée', 'success');
-                              fetchData();
+                            <button className="menu-item text-red" onClick={() => {
+                              setAnnulationReason('');
+                              setShowAnnulationModal({ demandeId: d.id });
                               setActiveMoreMenu(null);
                             }}>
                               <XCircle size={16} /> Rejeté / Annulé
@@ -3018,6 +3014,84 @@ export default function Dashboard() {
                 }}
               >
                 <Check size={16} /> Valider
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Annulation Modal */}
+      {showAnnulationModal && (
+        <div className="modal-overlay z-[110]" onClick={() => setShowAnnulationModal(null)}>
+          <div
+            className="modal-content max-w-[460px]"
+            onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: 0, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', border: 'none' }}
+          >
+            {/* Header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fef2f2' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
+                  <XCircle size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+                    Rejeté / Annulé — #{showAnnulationModal.demandeId}
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAnnulationModal(null)}
+                style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '24px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+                Motif du rejet / annulation <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <textarea
+                autoFocus
+                style={{ width: '100%', border: '2px solid #0d9488', borderRadius: '10px', padding: '14px 16px', fontSize: '14px', color: '#0f172a', minHeight: '120px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
+                placeholder="Saisissez la raison du rejet ou de l'annulation..."
+                value={annulationReason}
+                onChange={e => setAnnulationReason(e.target.value)}
+                onKeyDown={e => e.stopPropagation()}
+              />
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={() => setShowAnnulationModal(null)}
+                style={{ padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#475569', backgroundColor: 'white', border: '1px solid #cbd5e1', cursor: 'pointer' }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={async () => {
+                  if (!annulationReason.trim()) return;
+                  try {
+                    await annulerDemande(showAnnulationModal.demandeId, annulationReason.trim());
+                    addToast('Demande rejetée / annulée', 'success');
+                    setShowAnnulationModal(null);
+                    setAnnulationReason('');
+                    fetchData();
+                  } catch (err) {
+                    addToast('Erreur lors de l\'annulation', 'error');
+                  }
+                }}
+                disabled={!annulationReason.trim()}
+                style={{
+                  padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white',
+                  backgroundColor: annulationReason.trim() ? '#ef4444' : '#fca5a5',
+                  border: 'none', cursor: annulationReason.trim() ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Confirmer
               </button>
             </div>
           </div>
