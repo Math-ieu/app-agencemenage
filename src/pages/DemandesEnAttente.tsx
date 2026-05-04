@@ -1080,16 +1080,13 @@ export default function DemandesEnAttente() {
                   /* ====== STANDARD MÉNAGE SERVICES ====== */
                   <>
                     {/* Type d'habitation */}
-                    {isCleaningService && !isGrandMenageService && (
+                    {isCleaningService && !isGrandMenageService && !isMenageBureauxService && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">
-                          {isMenageBureauxService ? "Type de local professionnel" : "Type d'habitation"}
+                          Type d'habitation
                         </div>
                         <div className="ws-radio-pills">
-                          {(isMenageBureauxService
-                            ? ['Bureau', 'Magasin', 'Restaurant', 'Clinique', 'Hôtel', 'Entrepôt']
-                            : ['Studio', 'Appartement', 'Duplex', 'Villa', 'Maison']
-                          ).map(type => (
+                          {['Studio', 'Appartement', 'Duplex', 'Villa', 'Maison'].map(type => (
                             <label key={type} className="ws-radio-pill">
                               <input type="radio" name="propertyType" value={type} checked={formData.type_habitation === type} onChange={e => setFormData({ ...formData, type_habitation: e.target.value })} />
                               <span>{type}</span>
@@ -1144,6 +1141,25 @@ export default function DemandesEnAttente() {
                     )}
 
                     {/* Fréquence */}
+                    {/* Surface bureau (cards) */}
+                    {isMenageBureauxService && (
+                      <div className="ws-form-block">
+                        <div className="ws-section-header">Superficie de vos locaux</div>
+                        <div className="ws-surface-cards">
+                          {[
+                            { v: '0-70', l: '0 - 70 m²' },
+                            { v: '71-150', l: '71 - 150 m²' },
+                            { v: '151-300', l: '151 - 300 m²' },
+                            { v: '300+', l: '300 m² et plus' }
+                          ].map(s => (
+                            <div key={s.v} className={`ws-surface-card ${String(formData.surface) === s.v ? 'active' : ''}`} onClick={() => setFormData({ ...formData, surface: s.v as any })}>
+                              {s.l}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="ws-form-block">
                       <div className="ws-section-header">Choisissez la fréquence</div>
                       <div className="ws-freq-toggle">
@@ -1222,25 +1238,6 @@ export default function DemandesEnAttente() {
                             <span>150 m²</span>
                             <span>300 m²</span>
                           </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Surface bureau (cards) */}
-                    {isMenageBureauxService && (
-                      <div className="ws-form-block">
-                        <div className="ws-section-header">Superficie de vos locaux</div>
-                        <div className="ws-surface-cards">
-                          {[
-                            { v: '0-70', l: '0 - 70 m²' },
-                            { v: '71-150', l: '71 - 150 m²' },
-                            { v: '151-300', l: '151 - 300 m²' },
-                            { v: '300+', l: '300 m² et plus' }
-                          ].map(s => (
-                            <div key={s.v} className={`ws-surface-card ${String(formData.surface) === s.v ? 'active' : ''}`} onClick={() => setFormData({ ...formData, surface: s.v as any })}>
-                              {s.l}
-                            </div>
-                          ))}
                         </div>
                       </div>
                     )}
