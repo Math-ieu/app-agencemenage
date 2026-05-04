@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getDemandes, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient } from '../api/client';
+import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient } from '../api/client';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import {
@@ -144,16 +144,22 @@ export default function DemandesEnAttente() {
   // Handle external edit request (from Clients list)
   useEffect(() => {
     const state = location.state as { editDemandeId?: number } | null;
-    if (state?.editDemandeId && demandes.length > 0 && !editingDemande) {
+    // Ensure we trigger the effect even if `demandes` is empty (it might be the first load or an empty list)
+    if (state?.editDemandeId && !editingDemande) {
       const target = demandes.find(d => d.id === state.editDemandeId);
       if (target) {
         openEditModal(target);
         // Clear state to prevent reopening
         navigate(location.pathname, { replace: true, state: {} });
       } else {
-        // Optionnel: si non trouvé dans la liste courante (ex: déjà validée)
-        addToast("La demande n'est plus en attente ou est introuvable.", 'info');
-        navigate(location.pathname, { replace: true, state: {} });
+        // Fetch it dynamically if not in the current list
+        getDemande(state.editDemandeId).then(res => {
+          openEditModal(res.data);
+          navigate(location.pathname, { replace: true, state: {} });
+        }).catch(() => {
+          addToast("La demande n'est plus en attente ou est introuvable.", 'info');
+          navigate(location.pathname, { replace: true, state: {} });
+        });
       }
     }
   }, [location.state, demandes, editingDemande, navigate, location.pathname]);

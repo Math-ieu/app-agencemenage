@@ -499,7 +499,13 @@ export default function Clients() {
                             <UserIcon size={16} className="dropdown-item-icon" />
                             <span>Compte client</span>
                           </Link>
-                          <div className="dropdown-item">
+                          <div className="dropdown-item" onClick={() => {
+                            if (c.latest_demande) {
+                              navigate('/demandes', { state: { editDemandeId: c.latest_demande.id } });
+                            } else {
+                              addToast("Ce client n'a pas de demande à éditer.", 'info');
+                            }
+                          }}>
                             <Pencil size={16} className="dropdown-item-icon" />
                             <span>Éditer le besoin</span>
                           </div>
