@@ -392,7 +392,6 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
             
             <div className="form-grid grid-cols-3 mb-6">
               {['photo', 'photo2', 'photo3'].map((field, idx) => {
-                const isPhoto = true;
                 const hasNewFile = Boolean(files[field as keyof typeof files]);
                 const existingFileUrl = initialAgent ? (initialAgent as any)[field] : null;
                 const isCleared = clearedFiles[field];
