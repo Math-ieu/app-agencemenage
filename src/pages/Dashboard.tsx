@@ -744,7 +744,7 @@ export default function Dashboard() {
       client_name: d.client_name || formData.nom || '',
       client_phone: d.client_phone || formData.whatsapp_phone || '',
       client_whatsapp: d.client_whatsapp || formData.whatsapp_phone || '',
-      client_email: d.client_details?.email || '',
+      client_email: d.client_detail?.email || '',
       neighborhood: d.neighborhood_city || 'Casablanca',
       is_devis: d.is_devis,
       statut: d.statut,
@@ -2350,7 +2350,7 @@ export default function Dashboard() {
                         <span>Téléphone:</span> {selectedDemande.client_phone || selectedDemande.formulaire_data?.whatsapp_phone || '—'}
                         {selectedDemande.source === 'backoffice' && <span className="badge badge-orange ms-1" style={{ fontSize: '9px', padding: '0px 4px' }}>BO</span>}
                       </div>
-                      <div className="detail-item"><span>Email:</span> {selectedDemande.client_details?.email || '—'}</div>
+                      <div className="detail-item"><span>Email:</span> {selectedDemande.client_detail?.email || '—'}</div>
                       <div className="detail-item"><span>Ville:</span> {selectedDemande.neighborhood_city}</div>
                       <div className="detail-item"><span>Segment:</span> {selectedDemande.segment.toUpperCase()}</div>
                     </div>

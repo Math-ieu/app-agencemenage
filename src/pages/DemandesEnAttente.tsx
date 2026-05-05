@@ -78,7 +78,7 @@ export default function DemandesEnAttente() {
     produits: false,
     torchons: false,
     montant: '',
-    mode_paiement: '',
+    mode_paiement: 'virement',
     statut_paiement_ui: 'non_confirme',
     heard_about_us: '',
     notes: '',
@@ -333,7 +333,7 @@ export default function DemandesEnAttente() {
       nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: '', heure: '',
       scheduling_type: 'fixed', preference_horaire: '', type_habitation: '', frequence: '', intervention_nature: 'sinistre', accommodation_state: '', cleanliness_type: '', nb_intervenants: 1,
       surface: 50, details_pieces: '', duree: 4, produits: false, torchons: false,
-      montant: '', mode_paiement: '', statut_paiement_ui: 'non_confirme', heard_about_us: '', notes: '',
+      montant: '', mode_paiement: 'virement', statut_paiement_ui: 'non_confirme', heard_about_us: '', notes: '',
       service_type: 'flexible', structure_type: '', nb_personnel: 1,
       lieu_garde: 'domicile', age_personne: '', sexe_personne: '',
       mobilite: '', situation_medicale: '', nb_jours: 1,
@@ -356,7 +356,7 @@ export default function DemandesEnAttente() {
 
     setFormData({
       nom: d.client_name || d.formulaire_data?.nom || d.formulaire_data?.fullName || '',
-      email: d.formulaire_data?.email || d.client_details?.email || '',
+      email: d.formulaire_data?.email || d.client_detail?.email || '',
       entity_name: d.formulaire_data?.entityName || d.formulaire_data?.entity_name || '',
       contact_person: d.formulaire_data?.contactPerson || d.formulaire_data?.contact_person || '',
       ville: d.formulaire_data?.ville || d.client_city || 'Casablanca',
@@ -804,7 +804,7 @@ export default function DemandesEnAttente() {
                   )}
 
                   {/* Ownership Alert */}
-                  {d.identification_statut === 'existant_valide' && d.client_details?.assigned_commercial && (
+                  {d.identification_statut === 'existant_valide' && d.client_detail?.assigned_commercial && (
                     <div className="mt-4 p-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-2">
                       <UserCheck size={16} className="text-blue-500" />
                       <p className="text-xs text-blue-700 font-medium">Ce client est déjà suivi par l'agence.</p>
@@ -1586,7 +1586,7 @@ export default function DemandesEnAttente() {
               ) : (
                 <>
                   <button className="btn btn-secondary" type="button" onClick={() => setShowCreateModal(false)}>Annuler</button>
-                  <button className="btn btn-primary" type="button" onClick={handleCreateDemande}>
+                  <button className="btn btn-primary" type="button" onClick={handleCreateDemande} style={{ backgroundColor: 'var(--primary)', borderColor: 'var(--primary)' }}>
                     Ajouter la demande
                   </button>
                 </>

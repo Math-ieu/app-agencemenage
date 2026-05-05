@@ -182,6 +182,16 @@
   color: #3156b8;
 }
 
+.mk-status-grey {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.mk-status-red {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
 .mk-create-form {
   border: 1px solid #d9e3ea;
   border-radius: 10px;

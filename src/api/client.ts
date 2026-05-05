@@ -288,3 +288,20 @@ export const updateBlogPost = (slug: string, data: FormData | Record<string, unk
 
 export const deleteBlogPost = (slug: string) =>
   apiClient.delete(`/api/blog/posts/${slug}/`);
+
+// MARKETING
+export const getPromoCodes = (params?: Record<string, unknown>) => apiClient.get('/api/marketing/promos/', { params });
+export const createPromoCode = (data: Record<string, unknown>) => apiClient.post('/api/marketing/promos/', data);
+export const updatePromoCode = (id: number, data: Record<string, unknown>) => apiClient.patch(`/api/marketing/promos/${id}/`, data);
+export const deletePromoCode = (id: number) => apiClient.delete(`/api/marketing/promos/${id}/`);
+
+export const getCommercialGestures = (params?: Record<string, unknown>) => apiClient.get('/api/marketing/gestes/', { params });
+export const createCommercialGesture = (data: Record<string, unknown>) => apiClient.post('/api/marketing/gestes/', data);
+export const updateCommercialGesture = (id: number, data: Record<string, unknown>) => apiClient.patch(`/api/marketing/gestes/${id}/`, data);
+export const deleteCommercialGesture = (id: number) => apiClient.delete(`/api/marketing/gestes/${id}/`);
+
+export const getCampaigns = (params?: Record<string, unknown>) => apiClient.get('/api/marketing/campagnes/', { params });
+export const createCampaign = (data: Record<string, unknown>) => apiClient.post('/api/marketing/campagnes/', data);
+export const updateCampaign = (id: number, data: Record<string, unknown>) => apiClient.patch(`/api/marketing/campagnes/${id}/`, data);
+export const deleteCampaign = (id: number) => apiClient.delete(`/api/marketing/campagnes/${id}/`);
+

@@ -6,12 +6,16 @@
 import { useMemo } from 'react';
 import { X } from 'lucide-react';
 import { TYPES_GESTE, STATUTS_GESTE, CANAUX_DIFFUSION } from '@/lib/marketing-constants';
+import type { Demande } from '@/types';
 
 export interface GesteFormState {
+  demande_id: string;
   client_nom: string;
   client_telephone: string;
   ville: string;
   quartier: string;
+  fidelite: string;
+  frequence: string;
   date_geste: string;
   statut_geste: string;
   type_geste: string;
@@ -29,13 +33,14 @@ export interface GesteFormState {
 }
 
 interface Props {
+  demandes: Demande[];
   form: GesteFormState;
   setForm: React.Dispatch<React.SetStateAction<GesteFormState>>;
   onClose: () => void;
   onSubmit: () => void;
 }
 
-export function CreateGesteModal({ form, setForm, onClose, onSubmit }: Props) {
+export function CreateGesteModal({ demandes, form, setForm, onClose, onSubmit }: Props) {
   // Calculs tarification
   const montantHT = Number(form.montant_ht) || 0;
   const tvaMontant = form.tva_active ? montantHT * 0.2 : 0;
@@ -69,24 +74,71 @@ export function CreateGesteModal({ form, setForm, onClose, onSubmit }: Props) {
           <button type="button" className="mk-modal-close" onClick={onClose}><X size={16} /></button>
         </header>
         <div className="mk-modal-body">
-          {/* 1. Client */}
+          {/* 1. Référence de la demande & Client */}
           <label className="mk-field">
-            <span>Nom du client *</span>
-            <input placeholder="Nom du client" value={form.client_nom} onChange={(e) => setForm({ ...form, client_nom: e.target.value })} />
+            <span>Sélectionner la demande / Client *</span>
+            <select
+              value={form.demande_id}
+              onChange={(e) => {
+                const dem = demandes.find(d => d.id === Number(e.target.value));
+                if (dem) {
+                  const isAbo = dem.frequency !== 'une_fois';
+                  const freq = isAbo ? 'Abonnement' : 'Une seule fois';
+                  setForm({
+                    ...form,
+                    demande_id: String(dem.id),
+                    client_nom: dem.client_name || '',
+                    client_telephone: dem.client_phone || dem.client_whatsapp || '',
+                    ville: dem.client_city || dem.client_detail?.city || '',
+                    quartier: dem.client_neighborhood || dem.client_detail?.neighborhood || '',
+                    fidelite: dem.client_detail?.demandes_count && dem.client_detail.demandes_count > 1 
+                      ? `${dem.client_detail.demandes_count} interventions` 
+                      : 'Nouveau client',
+                    frequence: freq,
+                    montant_ht: String(dem.prix || ''),
+                  });
+                } else {
+                  setForm({ ...form, demande_id: '' });
+                }
+              }}
+            >
+              <option value="">Sélectionner une demande...</option>
+              {demandes.map(d => (
+                <option key={d.id} value={d.id}>
+                  #{d.id} - {d.client_name || 'Client inconnu'}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="mk-field">
+            <span>Nom du client</span>
+            <input disabled placeholder="Nom du client" value={form.client_nom} />
           </label>
           <label className="mk-field">
             <span>Téléphone client</span>
-            <input placeholder="06..." value={form.client_telephone} onChange={(e) => setForm({ ...form, client_telephone: e.target.value })} />
+            <input disabled placeholder="06..." value={form.client_telephone} />
           </label>
 
           <div className="mk-form-row-2">
             <label className="mk-field">
               <span>Ville</span>
-              <input placeholder="Casablanca" value={form.ville} onChange={(e) => setForm({ ...form, ville: e.target.value })} />
+              <input disabled placeholder="Casablanca" value={form.ville} />
             </label>
             <label className="mk-field">
               <span>Quartier</span>
-              <input placeholder="Maârif" value={form.quartier} onChange={(e) => setForm({ ...form, quartier: e.target.value })} />
+              <input disabled placeholder="Maârif" value={form.quartier} />
+            </label>
+          </div>
+
+          <div className="mk-form-row-2">
+            <label className="mk-field">
+              <span>Fidélité / Statut</span>
+              <input disabled value={form.fidelite} />
+            </label>
+            <label className="mk-field">
+              <span>Fréquence</span>
+              <input disabled value={form.frequence} />
             </label>
           </div>
 

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Megaphone, Ticket, TrendingUp, Plus, Trash2, Pencil, Send, Copy } from 'lucide-react';
-import { TYPES_GESTE, CANAUX_CAMPAGNE, CIBLES_CAMPAGNE, SEGMENTS_CLIENT } from '@/lib/marketing-constants';
+import { Megaphone, Ticket, TrendingUp, Plus, Trash2, Pencil, Send, Copy, Archive, ArchiveRestore } from 'lucide-react';
+import { TYPES_GESTE, SEGMENTS_CLIENT } from '@/lib/marketing-constants';
+import { getDemandes, getPromoCodes, createPromoCode, deletePromoCode, updatePromoCode, getCommercialGestures, createCommercialGesture, deleteCommercialGesture, updateCommercialGesture, getCampaigns, createCampaign, deleteCampaign, updateCampaign } from '@/api/client';
+import { useAuthStore } from '../store/auth';
+import type { Demande } from '@/types';
 import { CreateOffreModal, type PromoFormState } from './marketing/CreateOffreModal';
 import { CreateGesteModal, type GesteFormState } from './marketing/CreateGesteModal';
 import { CreateCampagneModal, type CampagneFormState } from './marketing/CreateCampagneModal';
@@ -14,48 +17,59 @@ interface PromoCodeItem {
   name: string;
   code: string;
   reduction: number;
+  reduction_type: 'pourcentage' | 'montant_fixe';
   segment: SegmentLabel;
-  validFrom: string;
-  validUntil: string;
-  status: 'active' | 'inactive';
-  customerStatus: 'Tous les clients' | 'Nouveaux clients';
+  created_at: string;
+  valid_from: string;
+  valid_until: string;
+  status: 'brouillon' | 'active' | 'desactivee' | 'expiree';
+  customer_status: string;
   uses: number;
-  generatedRevenue: number;
+  generated_revenue: number;
+  archived: boolean;
 }
 
 interface CommercialGestureItem {
   id: number;
   date: string;
-  commercial: string;
-  client: string;
-  gestureType: string;
-  reductionMad: number;
-  netToPayMad: number;
-  agencyShareMad: number;
-  profileShareMad: number;
-  status: 'en_cours' | 'termine';
+  demande_id: number | null;
+  commercial_name: string;
+  client_name: string;
+  gesture_type: string;
+  status: 'en_attente' | 'en_cours' | 'cloture';
+  montant_ht: number;
+  tva_active: boolean;
+  reduction_type: string;
+  reduction_value: number;
+  total_a_payer: number;
+  part_agence: number;
+  part_profil: number;
+  motif: string;
+  envoyer_message: boolean;
+  message_client: string;
+  canal_diffusion: string[];
+  archived: boolean;
+  created_at: string;
 }
 
 interface CampaignItem {
   id: number;
   date: string;
   title: string;
+  message: string;
   target: 'Profil' | 'Client';
   segment: SegmentLabel;
-  channel: string;
+  criteria: string;
+  channel: string | string[];
   city: string;
-  broadcastDate: string;
-  perDayDest: number;
-  status: 'programmee' | 'envoyee' | 'brouillon';
+  broadcast_time_start: string;
+  broadcast_time_end: string;
+  broadcast_date: string;
+  per_day_dest: number;
+  status: 'programmee' | 'envoyee' | 'brouillon' | 'annulee';
+  archived: boolean;
+  created_at: string;
 }
-
-interface MarketingStore {
-  promoCodes: PromoCodeItem[];
-  gestures: CommercialGestureItem[];
-  campaigns: CampaignItem[];
-}
-
-const STORAGE_KEY = 'marketing_data_v2';
 
 const money = (value: number): string => `${new Intl.NumberFormat('fr-FR', {
   minimumFractionDigits: 0,
@@ -77,6 +91,27 @@ const segmentLabel = (segment: SegmentLabel): string => {
   return 'tous';
 };
 
+const STATUTS_CLIENT_MAP: Record<string, string> = {
+  tous: 'Tous les clients',
+  nouveau: 'Nouveau client',
+  inactif: 'Client inactif',
+  regulier: 'Client r\u00e9gulier',
+  abonne: 'Client abonn\u00e9',
+};
+
+const statusChipClass = (status: string): string => {
+  if (status === 'active') return 'mk-status-green';
+  if (status === 'brouillon') return 'mk-status-grey';
+  if (status === 'expiree') return 'mk-status-red';
+  return '';
+};
+
+const statusLabel = (status: string): string => {
+  const map: Record<string, string> = { brouillon: 'Brouillon', active: 'Actif', desactivee: 'Inactif', expiree: 'Expir\u00e9' };
+  return map[status] || status;
+};
+
+
 export default function Marketing() {
   const [activeTab, setActiveTab] = useState<MarketingTab>('codes');
 
@@ -87,6 +122,14 @@ export default function Marketing() {
   const [showCreatePromo, setShowCreatePromo] = useState(false);
   const [showCreateGesture, setShowCreateGesture] = useState(false);
   const [showCreateCampaign, setShowCreateCampaign] = useState(false);
+  const [demandes, setDemandes] = useState<Demande[]>([]);
+  const { user } = useAuthStore();
+
+  useEffect(() => {
+    getDemandes().then(res => {
+      setDemandes(res.data.results || res.data);
+    }).catch(console.error);
+  }, []);
 
   const [promoForm, setPromoForm] = useState<PromoFormState>({
     nom: '',
@@ -105,10 +148,13 @@ export default function Marketing() {
   });
 
   const [gestureForm, setGestureForm] = useState<GesteFormState>({
+    demande_id: '',
     client_nom: '',
     client_telephone: '',
     ville: '',
     quartier: '',
+    fidelite: 'Nouveau client',
+    frequence: 'Une seule fois',
     date_geste: toInputDate(new Date()),
     statut_geste: 'en_attente',
     type_geste: 'reduction_tarif',
@@ -144,6 +190,7 @@ export default function Marketing() {
   const [codeDateTo, setCodeDateTo] = useState('');
   const [codeSegmentFilter, setCodeSegmentFilter] = useState('Tous');
   const [codeStatusFilter, setCodeStatusFilter] = useState('Tous');
+  const [showArchived, setShowArchived] = useState(false);
 
   const [gesteCommercialFilter, setGesteCommercialFilter] = useState('');
   const [gesteTypeFilter, setGesteTypeFilter] = useState('Tous les types');
@@ -155,22 +202,17 @@ export default function Marketing() {
   const [campagneDateTo, setCampagneDateTo] = useState('');
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as MarketingStore;
-      setPromoCodes(Array.isArray(parsed.promoCodes) ? parsed.promoCodes : []);
-      setGestures(Array.isArray(parsed.gestures) ? parsed.gestures : []);
-      setCampaigns(Array.isArray(parsed.campaigns) ? parsed.campaigns : []);
-    } catch {
-      // ignore invalid local storage payload
-    }
+    // Initial fetch
+    Promise.all([
+      getPromoCodes(),
+      getCommercialGestures(),
+      getCampaigns()
+    ]).then(([promosRes, gesturesRes, campaignsRes]) => {
+      setPromoCodes(promosRes.data.results || promosRes.data);
+      setGestures(gesturesRes.data.results || gesturesRes.data);
+      setCampaigns(campaignsRes.data.results || campaignsRes.data);
+    }).catch(console.error);
   }, []);
-
-  useEffect(() => {
-    const data: MarketingStore = { promoCodes, gestures, campaigns };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [promoCodes, gestures, campaigns]);
 
   useEffect(() => {
     setShowCreatePromo(false);
@@ -179,69 +221,84 @@ export default function Marketing() {
   }, [activeTab]);
 
   const dashboardStats = useMemo(() => {
-    const promoUsed = promoCodes.reduce((sum, item) => sum + item.uses, 0);
-    const revenue = promoCodes.reduce((sum, item) => sum + item.generatedRevenue, 0);
+    const promoUsed = promoCodes.reduce((sum, item) => sum + (item.uses || 0), 0);
+    const revenue = promoCodes.reduce((sum, item) => sum + Number(item.generated_revenue || 0), 0);
     return { promoUsed, revenue };
   }, [promoCodes]);
 
   const filteredCodes = useMemo(() => {
     return promoCodes.filter((item) => {
+      // Archive filter
+      if (showArchived && !item.archived) return false;
+      if (!showArchived && item.archived) return false;
       if (codeSegmentFilter !== 'Tous' && segmentLabel(item.segment) !== codeSegmentFilter.toLowerCase()) return false;
       if (codeStatusFilter !== 'Tous') {
-        const statusLabel = item.status === 'active' ? 'Actif' : 'Inactif';
+        const statusMap: Record<string, string> = { 'brouillon': 'Brouillon', 'active': 'Actif', 'desactivee': 'Inactif', 'expiree': 'Expiré' };
+        const statusLabel = statusMap[item.status] || item.status;
         if (statusLabel !== codeStatusFilter) return false;
       }
-      if (codeDateFrom && item.validFrom && item.validFrom < codeDateFrom) return false;
-      if (codeDateTo && item.validFrom && item.validFrom > codeDateTo) return false;
+      const dateRef = item.created_at || item.valid_from;
+      if (codeDateFrom && dateRef && dateRef < codeDateFrom) return false;
+      if (codeDateTo && dateRef && dateRef > codeDateTo) return false;
       return true;
     });
-  }, [promoCodes, codeSegmentFilter, codeStatusFilter, codeDateFrom, codeDateTo]);
+  }, [promoCodes, codeSegmentFilter, codeStatusFilter, codeDateFrom, codeDateTo, showArchived]);
 
   const filteredGestes = useMemo(() => {
     return gestures.filter((item) => {
-      if (gesteCommercialFilter && !item.commercial.toLowerCase().includes(gesteCommercialFilter.toLowerCase())) return false;
-      if (gesteTypeFilter !== 'Tous les types' && item.gestureType !== gesteTypeFilter) return false;
+      // Archive filter
+      if (showArchived && !item.archived) return false;
+      if (!showArchived && item.archived) return false;
+      if (gesteCommercialFilter && !item.commercial_name?.toLowerCase().includes(gesteCommercialFilter.toLowerCase())) return false;
+      if (gesteTypeFilter !== 'Tous les types' && item.gesture_type !== gesteTypeFilter) return false;
       if (gesteDateFrom && item.date < gesteDateFrom) return false;
       if (gesteDateTo && item.date > gesteDateTo) return false;
       return true;
     });
-  }, [gestures, gesteCommercialFilter, gesteTypeFilter, gesteDateFrom, gesteDateTo]);
+  }, [gestures, gesteCommercialFilter, gesteTypeFilter, gesteDateFrom, gesteDateTo, showArchived]);
 
   const filteredCampagnes = useMemo(() => {
     return campaigns.filter((item) => {
+      // Archive filter
+      if (showArchived && !item.archived) return false;
+      if (!showArchived && item.archived) return false;
       if (campagneCibleFilter !== 'Toutes les cibles' && item.target !== campagneCibleFilter.replace('Toutes les cibles', '')) return false;
       if (campagneDateFrom && item.date < campagneDateFrom) return false;
       if (campagneDateTo && item.date > campagneDateTo) return false;
       return true;
     });
-  }, [campaigns, campagneCibleFilter, campagneDateFrom, campagneDateTo]);
+  }, [campaigns, campagneCibleFilter, campagneDateFrom, campagneDateTo, showArchived]);
 
   const createPromo = () => {
     if (!promoForm.nom.trim() || !promoForm.code_promo.trim()) return;
-    const valeur = Number(promoForm.valeur_reduction || 0);
+    const codeUpper = promoForm.code_promo.trim().toUpperCase();
+    const customerLabel = STATUTS_CLIENT_MAP[promoForm.statut_client] || promoForm.statut_client;
 
-    const item: PromoCodeItem = {
-      id: Date.now(),
+    const payload = {
       name: promoForm.nom.trim(),
-      code: promoForm.code_promo.trim().toUpperCase(),
-      reduction: promoForm.type_reduction === 'pourcentage' ? valeur : 0,
-      segment: promoForm.segment_client as SegmentLabel,
-      validFrom: promoForm.date_debut,
-      validUntil: promoForm.date_indeterminee ? '' : promoForm.date_fin,
-      status: promoForm.statut === 'active' ? 'active' : 'inactive',
-      customerStatus: promoForm.statut_client === 'nouveau' ? 'Nouveaux clients' : 'Tous les clients',
-      uses: 0,
-      generatedRevenue: 0,
+      code: codeUpper,
+      reduction: Number(promoForm.valeur_reduction || 0),
+      reduction_type: promoForm.type_reduction,
+      segment: promoForm.segment_client,
+      valid_from: promoForm.date_debut,
+      valid_until: promoForm.date_indeterminee ? null : promoForm.date_fin || null,
+      status: promoForm.statut,
+      customer_status: customerLabel,
+      services: promoForm.services,
+      canaux: promoForm.canaux,
+      message_promotionnel: promoForm.message_promotionnel,
     };
 
-    setPromoCodes((prev) => [item, ...prev]);
-    setPromoForm({
-      nom: '', statut: 'brouillon', code_promo: '', type_reduction: 'pourcentage',
-      valeur_reduction: '', segment_client: 'particulier', statut_client: 'tous',
-      services: [], canaux: [], message_promotionnel: '',
-      date_debut: toInputDate(new Date()), date_fin: '', date_indeterminee: false,
-    });
-    setShowCreatePromo(false);
+    createPromoCode(payload).then((res) => {
+      setPromoCodes((prev) => [res.data, ...prev]);
+      setPromoForm({
+        nom: '', statut: 'brouillon', code_promo: '', type_reduction: 'pourcentage',
+        valeur_reduction: '', segment_client: 'particulier', statut_client: 'tous',
+        services: [], canaux: [], message_promotionnel: '',
+        date_debut: toInputDate(new Date()), date_fin: '', date_indeterminee: false,
+      });
+      setShowCreatePromo(false);
+    }).catch(console.error);
   };
 
   const createGesture = () => {
@@ -255,60 +312,68 @@ export default function Marketing() {
       : Number(gestureForm.reduction_valeur) || 0;
     const isAnnulation = gestureForm.type_geste === 'facturation_annulee' || gestureForm.type_geste === 'intervention_gratuite';
     const totalAPayer = isAnnulation ? 0 : Math.max(0, montantTTC - reductionAmount);
-    const typeLabel = TYPES_GESTE.find((t) => t.value === gestureForm.type_geste)?.label || gestureForm.type_geste;
 
-    const item: CommercialGestureItem = {
-      id: Date.now(),
+    const payload = {
+      demande: gestureForm.demande_id ? Number(gestureForm.demande_id) : null,
       date: gestureForm.date_geste,
-      commercial: gestureForm.cree_par.trim() || '—',
-      client: gestureForm.client_nom.trim(),
-      gestureType: typeLabel,
-      reductionMad: reductionAmount,
-      netToPayMad: totalAPayer,
-      agencyShareMad: Number(gestureForm.part_agence || 0),
-      profileShareMad: Number(gestureForm.part_profil || 0),
-      status: 'en_cours',
+      gesture_type: gestureForm.type_geste,
+      status: gestureForm.statut_geste,
+      montant_ht: montantHT,
+      tva_active: gestureForm.tva_active,
+      reduction_type: gestureForm.reduction_type,
+      reduction_value: Number(gestureForm.reduction_valeur || 0),
+      total_a_payer: totalAPayer,
+      part_profil: Number(gestureForm.part_profil || 0),
+      part_agence: Number(gestureForm.part_agence || 0),
+      motif: gestureForm.motif,
+      envoyer_message: gestureForm.envoyer_message,
+      message_client: gestureForm.message_client,
+      canal_diffusion: gestureForm.canal_diffusion,
     };
 
-    setGestures((prev) => [item, ...prev]);
-    setGestureForm({
-      client_nom: '', client_telephone: '', ville: '', quartier: '',
-      date_geste: toInputDate(new Date()), statut_geste: 'en_attente',
-      type_geste: 'reduction_tarif', montant_ht: '', tva_active: false,
-      reduction_type: 'montant', reduction_valeur: '',
-      part_profil: '', part_agence: '', motif: '',
-      envoyer_message: false, message_client: '', canal_diffusion: [], cree_par: '',
-    });
-    setShowCreateGesture(false);
+    createCommercialGesture(payload).then((res) => {
+      setGestures((prev) => [res.data, ...prev]);
+      setGestureForm({
+        demande_id: '', client_nom: '', client_telephone: '', ville: '', quartier: '',
+        fidelite: 'Nouveau client', frequence: 'Une seule fois',
+        date_geste: toInputDate(new Date()), statut_geste: 'en_attente',
+        type_geste: 'reduction_tarif', montant_ht: '', tva_active: false,
+        reduction_type: 'montant', reduction_valeur: '',
+        part_profil: '', part_agence: '', motif: '',
+        envoyer_message: false, message_client: '', canal_diffusion: [], cree_par: user?.first_name || '',
+      });
+      setShowCreateGesture(false);
+    }).catch(console.error);
   };
 
-  const createCampaign = () => {
+  const createCampaignFunc = () => {
     if (!campaignForm.nom.trim()) return;
 
-    const cibleLabel = CIBLES_CAMPAGNE.find((c) => c.value === campaignForm.cible)?.label || campaignForm.cible;
-    const canalLabel = campaignForm.canal.map((c) => CANAUX_CAMPAGNE.find((x) => x.value === c)?.label || c).join(', ');
-
-    const item: CampaignItem = {
-      id: Date.now(),
-      date: campaignForm.date_diffusion || toInputDate(new Date()),
+    const payload = {
       title: campaignForm.nom.trim(),
-      target: cibleLabel as 'Profil' | 'Client',
-      segment: (campaignForm.segment_cible || 'tous') as SegmentLabel,
-      channel: canalLabel,
+      message: campaignForm.message,
+      target: campaignForm.cible.charAt(0).toUpperCase() + campaignForm.cible.slice(1),
+      segment: campaignForm.segment_cible,
+      criteria: campaignForm.critere_ciblage,
+      channel: campaignForm.canal,
       city: campaignForm.ville_ciblage,
-      broadcastDate: campaignForm.date_diffusion,
-      perDayDest: Number(campaignForm.nombre_destinataires_jour || 0),
-      status: (campaignForm.statut || 'brouillon') as CampaignItem['status'],
+      broadcast_time_start: campaignForm.heure_debut || null,
+      broadcast_time_end: campaignForm.heure_fin || null,
+      broadcast_date: campaignForm.date_diffusion || null,
+      per_day_dest: Number(campaignForm.nombre_destinataires_jour || 0),
+      status: campaignForm.statut,
     };
 
-    setCampaigns((prev) => [item, ...prev]);
-    setCampaignForm({
-      nom: '', message: '', statut: 'brouillon', cible: 'client',
-      segment_cible: 'tous', critere_ciblage: 'tous', canal: [],
-      ville_ciblage: 'Casablanca', heure_debut: '', heure_fin: '',
-      date_diffusion: '', nombre_destinataires_jour: '',
-    });
-    setShowCreateCampaign(false);
+    createCampaign(payload).then((res) => {
+      setCampaigns((prev) => [res.data, ...prev]);
+      setCampaignForm({
+        nom: '', message: '', statut: 'brouillon', cible: 'client',
+        segment_cible: 'tous', critere_ciblage: 'tous', canal: [],
+        ville_ciblage: 'Casablanca', heure_debut: '', heure_fin: '',
+        date_diffusion: '', nombre_destinataires_jour: '',
+      });
+      setShowCreateCampaign(false);
+    }).catch(console.error);
   };
 
   const tabTitle =
@@ -386,7 +451,7 @@ export default function Marketing() {
 
       {activeTab === 'codes' && (
         <>
-          <div className="mk-filters-row">
+          <div className="mk-filters-row" style={{ alignItems: 'flex-end' }}>
             <label>Date du
               <input type="date" value={codeDateFrom} onChange={(e) => setCodeDateFrom(e.target.value)} />
             </label>
@@ -406,8 +471,19 @@ export default function Marketing() {
                 <option>Tous</option>
                 <option>Actif</option>
                 <option>Inactif</option>
+                <option>Brouillon</option>
+                <option>Expiré</option>
               </select>
             </label>
+            <button
+              type="button"
+              className={`btn ${showArchived ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              {showArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+              {showArchived ? 'Voir les actifs' : 'Archivés'}
+            </button>
           </div>
 
           <div className="table-wrapper mk-table-wrap">
@@ -428,35 +504,60 @@ export default function Marketing() {
               <tbody>
                 {filteredCodes.map((item) => (
                   <tr key={item.id}>
-                    <td>{fmtDate(item.validFrom)}</td>
+                    <td>{fmtDate(item.created_at || item.valid_from)}</td>
                     <td>{item.name}</td>
                     <td>
                       <button className="mk-code-chip" onClick={() => copyCode(item.code)}>
                         {item.code} <Copy size={12} />
                       </button>
                     </td>
-                    <td>-{item.reduction}%</td>
+                    <td>{item.reduction_type === 'montant_fixe' ? `${item.reduction} MAD` : `-${item.reduction}%`}</td>
                     <td>{segmentLabel(item.segment)}</td>
-                    <td>{item.customerStatus}</td>
-                    <td>{fmtDate(item.validFrom)} {'->'} {fmtDate(item.validUntil)}</td>
+                    <td>{item.customer_status}</td>
+                    <td>{fmtDate(item.valid_from)} {'→'} {item.valid_until ? fmtDate(item.valid_until) : 'Indéterminée'}</td>
                     <td>
-                      <span className={`mk-status-chip ${item.status === 'active' ? 'mk-status-green' : ''}`}>
-                        {item.status === 'active' ? 'Active' : 'Inactive'}
+                      <span className={`mk-status-chip ${statusChipClass(item.status)}`}>
+                        {statusLabel(item.status)}
                       </span>
                     </td>
                     <td>
-                      <button className="icon-btn" title="Modifier">
+                      <button className="icon-btn" title="Modifier" onClick={() => {
+                        setPromoForm({
+                          nom: item.name, statut: item.status, code_promo: item.code,
+                          type_reduction: item.reduction_type || 'pourcentage',
+                          valeur_reduction: String(item.reduction),
+                          segment_client: item.segment,
+                          statut_client: Object.entries(STATUTS_CLIENT_MAP).find(([, v]) => v === item.customer_status)?.[0] || 'tous',
+                          services: [], canaux: [], message_promotionnel: '',
+                          date_debut: item.valid_from, date_fin: item.valid_until, date_indeterminee: !item.valid_until,
+                        });
+                        setPromoCodes((prev) => prev.filter((x) => x.id !== item.id));
+                        setShowCreatePromo(true);
+                      }}>
                         <Pencil size={14} />
                       </button>
-                      <button className="icon-btn" title="Supprimer" onClick={() => setPromoCodes((prev) => prev.filter((x) => x.id !== item.id))}>
+                      <button className="icon-btn" title="Supprimer" onClick={() => {
+                        if (window.confirm('Supprimer ce code promo ?')) {
+                          deletePromoCode(item.id).then(() => {
+                            setPromoCodes((prev) => prev.filter((x) => x.id !== item.id));
+                          }).catch(console.error);
+                        }
+                      }}>
                         <Trash2 size={14} />
+                      </button>
+                      <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
+                        updatePromoCode(item.id, { archived: !item.archived }).then((res) => {
+                          setPromoCodes((prev) => prev.map((x) => x.id === item.id ? res.data : x));
+                        }).catch(console.error);
+                      }}>
+                        {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                       </button>
                     </td>
                   </tr>
                 ))}
                 {filteredCodes.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="empty-row">Aucune offre créée</td>
+                    <td colSpan={9} className="empty-row">{showArchived ? 'Aucune offre archivée' : 'Aucune offre créée'}</td>
                   </tr>
                 )}
               </tbody>
@@ -467,11 +568,11 @@ export default function Marketing() {
 
       {activeTab === 'gestes' && (
         <>
-          <div className="mk-filters-row mk-filters-row-gestes">
-            <label>
+          <div className="mk-filters-row mk-filters-row-gestes" style={{ alignItems: 'flex-end' }}>
+            <label> Commercial
               <input type="text" placeholder="Filtrer par commercial..." value={gesteCommercialFilter} onChange={(e) => setGesteCommercialFilter(e.target.value)} />
             </label>
-            <label>
+            <label> Type de geste
               <select value={gesteTypeFilter} onChange={(e) => setGesteTypeFilter(e.target.value)}>
                 <option>Tous les types</option>
                 {TYPES_GESTE.map((t) => (
@@ -479,55 +580,89 @@ export default function Marketing() {
                 ))}
               </select>
             </label>
-            <label>
+            <label> Date du
               <input type="date" value={gesteDateFrom} onChange={(e) => setGesteDateFrom(e.target.value)} />
             </label>
-            <label>
+            <label> Au
               <input type="date" value={gesteDateTo} onChange={(e) => setGesteDateTo(e.target.value)} />
             </label>
+            <button
+              type="button"
+              className={`btn ${showArchived ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              {showArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+              {showArchived ? 'Voir les actifs' : 'Archivés'}
+            </button>
           </div>
 
           <div className="table-wrapper mk-table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th>Date création</th>
                   <th>Commercial</th>
                   <th>Client</th>
-                  <th>Type geste</th>
-                  <th>Réduction</th>
-                  <th>Net à payer</th>
+                  <th>Type de geste</th>
+                  <th>Type réduction</th>
+                  <th>Net à Payer</th>
                   <th>Part agence</th>
                   <th>Part profil</th>
-                  <th>Statut</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredGestes.map((item) => (
                   <tr key={item.id}>
-                    <td>{fmtDate(item.date)}</td>
-                    <td>{item.commercial}</td>
-                    <td>{item.client}</td>
-                    <td>{item.gestureType}</td>
-                    <td>{money(item.reductionMad)}</td>
-                    <td>{money(item.netToPayMad)}</td>
-                    <td>{money(item.agencyShareMad)}</td>
-                    <td>{money(item.profileShareMad)}</td>
-                    <td><span className="mk-status-chip mk-status-blue">En cours</span></td>
+                    <td>{fmtDate(item.created_at || item.date)}</td>
+                    <td>{item.commercial_name || '—'}</td>
+                    <td>{item.client_name || '—'}</td>
+                    <td>{TYPES_GESTE.find(t => t.value === item.gesture_type)?.label || item.gesture_type}</td>
+                    <td>{item.reduction_type === 'montant' ? `${item.reduction_value} MAD` : `${item.reduction_value}%`}</td>
+                    <td style={{ fontWeight: 600 }}>{Number(item.total_a_payer || 0).toFixed(2)} MAD</td>
+                    <td style={{ color: '#0f766e' }}>{Number(item.part_agence || 0).toFixed(2)} MAD</td>
+                    <td style={{ color: '#0369a1' }}>{Number(item.part_profil || 0).toFixed(2)} MAD</td>
                     <td>
-                      <button className="icon-btn" title="Modifier">
+                      <button className="icon-btn" title="Modifier" onClick={() => {
+                        setGestureForm({
+                          demande_id: item.demande_id ? String(item.demande_id) : '',
+                          client_nom: item.client_name, client_telephone: '', ville: '', quartier: '',
+                          fidelite: 'Nouveau client', frequence: 'Une seule fois',
+                          date_geste: item.date, statut_geste: item.status,
+                          type_geste: item.gesture_type,
+                          montant_ht: String(item.montant_ht), tva_active: item.tva_active,
+                          reduction_type: item.reduction_type || 'montant', reduction_valeur: String(item.reduction_value),
+                          part_profil: String(item.part_profil), part_agence: String(item.part_agence), motif: item.motif,
+                          envoyer_message: item.envoyer_message, message_client: item.message_client, canal_diffusion: item.canal_diffusion || [], cree_par: item.commercial_name,
+                        });
+                        setGestures((prev) => prev.filter((x) => x.id !== item.id));
+                        setShowCreateGesture(true);
+                      }}>
                         <Pencil size={14} />
                       </button>
-                      <button className="icon-btn" title="Supprimer" onClick={() => setGestures((prev) => prev.filter((x) => x.id !== item.id))}>
+                      <button className="icon-btn" title="Supprimer" onClick={() => {
+                        if (window.confirm('Supprimer ce geste commercial ?')) {
+                          deleteCommercialGesture(item.id).then(() => {
+                            setGestures((prev) => prev.filter((x) => x.id !== item.id));
+                          }).catch(console.error);
+                        }
+                      }}>
                         <Trash2 size={14} />
+                      </button>
+                      <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
+                        updateCommercialGesture(item.id, { archived: !item.archived }).then((res) => {
+                          setGestures((prev) => prev.map((x) => x.id === item.id ? res.data : x));
+                        }).catch(console.error);
+                      }}>
+                        {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                       </button>
                     </td>
                   </tr>
                 ))}
                 {filteredGestes.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="empty-row">Aucun geste commercial</td>
+                    <td colSpan={9} className="empty-row">{showArchived ? 'Aucun geste commercial archivé' : 'Aucun geste commercial créé'}</td>
                   </tr>
                 )}
               </tbody>
@@ -538,7 +673,7 @@ export default function Marketing() {
 
       {activeTab === 'campagnes' && (
         <>
-          <div className="mk-filters-row mk-filters-row-campagnes">
+          <div className="mk-filters-row mk-filters-row-campagnes" style={{ alignItems: 'flex-end' }}>
             <label>
               <select value={campagneCibleFilter} onChange={(e) => setCampagneCibleFilter(e.target.value)}>
                 <option>Toutes les cibles</option>
@@ -552,19 +687,29 @@ export default function Marketing() {
             <label>
               <input type="date" value={campagneDateTo} onChange={(e) => setCampagneDateTo(e.target.value)} />
             </label>
+            <button
+              type="button"
+              className={`btn ${showArchived ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              {showArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+              {showArchived ? 'Voir les actives' : 'Archivées'}
+            </button>
           </div>
 
           <div className="table-wrapper mk-table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th>Date création</th>
                   <th>Titre</th>
+                  <th>Message</th>
                   <th>Cible</th>
-                  <th>Segment</th>
+                  <th>Segment / Critère</th>
                   <th>Canal</th>
                   <th>Ville</th>
-                  <th>Date diffusion</th>
+                  <th>Diffusion</th>
                   <th>Dest./jour</th>
                   <th>Statut</th>
                   <th>Actions</th>
@@ -573,31 +718,59 @@ export default function Marketing() {
               <tbody>
                 {filteredCampagnes.map((item) => (
                   <tr key={item.id}>
-                    <td>{fmtDate(item.date)}</td>
+                    <td>{fmtDate(item.created_at || item.date)}</td>
                     <td>{item.title}</td>
+                    <td style={{ maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.message}>{item.message || '—'}</td>
                     <td>{item.target}</td>
-                    <td>{segmentLabel(item.segment)}</td>
-                    <td>{item.channel}</td>
-                    <td>{item.city}</td>
-                    <td>{fmtDate(item.broadcastDate)}</td>
-                    <td>{item.perDayDest}</td>
-                    <td><span className="mk-status-chip">{item.status === 'programmee' ? 'Programmée' : item.status}</span></td>
+                    <td>{item.target === 'Client' ? segmentLabel(item.segment) : item.criteria}</td>
+                    <td>{Array.isArray(item.channel) ? item.channel.join(', ') : item.channel}</td>
+                    <td>{item.city || '—'}</td>
+                    <td>{fmtDate(item.broadcast_date)} {item.broadcast_time_start && `(${item.broadcast_time_start} - ${item.broadcast_time_end})`}</td>
+                    <td>{item.per_day_dest}</td>
                     <td>
-                      <button className="icon-btn" title="Modifier">
+                      <span className={`mk-status-chip ${item.status === 'programmee' ? 'mk-status-blue' : item.status === 'envoyee' ? 'mk-status-green' : item.status === 'annulee' ? 'mk-status-red' : 'mk-status-grey'}`}>
+                        {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                      </span>
+                    </td>
+                    <td>
+                      <button className="icon-btn" title="Modifier" onClick={() => {
+                        setCampaignForm({
+                          nom: item.title, message: item.message || '', statut: item.status,
+                          cible: item.target.toLowerCase(), segment_cible: item.segment, critere_ciblage: item.criteria || 'tous',
+                          canal: Array.isArray(item.channel) ? item.channel : [item.channel], ville_ciblage: item.city || '',
+                          heure_debut: item.broadcast_time_start || '', heure_fin: item.broadcast_time_end || '',
+                          date_diffusion: item.broadcast_date || '', nombre_destinataires_jour: String(item.per_day_dest || 0),
+                        });
+                        setCampaigns((prev) => prev.filter((x) => x.id !== item.id));
+                        setShowCreateCampaign(true);
+                      }}>
                         <Pencil size={14} />
                       </button>
                       <button className="icon-btn" title="Envoyer">
                         <Send size={14} />
                       </button>
-                      <button className="icon-btn" title="Supprimer" onClick={() => setCampaigns((prev) => prev.filter((x) => x.id !== item.id))}>
+                      <button className="icon-btn" title="Supprimer" onClick={() => {
+                        if (window.confirm('Supprimer cette campagne ?')) {
+                          deleteCampaign(item.id).then(() => {
+                            setCampaigns((prev) => prev.filter((x) => x.id !== item.id));
+                          }).catch(console.error);
+                        }
+                      }}>
                         <Trash2 size={14} />
+                      </button>
+                      <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
+                        updateCampaign(item.id, { archived: !item.archived }).then((res) => {
+                          setCampaigns((prev) => prev.map((x) => x.id === item.id ? res.data : x));
+                        }).catch(console.error);
+                      }}>
+                        {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                       </button>
                     </td>
                   </tr>
                 ))}
                 {filteredCampagnes.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="empty-row">Aucune campagne</td>
+                    <td colSpan={11} className="empty-row">{showArchived ? 'Aucune campagne archivée' : 'Aucune campagne'}</td>
                   </tr>
                 )}
               </tbody>
@@ -617,6 +790,7 @@ export default function Marketing() {
 
       {showCreateGesture && (
         <CreateGesteModal
+          demandes={demandes}
           form={gestureForm}
           setForm={setGestureForm}
           onClose={closeModals}
@@ -629,7 +803,7 @@ export default function Marketing() {
           form={campaignForm}
           setForm={setCampaignForm}
           onClose={closeModals}
-          onSubmit={createCampaign}
+          onSubmit={createCampaignFunc}
         />
       )}
     </div>

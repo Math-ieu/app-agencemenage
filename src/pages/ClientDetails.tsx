@@ -628,7 +628,7 @@ export default function ClientDetails() {
               <InfoField label="TARIF" value={latest.prix ? `${latest.prix} MAD` : undefined} />
               <InfoField label="DATE INTERVENTION" value={latest.date_intervention || undefined} />
               <InfoField label="HEURE INTERVENTION" value={latest.heure_intervention || undefined} />
-              <InfoField label="ADRESSE" value={latest.client_details?.address || client.address} />
+              <InfoField label="ADRESSE" value={latest.client_detail?.address || client.address} />
               <InfoField label="VILLE" value={client.city || 'Casablanca'} />
               <InfoField label="REPÈRE / QUARTIER" value={client.neighborhood} />
               <InfoField label="DATE CRÉATION" value={new Date(latest.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} />

@@ -9,22 +9,21 @@ export interface User {
 
 export interface Client {
   id: number;
+  display_name: string;
+  full_name?: string;
   first_name: string;
   last_name: string;
-  full_name: string;
-  email: string;
+  entity_name?: string;
   phone: string;
   whatsapp?: string;
-  address: string;
+  assigned_commercial?: string;
+  email: string;
+  segment: 'particulier' | 'entreprise';
   city: string;
   neighborhood: string;
-  segment: 'particulier' | 'entreprise';
-  demandes_count: number;
+  address: string;
   created_at: string;
-  avis_commercial?: string;
-  avis_operationnel?: string;
-  assigned_commercial?: number;
-  phone_history?: any[];
+  demandes_count?: number;
 }
 
 export interface Agent {
@@ -38,22 +37,22 @@ export interface Agent {
   gender: string;
   birth_date: string;
   marital_status?: string;
-  situation?: string;
   has_children: boolean;
   poste: string;
-  experience?: string;
+  experience: string;
   experience_years: number;
   experience_months: number;
   education_level: string;
   languages: string[];
   nationality: string;
   cin: string;
+  situation: string;
   type_profil: string;
-  training_details?: string;
+  training_details: string;
   can_read_write: boolean;
-  health_issues?: string;
-  physical_appearance?: string;
-  corpulence?: string;
+  health_issues: string;
+  physical_appearance: string;
+  corpulence: string;
   avail_emergencies: boolean;
   avail_7_7: boolean;
   avail_day: boolean;
@@ -85,7 +84,7 @@ export interface Demande {
   client_city?: string;
   client_neighborhood?: string;
   client_address?: string;
-  client_details?: Client;
+  client_detail?: Client;
   assigned_to_name: string;
   assigned_to_id?: number;
   commercial_name?: string;
