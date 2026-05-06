@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
@@ -184,6 +184,10 @@ export default function Dashboard() {
   const [showCAOModal, setShowCAOModal] = useState<Demande | null>(null);
   const [showAnnulationModal, setShowAnnulationModal] = useState<{ demandeId: number } | null>(null);
   const [annulationReason, setAnnulationReason] = useState('');
+  const [showFacturationAnnuleeModal, setShowFacturationAnnuleeModal] = useState<{ demandeId: number } | null>(null);
+  const [facturationAnnuleeReason, setFacturationAnnuleeReason] = useState('');
+  const [facturationAnnuleeProfilPaye, setFacturationAnnuleeProfilPaye] = useState(false);
+  const [facturationAnnuleeAmount, setFacturationAnnuleeAmount] = useState<number | ''>('');
   const [caoDecision, setCaoDecision] = useState<'confirmed' | 'postponed' | 'cancelled' | null>(null);
   const [caoCancelReason, setCaoCancelReason] = useState('');
   const [caoPostponedDate, setCaoPostponedDate] = useState('');
@@ -664,6 +668,23 @@ export default function Dashboard() {
         } catch (waErr) {
           console.error("WhatsApp error:", waErr);
         }
+      }
+
+      // Assignation automatique des profils (Gestion des parts)
+      const existingProfilIds = selectedDemande.profils_envoyes?.map((p: any) => p.id) || [];
+      const newProfilIds = partsRepartition
+        .map((p) => p.profile_id)
+        .filter((id) => id && !existingProfilIds.includes(parseInt(id as unknown as string)));
+
+      if (newProfilIds.length > 0) {
+        for (const id of newProfilIds) {
+          try {
+            await sendProfilToDemande(selectedDemande.id, parseInt(id as unknown as string));
+          } catch (err) {
+            console.error("Erreur lors de l'assignation automatique du profil", err);
+          }
+        }
+        addToast(`${newProfilIds.length} profil(s) automatiquement assigné(s) au besoin`, 'success');
       }
 
       // Mettre à jour selectedDemande
@@ -1234,13 +1255,11 @@ export default function Dashboard() {
                               <XCircle size={16} /> Rejeté / Annulé
                             </button>
 
-                            <button className="menu-item text-orange" onClick={async () => {
-                              if (confirm('Confirmer l\'annulation de la facturation ?')) {
-                                await updateDemande(d.id, { statut_paiement: 'annule' });
-                                addToast('Facturation annulée', 'success');
-                                fetchData();
-                                setActiveMoreMenu(null);
-                              }
+                            <button className="menu-item text-orange" onClick={() => {
+                              setFacturationAnnuleeReason('');
+                              setFacturationAnnuleeProfilPaye(false);
+                              setShowFacturationAnnuleeModal({ demandeId: d.id });
+                              setActiveMoreMenu(null);
                             }}>
                               <XCircle size={16} /> Facturation annulée
                             </button>
@@ -2180,7 +2199,12 @@ export default function Dashboard() {
                               <input type="number" value={editFormData.montant_profil_doit_agence || ''} onChange={e => {
                                 const val = toNumber(e.target.value);
                                 // Auto-dispatch: profil doit = part_agence, profil part = TTC - part_agence
-                                const nextParts = partsRepartition.length > 0 ? partsRepartition.map((p, i) => i === 0 ? { ...p, amount: roundMoney(montantTTC - val) } : p) : partsRepartition;
+                                const totalProfilPart = roundMoney(montantTTC - val);
+                                const count = partsRepartition.length || 1;
+                                const amountPerProfile = roundMoney(totalProfilPart / count);
+                                const nextParts = partsRepartition.length > 0 ? partsRepartition.map((p, i) => {
+                                  return { ...p, amount: i === count - 1 ? roundMoney(totalProfilPart - (amountPerProfile * (count - 1))) : amountPerProfile };
+                                }) : partsRepartition;
                                 setEditFormData({ ...editFormData, montant_profil_doit_agence: e.target.value, part_agence: val, parts_repartition: nextParts });
                               }} className="edit-input" placeholder="0" style={{ borderColor: '#FECACA', color: '#B91C1C', fontWeight: 600 }} />
                             </div>
@@ -2195,7 +2219,12 @@ export default function Dashboard() {
                               <input type="number" value={editFormData.montant_agence_doit_profil || ''} onChange={e => {
                                 const val = toNumber(e.target.value);
                                 // Auto-dispatch: agence doit = profil part, agence part = TTC - profil part
-                                const nextParts = partsRepartition.length > 0 ? partsRepartition.map((p, i) => i === 0 ? { ...p, amount: val } : p) : partsRepartition;
+                                const totalProfilPart = val;
+                                const count = partsRepartition.length || 1;
+                                const amountPerProfile = roundMoney(totalProfilPart / count);
+                                const nextParts = partsRepartition.length > 0 ? partsRepartition.map((p, i) => {
+                                  return { ...p, amount: i === count - 1 ? roundMoney(totalProfilPart - (amountPerProfile * (count - 1))) : amountPerProfile };
+                                }) : partsRepartition;
                                 setEditFormData({ ...editFormData, montant_agence_doit_profil: e.target.value, part_agence: roundMoney(montantTTC - val), parts_repartition: nextParts });
                               }} className="edit-input" placeholder="0" style={{ borderColor: '#FED7AA', color: '#C2410C', fontWeight: 600 }} />
                             </div>
@@ -3092,6 +3121,155 @@ export default function Dashboard() {
                 }}
               >
                 Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Facturation Annulee Modal */}
+      {showFacturationAnnuleeModal && (
+        <div className="modal-overlay z-[110]" onClick={() => setShowFacturationAnnuleeModal(null)}>
+          <div
+            className="modal-content max-w-[460px]"
+            onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: '#f8fafc', borderRadius: '16px', padding: '24px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', border: 'none' }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f766e' }}>
+                Facturation annulée — #{showFacturationAnnuleeModal.demandeId}
+              </h3>
+              <button
+                onClick={() => setShowFacturationAnnuleeModal(null)}
+                style={{ background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#0f766e', fontSize: '18px' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#0f766e', marginBottom: '4px' }}>
+                Raison de l'annulation
+              </label>
+              <textarea
+                autoFocus
+                style={{ width: '100%', border: '1.5px solid #0d9488', borderRadius: '8px', padding: '12px', fontSize: '14px', color: '#334155', minHeight: '100px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
+                value={facturationAnnuleeReason}
+                onChange={e => setFacturationAnnuleeReason(e.target.value)}
+                onKeyDown={e => e.stopPropagation()}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+              <label style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>
+                Le profil sera payé ?
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setFacturationAnnuleeProfilPaye(true)}
+                  style={{
+                    padding: '6px 16px', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+                    background: facturationAnnuleeProfilPaye ? '#0d9488' : '#ffffff',
+                    color: facturationAnnuleeProfilPaye ? 'white' : '#0f766e',
+                    border: facturationAnnuleeProfilPaye ? '1px solid #0d9488' : '1px solid #e2e8f0',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Oui
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFacturationAnnuleeProfilPaye(false)}
+                  style={{
+                    padding: '6px 16px', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+                    background: !facturationAnnuleeProfilPaye ? '#0d9488' : '#ffffff',
+                    color: !facturationAnnuleeProfilPaye ? 'white' : '#0f766e',
+                    border: !facturationAnnuleeProfilPaye ? '1px solid #0d9488' : '1px solid #e2e8f0',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Non
+                </button>
+              </div>
+            </div>
+
+            {facturationAnnuleeProfilPaye && (
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#0f766e', marginBottom: '8px' }}>
+                  Montant à payer au profil (MAD)
+                </label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={facturationAnnuleeAmount}
+                  onChange={e => setFacturationAnnuleeAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  onKeyDown={e => e.stopPropagation()}
+                  style={{ width: '100%', border: '1.5px solid #0d9488', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#334155', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
+                />
+              </div>
+            )}
+
+            <hr style={{ borderTop: '1px solid #e2e8f0', borderBottom: 'none', margin: '0 0 20px 0' }} />
+
+            {/* Footer */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+              <button
+                onClick={() => setShowFacturationAnnuleeModal(null)}
+                style={{ padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#0f766e', backgroundColor: 'white', border: '1px solid #e2e8f0', cursor: 'pointer' }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={async () => {
+                  if (!facturationAnnuleeReason.trim()) return;
+                  try {
+                    const d = demandes.find(x => x.id === showFacturationAnnuleeModal.demandeId);
+                    if (!d) return;
+                    const prevFacturation = d.formulaire_data?.facturation || {};
+                    const partsRepartition = prevFacturation.parts_repartition || [];
+                    const amountToDistribute = facturationAnnuleeProfilPaye ? Number(facturationAnnuleeAmount) || 0 : 0;
+                    const newParts = facturationAnnuleeProfilPaye && partsRepartition.length > 0
+                      ? partsRepartition.map((p: any) => ({ ...p, amount: roundMoney(amountToDistribute / partsRepartition.length) }))
+                      : partsRepartition;
+
+                    const updateData = {
+                      statut: 'annule',
+                      formulaire_data: {
+                        ...(d.formulaire_data || {}),
+                        facturation: {
+                          ...prevFacturation,
+                          facturation_annulee: true,
+                          statut_paiement_ui: 'facturation_annulee',
+                          annulation_raison: facturationAnnuleeReason.trim(),
+                          profil_sera_paye: facturationAnnuleeProfilPaye,
+                          montant_profil_annulation: amountToDistribute,
+                          parts_repartition: newParts
+                        }
+                      }
+                    };
+                    await updateDemande(d.id, updateData);
+                    addToast('Facturation annulée', 'success');
+                    setShowFacturationAnnuleeModal(null);
+                    setFacturationAnnuleeReason('');
+                    setFacturationAnnuleeProfilPaye(false);
+                    setFacturationAnnuleeAmount('');
+                    fetchData();
+                  } catch (err) {
+                    addToast("Erreur lors de l'annulation de la facturation", 'error');
+                  }
+                }}
+                disabled={!facturationAnnuleeReason.trim()}
+                style={{
+                  padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white',
+                  backgroundColor: facturationAnnuleeReason.trim() ? '#0d9488' : '#99f6e4',
+                  border: 'none', cursor: facturationAnnuleeReason.trim() ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Confirmer l'annulation
               </button>
             </div>
           </div>

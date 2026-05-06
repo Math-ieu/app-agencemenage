@@ -227,12 +227,18 @@ const shortMissionNo = (missionNo: string): string => {
   return `M-${parseInt(match[1], 10)}`;
 };
 
-const creditPaymentLabel = (row: FacturationRow): 'Payé' | 'Non payé' => {
-  if (row.encaissePar === 'Agence') {
-    return row.partProfilVersee ? 'Payé' : 'Non payé';
+const creditPaymentLabel = (row: FacturationRow | any): 'Payé' | 'Non payé' => {
+  if (row._partProfilVersee !== undefined) {
+    return row._partProfilVersee ? 'Payé' : 'Non payé';
   }
-
   return row.partProfilVersee ? 'Payé' : 'Non payé';
+};
+
+const debitPaymentLabel = (row: FacturationRow | any): 'Payé' | 'Non payé' => {
+  if (row._partAgenceReversee !== undefined) {
+    return row._partAgenceReversee ? 'Payé' : 'Non payé';
+  }
+  return row.partAgenceReversee ? 'Payé' : 'Non payé';
 };
 
 const missionFinanceLabel = (row: FacturationRow): 'Facturation annulée' | 'Facturée' => (
@@ -786,6 +792,8 @@ export default function VueGlobale() {
         // Multi-profile logic
         const splitPartAgence = item.partAgence / item.parts_repartition.length;
 
+        const delegatePart = item.parts_repartition.find((p: any) => p.is_delegate) || item.parts_repartition[0];
+
         for (const part of item.parts_repartition) {
           const profileId = Number(part.profile_id);
           // If we can't find the name in the part object, we'll try to find it in the agents list
@@ -811,24 +819,20 @@ export default function VueGlobale() {
           }
 
           const profile = grouped.get(accountKey)!;
+          const isDelegate = part === delegatePart;
+          
           profile.missions += 1;
           profile.caTotal += (amount + splitPartAgence); // CA généré = part du profil + sa part de la commission agence
           profile.partAgence += splitPartAgence;
           profile.partProfil += amount;
 
           const encaissePar = item.encaissePar;
-          // Approximate debts for multi-profile based on their specific amount
           if (encaissePar === 'Agence') {
             if (item.reglementInterne === 'Réglé') {
-               // If settled, assume this profile got their part
                profile.verseAuProfil += amount;
-            } else if (item.statutPaiementUi === 'agence_payee_client' || item.statutPaiementUi === 'Agence payée / Client') {
-               // Agency owes this profile their amount
-               // (Handled by solde calculation later, but we can track versements here)
             }
-          } else if (item.reglementInterne === 'Réglé') {
-             // If settled, assume this profile gave the agency part
-             profile.recuDuProfil += splitPartAgence;
+          } else if (item.reglementInterne === 'Réglé' && isDelegate) {
+             profile.recuDuProfil += item.partAgence;
           }
         }
       } else {
@@ -943,10 +947,13 @@ export default function VueGlobale() {
 
       if (suiviPaiementFilter === 'Tous les paiements') {
         // Updated rule: Non payé, Paiement partiel, paiement en attente ou profil payé par client
-        const allowed = ['non_confirme', 'paiement_partiel', 'paiement_en_attente', 'profil_paye_client'];
+        const allowed = ['non_confirme', 'paiement_partiel', 'paiement_en_attente', 'profil_paye_client', 'Profil payé / Client'];
         if (row.statutPaiementUi && !allowed.includes(row.statutPaiementUi)) {
           // If we have UI status, check against allowed list. 
           // However, for "Suivi facturation" tab by default, we want to see pending stuff.
+          return false;
+        } else if (!row.statutPaiementUi && row.paiement === 'paye') {
+          return false;
         }
       }
 
@@ -973,19 +980,45 @@ export default function VueGlobale() {
     });
   }, [suiviBaseRows, suiviDateFrom, suiviDateTo, suiviPaiementFilter, suiviSearch, suiviSegmentFilter, suiviStatutFilter]);
 
-  const agenceNonPayeAmount = useMemo(
-    () => facturationData
-      .filter((row) => (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client' || (!row.statutPaiementUi && row.encaissePar === 'Profil')) && row.reglementInterne !== 'Réglé')
-      .reduce((sum, row) => sum + getPartAgenceDueFromProfil(row), 0),
-    [facturationData]
-  );
+  const agenceNonPayeAmount = useMemo(() => {
+    let total = 0;
+    for (const row of facturationData) {
+      const isDebit = row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
+      if (!isDebit) continue;
+      
+      const totalDue = getPartAgenceDueFromProfil(row);
+      if (row.parts_repartition && row.parts_repartition.length > 0) {
+        const delegatePart = row.parts_repartition.find((p: any) => p.is_delegate) || row.parts_repartition[0];
+        if (!delegatePart.part_agence_reversee) {
+          total += totalDue;
+        }
+      } else if (row.reglementInterne !== 'Réglé') {
+        total += totalDue;
+      }
+    }
+    return total;
+  }, [facturationData]);
 
-  const profilNonPayeAmount = useMemo(
-    () => facturationData
-      .filter((row) => (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence')) && row.reglementInterne !== 'Réglé')
-      .reduce((sum, row) => sum + getPartProfilDueFromAgence(row), 0),
-    [facturationData]
-  );
+  const profilNonPayeAmount = useMemo(() => {
+    let total = 0;
+    for (const row of facturationData) {
+      const isCredit = row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence');
+      if (!isCredit) continue;
+
+      const totalDue = getPartProfilDueFromAgence(row);
+      if (row.parts_repartition && row.parts_repartition.length > 0) {
+        const totalParts = row.parts_repartition.reduce((s, p) => s + Number(p.amount || 0), 0) || 1;
+        for (const part of row.parts_repartition) {
+          if (!part.part_profil_versee) {
+            total += (Number(part.amount || 0) / totalParts) * totalDue;
+          }
+        }
+      } else if (row.reglementInterne !== 'Réglé') {
+        total += totalDue;
+      }
+    }
+    return total;
+  }, [facturationData]);
 
   const profileBalances = useMemo<ProfileBalance[]>(
     () =>
@@ -1021,8 +1054,8 @@ export default function VueGlobale() {
   const displayedMissionTotal = filteredSuiviRows.reduce((sum, row) => sum + row.montant, 0);
 
   const suiviRecap = useMemo(() => {
-    const activeRows = filteredSuiviRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
-    const cancelledRows = filteredSuiviRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
+    const activeRows = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
+    const cancelledRows = periodFilteredRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
 
     const totalFacture = activeRows.filter((row) => row.paiement === 'paye').length;
     const chiffreAffaires = activeRows
@@ -1036,7 +1069,7 @@ export default function VueGlobale() {
     const paiementsEnAttente = activeRows.filter((row) => row.paiement === 'partiellement_paye').length;
 
     return { totalFacture, chiffreAffaires, commissionAgence, paiementsEnAttente };
-  }, [filteredSuiviRows]);
+  }, [periodFilteredRows]);
 
   const globalSegmentStats = useMemo(() => {
     const particulier = facturationData.filter((row) => row.segment === 'Particulier').length;
@@ -1130,9 +1163,37 @@ export default function VueGlobale() {
     [filteredDebitRows]
   );
 
+  const expandedDebitRows = useMemo(() => {
+    const result: any[] = [];
+    for (const row of filteredDebitRows) {
+      if (row.parts_repartition && row.parts_repartition.length > 0) {
+        const totalDue = getPartAgenceDueFromProfil(row);
+        const delegatePart = row.parts_repartition.find((p: any) => p.is_delegate) || row.parts_repartition[0];
+        const pId = Number(delegatePart.profile_id);
+        const pName = profileAccountsData.find(a => a.id === pId)?.name || delegatePart.profile_name || row.profil;
+        
+        result.push({
+          ...row,
+          profilId: pId,
+          profil: pName,
+          _partAgenceDue: totalDue,
+          _partAgenceReversee: delegatePart.part_agence_reversee ?? row.partAgenceReversee,
+          _uniqueKey: `${row.missionNo}-${pId}`
+        });
+      } else {
+        result.push({
+          ...row,
+          _partAgenceDue: getPartAgenceDueFromProfil(row),
+          _uniqueKey: row.missionNo
+        });
+      }
+    }
+    return result;
+  }, [filteredDebitRows, profileAccountsData]);
+
   const debitProfilesCount = useMemo(
-    () => new Set(filteredDebitRows.map((row) => row.profilId || row.profil)).size,
-    [filteredDebitRows]
+    () => new Set(expandedDebitRows.map((row) => row.profilId || row.profil)).size,
+    [expandedDebitRows]
   );
 
   const creditTotal = useMemo(
@@ -1140,29 +1201,88 @@ export default function VueGlobale() {
     [filteredCreditRows]
   );
 
+  const expandedCreditRows = useMemo(() => {
+    const result: any[] = [];
+    for (const row of filteredCreditRows) {
+      if (row.parts_repartition && row.parts_repartition.length > 0) {
+        const totalDue = getPartProfilDueFromAgence(row);
+        const totalParts = row.parts_repartition.reduce((s, p) => s + Number(p.amount || 0), 0) || 1;
+        for (const part of row.parts_repartition) {
+          const pId = Number(part.profile_id);
+          const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
+          const portion = (Number(part.amount || 0) / totalParts) * totalDue;
+          result.push({
+            ...row,
+            profilId: pId,
+            profil: pName,
+            _partProfilDue: portion,
+            _partProfilVersee: part.part_profil_versee ?? row.partProfilVersee,
+            _uniqueKey: `${row.missionNo}-${pId}`
+          });
+        }
+      } else {
+        result.push({
+          ...row,
+          _partProfilDue: getPartProfilDueFromAgence(row),
+          _uniqueKey: row.missionNo
+        });
+      }
+    }
+    return result;
+  }, [filteredCreditRows, profileAccountsData]);
+
   const agenceNonPayeByProfile = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of facturationData) {
       const isDebit = row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
-      if (!isDebit || row.reglementInterne === 'Réglé') continue;
-      map.set(row.profil, (map.get(row.profil) || 0) + getPartAgenceDueFromProfil(row));
+      if (!isDebit) continue;
+      
+      const totalDue = getPartAgenceDueFromProfil(row);
+      if (row.parts_repartition && row.parts_repartition.length > 0) {
+        const delegatePart = row.parts_repartition.find((p: any) => p.is_delegate) || row.parts_repartition[0];
+        if (delegatePart.part_agence_reversee) continue;
+
+        const profileId = Number(delegatePart.profile_id);
+        const pName = profileAccountsData.find(a => a.id === profileId)?.name || delegatePart.profile_name || row.profil;
+        map.set(pName, (map.get(pName) || 0) + totalDue);
+      } else {
+        if (row.reglementInterne === 'Réglé') continue;
+        map.set(row.profil, (map.get(row.profil) || 0) + totalDue);
+      }
     }
     return Array.from(map.entries())
       .map(([name, amount]) => ({ name, amount }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [facturationData]);
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  }, [facturationData, profileAccountsData]);
 
   const profilNonPayeByProfile = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of facturationData) {
       const isCredit = row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence');
-      if (!isCredit || row.reglementInterne === 'Réglé') continue;
-      map.set(row.profil, (map.get(row.profil) || 0) + getPartProfilDueFromAgence(row));
+      if (!isCredit) continue;
+      
+      const totalDue = getPartProfilDueFromAgence(row);
+      if (row.parts_repartition && row.parts_repartition.length > 0) {
+        const totalParts = row.parts_repartition.reduce((s, p) => s + Number(p.amount || 0), 0) || 1;
+        for (const part of row.parts_repartition) {
+          if (part.part_profil_versee) continue;
+          
+          const pId = Number(part.profile_id);
+          const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
+          const portion = (Number(part.amount || 0) / totalParts) * totalDue;
+          map.set(pName, (map.get(pName) || 0) + portion);
+        }
+      } else {
+        if (row.reglementInterne === 'Réglé') continue;
+        map.set(row.profil, (map.get(row.profil) || 0) + totalDue);
+      }
     }
     return Array.from(map.entries())
       .map(([name, amount]) => ({ name, amount }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [facturationData]);
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  }, [facturationData, profileAccountsData]);
 
   const globalTableTotals = useMemo(() => {
     return globalTableRows.reduce(
@@ -1178,6 +1298,75 @@ export default function VueGlobale() {
       { debit: 0, credit: 0, commission: 0 }
     );
   }, [globalTableRows]);
+
+  const expandedGlobalTableRows = useMemo(() => {
+    const result: any[] = [];
+    for (const row of globalTableRows) {
+      const isDebit = row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
+      const isCredit = row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence');
+
+      if (row.parts_repartition && row.parts_repartition.length > 0) {
+        if (isDebit) {
+          const delegatePart = row.parts_repartition.find((p: any) => p.is_delegate) || row.parts_repartition[0];
+          const pId = Number(delegatePart.profile_id);
+          const pName = profileAccountsData.find(a => a.id === pId)?.name || delegatePart.profile_name || row.profil;
+          
+          result.push({
+            ...row,
+            profilId: pId,
+            profil: pName,
+            _partAgenceDue: getPartAgenceDueFromProfil(row),
+            _partProfilDue: null,
+            _commission: getCommissionAgenceEncaissee(row),
+            _uniqueKey: `${row.missionNo}-${pId}-debit`,
+            _isDebit: isDebit,
+            _isCredit: isCredit
+          });
+        } else if (isCredit) {
+          const totalDue = getPartProfilDueFromAgence(row);
+          const totalParts = row.parts_repartition.reduce((s, p) => s + Number(p.amount || 0), 0) || 1;
+          for (let i = 0; i < row.parts_repartition.length; i++) {
+            const part = row.parts_repartition[i];
+            const pId = Number(part.profile_id);
+            const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
+            const portion = (Number(part.amount || 0) / totalParts) * totalDue;
+            result.push({
+              ...row,
+              profilId: pId,
+              profil: pName,
+              _partAgenceDue: null,
+              _partProfilDue: portion,
+              _commission: i === 0 ? getCommissionAgenceEncaissee(row) : null,
+              _uniqueKey: `${row.missionNo}-${pId}-credit`,
+              _isDebit: isDebit,
+              _isCredit: isCredit
+            });
+          }
+        } else {
+          result.push({
+            ...row,
+            _partAgenceDue: getPartAgenceDueFromProfil(row),
+            _partProfilDue: getPartProfilDueFromAgence(row),
+            _commission: getCommissionAgenceEncaissee(row),
+            _uniqueKey: row.missionNo,
+            _isDebit: isDebit,
+            _isCredit: isCredit
+          });
+        }
+      } else {
+        result.push({
+          ...row,
+          _partAgenceDue: getPartAgenceDueFromProfil(row),
+          _partProfilDue: getPartProfilDueFromAgence(row),
+          _commission: getCommissionAgenceEncaissee(row),
+          _uniqueKey: row.missionNo,
+          _isDebit: isDebit,
+          _isCredit: isCredit
+        });
+      }
+    }
+    return result;
+  }, [globalTableRows, profileAccountsData]);
 
   const goToClientDetails = useCallback((clientId?: number) => {
     if (!clientId) return;
@@ -1266,20 +1455,34 @@ export default function VueGlobale() {
       const originalFormData = row.originalDemande.formulaire_data || {};
       const facturation = originalFormData.facturation || {};
       
+      let allPaid = isPaid; // By default if single profile
+      let newParts = facturation.parts_repartition;
+
+      if (Array.isArray(facturation.parts_repartition) && facturation.parts_repartition.length > 0 && row.profilId) {
+        newParts = facturation.parts_repartition.map((p: any) => {
+          if (Number(p.profile_id) === row.profilId) {
+            return { ...p, part_profil_versee: isPaid, date_versement_profil: isPaid ? todayIso : null };
+          }
+          return p;
+        });
+        allPaid = newParts.every((p: any) => p.part_profil_versee);
+      }
+
       await updateDemande(row.demandeId, {
         formulaire_data: {
           ...originalFormData,
           facturation: {
             ...facturation,
-            // Sync règlement interne
-            part_profil_versee: isPaid,
-            date_versement_profil: isPaid ? todayIso : null,
+            parts_repartition: newParts,
+            // Sync règlement interne if all are paid or single
+            part_profil_versee: allPaid,
+            date_versement_profil: allPaid ? todayIso : null,
             // Sync statut Dashboard : Payé ou retour à Agence payée / Client
-            statut_paiement_ui: isPaid ? 'paye' : 'agence_payee_client',
+            statut_paiement_ui: allPaid ? 'paye' : (facturation.statut_paiement_ui === 'facturation_annulee' ? 'facturation_annulee' : 'agence_payee_client'),
           }
         },
         // Sync champ API : integral ou partiel
-        statut_paiement: isPaid ? 'integral' : 'partiel',
+        statut_paiement: allPaid ? 'integral' : 'partiel',
       });
     }
 
@@ -1301,20 +1504,34 @@ export default function VueGlobale() {
       const originalFormData = row.originalDemande.formulaire_data || {};
       const facturation = originalFormData.facturation || {};
       
+      let allPaid = isPaid; // By default if single profile
+      let newParts = facturation.parts_repartition;
+
+      if (Array.isArray(facturation.parts_repartition) && facturation.parts_repartition.length > 0 && row.profilId) {
+        newParts = facturation.parts_repartition.map((p: any) => {
+          if (Number(p.profile_id) === row.profilId) {
+            return { ...p, part_agence_reversee: isPaid, date_remise_agence: isPaid ? todayIso : null };
+          }
+          return p;
+        });
+        allPaid = newParts.every((p: any) => p.part_agence_reversee);
+      }
+
       await updateDemande(row.demandeId, {
         formulaire_data: {
           ...originalFormData,
           facturation: {
             ...facturation,
-            // Sync règlement interne
-            part_agence_reversee: isPaid,
-            date_remise_agence: isPaid ? todayIso : null,
+            parts_repartition: newParts,
+            // Sync règlement interne if all are paid or single
+            part_agence_reversee: allPaid,
+            date_remise_agence: allPaid ? todayIso : null,
             // Sync statut Dashboard : Payé ou retour à Profil payé / Client
-            statut_paiement_ui: isPaid ? 'paye' : 'profil_paye_client',
+            statut_paiement_ui: allPaid ? 'paye' : 'profil_paye_client',
           }
         },
         // Sync champ API : integral ou partiel
-        statut_paiement: isPaid ? 'integral' : 'partiel',
+        statut_paiement: allPaid ? 'integral' : 'partiel',
       });
     }
 
@@ -1732,8 +1949,8 @@ export default function VueGlobale() {
                   </tr>
                 </thead>
                 <tbody>
-                  {globalTableRows.map((row) => (
-                    <tr key={`${row.missionNo}-${row.client}`}>
+                  {expandedGlobalTableRows.map((row) => (
+                    <tr key={row._uniqueKey}>
                       <td>{row.date || '—'}</td>
                       <td className="fw-bold">
                         {row.clientId ? (
@@ -1746,15 +1963,13 @@ export default function VueGlobale() {
                         ) : (row.profil || '—')}
                       </td>
                       <td className="fg-text-red fw-semibold">
-                        {(row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil'))
-                          ? money(getPartAgenceDueFromProfil(row)) : '—'}
+                        {row._isDebit && row._partAgenceDue !== null ? money(row._partAgenceDue) : '—'}
                       </td>
                       <td className="fg-text-orange fw-semibold">
-                        {(row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence'))
-                          ? money(getPartProfilDueFromAgence(row)) : '—'}
+                        {row._isCredit && row._partProfilDue !== null ? money(row._partProfilDue) : '—'}
                       </td>
                       <td className="fg-text-green fw-semibold">
-                        {money(getCommissionAgenceEncaissee(row))}
+                        {row._commission !== null ? money(row._commission) : '—'}
                       </td>
                     </tr>
                   ))}
@@ -1851,8 +2066,8 @@ export default function VueGlobale() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredDebitRows.map((row) => (
-                    <tr key={row.missionNo} style={row.reglementInterne === 'Réglé' ? { opacity: 0.45 } : undefined}>
+                  {expandedDebitRows.map((row) => (
+                    <tr key={row._uniqueKey} style={debitPaymentLabel(row) === 'Payé' ? { opacity: 0.45 } : undefined}>
                       <td>{row.date || '—'}</td>
                       <td>
                         {row.clientId ? (
@@ -1868,13 +2083,13 @@ export default function VueGlobale() {
                       <td>{row.service}</td>
                       <td><span className="fg-pill fg-pill-blue">{row.segment}</span></td>
                       <td className="fw-semibold">{money(getMontantEncaisseProfil(row))}</td>
-                      <td className="fg-text-red fw-bold">{money(getPartAgenceDueFromProfil(row))}</td>
+                      <td className="fg-text-red fw-bold">{money(row._partAgenceDue)}</td>
                       <td>{money(row.partProfil)}</td>
                       <td>
                         <label className="fg-select-wrap fg-compact-select">
                           <select
-                            className={`fg-status-select ${row.reglementInterne === 'Réglé' ? 'paid' : 'unpaid'}`}
-                            value={row.reglementInterne === 'Réglé' ? 'Payé' : 'Non payé'}
+                            className={`fg-status-select ${debitPaymentLabel(row) === 'Payé' ? 'paid' : 'unpaid'}`}
+                            value={debitPaymentLabel(row)}
                             onChange={(e) => void updateDebitPaymentStatus(row, e.target.value as 'Payé' | 'Non payé')}
                           >
                             <option value="Non payé">Non payé</option>
@@ -1885,7 +2100,7 @@ export default function VueGlobale() {
                       </td>
                     </tr>
                   ))}
-                  {filteredDebitRows.length === 0 && (
+                  {expandedDebitRows.length === 0 && (
                     <tr>
                       <td colSpan={9} className="empty-row">Aucune ligne pour ce filtre.</td>
                     </tr>
@@ -1942,8 +2157,8 @@ export default function VueGlobale() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCreditRows.map((row) => (
-                    <tr key={row.missionNo} style={row.reglementInterne === 'Réglé' ? { opacity: 0.45 } : undefined}>
+                  {expandedCreditRows.map((row) => (
+                    <tr key={row._uniqueKey} style={creditPaymentLabel(row) === 'Payé' ? { opacity: 0.45 } : undefined}>
                       <td>{row.date || '—'}</td>
                       <td>
                         {row.clientId ? (
@@ -1966,10 +2181,11 @@ export default function VueGlobale() {
                       <td><span className="fg-pill fg-pill-blue">{row.segment}</span></td>
                       <td className="fw-semibold">{money(row.montant)}</td>
                       <td>{money(row.partAgence)}</td>
-                      <td className="fg-text-blue fw-bold">{money(getPartProfilDueFromAgence(row))}</td>
+                      <td className="fg-text-blue fw-bold">{money(row._partProfilDue)}</td>
                       <td>
                         <label className="fg-select-wrap fg-compact-select">
                           <select
+                            className={`fg-status-select ${creditPaymentLabel(row) === 'Payé' ? 'paid' : 'unpaid'}`}
                             value={creditPaymentLabel(row)}
                             onChange={(e) => void updateCreditPaymentStatus(row, e.target.value as 'Payé' | 'Non payé')}
                           >
