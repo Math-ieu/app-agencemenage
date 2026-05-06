@@ -945,18 +945,6 @@ export default function VueGlobale() {
 
       if (suiviStatutFilter !== 'Tous les statuts' && row.statut !== suiviStatutFilter) return false;
 
-      if (suiviPaiementFilter === 'Tous les paiements') {
-        // Updated rule: Non payé, Paiement partiel, paiement en attente ou profil payé par client
-        const allowed = ['non_confirme', 'paiement_partiel', 'paiement_en_attente', 'profil_paye_client', 'Profil payé / Client'];
-        if (row.statutPaiementUi && !allowed.includes(row.statutPaiementUi)) {
-          // If we have UI status, check against allowed list. 
-          // However, for "Suivi facturation" tab by default, we want to see pending stuff.
-          return false;
-        } else if (!row.statutPaiementUi && row.paiement === 'paye') {
-          return false;
-        }
-      }
-
       if (suiviPaiementFilter === 'Non payé' && row.paiement !== 'non_paye' && row.statutPaiementUi !== 'non_confirme') return false;
       if (suiviPaiementFilter === 'Paiement en attente' && row.paiement !== 'partiellement_paye' && row.statutPaiementUi !== 'paiement_en_attente') return false;
       if (suiviPaiementFilter === 'Paiement effectué' && row.paiement !== 'paye' && row.statutPaiementUi !== 'paye') return false;
