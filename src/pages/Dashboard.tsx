@@ -1220,17 +1220,17 @@ export default function Dashboard() {
                             minWidth: '220px',
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
+                            <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Pencil size={16} /> Éditer le besoin
                             </button>
 
-                            <button className="menu-item" onClick={() => {
+                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
                               setShowNoteModal({ demandeId: d.id, type: 'commercial', note: d.note_commercial || '' });
                               setActiveMoreMenu(null);
                             }}>
                               <MessageSquare size={16} /> Note commerciale
                             </button>
-                            <button className="menu-item" onClick={() => {
+                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
                               setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: d.note_operationnel || '' });
                               setActiveMoreMenu(null);
                             }}>
@@ -1239,7 +1239,7 @@ export default function Dashboard() {
 
                             <div className="menu-divider" />
 
-                            <button className="menu-item text-purple" onClick={async () => {
+                            <button className="menu-item" style={{ color: '#6366f1' }} onClick={async () => {
                               await updateDemande(d.id, { statut: 'pres_en_cours' });
                               addToast('Statut mis à jour : Prestation en cours', 'success');
                               fetchData();
@@ -1248,7 +1248,7 @@ export default function Dashboard() {
                               <CheckCircle size={16} /> Pres. en cours
                             </button>
 
-                            <button className="menu-item text-orange" onClick={async () => {
+                            <button className="menu-item" style={{ color: '#0ea5e9' }} onClick={async () => {
                               await updateDemande(d.id, { statut: 'pres_terminee' });
                               addToast('Statut mis à jour : Prestation terminée', 'success');
                               addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
@@ -1260,7 +1260,7 @@ export default function Dashboard() {
 
                             <div className="menu-divider" />
 
-                            <button className="menu-item text-red" onClick={() => {
+                            <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
                               setAnnulationReason('');
                               setShowAnnulationModal({ demandeId: d.id });
                               setActiveMoreMenu(null);
@@ -1268,7 +1268,7 @@ export default function Dashboard() {
                               <XCircle size={16} /> Rejeté / Annulé
                             </button>
 
-                            <button className="menu-item text-orange" onClick={() => {
+                            <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
                               setFacturationAnnuleeReason('');
                               setFacturationAnnuleeProfilPaye(false);
                               setShowFacturationAnnuleeModal({ demandeId: d.id });
@@ -1277,7 +1277,7 @@ export default function Dashboard() {
                               <XCircle size={16} /> Facturation annulée
                             </button>
 
-                            <button className="menu-item text-red" onClick={async () => {
+                            <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
                               if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
                                 try {
                                   await deleteDemande(d.id);
@@ -1354,17 +1354,17 @@ export default function Dashboard() {
                             zIndex: 50,
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            <button className="menu-item" onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
+                            <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                               <Pencil size={16} /> Éditer le besoin
                             </button>
 
-                            <button className="menu-item" onClick={() => {
+                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
                               setShowNoteModal({ demandeId: d.id, type: 'commercial', note: d.note_commercial || '' });
                               setActiveMoreMenu(null);
                             }}>
                               <MessageSquare size={16} /> Note commerciale
                             </button>
-                            <button className="menu-item" onClick={() => {
+                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
                               setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: d.note_operationnel || '' });
                               setActiveMoreMenu(null);
                             }}>
@@ -1373,7 +1373,7 @@ export default function Dashboard() {
 
                             <div className="menu-divider" />
 
-                            <button className="menu-item text-purple" onClick={async () => {
+                            <button className="menu-item" style={{ color: '#6366f1' }} onClick={async () => {
                               await updateDemande(d.id, { statut: 'pres_en_cours' });
                               addToast('Statut mis à jour : Prestation en cours', 'success');
                               fetchData();
@@ -1382,7 +1382,7 @@ export default function Dashboard() {
                               <CheckCircle size={16} /> Pres. en cours
                             </button>
 
-                            <button className="menu-item text-orange" onClick={async () => {
+                            <button className="menu-item" style={{ color: '#0ea5e9' }} onClick={async () => {
                               await updateDemande(d.id, { statut: 'pres_terminee' });
                               addToast('Statut mis à jour : Prestation terminée', 'success');
                               addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
@@ -1394,7 +1394,7 @@ export default function Dashboard() {
 
                             <div className="menu-divider" />
 
-                            <button className="menu-item text-red" onClick={() => {
+                            <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
                               setAnnulationReason('');
                               setShowAnnulationModal({ demandeId: d.id });
                               setActiveMoreMenu(null);
@@ -1402,7 +1402,16 @@ export default function Dashboard() {
                               <XCircle size={16} /> Rejeté / Annulé
                             </button>
 
-                            <button className="menu-item text-red" onClick={async () => {
+                            <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
+                              setFacturationAnnuleeReason('');
+                              setFacturationAnnuleeProfilPaye(false);
+                              setShowFacturationAnnuleeModal({ demandeId: d.id });
+                              setActiveMoreMenu(null);
+                            }}>
+                              <XCircle size={16} /> Facturation annulée
+                            </button>
+
+                            <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
                               if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
                                 try {
                                   await deleteDemande(d.id);
@@ -1490,33 +1499,17 @@ export default function Dashboard() {
                           right: 'auto', left: 0, zIndex: 50, minWidth: '220px',
                           ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
                         }}>
-                          <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
+                          <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMenu(null); }}>
                             <Pencil size={16} /> Éditer le besoin
                           </button>
-                          <button className="menu-item w-full" onClick={(e) => { e.stopPropagation(); openCAOModal(d); setActiveMenu(null); }}>
-                            <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> Confirmation CAO
+
+                          <button className="menu-item" style={{ color: '#0d9488' }} onClick={(e) => { e.stopPropagation(); openCAOModal(d); setActiveMenu(null); }}>
+                            <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> Confirmation avant opération
                           </button>
-                          <Link to={d.client ? `/clients/${encodeId(d.client)}` : '#'} className="menu-item" onClick={() => setActiveMenu(null)} style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}>
+
+                          <Link to={d.client ? `/clients/${encodeId(d.client)}` : '#'} className="menu-item" onClick={() => setActiveMenu(null)} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <UserCheck size={16} /> Compte Client
                           </Link>
-                          <div className="menu-divider" />
-                          <button className="menu-item text-purple" onClick={async () => {
-                            await updateDemande(d.id, { statut: 'pres_en_cours' });
-                            addToast('Statut mis à jour : Prestation en cours', 'success');
-                            fetchData();
-                            setActiveMenu(null);
-                          }}>
-                            <CheckCircle size={16} /> Pres. en cours
-                          </button>
-                          <button className="menu-item text-orange" onClick={async () => {
-                            await updateDemande(d.id, { statut: 'pres_terminee' });
-                            addToast('Statut mis à jour : Prestation terminée', 'success');
-                            addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
-                            fetchData();
-                            setActiveMenu(null);
-                          }}>
-                            <CheckCircle size={16} /> Pres. terminée
-                          </button>
                         </div>
                       )}
                     </div>
