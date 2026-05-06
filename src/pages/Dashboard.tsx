@@ -326,7 +326,15 @@ export default function Dashboard() {
       }
 
       const enAttenteList = allResults.filter(d => d.statut === 'en_attente');
-      const results = allResults.filter(d => d.statut !== 'en_attente' && d.statut !== 'annule');
+      const results = allResults.filter(d => {
+        if (d.statut === 'en_attente' || d.statut === 'annule') return false;
+        
+        const facturation = d.formulaire_data?.facturation || {};
+        const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
+        if (statutUi === 'paye') return false;
+        
+        return true;
+      });
       setDemandes(results);
 
       const enCours = results.filter(d => d.statut === 'en_cours');
@@ -844,6 +852,11 @@ export default function Dashboard() {
       // Filtre Onglet (Besoins vs Abonnements)
       if (activeTab === 'abonnements' && d.frequency !== 'abonnement') return false;
       if (activeTab === 'besoins' && d.frequency === 'abonnement') return false;
+      
+      // Exclure les missions payées du tableau de bord
+      const facturation = d.formulaire_data?.facturation || {};
+      const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
+      if (statutUi === 'paye') return false;
 
       // Recherche
       if (search) {
