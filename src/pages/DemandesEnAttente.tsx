@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { Demande } from '../types';
 import { normalizeFrequence, normalizePayment, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
+import { usePriceCalculator } from '../hooks/usePriceCalculator';
+import { useResourceEstimator } from '../hooks/useResourceEstimator';
 
 const isDevisRequired = (d: Demande | null) => {
   if (!d) return false;
@@ -133,6 +135,29 @@ export default function DemandesEnAttente() {
   const isMenageAirBnBService = selectedServiceKey.includes('air bnb') || selectedServiceKey.includes('airbnb');
   const isFinChantierService = selectedServiceKey.includes('fin de chantier') || selectedServiceKey.includes('fin chantier');
   const minDuree = isGrandMenageService ? 6 : isMenageBureauxService ? 2 : 4;
+
+  const calculatedPrice = usePriceCalculator(formData, selectedService);
+  const estimatedResources = useResourceEstimator(formData, selectedService);
+
+  // Sync estimated resources
+  useEffect(() => {
+    if (estimatedResources) {
+      setFormData(prev => ({
+        ...prev,
+        duree: estimatedResources.duration,
+        nb_intervenants: estimatedResources.people
+      }));
+    }
+  }, [estimatedResources]);
+
+  // Sync calculated price to montant
+  useEffect(() => {
+    if (calculatedPrice && calculatedPrice !== 'Sur devis') {
+      setFormData(prev => ({ ...prev, montant: calculatedPrice }));
+    } else if (calculatedPrice === 'Sur devis') {
+      setFormData(prev => ({ ...prev, montant: '' }));
+    }
+  }, [calculatedPrice]);
 
   // Fecth Commerciaux for Assignation
   useEffect(() => {
@@ -1233,8 +1258,7 @@ export default function DemandesEnAttente() {
                     )}
 
                     {/* Surface (Grand Ménage, Fin Chantier, Déménagement) */}
-                    {(isGrandMenageService || isFinChantierService || isPostDemenagementService) && (
-                      <div className="ws-form-block">
+                    {(isGrandMenageService || isFinChantierService || isPostDemenagementService || isPostSinistreService || isMenageBureauxService) && (                      <div className="ws-form-block">
                         <div className="ws-section-header">Superficie de votre bien en m²</div>
                         <div className="ws-slider-container">
                           <div className="ws-slider-value">{formData.surface} m²</div>
@@ -1249,28 +1273,50 @@ export default function DemandesEnAttente() {
                     )}
 
                     {/* Durée */}
-                    {(isMenageStandardService || isGrandMenageService || isMenageAirBnBService || isMenageBureauxService) && (
+                    {(isMenageStandardService || isGrandMenageService || isMenageAirBnBService || isMenageBureauxService || isPostDemenagementService || isPostSinistreService || isFinChantierService) && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">Précisez le temps qui vous convient</div>
                         <p style={{ color: '#ef4444', fontSize: '0.65rem', textAlign: 'center', marginBottom: '0.5rem' }}>
                           La durée minimale est de {minDuree} heures
                         </p>
-                        <div className="ws-counter">
-                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: Math.max(minDuree, formData.duree - 1) })} disabled={formData.duree <= minDuree}>−</button>
-                          <span className="ws-counter-value">{formData.duree}</span>
-                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: formData.duree + 1 })}>+</button>
+                        <div className="flex items-center justify-center gap-4">
+                          <div className="ws-counter">
+                            <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: Math.max(minDuree, formData.duree - 1) })} disabled={formData.duree <= minDuree}>−</button>
+                            <span className="ws-counter-value">{formData.duree} h</span>
+                            <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: formData.duree + 1 })}>+</button>
+                          </div>
+                          {estimatedResources && formData.duree !== estimatedResources.duration && (
+                            <button 
+                              type="button"
+                              onClick={() => setFormData({ ...formData, duree: estimatedResources.duration })}
+                              className="text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded-full border border-teal-200 hover:bg-teal-200"
+                            >
+                              Suggéré: {estimatedResources.duration}h
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
 
                     {/* Nombre de personnes */}
-                    {(isMenageStandardService || isGrandMenageService || isMenageAirBnBService || isMenageBureauxService) && (
+                    {(isMenageStandardService || isGrandMenageService || isMenageAirBnBService || isMenageBureauxService || isPostDemenagementService || isPostSinistreService || isFinChantierService) && (
                       <div className="ws-form-block">
                         <div className="ws-section-header">Nombre de personne</div>
-                        <div className="ws-counter">
-                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: Math.max(1, formData.nb_intervenants - 1) })} disabled={formData.nb_intervenants <= 1}>−</button>
-                          <span className="ws-counter-value">{formData.nb_intervenants}</span>
-                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: formData.nb_intervenants + 1 })}>+</button>
+                        <div className="flex items-center justify-center gap-4">
+                          <div className="ws-counter">
+                            <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: Math.max(1, formData.nb_intervenants - 1) })} disabled={formData.nb_intervenants <= 1}>−</button>
+                            <span className="ws-counter-value">{formData.nb_intervenants}</span>
+                            <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: formData.nb_intervenants + 1 })}>+</button>
+                          </div>
+                          {estimatedResources && formData.nb_intervenants !== estimatedResources.people && (
+                            <button 
+                              type="button"
+                              onClick={() => setFormData({ ...formData, nb_intervenants: estimatedResources.people })}
+                              className="text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded-full border border-teal-200 hover:bg-teal-200"
+                            >
+                              Suggéré: {estimatedResources.people}
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1455,7 +1501,30 @@ export default function DemandesEnAttente() {
                   <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
                     <div className="form-group">
                       <label className="label-teal">Montant total (MAD) *</label>
-                      <input type="number" placeholder="0.00" required value={formData.montant} onChange={e => setFormData({ ...formData, montant: e.target.value })} />
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          placeholder={calculatedPrice && calculatedPrice !== 'Sur devis' ? calculatedPrice : "0.00"} 
+                          required 
+                          value={formData.montant} 
+                          onChange={e => setFormData({ ...formData, montant: e.target.value })} 
+                        />
+                        {calculatedPrice && calculatedPrice !== 'Sur devis' && formData.montant !== calculatedPrice && (
+                          <button 
+                            type="button"
+                            onClick={() => setFormData({ ...formData, montant: calculatedPrice })}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] bg-teal-600 text-white px-2 py-0.5 rounded hover:bg-teal-700 transition-colors"
+                            title="Réappliquer le prix calculé"
+                          >
+                            Calculé: {calculatedPrice}
+                          </button>
+                        )}
+                        {calculatedPrice === 'Sur devis' && (
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 italic">
+                            Prix sur devis
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="form-group">
                       <label className="label-teal">Mode de paiement *</label>
