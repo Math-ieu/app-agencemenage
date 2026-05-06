@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   getAgent, getMissions, getFeedbacks,
   updateAgent, fetchSecureDocBlob, getDemandes, sendProfilToDemande,
-  getAgentHistory
+  getAgentHistory, getDemandesHistorique
 } from '../api/client';
 import { decodeId } from '../utils/obfuscation';
 import {
@@ -169,6 +169,7 @@ export default function ProfilDetails() {
 
   const [agent, setAgent] = useState<Agent | null>(null);
   const [missions, setMissions] = useState<any[]>([]);
+  const [historyDemandes, setHistoryDemandes] = useState<any[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -206,9 +207,8 @@ export default function ProfilDetails() {
     }
     setLoading(true);
     try {
-      const [agentRes, missionsRes, feedbackRes, historyRes] = await Promise.all([
+      const [agentRes, feedbackRes, historyRes] = await Promise.all([
         getAgent(realId),
-        getMissions({ agent: realId }),
         getFeedbacks({ mission__agent: realId }),
         getAgentHistory(realId)
       ]);
@@ -216,11 +216,61 @@ export default function ProfilDetails() {
       setAgent(agentRes.data);
       setOperatorNotes(agentRes.data.operator_notes || '');
 
-      // Handle list structure if paginated
-      const missionsData = missionsRes.data.results || missionsRes.data;
+      const fetchAllMissions = async (params: Record<string, string | number>) => {
+        const rows: any[] = [];
+        let page = 1;
+        while (true) {
+          const response = await getMissions({ ...params, page });
+          const data = response.data;
+          const pageRows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+          rows.push(...pageRows);
+          if (!data?.next || pageRows.length === 0) break;
+          page += 1;
+        }
+        return rows;
+      };
+
+      const fetchAllDemands = async () => {
+        const rows: any[] = [];
+        let page = 1;
+        while (true) {
+          try {
+            const response = await getDemandesHistorique({ page });
+            if (!response?.data) break;
+            const data = response.data;
+            const pageRows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+            rows.push(...pageRows);
+            if (!data?.next || pageRows.length === 0) break;
+            page += 1;
+          } catch { break; }
+        }
+        return rows;
+      };
+
+      const [agentMissions, delegueMissions, intervenantMissions, allDemandsRaw] = await Promise.all([
+        fetchAllMissions({ agent: realId }),
+        fetchAllMissions({ delegue: realId }),
+        fetchAllMissions({ intervenants: realId }),
+        fetchAllDemands()
+      ]);
+
+      const missionsById = new Map<number, any>();
+      for (const mission of [...agentMissions, ...delegueMissions, ...intervenantMissions]) {
+        if (mission?.id) missionsById.set(mission.id, mission);
+      }
+
+      const filteredDemands = allDemandsRaw.filter((d: any) => {
+        const fact = d?.formulaire_data?.facturation || {};
+        const parts = Array.isArray(fact.parts_repartition) ? fact.parts_repartition : (Array.isArray(d.parts_repartition) ? d.parts_repartition : []);
+        if (parts.some((p: any) => Number(p.profile_id) === realId)) return true;
+        if (fact.profil_id && Number(fact.profil_id) === realId) return true;
+        return false;
+      });
+
       const feedbackData = feedbackRes.data.results || feedbackRes.data;
 
-      setMissions(Array.isArray(missionsData) ? missionsData : []);
+      setMissions(Array.from(missionsById.values()));
+      setHistoryDemandes(filteredDemands);
       setFeedbacks(Array.isArray(feedbackData) ? feedbackData : []);
       setHistory(Array.isArray(historyRes.data) ? historyRes.data : []);
     } catch (err) {
@@ -368,66 +418,78 @@ export default function ProfilDetails() {
     return Number.isFinite(parsed) ? parsed : 0;
   };
 
-  const financeStats = useMemo(() => {
+    const financeStats = useMemo(() => {
     let totalCa = 0;
     let profilDoitAgence = 0;
     let agenceDoitProfil = 0;
+    let nombreMissions = 0;
 
     if (!agent) return { totalCa: 0, nombreMissions: 0, profilDoitAgence: 0, agenceDoitProfil: 0 };
 
-    missions.forEach((mission) => {
-      const demande = mission?.demande_detail || {};
-      const facturation = demande?.formulaire_data?.facturation || {};
-      const montantTotal = toNumber(facturation.montant_ttc || demande.prix);
+    const processItem = (sourceData: any, isMission: boolean) => {
+      const demande = isMission ? sourceData.demande_detail || {} : sourceData;
+      const facturation = demande.formulaire_data?.facturation || {};
+      const montantTotal = Number(demande.prix || facturation.montant_ttc || 0);
 
-      // Chercher la part de CE profil dans parts_repartition
-      const partsRep: any[] = Array.isArray(facturation.parts_repartition) ? facturation.parts_repartition
-        : Array.isArray(demande.parts_repartition) ? demande.parts_repartition : [];
-
-      const myPart = partsRep.find((p: any) => Number(p.profile_id) === agent.id);
-      const partProfil = myPart ? toNumber(myPart.amount) : toNumber(facturation.montant_agence_doit_profil || montantTotal * 0.5);
-
-      const partAgenceVal = toNumber(facturation.part_agence || demande.part_agence || montantTotal * 0.5);
-      const nbProfiles = partsRep.length > 0 ? partsRep.length : 1;
-
-      // CA généré = part du profil + sa proportion de la part agence
-      // (Pour que la somme des CA de tous les profils donne bien le CA total de la demande)
-      totalCa += (partProfil + (partAgenceVal / nbProfiles));
-
-      // Déterminer le statut de paiement
-      const statutUi = facturation.statut_paiement_ui || demande.statut_paiement_ui || '';
-      const encaissePar = facturation.encaisse_par || (mission.encaisse_par === 'profil' ? 'profil' : 'agence');
-
-      // Facturation annulée : ignorer
-      if (statutUi === 'facturation_annulee' || mission.statut === 'annulee') return;
-
-      // Logique de dettes
-      if (statutUi === 'agence_payee_client') {
-        // L'agence a encaissé → elle doit la part du profil
-        agenceDoitProfil += toNumber(facturation.montant_agence_doit_profil || partProfil);
-      } else if (statutUi === 'profil_paye_client') {
-        // Le profil a encaissé → il doit la part de l'agence
-        profilDoitAgence += toNumber(facturation.montant_profil_doit_agence || partAgenceVal);
-      } else if (encaissePar === 'agence') {
-        // Paiement standard via agence → agence doit profil
-        agenceDoitProfil += partProfil;
-      } else if (encaissePar === 'profil') {
-        // Paiement via profil → profil doit agence
-        profilDoitAgence += partAgenceVal;
+      const rawStatutPaiementUi = facturation.statut_paiement_ui || sourceData.paiement_client_statut || (demande.statut_paiement === 'integral' ? 'paye' : 'non_paye');
+      let encaissePar = (sourceData.encaisse_par === 'profil' || demande.mode_paiement === 'sur_place') ? 'Profil' : 'Agence';
+      if (['profil_paye_client', 'Profil payé / Client'].includes(rawStatutPaiementUi)) encaissePar = 'Profil';
+      else if (['agence_payee_client', 'Agence payée / Client'].includes(rawStatutPaiementUi)) encaissePar = 'Agence';
+      else if (['paye', 'integral', 'effectue'].includes(rawStatutPaiementUi)) {
+        if (sourceData.part_agence_reversee || facturation.part_agence_reversee) encaissePar = 'Profil';
+        else if (sourceData.part_profil_versee || facturation.part_profil_versee) encaissePar = 'Agence';
       }
 
-      // Soustraire si déjà réglé
-      if (mission.part_profil_versee && encaissePar === 'agence') agenceDoitProfil -= partProfil;
-      if (mission.part_agence_reversee && encaissePar === 'profil') profilDoitAgence -= partAgenceVal;
+      const partProfilVersee = encaissePar === 'Agence' ? (sourceData.part_profil_versee ?? facturation.part_profil_versee ?? false) : (sourceData.part_agence_reversee ?? facturation.part_agence_reversee ?? false);
+      const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
+
+      const partsRep: any[] = Array.isArray(facturation.parts_repartition) ? facturation.parts_repartition : (Array.isArray(demande.parts_repartition) ? demande.parts_repartition : []);
+      const partAgenceGlobal = Number(demande.part_agence ?? facturation.part_agence ?? (montantTotal * 0.5));
+
+      if (partsRep.length > 0) {
+        const myPart = partsRep.find((p: any) => Number(p.profile_id) === agent.id);
+        if (myPart) {
+          const amount = Number(myPart.amount);
+          const splitPartAgence = partAgenceGlobal / partsRep.length;
+          const isDelegate = myPart === (partsRep.find((p: any) => p.is_delegate) || partsRep[0]);
+
+          nombreMissions += 1;
+          totalCa += (amount + splitPartAgence);
+
+          if (encaissePar === 'Agence' && reglementInterne !== 'Réglé') agenceDoitProfil += amount;
+          else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isDelegate) profilDoitAgence += partAgenceGlobal;
+        }
+      } else {
+        const partProfil = Number(facturation.part_profil ?? (montantTotal * 0.5));
+        nombreMissions += 1;
+        totalCa += partProfil;
+
+        if (encaissePar === 'Agence' && reglementInterne !== 'Réglé') {
+          const due = Number(facturation.montant_agence_doit_profil || partProfil);
+          agenceDoitProfil += due;
+        } else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé') {
+          const due = Number(facturation.montant_profil_doit_agence || partAgenceGlobal);
+          profilDoitAgence += due;
+        }
+      }
+    };
+
+    // Traiter les missions
+    const missionDemandeIds = new Set();
+    missions.forEach(m => {
+      if (m.demande_detail?.id) missionDemandeIds.add(m.demande_detail.id);
+      processItem(m, true);
     });
 
-    return {
-      totalCa: Math.max(0, totalCa),
-      nombreMissions: missions.length,
-      profilDoitAgence: Math.max(0, profilDoitAgence),
-      agenceDoitProfil: Math.max(0, agenceDoitProfil),
-    };
-  }, [agent, missions]);
+    // Traiter l'historique non couvert par les missions
+    historyDemandes.forEach(d => {
+      if (!missionDemandeIds.has(d.id)) {
+        processItem(d, false);
+      }
+    });
+
+    return { totalCa, nombreMissions, profilDoitAgence, agenceDoitProfil };
+  }, [agent, missions, historyDemandes]);
 
   const formatMissionStatus = (status?: string): string => {
     const map: Record<string, string> = {
@@ -449,6 +511,29 @@ export default function ProfilDetails() {
       addToast('Erreur lors du téléchargement du fichier.', 'error');
     }
   };
+
+  const combinedHistorique = useMemo(() => {
+    const list: any[] = [];
+    const missionDemandeIds = new Set(missions.map(m => m.demande_detail?.id).filter(Boolean));
+
+    missions.forEach(m => list.push({ type: 'mission', data: m }));
+    historyDemandes.forEach(d => {
+      if (!missionDemandeIds.has(d.id)) {
+        list.push({ type: 'demande', data: d });
+      }
+    });
+
+    list.sort((a, b) => {
+      const getD = (item: any) => {
+        if (item.type === 'mission') return item.data.demande_detail?.date_intervention || item.data.date_debut || item.data.created_at;
+        return item.data.date_intervention || item.data.created_at;
+      };
+      const dA = new Date(getD(a)).getTime() || 0;
+      const dB = new Date(getD(b)).getTime() || 0;
+      return dB - dA;
+    });
+    return list;
+  }, [missions, historyDemandes]);
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
@@ -769,18 +854,30 @@ export default function ProfilDetails() {
                 <Th>N°</Th><Th>Date</Th><Th>Client</Th><Th>Service</Th><Th>Montant</Th><Th>Statut</Th><Th>Feedback</Th>
               </tr></thead>
               <tbody>
-                {missions.map((m, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <Td mono>MSN-{String(m.id).padStart(5, '0')}</Td>
-                    <Td>{m.demande_detail?.date_intervention ? new Date(m.demande_detail.date_intervention).toLocaleDateString('fr-FR') : (m.date_debut ? new Date(m.date_debut).toLocaleDateString('fr-FR') : '—')}</Td>
-                    <Td bold color="#475569">{m.demande_detail?.client_name || '—'}</Td>
-                    <Td>{m.demande_detail?.service || '—'}</Td>
-                    <Td bold color="#1e293b">{money(toNumber(m.demande_detail?.prix))}</Td>
-                    <Td><Badge bg="#f1f5f9" color="#475569">{formatMissionStatus(m.statut)}</Badge></Td>
-                    <Td color="#94a3b8">—</Td>
-                  </tr>
-                ))}
-                {missions.length === 0 && <EmptyState text="Aucune mission trouvée." colSpan={7} />}
+                {combinedHistorique.map((item, i) => {
+                  const isMission = item.type === 'mission';
+                  const d = isMission ? item.data.demande_detail : item.data;
+                  if (!d) return null;
+
+                  return (
+                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <Td mono>{isMission ? `MSN-${String(item.data.id).padStart(5, '0')}` : `#${d.id}`}</Td>
+                      <Td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (isMission && item.data.date_debut ? new Date(item.data.date_debut).toLocaleDateString('fr-FR') : '—')}</Td>
+                      <Td bold color="#475569">{d.client_name || '—'}</Td>
+                      <Td>{d.service || '—'}</Td>
+                      <Td bold color="#1e293b">{money(toNumber(d.prix))}</Td>
+                      <Td>
+                        {isMission ? (
+                          <Badge bg="#f1f5f9" color="#475569">{formatMissionStatus(item.data.statut)}</Badge>
+                        ) : (
+                          getStatutBadge(d.statut)
+                        )}
+                      </Td>
+                      <Td color="#94a3b8">{!isMission ? 'Proposé' : '—'}</Td>
+                    </tr>
+                  );
+                })}
+                {combinedHistorique.length === 0 && <EmptyState text="Aucun historique de mission trouvé." colSpan={7} />}
               </tbody>
             </table>
           </div>
