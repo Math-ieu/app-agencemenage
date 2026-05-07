@@ -328,7 +328,7 @@ export default function ClientDetails() {
                 color: 'white', fontSize: 20, fontWeight: 700,
                 backgroundColor: C.teal,
               }}>
-                {(client.full_name || client.first_name || 'C')[0].toUpperCase()}
+                {(client.full_name || client.entity_name || client.last_name || client.first_name || 'C').trim()[0].toUpperCase()}
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
