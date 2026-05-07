@@ -201,8 +201,26 @@ export default function ClientDetails() {
       ]);
       setClient(clientRes.data);
       const list = Array.isArray(demandesRes.data?.results) ? demandesRes.data.results : (Array.isArray(demandesRes.data) ? demandesRes.data : []);
+      // Ensure list is sorted by newest first so that list[0] is the most recent demand
+      list.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
       setDemandes(list);
-      if (list[0]) { setAvisComm(list[0].note_commercial || ''); setAvisOp(list[0].note_operationnel || ''); }
+
+      // "le nouveau écrase l'ancien" : Find the most recently updated/created note across all demands
+      const getLatestNote = (field: 'note_commercial' | 'note_operationnel') => {
+        const demandsWithNote = list.filter((d: any) => d[field]);
+        if (demandsWithNote.length === 0) return '';
+        demandsWithNote.sort((a: any, b: any) => {
+          const dateA = new Date(a.updated_at || a.created_at).getTime();
+          const dateB = new Date(b.updated_at || b.created_at).getTime();
+          return dateB - dateA;
+        });
+        return demandsWithNote[0][field];
+      };
+
+      setAvisComm(getLatestNote('note_commercial'));
+      setAvisOp(getLatestNote('note_operationnel'));
+
       setFeedbacks(Array.isArray(feedbacksRes.data?.results) ? feedbacksRes.data.results : (Array.isArray(feedbacksRes.data) ? feedbacksRes.data : []));
     } catch (err) { console.error('Error fetching client details:', err); }
     finally { setLoading(false); }
@@ -401,85 +419,70 @@ export default function ClientDetails() {
                 </tr></thead>
                 <tbody>
                   {demandes.map(d => (
-                    <tr key={d.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                      <Td>{new Date(d.created_at).toLocaleDateString('fr-FR')}</Td>
-                      <Td bold color="#1e293b">{d.service}</Td>
-                      <Td>
-                        {(d.profils_envoyes?.length ?? 0) > 0 ? (
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            {d.profils_envoyes?.map(p => (
-                              <Link 
-                                key={p.id} 
-                                to={`/profils/${encodeId(p.id)}`} 
-                                style={{ 
-                                  textDecoration: 'none',
-                                  padding: '2px 8px',
-                                  backgroundColor: '#f1f5f9',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: 6,
-                                  fontSize: 12,
-                                  color: C.teal,
-                                  fontWeight: 600,
-                                  display: 'inline-flex',
-                                  alignItems: 'center'
-                                }}
-                                title={p.full_name}
-                              >
-                                {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()}
-                              </Link>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>
-                        )}
-                      </Td>
-                      <Td>
-                        <Badge bg={d.segment === 'entreprise' ? C.lime : C.teal} color="white">
-                          {d.segment === 'entreprise' ? 'Entreprise' : 'Particulier'}
-                        </Badge>
-                      </Td>
-                      <Td>
-                        <Badge 
-                          bg={
-                            d.statut === 'annule' ? '#E53E3E' : 
-                            d.statut === 'termine' ? '#2F855A' :
-                            d.statut === 'en_cours' ? (d.cao ? '#2F855A' : '#3B82F6') :
-                            '#DD6B20'
-                          } 
-                          color="white"
-                        >
-                          {d.statut === 'en_cours' ? (d.cao ? 'Confirmé' : 'Nouveau besoin') :
-                           d.statut === 'termine' ? 'Terminé' :
-                           d.statut === 'annule' ? 'Annulée' :
-                           d.statut === 'pres_en_cours' ? 'Pres. en cours' :
-                           d.statut === 'pres_terminee' ? 'Pres. terminée' :
-                           'Nouveau besoin'}
-                        </Badge>
-                      </Td>
-                      <Td center>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-                          <button 
-                            onClick={async () => {
-                              try {
-                                addToast('Relance de la demande...', 'info');
-                                await updateDemande(d.id, { statut: 'en_cours', cao: false });
-                                addToast('Demande relancée avec succès', 'success');
-                                fetchData();
-                              } catch (err) {
-                                addToast('Erreur lors de la relance', 'error');
-                              }
-                            }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}
+                    <React.Fragment key={d.id}>
+                      <tr style={{ borderBottom: (d.note_commercial || d.note_operationnel) ? 'none' : '1px solid #f8fafc' }}>
+                        <Td>{new Date(d.created_at).toLocaleDateString('fr-FR')}</Td>
+                        <Td bold color="#1e293b">{d.service}</Td>
+                        <Td>
+                          {(d.profils_envoyes?.length ?? 0) > 0 ? (
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {d.profils_envoyes?.map(p => (
+                                <Link 
+                                  key={p.id} 
+                                  to={`/profils/${encodeId(p.id)}`} 
+                                  style={{ 
+                                    textDecoration: 'none',
+                                    padding: '2px 8px',
+                                    backgroundColor: '#f1f5f9',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: 6,
+                                    fontSize: 12,
+                                    color: C.teal,
+                                    fontWeight: 600,
+                                    display: 'inline-flex',
+                                    alignItems: 'center'
+                                  }}
+                                  title={p.full_name}
+                                >
+                                  {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()}
+                                </Link>
+                              ))}
+                            </div>
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>
+                          )}
+                        </Td>
+                        <Td>
+                          <Badge bg={d.segment === 'entreprise' ? C.lime : C.teal} color="white">
+                            {d.segment === 'entreprise' ? 'Entreprise' : 'Particulier'}
+                          </Badge>
+                        </Td>
+                        <Td>
+                          <Badge 
+                            bg={
+                              d.statut === 'annule' ? '#E53E3E' : 
+                              d.statut === 'termine' ? '#2F855A' :
+                              d.statut === 'en_cours' ? (d.cao ? '#2F855A' : '#3B82F6') :
+                              '#DD6B20'
+                            } 
+                            color="white"
                           >
-                            <RefreshCw size={15} color={C.teal} /> Renouveler
-                          </button>
-                          {d.frequency === 'abonnement' && (
+                            {d.statut === 'en_cours' ? (d.cao ? 'Confirmé' : 'Nouveau besoin') :
+                             d.statut === 'termine' ? 'Terminé' :
+                             d.statut === 'annule' ? 'Annulée' :
+                             d.statut === 'pres_en_cours' ? 'Pres. en cours' :
+                             d.statut === 'pres_terminee' ? 'Pres. terminée' :
+                             'Nouveau besoin'}
+                          </Badge>
+                        </Td>
+                        <Td center>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
                             <button 
                               onClick={async () => {
                                 try {
-                                  addToast('Relance de l\'abonnement...', 'info');
+                                  addToast('Relance de la demande...', 'info');
                                   await updateDemande(d.id, { statut: 'en_cours', cao: false });
-                                  addToast('Abonnement relancé avec succès', 'success');
+                                  addToast('Demande relancée avec succès', 'success');
                                   fetchData();
                                 } catch (err) {
                                   addToast('Erreur lors de la relance', 'error');
@@ -487,14 +490,45 @@ export default function ClientDetails() {
                               }}
                               style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}
                             >
-                              <RefreshCw size={15} color={C.teal} /> Abonnement
+                              <RefreshCw size={15} color={C.teal} /> Renouveler
                             </button>
-                          )}
-                          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><Eye size={17} /></button>
-                          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><FileText size={17} /></button>
-                        </div>
-                      </Td>
-                    </tr>
+                            {d.frequency === 'abonnement' && (
+                              <button 
+                                onClick={async () => {
+                                  try {
+                                    addToast('Relance de l\'abonnement...', 'info');
+                                    await updateDemande(d.id, { statut: 'en_cours', cao: false });
+                                    addToast('Abonnement relancé avec succès', 'success');
+                                    fetchData();
+                                  } catch (err) {
+                                    addToast('Erreur lors de la relance', 'error');
+                                  }
+                                }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}
+                              >
+                                <RefreshCw size={15} color={C.teal} /> Abonnement
+                              </button>
+                            )}
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><Eye size={17} /></button>
+                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><FileText size={17} /></button>
+                          </div>
+                        </Td>
+                      </tr>
+                      {(d.note_commercial || d.note_operationnel) && (
+                        <tr style={{ borderBottom: '1px solid #f8fafc', backgroundColor: '#fdfdfd' }}>
+                          <td colSpan={6} style={{ padding: '8px 24px 16px', fontSize: 13, color: '#475569' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#f1f5f9', padding: 12, borderRadius: 8 }}>
+                              {d.note_commercial && (
+                                <div><strong style={{ color: C.orange, marginRight: 6 }}>[Comm.]</strong> {d.note_commercial}</div>
+                              )}
+                              {d.note_operationnel && (
+                                <div><strong style={{ color: C.tan, marginRight: 6 }}>[Op.]</strong> {d.note_operationnel}</div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
