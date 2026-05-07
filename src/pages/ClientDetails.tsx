@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  getClient, getDemandes, getFeedbacks,
+  getClient, getDemandes, getFeedbacks, getClientActionLogs,
   updateDemande, fetchSecureDocBlob
 } from '../api/client';
 import { decodeId, encodeId } from '../utils/obfuscation';
@@ -13,6 +13,15 @@ import {
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { Client, Demande } from '../types';
+
+export interface ActionLog {
+  id: number;
+  action: string;
+  details: string;
+  created_at: string;
+  user_name: string;
+}
+
 
 /* ═══════════════════════════════════════════════════════════
    Color palette (matching the reference screenshots)
@@ -167,6 +176,7 @@ export default function ClientDetails() {
   const [client, setClient] = useState<Client | null>(null);
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
+  const [actionLogs, setActionLogs] = useState<ActionLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -194,10 +204,11 @@ export default function ClientDetails() {
     }
     setLoading(true);
     try {
-      const [clientRes, demandesRes, feedbacksRes] = await Promise.all([
+      const [clientRes, demandesRes, feedbacksRes, actionLogsRes] = await Promise.all([
         getClient(realId),
         getDemandes({ client: realId.toString() }),
         getFeedbacks({ client: realId.toString() }),
+        getClientActionLogs(realId),
       ]);
       setClient(clientRes.data);
       const list = Array.isArray(demandesRes.data?.results) ? demandesRes.data.results : (Array.isArray(demandesRes.data) ? demandesRes.data : []);
@@ -222,6 +233,7 @@ export default function ClientDetails() {
       setAvisOp(getLatestNote('note_operationnel'));
 
       setFeedbacks(Array.isArray(feedbacksRes.data?.results) ? feedbacksRes.data.results : (Array.isArray(feedbacksRes.data) ? feedbacksRes.data : []));
+      setActionLogs(Array.isArray(actionLogsRes.data?.results) ? actionLogsRes.data.results : (Array.isArray(actionLogsRes.data) ? actionLogsRes.data : []));
     } catch (err) { console.error('Error fetching client details:', err); }
     finally { setLoading(false); }
   };
@@ -739,6 +751,35 @@ export default function ClientDetails() {
         </Accordion>
 
 
+
+        
+
+        {/* ── 7. Historique des actions ── */}
+        <Accordion title="Historique des actions" icon={<History size={18} />} isOpen={openSections.actionsHistory} onToggle={() => toggle('actionsHistory')} color="#6366f1" badge={actionLogs.length}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <Th>Date</Th>
+                  <Th>Action</Th>
+                  <Th>Détails</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {actionLogs.map((log) => (
+                  <tr key={log.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                    <Td>{new Date(log.created_at).toLocaleString('fr-FR', {
+                       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })}</Td>
+                    <Td bold color="#1e293b">{log.action}</Td>
+                    <Td color="#64748b">{log.details}</Td>
+                  </tr>
+                ))}
+                {actionLogs.length === 0 && <EmptyState text="Aucun historique d'action trouvé" colSpan={3} />}
+              </tbody>
+            </table>
+          </div>
+        </Accordion>
 
         {/* ── 8. Feedback Client ── */}
         <Accordion title="Feedback Client" icon={<Star size={18} />} isOpen={openSections.feedback} onToggle={() => toggle('feedback')} color={C.coral} badge={feedbacks.length}>

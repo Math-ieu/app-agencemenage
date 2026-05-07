@@ -305,3 +305,4 @@ export const createCampaign = (data: Record<string, unknown>) => apiClient.post(
 export const updateCampaign = (id: number, data: Record<string, unknown>) => apiClient.patch(`/api/marketing/campagnes/${id}/`, data);
 export const deleteCampaign = (id: number) => apiClient.delete(`/api/marketing/campagnes/${id}/`);
 
+export const getClientActionLogs = (id: number) => apiClient.get(`/api/clients/${id}/action_logs/`);
