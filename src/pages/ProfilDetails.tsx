@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   getAgent, getMissions, getFeedbacks,
   updateAgent, fetchSecureDocBlob, getDemandes, sendProfilToDemande,
-  getAgentHistory, getDemandesHistorique
+  getAgentHistory, getDemandesHistorique, API_URL
 } from '../api/client';
 import { decodeId } from '../utils/obfuscation';
 import {
@@ -493,12 +493,21 @@ export default function ProfilDetails() {
   };
 
   const handleDownload = async (url: string) => {
+    if (!url) return;
     try {
+      // Si c'est une URL absolue externe, on l'ouvre directement
+      if (url.startsWith('http') && !url.includes(window.location.hostname) && !url.includes('localhost')) {
+        window.open(url, '_blank');
+        return;
+      }
       const { blobUrl } = await fetchSecureDocBlob(url);
       window.open(blobUrl, '_blank');
     } catch (err) {
-      console.error(err);
-      addToast('Erreur lors du téléchargement du fichier.', 'error');
+      console.error('Download error:', err);
+      // Fallback: essayer d'ouvrir directement l'URL originale
+      // Si l'URL est relative (commence par /), on ajoute l'API_URL
+      const finalUrl = (url.startsWith('/') && !url.startsWith('//')) ? `${API_URL}${url}` : url;
+      window.open(finalUrl, '_blank');
     }
   };
 
