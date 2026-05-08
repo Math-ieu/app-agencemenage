@@ -270,10 +270,19 @@ export default function ProfilDetails() {
       });
 
       const feedbackData = feedbackRes.data.results || feedbackRes.data;
+      const feedbacksProcessed = (Array.isArray(feedbackData) ? feedbackData : []).map((f: any) => {
+        if (!f.client && f.demande) {
+          const matchingDemand = allDemandsRaw.find((d: any) => d.id === f.demande);
+          if (matchingDemand) {
+            return { ...f, client: matchingDemand.client };
+          }
+        }
+        return f;
+      });
 
       setMissions(Array.from(missionsById.values()));
       setHistoryDemandes(filteredDemands);
-      setFeedbacks(Array.isArray(feedbackData) ? feedbackData : []);
+      setFeedbacks(feedbacksProcessed);
       setHistory(Array.isArray(historyRes.data) ? historyRes.data : []);
     } catch (err) {
       console.error('Error fetching agent details:', err);
