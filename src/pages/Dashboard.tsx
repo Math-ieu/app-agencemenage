@@ -1788,10 +1788,10 @@ export default function Dashboard() {
                                 <div className="ws-section-header">Nature de l'intervention</div>
                                 <div className="ws-nature-cards">
                                   {[
-                                    { v: 'sinistre', l: '🔥 Après sinistre' },
-                                    { v: 'event', l: '🎉 Post évènement' },
-                                    { v: 'express', l: '⚡ Remise en état express' },
-                                    { v: 'autre', l: '📋 Autre situation urgente' }
+                                    { v: 'sinistre', l: 'Après sinistre' },
+                                    { v: 'event', l: 'Post évènement' },
+                                    { v: 'express', l: 'Remise en état express' },
+                                    { v: 'autre', l: 'Autre situation urgente' }
                                   ].map(n => (
                                     <div key={n.v} className={`ws-nature-card ${editFormData.intervention_nature === n.v ? 'active' : ''}`} onClick={() => setEditFormData({ ...editFormData, intervention_nature: n.v })}>
                                       {n.l}

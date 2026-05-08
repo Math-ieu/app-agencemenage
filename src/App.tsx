@@ -21,6 +21,7 @@ import ClientDetails from './pages/ClientDetails.tsx';
 import ProfilDetails from './pages/ProfilDetails.tsx';
 import Blog from './pages/seo/Blog';
 import ArticleForm from './components/blog/ArticleForm';
+import MoteurDevis from './pages/MoteurDevis';
 
 
 // Navigation guard function
@@ -59,6 +60,7 @@ export default function App() {
           </Route>
           <Route path="qualite" element={<Qualite />} />
           <Route path="marketing" element={<Marketing />} />
+          <Route path="devis" element={<MoteurDevis />} />
           <Route path="parametres" element={<Parametres />} />
 
           {/* SEO / Blog Routes */}

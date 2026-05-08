@@ -676,12 +676,17 @@ export default function VueGlobale() {
   const [debitDateFrom, setDebitDateFrom] = useState('');
   const [debitDateTo, setDebitDateTo] = useState('');
   const [debitSegmentFilter, setDebitSegmentFilter] = useState<'Tous les segments' | 'Particulier' | 'Entreprise'>('Tous les segments');
-  const [debitPaymentFilter, setDebitPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Tous');
+  const [debitPaymentFilter, setDebitPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Non payé');
   const [debitMissionFilter, setDebitMissionFilter] = useState<'Tous' | 'Facturée' | 'Facturation annulée'>('Tous');
   const [debitSearch, setDebitSearch] = useState('');
   const [searchProfiles, setSearchProfiles] = useState('');
   const [suiviSearch, setSuiviSearch] = useState('');
-  const [creditPaymentFilter, setCreditPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Tous');
+  const [creditDateFrom, setCreditDateFrom] = useState('');
+  const [creditDateTo, setCreditDateTo] = useState('');
+  const [creditSegmentFilter, setCreditSegmentFilter] = useState<'Tous les segments' | 'Particulier' | 'Entreprise'>('Tous les segments');
+  const [creditPaymentFilter, setCreditPaymentFilter] = useState<'Non payé' | 'Payé' | 'Tous'>('Non payé');
+  const [creditMissionFilter, setCreditMissionFilter] = useState<'Tous' | 'Facturée' | 'Facturation annulée'>('Tous');
+  const [creditSearch, setCreditSearch] = useState('');
   const [suiviDateFrom, setSuiviDateFrom] = useState(() => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
@@ -913,6 +918,9 @@ export default function VueGlobale() {
 
   const globalTableRows = useMemo(() => {
     return facturationData.filter((row) => {
+      // Filtrer uniquement pour afficher "Non payé"
+      if (row.paiement !== 'non_paye') return false;
+      
       if (row.encaissePar === 'Profil' && row.reglementInterne === 'Réglé') return false;
 
       const date = parseFrenchDate(row.date);
@@ -1141,10 +1149,30 @@ export default function VueGlobale() {
 
   const filteredCreditRows = useMemo(() => {
     return creditRows.filter((row) => {
-      if (creditPaymentFilter === 'Tous') return true;
-      return creditPaymentLabel(row) === creditPaymentFilter;
+      const rowDate = parseFrenchDate(row.date);
+      if (!rowDate) return false;
+      const isoDate = rowDate.toISOString().slice(0, 10);
+
+      if (creditDateFrom && isoDate < creditDateFrom) return false;
+      if (creditDateTo && isoDate > creditDateTo) return false;
+
+      if (creditSegmentFilter !== 'Tous les segments' && row.segment !== creditSegmentFilter) return false;
+
+      if (creditPaymentFilter === 'Non payé' && creditPaymentLabel(row) === 'Payé') return false;
+      if (creditPaymentFilter === 'Payé' && creditPaymentLabel(row) !== 'Payé') return false;
+
+      if (creditMissionFilter === 'Facturation annulée' && row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee') return false;
+      if (creditMissionFilter === 'Facturée' && (row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee')) return false;
+
+      if (creditSearch.trim()) {
+        const needle = creditSearch.toLowerCase();
+        const haystack = `${row.client} ${row.profil} ${row.ville}`.toLowerCase();
+        if (!haystack.includes(needle)) return false;
+      }
+
+      return true;
     });
-  }, [creditRows, creditPaymentFilter]);
+  }, [creditDateFrom, creditDateTo, creditMissionFilter, creditPaymentFilter, creditRows, creditSearch, creditSegmentFilter]);
 
   const debitTotal = useMemo(
     () => filteredDebitRows.reduce((sum, row) => sum + getPartAgenceDueFromProfil(row), 0),
@@ -1157,6 +1185,11 @@ export default function VueGlobale() {
       if (row.parts_repartition && row.parts_repartition.length > 0) {
         const totalDue = getPartAgenceDueFromProfil(row);
         const delegatePart = row.parts_repartition.find((p: any) => p.is_delegate) || row.parts_repartition[0];
+        const isPaid = delegatePart.part_agence_reversee ?? row.partAgenceReversee;
+
+        if (debitPaymentFilter === 'Non payé' && isPaid) continue;
+        if (debitPaymentFilter === 'Payé' && !isPaid) continue;
+
         const pId = Number(delegatePart.profile_id);
         const pName = profileAccountsData.find(a => a.id === pId)?.name || delegatePart.profile_name || row.profil;
         
@@ -1165,7 +1198,7 @@ export default function VueGlobale() {
           profilId: pId,
           profil: pName,
           _partAgenceDue: totalDue,
-          _partAgenceReversee: delegatePart.part_agence_reversee ?? row.partAgenceReversee,
+          _partAgenceReversee: isPaid,
           _uniqueKey: `${row.missionNo}-${pId}`
         });
       } else {
@@ -1196,6 +1229,10 @@ export default function VueGlobale() {
         const totalDue = getPartProfilDueFromAgence(row);
         const totalParts = row.parts_repartition.reduce((s, p) => s + Number(p.amount || 0), 0) || 1;
         for (const part of row.parts_repartition) {
+          const isPaid = part.part_profil_versee ?? row.partProfilVersee;
+          if (creditPaymentFilter === 'Non payé' && isPaid) continue;
+          if (creditPaymentFilter === 'Payé' && !isPaid) continue;
+
           const pId = Number(part.profile_id);
           const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
           const portion = (Number(part.amount || 0) / totalParts) * totalDue;
@@ -1204,7 +1241,7 @@ export default function VueGlobale() {
             profilId: pId,
             profil: pName,
             _partProfilDue: portion,
-            _partProfilVersee: part.part_profil_versee ?? row.partProfilVersee,
+            _partProfilVersee: isPaid,
             _uniqueKey: `${row.missionNo}-${pId}`
           });
         }
@@ -2020,9 +2057,9 @@ export default function VueGlobale() {
               </label>
               <label className="fg-select-wrap">
                 <select value={debitPaymentFilter} onChange={(e) => setDebitPaymentFilter(e.target.value as 'Non payé' | 'Payé' | 'Tous')}>
-                  <option>Non payé</option>
-                  <option>Payé</option>
-                  <option>Tous</option>
+                  <option value="Non payé">Non payé</option>
+                  <option value="Payé">Payé</option>
+                  <option value="Tous">Tous</option>
                 </select>
                 <ChevronDown size={14} />
               </label>
@@ -2113,18 +2150,47 @@ export default function VueGlobale() {
             </article>
           </div>
 
-          <div className="fg-filter-row">
-            <label className="fg-select-wrap">
-              <select
-                value={creditPaymentFilter}
-                onChange={(e) => setCreditPaymentFilter(e.target.value as 'Non payé' | 'Payé' | 'Tous')}
-              >
-                <option value="Non payé">Non payé</option>
-                <option value="Payé">Payé</option>
-                <option value="Tous">Non payé + Payé</option>
-              </select>
-              <ChevronDown size={14} />
+          <div className="fg-facturation-filters">
+            <label className="fg-search-wrap">
+              <Search size={15} />
+              <input
+                type="text"
+                placeholder="Rechercher par nom client/profil..."
+                value={creditSearch}
+                onChange={(e) => setCreditSearch(e.target.value)}
+              />
             </label>
+            <div className="fg-period-wrap">
+              <label><Calendar size={14} /><input type="date" aria-label="Date début crédit" value={creditDateFrom} onChange={(e) => setCreditDateFrom(e.target.value)} /></label>
+              <span className="fg-period-arrow">→</span>
+              <label><Calendar size={14} /><input type="date" aria-label="Date fin crédit" value={creditDateTo} onChange={(e) => setCreditDateTo(e.target.value)} /></label>
+            </div>
+            <div className="fg-select-group">
+              <label className="fg-select-wrap">
+                <select value={creditSegmentFilter} onChange={(e) => setCreditSegmentFilter(e.target.value as 'Tous les segments' | 'Particulier' | 'Entreprise')}>
+                  <option>Tous les segments</option>
+                  <option>Particulier</option>
+                  <option>Entreprise</option>
+                </select>
+                <ChevronDown size={14} />
+              </label>
+              <label className="fg-select-wrap">
+                <select value={creditPaymentFilter} onChange={(e) => setCreditPaymentFilter(e.target.value as 'Non payé' | 'Payé' | 'Tous')}>
+                  <option value="Non payé">Non payé</option>
+                  <option value="Payé">Payé</option>
+                  <option value="Tous">Tous</option>
+                </select>
+                <ChevronDown size={14} />
+              </label>
+              <label className="fg-select-wrap">
+                <select value={creditMissionFilter} onChange={(e) => setCreditMissionFilter(e.target.value as 'Tous' | 'Facturée' | 'Facturation annulée')}>
+                  <option>Tous</option>
+                  <option>Facturée</option>
+                  <option>Facturation annulée</option>
+                </select>
+                <ChevronDown size={14} />
+              </label>
+            </div>
           </div>
 
           <section className="fg-table-section">

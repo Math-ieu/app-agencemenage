@@ -86,7 +86,9 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         'nettoyage fin de chantier',
         'garde malade',
         'placement & gestion',
-        'placement et gestion'
+        'placement et gestion',
+        'air bnb',
+        'airbnb'
     ];
 
     if (surDevisServices.some(s => serviceLower.includes(s))) {
@@ -151,8 +153,8 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         }
     }
 
-    // 4. Ménage Standard, Grand Ménage, Airbnb
-    if (serviceLower.includes('menage standard') || serviceLower.includes('grand menage') || serviceLower.includes('airbnb') || serviceLower.includes('air bnb')) {
+    // 4. Ménage Standard, Grand Ménage
+    if (serviceLower.includes('menage standard') || serviceLower.includes('grand menage')) {
         const baseRate = serviceLower.includes('grand menage') ? 70 : 60;
         let totalServicePrice = 0;
 

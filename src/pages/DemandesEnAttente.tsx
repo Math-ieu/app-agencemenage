@@ -13,12 +13,15 @@ import { Demande } from '../types';
 import { normalizeFrequence, normalizePayment, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { usePriceCalculator } from '../hooks/usePriceCalculator';
 import { useResourceEstimator } from '../hooks/useResourceEstimator';
+import QuoteSection from '../components/demandes/quotes/QuoteSection';
 
 const isDevisRequired = (d: Demande | null) => {
   if (!d) return false;
   if (d.segment === 'entreprise') return true;
-  const devisParticuliers = ['Ménage Air BnB', 'Ménage post-sinistre', 'Auxiliaire de vie', 'Ménage fin chantier', 'Nettoyage fin de chantier'];
-  return devisParticuliers.includes(d.service);
+  const s = (d.service || '').toLowerCase();
+  return s.includes('air bnb') || s.includes('airbnb') || 
+         s.includes('sinistre') || s.includes('auxiliaire') || 
+         s.includes('chantier') || s.includes('placement') || s.includes('gestion');
 };
 
 const normalizeServiceLabel = (value: string) =>
@@ -302,6 +305,18 @@ export default function DemandesEnAttente() {
     const cardState = expandedCards[cardId];
     if (cardState === undefined) return true; // Default open
     return cardState[section] !== false;
+  };
+
+  const handleDirectSendWhatsApp = async (demandeId: number, type: 'devis' | 'png') => {
+    try {
+      addToast(`Envoi du ${type === 'devis' ? 'devis' : 'récapitulatif'} via WhatsApp...`, 'info');
+      await sendWhatsApp(demandeId, type);
+      addToast('Document envoyé avec succès !', 'success');
+      fetchDemandes();
+    } catch (error) {
+      console.error(error);
+      addToast("Erreur lors de l'envoi WhatsApp.", 'error');
+    }
   };
 
   const handleSendWhatsApp = async () => {
@@ -836,6 +851,12 @@ export default function DemandesEnAttente() {
                     </div>
                   )}
 
+                  <QuoteSection 
+                    demande={d} 
+                    onPreview={handlePreviewDocument}
+                    onSend={handleDirectSendWhatsApp}
+                  />
+
                   <div className="pending-footer">
                     <div className="detail-item">
                       <span className="detail-label">Montant :</span>
@@ -937,6 +958,11 @@ export default function DemandesEnAttente() {
                       {!d.is_devis && d.mode_paiement && <span className="text-xs text-muted fw-normal"> ({d.mode_paiement})</span>}
                     </span>
                   </div>
+                   <QuoteSection 
+                    demande={d} 
+                    onPreview={handlePreviewDocument}
+                    onSend={handleDirectSendWhatsApp}
+                  />
                 </div>
 
                 <div className="mobile-card-actions">
@@ -1133,10 +1159,10 @@ export default function DemandesEnAttente() {
                         <div className="ws-section-header">Nature de l'intervention</div>
                         <div className="ws-nature-cards">
                           {[
-                            { v: 'sinistre', l: '🔥 Après sinistre' },
-                            { v: 'event', l: '🎉 Post évènement' },
-                            { v: 'express', l: '⚡ Remise en état express' },
-                            { v: 'autre', l: '📋 Autre situation urgente' }
+                            { v: 'sinistre', l: 'Après sinistre' },
+                            { v: 'event', l: 'Post évènement' },
+                            { v: 'express', l: 'Remise en état express' },
+                            { v: 'autre', l: 'Autre situation urgente' }
                           ].map(n => (
                             <div key={n.v} className={`ws-nature-card ${formData.intervention_nature === n.v ? 'active' : ''}`} onClick={() => setFormData({ ...formData, intervention_nature: n.v })}>
                               {n.l}
@@ -1500,12 +1526,12 @@ export default function DemandesEnAttente() {
                   <div className="ws-section-header" style={{ background: '#547d7c' }}>Tarification & Paiement</div>
                   <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
                     <div className="form-group">
-                      <label className="label-teal">Montant total (MAD) *</label>
+                      <label className="label-teal">Montant total (MAD) {calculatedPrice !== 'Sur devis' && '*'}</label>
                       <div className="relative">
                         <input 
                           type="number" 
                           placeholder={calculatedPrice && calculatedPrice !== 'Sur devis' ? calculatedPrice : "0.00"} 
-                          required 
+                          required={calculatedPrice !== 'Sur devis'} 
                           value={formData.montant} 
                           onChange={e => setFormData({ ...formData, montant: e.target.value })} 
                         />
