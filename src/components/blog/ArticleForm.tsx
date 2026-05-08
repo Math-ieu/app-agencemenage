@@ -708,7 +708,7 @@ export default function ArticleForm() {
                 </div>
               </div>
             )}
-          </div>
+          </div>  
         )}
       </div>
     </div>
