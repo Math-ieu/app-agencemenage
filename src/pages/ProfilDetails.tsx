@@ -5,13 +5,14 @@ import {
   updateAgent, fetchSecureDocBlob, getDemandes, sendProfilToDemande,
   getAgentHistory, getDemandesHistorique, API_URL
 } from '../api/client';
-import { decodeId } from '../utils/obfuscation';
+import { decodeId, encodeId } from '../utils/obfuscation';
 import {
   ChevronDown, User, FileText,
   MessageSquare, History, ArrowLeft,
   Download, Eye, Star, Briefcase, ShieldAlert, CheckCircle,
-  ClipboardCheck, Search, Send, PlusCircle, AlertTriangle
+  ClipboardCheck, Search, Send, PlusCircle, AlertTriangle, Image
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { renderStatusBadge } from '../utils/statusUtils';
 import { Agent } from '../types';
 import { useToastStore } from '../store/toast';
@@ -492,7 +493,7 @@ export default function ProfilDetails() {
     return map[status || ''] || status || '—';
   };
 
-  const handleDownload = async (url: string) => {
+  const handleDownload = async (url: string, baseName?: string) => {
     if (!url) return;
     try {
       // Si c'est une URL absolue externe, on l'ouvre directement
@@ -500,15 +501,39 @@ export default function ProfilDetails() {
         window.open(url, '_blank');
         return;
       }
-      const { blobUrl } = await fetchSecureDocBlob(url);
-      window.open(blobUrl, '_blank');
+      const { blobUrl, mimeType } = await fetchSecureDocBlob(url);
+      
+      // Déterminer l'extension
+      let extension = '';
+      if (mimeType.includes('pdf')) extension = '.pdf';
+      else if (mimeType.includes('image/jpeg')) extension = '.jpg';
+      else if (mimeType.includes('image/png')) extension = '.png';
+      else if (mimeType.includes('image/webp')) extension = '.webp';
+      else if (mimeType.includes('image')) extension = '.jpg';
+
+      // Téléchargement forcé
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      const fileName = baseName ? (baseName.endsWith(extension) ? baseName : `${baseName}${extension}`) : (url.split('/').pop() || 'document');
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error('Download error:', err);
-      // Fallback: essayer d'ouvrir directement l'URL originale
-      // Si l'URL est relative (commence par /), on ajoute l'API_URL
       const finalUrl = (url.startsWith('/') && !url.startsWith('//')) ? `${API_URL}${url}` : url;
       window.open(finalUrl, '_blank');
     }
+  };
+
+  const getMediaIcon = (url?: string, defaultIcon?: React.ReactNode) => {
+    if (!url) return defaultIcon;
+    const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext || '')) {
+      return <Image size={40} color={C.teal} />;
+    }
+    return defaultIcon;
   };
 
   const combinedHistorique = useMemo(() => {
@@ -747,7 +772,7 @@ export default function ProfilDetails() {
               <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {agent.photo ? <img src={agent.photo} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} /> : <User size={40} color="#cbd5e1" />}
               </div>
-              <button onClick={() => agent.photo && handleDownload(agent.photo)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              <button onClick={() => agent.photo && handleDownload(agent.photo, `Photo_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                 <Download size={14} /> Télécharger
               </button>
             </div>
@@ -755,14 +780,14 @@ export default function ProfilDetails() {
             <div style={{ textAlign: 'center', position: 'relative' }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>CIN</p>
               <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                <FileText size={40} color={agent.cin_file ? C.teal : "#cbd5e1"} />
+                {getMediaIcon(agent.cin_file, <FileText size={40} color={agent.cin_file ? C.teal : "#cbd5e1"} />)}
                 {agent.cin_file && (
                   <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
                     <CheckCircle size={14} />
                   </div>
                 )}
               </div>
-              <button disabled={!agent.cin_file} onClick={() => agent.cin_file && handleDownload(agent.cin_file)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.cin_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.cin_file ? 'pointer' : 'not-allowed' }}>
+              <button disabled={!agent.cin_file} onClick={() => agent.cin_file && handleDownload(agent.cin_file, `CIN_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.cin_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.cin_file ? 'pointer' : 'not-allowed' }}>
                 <Download size={14} /> {agent.cin_file ? 'Télécharger' : 'Indisponible'}
               </button>
             </div>
@@ -770,14 +795,14 @@ export default function ProfilDetails() {
             <div style={{ textAlign: 'center', position: 'relative' }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>ATTESTATION</p>
               <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                <ClipboardCheck size={40} color={agent.attestation_file ? C.teal : "#cbd5e1"} />
+                {getMediaIcon(agent.attestation_file, <ClipboardCheck size={40} color={agent.attestation_file ? C.teal : "#cbd5e1"} />)}
                 {agent.attestation_file && (
                   <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
                     <CheckCircle size={14} />
                   </div>
                 )}
               </div>
-              <button disabled={!agent.attestation_file} onClick={() => agent.attestation_file && handleDownload(agent.attestation_file)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.attestation_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.attestation_file ? 'pointer' : 'not-allowed' }}>
+              <button disabled={!agent.attestation_file} onClick={() => agent.attestation_file && handleDownload(agent.attestation_file, `Attestation_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.attestation_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.attestation_file ? 'pointer' : 'not-allowed' }}>
                 <Download size={14} /> {agent.attestation_file ? 'Télécharger' : 'Indisponible'}
               </button>
             </div>
@@ -785,14 +810,14 @@ export default function ProfilDetails() {
             <div style={{ textAlign: 'center', position: 'relative' }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>FICHE ANTROPOMÉTRIQUE</p>
               <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                <FileText size={40} color={agent.fiche_antropometrique ? C.teal : "#cbd5e1"} />
+                {getMediaIcon(agent.fiche_antropometrique, <FileText size={40} color={agent.fiche_antropometrique ? C.teal : "#cbd5e1"} />)}
                 {agent.fiche_antropometrique && (
                   <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
                     <CheckCircle size={14} />
                   </div>
                 )}
               </div>
-              <button disabled={!agent.fiche_antropometrique} onClick={() => agent.fiche_antropometrique && handleDownload(agent.fiche_antropometrique)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.fiche_antropometrique ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.fiche_antropometrique ? 'pointer' : 'not-allowed' }}>
+              <button disabled={!agent.fiche_antropometrique} onClick={() => agent.fiche_antropometrique && handleDownload(agent.fiche_antropometrique, `Fiche_Antropometrique_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.fiche_antropometrique ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.fiche_antropometrique ? 'pointer' : 'not-allowed' }}>
                 <Download size={14} /> {agent.fiche_antropometrique ? 'Télécharger' : 'Indisponible'}
               </button>
             </div>
@@ -832,7 +857,15 @@ export default function ProfilDetails() {
                 {feedbacks.map((f, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <Td>{f.date ? new Date(f.date).toLocaleDateString('fr-FR') : '—'}</Td>
-                    <Td bold color={C.teal}>{f.client_name || 'Client'}</Td>
+                    <Td bold>
+                      {f.client ? (
+                        <Link to={`/clients/${encodeId(f.client)}`} style={{ color: C.teal, textDecoration: 'none' }}>
+                          {f.client_name || 'Client'}
+                        </Link>
+                      ) : (
+                        <span style={{ color: C.teal }}>{f.client_name || 'Client'}</span>
+                      )}
+                    </Td>
                     <Td>
                       <div style={{ display: 'flex', gap: 2 }}>
                         {[...Array(5)].map((_, j) => {
@@ -865,7 +898,7 @@ export default function ProfilDetails() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                <Th>N°</Th><Th>Date</Th><Th>Client</Th><Th>Service</Th><Th>Montant</Th><Th>Statut</Th><Th>Feedback</Th>
+                <Th>N°</Th><Th>Date</Th><Th>Client</Th><Th>Service</Th><Th>Montant</Th><Th>Statut</Th>
               </tr></thead>
               <tbody>
                 {combinedHistorique.map((item, i) => {
@@ -877,7 +910,15 @@ export default function ProfilDetails() {
                     <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <Td mono>{isMission ? `MSN-${String(item.data.id).padStart(5, '0')}` : `#${d.id}`}</Td>
                       <Td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (isMission && item.data.date_debut ? new Date(item.data.date_debut).toLocaleDateString('fr-FR') : '—')}</Td>
-                      <Td bold color="#475569">{d.client_name || '—'}</Td>
+                      <Td bold color="#475569">
+                        {d.client ? (
+                          <Link to={`/clients/${encodeId(d.client)}`} style={{ color: '#037265', textDecoration: 'none' }}>
+                            {d.client_name || '—'}
+                          </Link>
+                        ) : (
+                          d.client_name || '—'
+                        )}
+                      </Td>
                       <Td>{d.service || '—'}</Td>
                       <Td bold color="#1e293b">{money(toNumber(d.prix))}</Td>
                       <Td>
@@ -887,11 +928,10 @@ export default function ProfilDetails() {
                           getStatutBadge(d.statut)
                         )}
                       </Td>
-                      <Td color="#94a3b8">{!isMission ? 'Proposé' : '—'}</Td>
                     </tr>
                   );
                 })}
-                {combinedHistorique.length === 0 && <EmptyState text="Aucun historique de mission trouvé." colSpan={7} />}
+                {combinedHistorique.length === 0 && <EmptyState text="Aucun historique de mission trouvé." colSpan={6} />}
               </tbody>
             </table>
           </div>

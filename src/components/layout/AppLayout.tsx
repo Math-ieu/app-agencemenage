@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Users, UserCheck, History,
-  DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X, Globe, ChevronDown, Calculator
+  DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X, Globe, ChevronDown
 } from 'lucide-react';
 import { useAuthStore, useNotificationStore } from '../../store/auth';
 import logoUrl from '../../assets/LOGO-AGENCE-MENAGE.png';
@@ -25,7 +25,6 @@ const navItems = [
   },
   { to: '/qualite', icon: Star, label: 'Qualité & Feedback' },
   { to: '/marketing', icon: Megaphone, label: 'Marketing' },
-  { to: '/devis', icon: Calculator, label: 'Moteur de devis' },
   { 
     id: 'seo',
     icon: Globe, 
