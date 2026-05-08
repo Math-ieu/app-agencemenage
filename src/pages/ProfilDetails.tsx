@@ -851,20 +851,19 @@ export default function ProfilDetails() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                <Th>Date</Th><Th>Client</Th><Th>Étoiles</Th><Th>Satisfaction</Th><Th>Statut</Th><Th center>Action</Th>
+                <Th>Date</Th><Th>Client</Th><Th>Étoiles</Th><Th>Satisfaction</Th><Th>Statut</Th>
               </tr></thead>
               <tbody>
                 {feedbacks.map((f, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <Td>{f.date ? new Date(f.date).toLocaleDateString('fr-FR') : '—'}</Td>
                     <Td bold>
-                      {f.client ? (
-                        <Link to={`/clients/${encodeId(f.client)}`} style={{ color: C.teal, textDecoration: 'none' }}>
-                          {f.client_name || 'Client'}
-                        </Link>
-                      ) : (
-                        <span style={{ color: C.teal }}>{f.client_name || 'Client'}</span>
-                      )}
+                      <Link 
+                        to={f.client ? `/clients/${encodeId(f.client)}` : '#'} 
+                        style={{ color: C.teal, textDecoration: 'none', cursor: f.client ? 'pointer' : 'default' }}
+                      >
+                        {f.client_name || 'Client'}
+                      </Link>
                     </Td>
                     <Td>
                       <div style={{ display: 'flex', gap: 2 }}>
@@ -884,10 +883,9 @@ export default function ProfilDetails() {
                         f.note_intervenant === 3 ? <Badge bg="#FEF3C7" color="#D97706">Neutre</Badge> :
                           <Badge bg="#FFF5F5" color="#C53030">Négatif</Badge>}
                     </Td>
-                    <Td center><Eye size={17} color="#94a3b8" cursor="pointer" /></Td>
                   </tr>
                 ))}
-                {feedbacks.length === 0 && <EmptyState text="Aucune évaluation trouvée." colSpan={6} />}
+                {feedbacks.length === 0 && <EmptyState text="Aucune évaluation trouvée." colSpan={5} />}
               </tbody>
             </table>
           </div>
