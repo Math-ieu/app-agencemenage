@@ -12,6 +12,7 @@ import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
+import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 
 // Services qui nécessitent un devis PDF (les autres ont un récapitulatif PNG)
 const isDevisRequired = (d: Demande | null): boolean => {
@@ -1128,18 +1129,7 @@ export default function Dashboard() {
                       <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
                       <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</td>
                       <td>
-                        <span className={`badge ${d.statut === 'en_cours' ? (d.cao ? 'badge-green' : 'badge-nouveau') :
-                          d.statut === 'termine' ? 'badge-green' :
-                            d.statut === 'pres_en_cours' ? 'badge-purple' :
-                              d.statut === 'pres_terminee' ? 'badge-orange' :
-                                'badge-orange'
-                          }`}>
-                          {d.statut === 'en_cours' ? (d.cao ? 'Confirmé' : (<><span>Nouveau</span><span>besoin</span></>)) :
-                            d.statut === 'termine' ? 'Terminé' :
-                              d.statut === 'pres_en_cours' ? 'Pres. en cours' :
-                                d.statut === 'pres_terminee' ? 'Pres. terminée' :
-                                  'Nouveau besoin'}
-                        </span>
+                        {renderStatusBadge(d.statut, d.cao)}
                       </td>
                       <td>
                         <div className="client-link-group">
@@ -2127,8 +2117,15 @@ export default function Dashboard() {
                           <div className="form-group">
                             <label>Statut du besoin</label>
                             <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500, fontSize: '14px', height: '38px' }}>
-                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: selectedDemande?.statut === 'annule' ? '#E53E3E' : selectedDemande?.statut === 'termine' ? '#2F855A' : selectedDemande?.statut === 'en_cours' ? (selectedDemande?.cao ? '#2F855A' : '#3B82F6') : selectedDemande?.statut === 'pres_en_cours' ? '#8B5CF6' : selectedDemande?.statut === 'pres_terminee' ? '#ED8936' : '#3B82F6' }} />
-                              <span style={{ color: '#0F766E' }}>{selectedDemande?.statut === 'en_cours' ? (selectedDemande?.cao ? 'Confirmé' : 'Nouveau besoin') : selectedDemande?.statut === 'termine' ? 'Terminé' : selectedDemande?.statut === 'annule' ? 'Annulé' : selectedDemande?.statut === 'pres_en_cours' ? 'Pres. en cours' : selectedDemande?.statut === 'pres_terminee' ? 'Pres. terminée' : 'Nouveau besoin'}</span>
+                              {(() => {
+                                const info = getStatusInfo(selectedDemande?.statut || '', selectedDemande?.cao);
+                                return (
+                                  <>
+                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: info.badgeClass.includes('green') ? '#2F855A' : info.badgeClass.includes('orange') ? '#ED8936' : info.badgeClass.includes('red') ? '#E53E3E' : info.badgeClass.includes('purple') ? '#8B5CF6' : '#3B82F6' }} />
+                                    <span style={{ color: '#0F766E' }}>{typeof info.label === 'string' ? info.label : 'Nouveau besoin'}</span>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
                           <div className="form-group">

@@ -9,9 +9,10 @@ import { decodeId } from '../utils/obfuscation';
 import {
   ChevronDown, User, FileText,
   MessageSquare, History, ArrowLeft,
-  Download, Eye, Star, Briefcase, ShieldAlert,
+  Download, Eye, Star, Briefcase, ShieldAlert, CheckCircle,
   ClipboardCheck, Search, Send, PlusCircle, AlertTriangle
 } from 'lucide-react';
+import { renderStatusBadge } from '../utils/statusUtils';
 import { Agent } from '../types';
 import { useToastStore } from '../store/toast';
 import AddProfileModal from './ProfilEditModal';
@@ -318,18 +319,7 @@ export default function ProfilDetails() {
   };
 
   const getStatutBadge = (statut: string) => {
-    const map: Record<string, { label: string; bg: string; color: string }> = {
-      en_attente: { label: 'En attente', bg: '#fef3c7', color: '#92400e' },
-      en_cours: { label: 'Nouveau besoin', bg: '#3b82f6', color: '#ffffff' },
-      termine: { label: 'Terminée', bg: '#f1f5f9', color: '#475569' },
-      annule: { label: 'Annulée', bg: '#fee2e2', color: '#991b1b' },
-    };
-    const s = map[statut] || { label: statut, bg: '#f1f5f9', color: '#475569' };
-    return (
-      <span style={{ padding: '3px 10px', borderRadius: 99, fontSize: 12, fontWeight: 700, backgroundColor: s.bg, color: s.color }}>
-        {s.label}
-      </span>
-    );
+    return renderStatusBadge(statut);
   };
 
   const formatAction = (log: any) => {
@@ -753,33 +743,48 @@ export default function ProfilDetails() {
               </button>
             </div>
             {/* CIN */}
-            <div style={{ textAlign: 'center' }}>
+            <div style={{ textAlign: 'center', position: 'relative' }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>CIN</p>
-              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <FileText size={40} color="#cbd5e1" />
+              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                <FileText size={40} color={agent.cin_file ? C.teal : "#cbd5e1"} />
+                {agent.cin_file && (
+                  <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
+                    <CheckCircle size={14} />
+                  </div>
+                )}
               </div>
-              <button onClick={() => agent.cin_file && handleDownload(agent.cin_file)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                <Download size={14} /> Télécharger
+              <button disabled={!agent.cin_file} onClick={() => agent.cin_file && handleDownload(agent.cin_file)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.cin_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.cin_file ? 'pointer' : 'not-allowed' }}>
+                <Download size={14} /> {agent.cin_file ? 'Télécharger' : 'Indisponible'}
               </button>
             </div>
             {/* Attestation */}
-            <div style={{ textAlign: 'center' }}>
+            <div style={{ textAlign: 'center', position: 'relative' }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>ATTESTATION</p>
-              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ClipboardCheck size={40} color="#cbd5e1" />
+              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                <ClipboardCheck size={40} color={agent.attestation_file ? C.teal : "#cbd5e1"} />
+                {agent.attestation_file && (
+                  <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
+                    <CheckCircle size={14} />
+                  </div>
+                )}
               </div>
-              <button onClick={() => agent.attestation_file && handleDownload(agent.attestation_file)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                <Download size={14} /> Télécharger
+              <button disabled={!agent.attestation_file} onClick={() => agent.attestation_file && handleDownload(agent.attestation_file)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.attestation_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.attestation_file ? 'pointer' : 'not-allowed' }}>
+                <Download size={14} /> {agent.attestation_file ? 'Télécharger' : 'Indisponible'}
               </button>
             </div>
             {/* Fiche Antropométrique */}
-            <div style={{ textAlign: 'center' }}>
+            <div style={{ textAlign: 'center', position: 'relative' }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>FICHE ANTROPOMÉTRIQUE</p>
-              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <FileText size={40} color="#cbd5e1" />
+              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                <FileText size={40} color={agent.fiche_antropometrique ? C.teal : "#cbd5e1"} />
+                {agent.fiche_antropometrique && (
+                  <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
+                    <CheckCircle size={14} />
+                  </div>
+                )}
               </div>
-              <button onClick={() => agent.fiche_antropometrique && handleDownload(agent.fiche_antropometrique)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                <Download size={14} /> Télécharger
+              <button disabled={!agent.fiche_antropometrique} onClick={() => agent.fiche_antropometrique && handleDownload(agent.fiche_antropometrique)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.fiche_antropometrique ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.fiche_antropometrique ? 'pointer' : 'not-allowed' }}>
+                <Download size={14} /> {agent.fiche_antropometrique ? 'Télécharger' : 'Indisponible'}
               </button>
             </div>
           </div>

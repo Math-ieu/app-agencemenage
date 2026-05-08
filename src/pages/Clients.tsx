@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { encodeId } from '../utils/obfuscation';
 import { getClients, getUsers, affecterDemande, updateClient, deleteClient } from '../api/client';
+import { renderStatusBadge } from '../utils/statusUtils';
 import { useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import { User } from '../types';
@@ -16,6 +17,7 @@ interface LatestDemande {
   statut: string;
   statut_paiement: string;
   commercial: string | null;
+  cao?: boolean;
   created_at: string;
 }
 
@@ -293,21 +295,17 @@ export default function Clients() {
   const getStatusBadge = (client: Client) => {
     const latest = client.latest_demande;
     if (!latest) return <span className="badge badge-status-attente">Nouveau</span>;
-    if (latest.statut_paiement === 'partiel') return <span className="badge badge-status-partielle">Facturation partielle</span>;
-    if (latest.statut_paiement === 'integral') return <span className="badge badge-status-paye">Payé</span>;
-    if (latest.statut === 'annule') return <span className="badge badge-status-annulee">Annulée</span>;
-    if (latest.statut === 'termine') return <span className="badge badge-status-effectuee">Prestation effectuée</span>;
-    if (latest.statut === 'en_cours') return <span className="badge-nouveau"><span>Nouveau</span><span>besoin</span></span>;
-    return <span className="badge badge-status-attente">{latest.statut}</span>;
+    return renderStatusBadge(latest.statut, latest.cao);
   };
 
   const getRowClass = (client: Client) => {
     const latest = client.latest_demande;
     if (!latest) return '';
-    if (latest.statut_paiement === 'partiel') return 'row-status-partielle';
-    if (latest.statut_paiement === 'integral') return 'row-status-paye';
+    
     if (latest.statut === 'annule') return 'row-status-annulee';
-    if (latest.statut === 'en_cours' || latest.statut === 'en_attente') return 'row-status-encours';
+    if (latest.statut === 'termine') return 'row-status-paye';
+    if (latest.statut === 'pres_terminee') return 'row-status-partielle';
+    if (latest.statut === 'en_cours' || latest.statut === 'en_attente' || latest.statut === 'pres_en_cours') return 'row-status-encours';
     return '';
   };
 
