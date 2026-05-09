@@ -695,7 +695,6 @@ export default function VueGlobale() {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
   });
-  const [suiviStatutFilter, setSuiviStatutFilter] = useState('Tous les statuts');
   const [suiviPaiementFilter, setSuiviPaiementFilter] = useState('Tous les paiements');
   const [suiviSegmentFilter, setSuiviSegmentFilter] = useState('Tous les segments');
   const [facturationData, setFacturationData] = useState<FacturationRow[]>([]);
@@ -941,21 +940,25 @@ export default function VueGlobale() {
   }, [facturationData, globalTableDateFrom, globalTableDateTo, globalTableSearch]);
 
   const suiviBaseRows = useMemo(() => {
-    if (suiviStatutFilter === 'Facturation annulée') {
-      return periodFilteredRows.filter((row) => row.statut === 'Facturation annulée');
-    }
-    return periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée');
-  }, [periodFilteredRows, suiviStatutFilter]);
+    return periodFilteredRows;
+  }, [periodFilteredRows]);
 
   const filteredSuiviRows = useMemo(() => {
     return suiviBaseRows.filter((row) => {
       if (suiviSegmentFilter !== 'Tous les segments' && row.segment !== suiviSegmentFilter) return false;
 
-      if (suiviStatutFilter !== 'Tous les statuts' && row.statut !== suiviStatutFilter) return false;
 
-      if (suiviPaiementFilter === 'Non payé' && row.paiement !== 'non_paye' && row.statutPaiementUi !== 'non_confirme') return false;
-      if (suiviPaiementFilter === 'Paiement en attente' && row.paiement !== 'partiellement_paye' && row.statutPaiementUi !== 'paiement_en_attente') return false;
-      if (suiviPaiementFilter === 'Paiement effectué' && row.paiement !== 'paye' && row.statutPaiementUi !== 'paye') return false;
+
+      if (suiviPaiementFilter !== 'Tous les paiements') {
+        const rowUi = row.statutPaiementUi;
+        if (suiviPaiementFilter === 'Non payé' && rowUi !== 'non_paye' && rowUi !== 'non_confirme') return false;
+        if (suiviPaiementFilter === 'Paiement en attente' && rowUi !== 'paiement_en_attente') return false;
+        if (suiviPaiementFilter === 'Agence payé/client' && rowUi !== 'agence_payee_client') return false;
+        if (suiviPaiementFilter === 'Profil payé/client' && rowUi !== 'profil_paye_client') return false;
+        if (suiviPaiementFilter === 'Paiement partiel' && rowUi !== 'paiement_partiel') return false;
+        if (suiviPaiementFilter === 'Payé' && rowUi !== 'paye') return false;
+        if (suiviPaiementFilter === 'Confirmé' && row.statut !== 'Confirmée') return false;
+      }
 
       if (suiviDateFrom || suiviDateTo) {
         const parts = row.date.split('/');
@@ -974,7 +977,7 @@ export default function VueGlobale() {
 
       return true;
     });
-  }, [suiviBaseRows, suiviDateFrom, suiviDateTo, suiviPaiementFilter, suiviSearch, suiviSegmentFilter, suiviStatutFilter]);
+  }, [suiviBaseRows, suiviDateFrom, suiviDateTo, suiviPaiementFilter, suiviSearch, suiviSegmentFilter]);
 
   const agenceNonPayeAmount = useMemo(() => {
     let total = 0;
@@ -2277,10 +2280,10 @@ export default function VueGlobale() {
           </section>
 
           <div className="fg-hero-stats">
-            <article><FileText size={20} /><div><strong>{suiviRecap.totalFacture}</strong><span>Missions totalement payées</span></div></article>
+            <article><FileText size={20} /><div><strong>{suiviRecap.totalFacture}</strong><span>Total factures</span></div></article>
             <article><BarChart3 size={20} /><div><strong>{money(suiviRecap.chiffreAffaires)}</strong><span>CHIFFRE D'AFFAIRES</span></div></article>
             <article><Clock3 size={20} /><div><strong>{money(suiviRecap.commissionAgence)}</strong><span>COMMISSION AGENCE</span></div></article>
-            <article><Users size={20} /><div><strong>{suiviRecap.paiementsEnAttente}</strong><span>Paiements partiels</span></div></article>
+            <article><Users size={20} /><div><strong>{suiviRecap.paiementsEnAttente}</strong><span>Paiements en attente</span></div></article>
           </div>
 
           <div className="fg-facturation-filters">
@@ -2299,21 +2302,15 @@ export default function VueGlobale() {
             </div>
             <div className="fg-select-group">
               <label className="fg-select-wrap">
-                <select value={suiviStatutFilter} onChange={(e) => setSuiviStatutFilter(e.target.value)}>
-                  <option>Tous les statuts</option>
-                  <option>Confirmée</option>
-                  <option>Terminée</option>
-                  <option>Payé</option>
-                  <option>Facturation annulée</option>
-                </select>
-                <ChevronDown size={14} />
-              </label>
-              <label className="fg-select-wrap">
                 <select value={suiviPaiementFilter} onChange={(e) => setSuiviPaiementFilter(e.target.value)}>
                   <option>Tous les paiements</option>
                   <option>Non payé</option>
                   <option>Paiement en attente</option>
-                  <option>Paiement effectué</option>
+                  <option>Agence payé/client</option>
+                  <option>Profil payé/client</option>
+                  <option>Paiement partiel</option>
+                  <option>Payé</option>
+                  <option>Confirmé</option>
                 </select>
                 <ChevronDown size={14} />
               </label>

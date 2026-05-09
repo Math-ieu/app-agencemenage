@@ -420,16 +420,26 @@ export default function ProfilDetails() {
 
     const financeStats = useMemo(() => {
     let totalCa = 0;
+    let cumulProfil = 0;
     let profilDoitAgence = 0;
     let agenceDoitProfil = 0;
     let nombreMissions = 0;
+    let totalPerte = 0;
+    let nbAnnulees = 0;
 
-    if (!agent) return { totalCa: 0, nombreMissions: 0, profilDoitAgence: 0, agenceDoitProfil: 0 };
+    if (!agent) return { totalCa: 0, cumulProfil: 0, nombreMissions: 0, profilDoitAgence: 0, agenceDoitProfil: 0, totalPerte: 0, nbAnnulees: 0 };
 
     const processItem = (sourceData: any, isMission: boolean) => {
       const demande = isMission ? sourceData.demande_detail || {} : sourceData;
       const facturation = demande.formulaire_data?.facturation || {};
       const montantTotal = Number(demande.prix || facturation.montant_ttc || 0);
+
+      if (demande.statut === 'annule' || facturation.facturation_annulee) {
+        const partProfil = Number(facturation.part_profil || (montantTotal * 0.5));
+        totalPerte += partProfil;
+        nbAnnulees += 1;
+        return;
+      }
 
       const rawStatutPaiementUi = facturation.statut_paiement_ui || sourceData.paiement_client_statut || (demande.statut_paiement === 'integral' ? 'paye' : 'non_paye');
       let encaissePar = (sourceData.encaisse_par === 'profil' || demande.mode_paiement === 'sur_place') ? 'Profil' : 'Agence';
@@ -455,6 +465,7 @@ export default function ProfilDetails() {
 
           nombreMissions += 1;
           totalCa += (amount + splitPartAgence);
+          cumulProfil += amount;
 
           if (encaissePar === 'Agence' && reglementInterne !== 'Réglé') agenceDoitProfil += amount;
           else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isDelegate) profilDoitAgence += partAgenceGlobal;
@@ -462,7 +473,8 @@ export default function ProfilDetails() {
       } else {
         const partProfil = Number(facturation.part_profil ?? (montantTotal * 0.5));
         nombreMissions += 1;
-        totalCa += partProfil;
+        totalCa += (partProfil + partAgenceGlobal);
+        cumulProfil += partProfil;
 
         if (encaissePar === 'Agence' && reglementInterne !== 'Réglé') {
           const due = Number(facturation.montant_agence_doit_profil || partProfil);
@@ -488,7 +500,7 @@ export default function ProfilDetails() {
       }
     });
 
-    return { totalCa, nombreMissions, profilDoitAgence, agenceDoitProfil };
+    return { totalCa, cumulProfil, nombreMissions, profilDoitAgence, agenceDoitProfil, totalPerte, nbAnnulees };
   }, [agent, missions, historyDemandes]);
 
   const formatMissionStatus = (status?: string): string => {
@@ -835,7 +847,7 @@ export default function ProfilDetails() {
 
         {/* ── 4. Solde financier ── */}
         <Accordion title="Solde financier" icon={<ArrowLeft size={18} />} isOpen={openSections.finance} onToggle={() => toggle('finance')} color={C.tan}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             <FinancialCard label="TOTAL CA GÉNÉRÉ" value={money(financeStats.totalCa)} color="#f1f5f9" textColor="#1e293b" />
             <FinancialCard label="NOMBRE DE MISSIONS" value={String(financeStats.nombreMissions)} color="#f1f5f9" textColor="#1e293b" />
             <FinancialCard
@@ -851,6 +863,20 @@ export default function ProfilDetails() {
               color="#EBF8FF"
               textColor="#2B6CB0"
               subtext="Part profil non versée"
+            />
+            <FinancialCard
+              label="TOTAL PERTE"
+              value={money(financeStats.totalPerte)}
+              color="#FFF5F5"
+              textColor="#C53030"
+              subtext={`${financeStats.nbAnnulees} facturation(s) annulée(s)`}
+            />
+            <FinancialCard
+              label="SOLDE NET PROFIL"
+              value={money(financeStats.cumulProfil)}
+              color="#F0FFF4"
+              textColor="#2F855A"
+              subtext="Total cumulé des missions"
             />
           </div>
         </Accordion>
