@@ -963,7 +963,7 @@
 }
 
 .fg-profile-modal {
-  width: min(100%, 760px);
+  width: min(100%, 1200px);
   border-radius: 10px;
   border: 1px solid #c8d5d4;
   background: #f3f6f6;

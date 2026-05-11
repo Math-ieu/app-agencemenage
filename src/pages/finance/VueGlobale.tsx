@@ -22,6 +22,10 @@ import {
   XCircle,
   Archive,
   Pencil,
+  TrendingUp,
+  Building2,
+  AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { fetchSecureDocBlob, generateDocument, getAgents, getDemandesHistorique, getMissions, sendWhatsApp, updateMission, updateDemande, getUsers } from '../../api/client';
 import { User as ApiUser } from '../../types';
@@ -109,6 +113,9 @@ interface ProfileAccount {
   partProfil: number;
   verseAuProfil: number;
   recuDuProfil: number;
+  totalDueToProfile: number;
+  totalDueToAgence: number;
+  factAnnulee: number;
 }
 
 interface ProfileBalance extends ProfileAccount {
@@ -847,6 +854,9 @@ export default function VueGlobale() {
           partProfil: 0,
           verseAuProfil: 0,
           recuDuProfil: 0,
+          totalDueToProfile: 0,
+          totalDueToAgence: 0,
+          factAnnulee: 0,
         });
       }
     }
@@ -879,6 +889,9 @@ export default function VueGlobale() {
               partProfil: 0,
               verseAuProfil: 0,
               recuDuProfil: 0,
+              totalDueToProfile: 0,
+              totalDueToAgence: 0,
+              factAnnulee: 0,
             });
           }
 
@@ -886,17 +899,29 @@ export default function VueGlobale() {
           const isDelegate = part === delegatePart;
 
           profile.missions += 1;
-          profile.caTotal += (amount + splitPartAgence); // CA généré = part du profil + sa part de la commission agence
-          profile.partAgence += splitPartAgence;
-          profile.partProfil += amount;
-
-          const encaissePar = item.encaissePar;
-          if (encaissePar === 'Agence') {
-            if (item.reglementInterne === 'Réglé') {
-              profile.verseAuProfil += amount;
+          if (item.statut === 'Facturation annulée' || item.statutPaiementUi === 'facturation_annulee') {
+            if (item.profilSeraPaye) {
+              const annulationAmount = Number(item.montantProfilAnnulation || 0) / (item.parts_repartition?.length || 1);
+              profile.factAnnulee += annulationAmount;
+              profile.partProfil += annulationAmount;
+              if (item.encaissePar === 'Agence') profile.totalDueToProfile += annulationAmount;
             }
-          } else if (item.reglementInterne === 'Réglé' && isDelegate) {
-            profile.recuDuProfil += item.partAgence;
+          } else {
+            profile.caTotal += (amount + splitPartAgence);
+            profile.partAgence += splitPartAgence;
+            profile.partProfil += amount;
+
+            if (item.encaissePar === 'Agence') {
+              profile.totalDueToProfile += amount;
+              if (item.reglementInterne === 'Réglé') {
+                profile.verseAuProfil += amount;
+              }
+            } else if (item.encaissePar === 'Profil') {
+              profile.totalDueToAgence += splitPartAgence;
+              if (item.reglementInterne === 'Réglé') {
+                profile.recuDuProfil += splitPartAgence;
+              }
+            }
           }
         }
       } else {
@@ -922,22 +947,40 @@ export default function VueGlobale() {
             partProfil: 0,
             verseAuProfil: 0,
             recuDuProfil: 0,
+            totalDueToProfile: 0,
+            totalDueToAgence: 0,
+            factAnnulee: 0,
           });
         }
 
         const profile = grouped.get(accountKey)!;
         profile.missions += 1;
-        profile.caTotal += partProfil; // Align CA Total with the single part as well
-        profile.partAgence += partAgence;
-        profile.partProfil += partProfil;
-
-        const encaissePar = item.encaissePar;
-        if (encaissePar === 'Agence') {
-          if (item.reglementInterne === 'Réglé') {
-            profile.verseAuProfil += getPartProfilDueFromAgence(item);
+        if (item.statut === 'Facturation annulée' || item.statutPaiementUi === 'facturation_annulee') {
+          if (item.profilSeraPaye) {
+            const annulationAmount = Number(item.montantProfilAnnulation || 0);
+            profile.factAnnulee += annulationAmount;
+            profile.partProfil += annulationAmount;
+            if (item.encaissePar === 'Agence') profile.totalDueToProfile += annulationAmount;
           }
-        } else if (item.reglementInterne === 'Réglé') {
-          profile.recuDuProfil += getPartAgenceDueFromProfil(item);
+        } else {
+          profile.caTotal += partProfil;
+          profile.partAgence += partAgence;
+          profile.partProfil += partProfil;
+
+          const encaissePar = item.encaissePar;
+          if (encaissePar === 'Agence') {
+            const due = getPartProfilDueFromAgence(item);
+            profile.totalDueToProfile += due;
+            if (item.reglementInterne === 'Réglé') {
+              profile.verseAuProfil += due;
+            }
+          } else if (encaissePar === 'Profil') {
+            const due = getPartAgenceDueFromProfil(item);
+            profile.totalDueToAgence += due;
+            if (item.reglementInterne === 'Réglé') {
+              profile.recuDuProfil += due;
+            }
+          }
         }
       }
     }
@@ -1083,10 +1126,16 @@ export default function VueGlobale() {
   const profileBalances = useMemo<ProfileBalance[]>(
     () =>
       profileAccountsData
-        .map((profile) => ({
-          ...profile,
-          solde: profile.partProfil - profile.verseAuProfil - profile.recuDuProfil,
-        }))
+        .map((profile) => {
+          const profilDoitAgence = Math.max(0, profile.totalDueToAgence - profile.recuDuProfil);
+          const agenceDoitProfil = Math.max(0, profile.totalDueToProfile - profile.verseAuProfil);
+          return {
+            ...profile,
+            profilDoitAgence,
+            agenceDoitProfil,
+            solde: agenceDoitProfil - profilDoitAgence,
+          };
+        })
         .filter((profile) =>
           `${profile.name} ${profile.city}`.toLowerCase().includes(searchProfiles.toLowerCase())
         ),
@@ -1114,10 +1163,10 @@ export default function VueGlobale() {
   const displayedMissionTotal = filteredSuiviRows.reduce((sum, row) => sum + row.montant, 0);
 
   const suiviRecap = useMemo(() => {
-    const activeRows = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
-    const cancelledRows = periodFilteredRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
+    const totalFacture = filteredSuiviRows.length;
+    const activeRows = filteredSuiviRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
+    const cancelledRows = filteredSuiviRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
 
-    const totalFacture = activeRows.filter((row) => row.paiement === 'paye').length;
     const chiffreAffaires = activeRows
       .filter((row) => row.paiement !== 'non_paye')
       .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
@@ -1126,10 +1175,10 @@ export default function VueGlobale() {
     const pertes = cancelledRows.reduce((sum, row) => sum + (row.profilSeraPaye ? Number(row.montantProfilAnnulation || 0) : 0), 0);
     const commissionAgence = commissionBrute - pertes;
 
-    const paiementsEnAttente = activeRows.filter((row) => row.paiement === 'partiellement_paye').length;
+    const paiementsEnAttente = filteredSuiviRows.filter((row) => row.paiement === 'partiellement_paye').length;
 
     return { totalFacture, chiffreAffaires, commissionAgence, paiementsEnAttente };
-  }, [periodFilteredRows]);
+  }, [filteredSuiviRows]);
 
   const globalSegmentStats = useMemo(() => {
     const particulier = facturationData.filter((row) => row.segment === 'Particulier').length;
@@ -1818,7 +1867,7 @@ export default function VueGlobale() {
       'Service',
       'Segment',
       'Montant TTC',
-      'À payer',
+      'A payé',
       'Reste a payer',
       'Part agence',
       'Part profil',
@@ -2474,7 +2523,7 @@ export default function VueGlobale() {
                   <th>TVA</th>
                   <th>Montant<br />TTC</th>
                   <th>Mode<br />paiement</th>
-                  <th>À payer</th>
+                  <th>A payé</th>
                   <th>Reste à<br />payer</th>
                   <th style={{ textAlign: 'center' }}>Statut Paiem.</th>
                   <th>Date<br />paiement</th>
@@ -2619,28 +2668,64 @@ export default function VueGlobale() {
 
           {displayMode === 'cards' ? (
             <div className="fg-profile-cards">
-              {profileBalances.map((profile) => (
-                <article key={profile.id} className="fg-profile-card">
-                  <header>
+              {profileBalances.map((profile: any) => (
+                <article key={profile.id} className="fg-profile-card" style={{ border: 'none', overflow: 'hidden', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.1)', background: 'white' }}>
+                  <header style={{ background: '#1e293b', padding: '1.25rem', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <h4>{profile.name}</h4>
-                      <p>{profile.city} - {profile.phone}</p>
+                      <h4 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0, textTransform: 'capitalize' }}>{profile.name.toLowerCase()}</h4>
+                      <p style={{ margin: '4px 0 0', opacity: 0.8, fontSize: '0.95rem' }}>{profile.city}</p>
                     </div>
-                    <span>{profile.missions} mission{profile.missions > 1 ? 's' : ''}</span>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', padding: '8px 16px', borderRadius: '8px', textAlign: 'center' }}>
+                      <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, opacity: 0.6, marginBottom: '2px' }}>MISSIONS</span>
+                      <strong style={{ fontSize: '1.25rem' }}>{profile.missions}</strong>
+                    </div>
                   </header>
 
-                  <div className="fg-profile-balance">
-                    <p>Agence doit au profil</p>
-                    <strong>{money(profile.solde)}</strong>
-                  </div>
+                  <div className="fg-modal-body" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div style={{ background: '#fff7ed', border: '1px solid #ffedd5', padding: '1rem', borderRadius: '12px' }}>
+                        <span style={{ display: 'block', color: '#9a3412', fontSize: '0.8rem', fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase' }}>PROFIL DOIT À L'AGENCE</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {profile.profilDoitAgence > 0 && <AlertCircle size={18} color="#ea580c" />}
+                          <strong style={{ fontSize: '1.35rem', color: '#c2410c' }}>{profile.profilDoitAgence > 0 ? money(profile.profilDoitAgence) : '—'}</strong>
+                        </div>
+                      </div>
+                      <div style={{ background: '#fff7ed', border: '1px solid #ffedd5', padding: '1rem', borderRadius: '12px' }}>
+                        <span style={{ display: 'block', color: '#9a3412', fontSize: '0.8rem', fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase' }}>AGENCE DOIT AU PROFIL</span>
+                        <strong style={{ fontSize: '1.35rem', color: '#c2410c' }}>{profile.agenceDoitProfil > 0 ? money(profile.agenceDoitProfil) : '—'}</strong>
+                      </div>
+                    </div>
 
-                  <div className="fg-metric-grid">
-                    <div><span>CA total généré</span><strong>{money(profile.caTotal)}</strong></div>
-                    <div><span>Part agence cumulée</span><strong>{money(profile.partAgence)}</strong></div>
-                    <div><span>Part profil cumulée</span><strong>{money(profile.partProfil)}</strong></div>
-                    <div><span>Versé au profil</span><strong>{money(profile.verseAuProfil)}</strong></div>
-                    <div><span>Reçu du profil</span><strong>{money(profile.recuDuProfil)}</strong></div>
-                    <div><span>En attente (total)</span><strong>{money(profile.solde)}</strong></div>
+                    <div className="fg-metric-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                      <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <TrendingUp size={18} color="#64748b" />
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>CA total généré</span>
+                          <strong style={{ fontSize: '1rem', color: '#1e293b' }}>{money(profile.caTotal)}</strong>
+                        </div>
+                      </div>
+                      <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <Building2 size={18} color="#64748b" />
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Part agence cumulée</span>
+                          <strong style={{ fontSize: '1rem', color: '#1e293b' }}>{money(profile.partAgence)}</strong>
+                        </div>
+                      </div>
+                      <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <User size={18} color="#64748b" />
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Part profil cumulée</span>
+                          <strong style={{ fontSize: '1rem', color: '#1e293b' }}>{money(profile.partProfil)}</strong>
+                        </div>
+                      </div>
+                      <div style={{ background: '#fff1f2', border: '1px solid #ffe4e6', padding: '0.85rem', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <AlertTriangle size={18} color="#e11d48" />
+                        <div>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#9f1239', fontWeight: 700 }}>TOTAL FACT. ANNULÉE</span>
+                          <strong style={{ fontSize: '1rem', color: '#be123c' }}>{money(profile.factAnnulee)}</strong>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </article>
               ))}
