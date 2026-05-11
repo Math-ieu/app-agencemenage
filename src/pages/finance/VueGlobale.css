@@ -769,6 +769,11 @@
   color: #166534;
 }
 
+.fg-pill-pale-red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .fg-facturation-table td small,
 .data-table td small {
   display: block;
@@ -1365,7 +1370,7 @@
 
 .fg-mission-kpis {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid #d5e0ea;
   border-bottom: 1px solid #d5e0ea;
 }
