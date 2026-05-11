@@ -866,7 +866,6 @@ export default function VueGlobale() {
         // Multi-profile logic
         const splitPartAgence = item.partAgence / item.parts_repartition.length;
 
-        const delegatePart = item.parts_repartition.find((p: any) => p.is_delegate) || item.parts_repartition[0];
 
         for (const part of item.parts_repartition) {
           const profileId = Number(part.profile_id);
