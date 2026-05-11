@@ -42,40 +42,78 @@ export default function LoginPage() {
           align-items: center;
           justify-content: center;
           font-family: 'DM Sans', system-ui, sans-serif;
-          background: #0c0f1a;
+          background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
           position: relative;
           overflow: hidden;
         }
 
-        .lp-root::before {
-          content: '';
+        /* Night Sky Stars */
+        .lp-stars {
           position: absolute;
-          inset: 0;
-          background:
-            radial-gradient(ellipse 70% 50% at 15% 20%, rgba(99,102,241,0.18) 0%, transparent 60%),
-            radial-gradient(ellipse 60% 50% at 85% 80%, rgba(14,165,233,0.13) 0%, transparent 60%);
+          top: 0;
+          left: 0;
+          width: 2px;
+          height: 2px;
+          background: transparent;
+          box-shadow: 1744px 122px #FFF, 134px 1321px #FFF, 92px 859px #FFF, 1618px 1012px #FFF, 482px 768px #FFF, 1872px 145px #FFF, 1432px 156px #FFF, 1876px 1654px #FFF, 123px 456px #FFF, 876px 123px #FFF, 1543px 789px #FFF, 345px 1678px #FFF, 987px 543px #FFF, 234px 1234px #FFF, 1765px 234px #FFF, 456px 987px #FFF, 1234px 678px #FFF, 543px 123px #FFF, 1678px 345px #FFF, 789px 1543px #FFF;
+          animation: twinkle 5s infinite;
+        }
+
+        .lp-stars-2 {
+          width: 1px;
+          height: 1px;
+          background: transparent;
+          box-shadow: 444px 222px #FFF, 234px 1421px #FFF, 192px 959px #FFF, 1818px 1112px #FFF, 582px 868px #FFF, 1772px 245px #FFF, 1532px 256px #FFF, 1776px 1754px #FFF, 223px 556px #FFF, 976px 223px #FFF, 1643px 889px #FFF, 445px 1778px #FFF, 1087px 643px #FFF, 334px 1334px #FFF, 1865px 334px #FFF, 556px 1087px #FFF, 1334px 778px #FFF, 643px 223px #FFF, 1778px 445px #FFF, 889px 1643px #FFF;
+          animation: twinkle 8s infinite;
+          opacity: 0.5;
+        }
+
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 0.3; }
+        }
+
+        /* Shooting Stars (Comets) */
+        .lp-comet {
+          position: absolute;
+          top: var(--top);
+          left: var(--left);
+          width: 1px;
+          height: 1px;
+          background: #fff;
+          opacity: 0;
+          animation: comet var(--duration) infinite linear;
+          animation-delay: var(--delay);
           pointer-events: none;
         }
 
-        .lp-grid {
+        .lp-comet::after {
+          content: '';
           position: absolute;
-          inset: 0;
-          background-image:
-            linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-          background-size: 52px 52px;
-          pointer-events: none;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 80px;
+          height: 1px;
+          background: linear-gradient(90deg, #fff, transparent);
+        }
+
+        @keyframes comet {
+          0% { transform: rotate(-45deg) translateX(0); opacity: 0; }
+          5% { opacity: 1; }
+          15% { transform: rotate(-45deg) translateX(-1000px); opacity: 0; }
+          100% { transform: rotate(-45deg) translateX(-1000px); opacity: 0; }
         }
 
         .lp-card {
           position: relative;
-          z-index: 1;
+          z-index: 10;
           width: 100%;
           max-width: 420px;
           padding: 48px 44px;
-          background: rgba(255,255,255,0.97);
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(10px);
           border-radius: 24px;
-          box-shadow: 0 32px 80px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.08);
+          box-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
         }
 
         .lp-logo {
@@ -279,13 +317,18 @@ export default function LoginPage() {
           position: absolute;
           bottom: 24px;
           font-size: 12px;
-          color: #334155;
+          color: #a5b4fc;
+          opacity: 0.8;
           z-index: 1;
         }
       `}</style>
 
       <div className="lp-root">
-        <div className="lp-grid" />
+        <div className="lp-stars" />
+        <div className="lp-stars-2" />
+        <div className="lp-comet" style={{ '--top': '10%', '--left': '100%', '--duration': '6s', '--delay': '0s' } as any} />
+        <div className="lp-comet" style={{ '--top': '30%', '--left': '100%', '--duration': '8s', '--delay': '3s' } as any} />
+        <div className="lp-comet" style={{ '--top': '50%', '--left': '100%', '--duration': '7s', '--delay': '5s' } as any} />
 
         <div className="lp-card">
           <div className="lp-logo">
