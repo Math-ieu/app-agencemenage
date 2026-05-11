@@ -896,7 +896,6 @@ export default function VueGlobale() {
           }
 
           const profile = grouped.get(accountKey)!;
-          const isDelegate = part === delegatePart;
 
           profile.missions += 1;
           if (item.statut === 'Facturation annulée' || item.statutPaiementUi === 'facturation_annulee') {
