@@ -131,11 +131,13 @@ export const generateDocument = (id: number, type: 'devis' | 'png' | 'facture') 
 export const sendWhatsApp = (
   id: number,
   type: 'devis' | 'png' | 'facture' | 'cao_profil' | 'feedback',
-  profileAgentId?: number
+  profileAgentId?: number,
+  mediaUrl?: string
 ) =>
   apiClient.post(`/api/demandes/${id}/send_whatsapp/`, {
     type,
     ...(profileAgentId ? { profile_agent_id: profileAgentId } : {}),
+    ...(mediaUrl ? { media_url: mediaUrl } : {}),
   });
 
 /**

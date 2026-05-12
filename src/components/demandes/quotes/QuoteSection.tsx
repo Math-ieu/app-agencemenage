@@ -17,7 +17,7 @@ export interface QuotePrestationLine {
 interface QuoteSectionProps {
   demande: any;
   onPreview: (demande: any, type: 'devis' | 'png') => void;
-  onSend: (id: number, type: 'devis' | 'png') => void;
+  onSend: (demande: any, type: 'devis' | 'png') => void;
 }
 
 export default function QuoteSection({ demande, onPreview, onSend }: QuoteSectionProps) {
@@ -57,6 +57,20 @@ export default function QuoteSection({ demande, onPreview, onSend }: QuoteSectio
       },
     };
     onPreview(enrichedDemande, type);
+  };
+
+  const handleSend = () => {
+    const enrichedDemande = {
+      ...demande,
+      prix: totalRef.current || demande.prix,
+      formulaire_data: {
+        ...(demande.formulaire_data || {}),
+        ...extraDataRef.current,
+        prestations: prestationsRef.current.length > 0 ? prestationsRef.current : undefined,
+        total: totalRef.current || undefined,
+      },
+    };
+    onSend(enrichedDemande, type);
   };
 
   const getComponent = () => {
@@ -103,7 +117,7 @@ export default function QuoteSection({ demande, onPreview, onSend }: QuoteSectio
           <Eye size={14} /> Aperçu {isDevis ? "Devis" : "Récap"}
         </button>
         <button 
-          onClick={() => onSend(demande.id, type)}
+          onClick={handleSend}
           style={{ 
             flex: 1, 
             display: "flex", 

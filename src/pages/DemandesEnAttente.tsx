@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient, uploadDocument } from '../api/client';
+import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient, uploadDocument, API_URL } from '../api/client';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -124,7 +124,7 @@ export default function DemandesEnAttente() {
   const [commerciaux, setCommerciaux] = useState<any[]>([]);
   const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
 
-  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string, demandeId: number } | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png', name: string, demandeId: number, mediaUrl?: string } | null>(null);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const selectedServiceKey = normalizeServiceLabel(selectedService);
@@ -221,6 +221,7 @@ export default function DemandesEnAttente() {
         const { blob, name } = await generateDevisPdf(demande);
         const uploadResponse = await uploadDocument(demande.id, blob, 'devis', name);
         const doc = uploadResponse.data;
+        const mediaUrl = doc?.id ? `${API_URL}/api/media/documents/${doc.id}/` : undefined;
 
         let blobUrl = URL.createObjectURL(blob);
         if (doc?.download_url) {
@@ -228,13 +229,26 @@ export default function DemandesEnAttente() {
           blobUrl = secure.blobUrl;
         }
 
-        setShowPreviewModal({ url: blobUrl, type: 'devis', name: doc?.nom || name, demandeId: demande.id });
+        setShowPreviewModal({ 
+          url: blobUrl, 
+          type: 'devis', 
+          name: doc?.nom || name, 
+          demandeId: demande.id,
+          mediaUrl 
+        });
       } else {
         addToast('Génération du récapitulatif sur le serveur...', 'info');
         const response = await generateDocument(demande.id, type);
         const doc = response.data;
+        const mediaUrl = doc?.id ? `${API_URL}/api/media/documents/${doc.id}/` : undefined;
         const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
-        setShowPreviewModal({ url: blobUrl, type: 'png', name: doc.nom, demandeId: demande.id });
+        setShowPreviewModal({ 
+          url: blobUrl, 
+          type: 'png', 
+          name: doc.nom, 
+          demandeId: demande.id,
+          mediaUrl 
+        });
       }
 
       fetchDemandes();
@@ -322,10 +336,20 @@ export default function DemandesEnAttente() {
     return cardState[section] !== false;
   };
 
-  const handleDirectSendWhatsApp = async (demandeId: number, type: 'devis' | 'png') => {
+  const handleDirectSendWhatsApp = async (demande: Demande, type: 'devis' | 'png') => {
     try {
+      let mediaUrl = undefined;
+      if (type === 'devis') {
+        addToast('Préparation du document...', 'info');
+        const { blob, name } = await generateDevisPdf(demande);
+        const res = await uploadDocument(demande.id, blob, 'devis', name);
+        if (res.data?.id) {
+          mediaUrl = `${API_URL}/api/media/documents/${res.data.id}/`;
+        }
+      }
+
       addToast(`Envoi du ${type === 'devis' ? 'devis' : 'récapitulatif'} via WhatsApp...`, 'info');
-      await sendWhatsApp(demandeId, type);
+      await sendWhatsApp(demande.id, type, undefined, mediaUrl);
       addToast('Document envoyé avec succès !', 'success');
       fetchDemandes();
     } catch (error) {
@@ -338,7 +362,12 @@ export default function DemandesEnAttente() {
     if (!showPreviewModal) return;
     setSendingWhatsApp(true);
     try {
-      await sendWhatsApp(showPreviewModal.demandeId, showPreviewModal.type);
+      await sendWhatsApp(
+        showPreviewModal.demandeId, 
+        showPreviewModal.type, 
+        undefined, 
+        showPreviewModal.mediaUrl
+      );
       addToast('Document envoyé via WhatsApp avec succès !', 'success');
     } catch (err) {
       console.error(err);
