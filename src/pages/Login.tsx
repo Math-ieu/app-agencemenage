@@ -110,10 +110,12 @@ export default function LoginPage() {
           width: 100%;
           max-width: 420px;
           padding: 48px 44px;
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(10px);
+          background: rgba(255, 255, 255, 0.03);
+          backdrop-filter: blur(20px) saturate(180%);
+          -webkit-backdrop-filter: blur(20px) saturate(180%);
           border-radius: 24px;
-          box-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          box-shadow: 0 32px 80px rgba(0,0,0,0.5);
         }
 
         .lp-logo {
@@ -135,28 +137,31 @@ export default function LoginPage() {
         .lp-label {
           display: inline-block;
           font-size: 11px;
-          font-weight: 500;
-          letter-spacing: 0.1em;
+          font-weight: 600;
+          letter-spacing: 0.12em;
           text-transform: uppercase;
-          color: #6366f1;
-          background: #eef2ff;
+          color: #2dd4bf;
+          background: rgba(3, 114, 101, 0.15);
+          border: 1px solid rgba(3, 114, 101, 0.3);
           border-radius: 6px;
-          padding: 4px 10px;
-          margin-bottom: 14px;
+          padding: 4px 12px;
+          margin-bottom: 16px;
         }
 
         .lp-title {
           font-family: 'DM Serif Display', Georgia, serif;
-          font-size: 30px;
+          font-size: 32px;
           font-weight: 400;
-          color: #0f172a;
-          letter-spacing: -0.02em;
-          margin-bottom: 8px;
+          color: #ffffff;
+          letter-spacing: 0.02em;
+          margin-bottom: 10px;
         }
-
+        
         .lp-subtitle {
-          font-size: 14px;
-          color: #94a3b8;
+          font-size: 15px;
+          color: #cbd5e1;
+          font-weight: 400;
+          letter-spacing: 0.01em;
         }
 
         .lp-form {
@@ -167,11 +172,11 @@ export default function LoginPage() {
 
         .lp-field label {
           display: block;
-          font-size: 12.5px;
+          font-size: 13px;
           font-weight: 500;
-          color: #374151;
-          margin-bottom: 7px;
-          letter-spacing: 0.01em;
+          color: #f1f5f9;
+          margin-bottom: 8px;
+          letter-spacing: 0.02em;
         }
 
         .lp-input-wrap {
@@ -182,31 +187,36 @@ export default function LoginPage() {
 
         .lp-input-icon {
           position: absolute;
-          left: 14px;
-          color: #94a3b8;
+          left: 16px;
+          color: #64748b;
           display: flex;
           pointer-events: none;
+          transition: color 0.2s;
+        }
+
+        .lp-input-wrap:focus-within .lp-input-icon {
+          color: #037265;
         }
 
         .lp-input-wrap input {
           width: 100%;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 12px;
-          padding: 13px 14px 13px 42px;
+          padding: 14px 14px 14px 44px;
           font-size: 14px;
           font-family: 'DM Sans', system-ui, sans-serif;
-          color: #0f172a;
+          color: #ffffff;
           outline: none;
-          transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+          transition: all 0.2s;
         }
-
-        .lp-input-wrap input::placeholder { color: #cbd5e1; }
+        
+        .lp-input-wrap input::placeholder { color: #475569; }
 
         .lp-input-wrap input:focus {
-          background: #fff;
-          border-color: #6366f1;
-          box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+          background: rgba(255, 255, 255, 0.07);
+          border-color: #037265;
+          box-shadow: 0 0 0 4px rgba(3, 114, 101, 0.15);
         }
 
         .lp-pwd-toggle {
@@ -222,7 +232,7 @@ export default function LoginPage() {
           transition: color 0.15s;
         }
 
-        .lp-pwd-toggle:hover { color: #6366f1; }
+        .lp-pwd-toggle:hover { color: #037265; }
 
         .lp-row {
           display: flex;
@@ -234,23 +244,26 @@ export default function LoginPage() {
         .lp-remember {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 10px;
           cursor: pointer;
-          font-size: 13px;
-          color: #64748b;
+          font-size: 14px;
+          color: #94a3b8;
           user-select: none;
+          transition: color 0.2s;
         }
+        
+        .lp-remember:hover { color: #cbd5e1; }
 
         .lp-remember input[type='checkbox'] {
           width: 15px;
           height: 15px;
-          accent-color: #6366f1;
+          accent-color: #037265;
           cursor: pointer;
         }
 
         .lp-forgot {
           font-size: 13px;
-          color: #6366f1;
+          color: #037265;
           text-decoration: none;
           font-weight: 500;
           transition: opacity 0.15s;
@@ -272,25 +285,25 @@ export default function LoginPage() {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
+          gap: 10px;
           width: 100%;
-          padding: 14px;
-          background: #4f46e5;
+          padding: 15px;
+          background: linear-gradient(135deg, #037265 0%, #025a50 100%);
           color: #fff;
           border: none;
           border-radius: 12px;
-          font-size: 14.5px;
-          font-weight: 500;
+          font-size: 15px;
+          font-weight: 600;
           font-family: 'DM Sans', system-ui, sans-serif;
           cursor: pointer;
-          transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
-          box-shadow: 0 4px 14px rgba(79,70,229,0.35);
-          margin-top: 4px;
+          transition: all 0.2s;
+          box-shadow: 0 10px 25px rgba(3,114,101,0.3);
+          margin-top: 8px;
         }
 
         .lp-submit:hover:not(:disabled) {
-          background: #4338ca;
-          box-shadow: 0 6px 20px rgba(79,70,229,0.45);
+          background: linear-gradient(135deg, #025a50 0%, #01413a 100%);
+          box-shadow: 0 6px 20px rgba(3,114,101,0.45);
           transform: translateY(-1px);
         }
 
@@ -302,13 +315,14 @@ export default function LoginPage() {
 
         .lp-support {
           text-align: center;
-          font-size: 12.5px;
+          font-size: 13px;
           color: #94a3b8;
-          margin-top: 20px;
+          margin-top: 24px;
+          letter-spacing: 0.01em;
         }
 
         .lp-support a {
-          color: #6366f1;
+          color: #037265;
           text-decoration: none;
           font-weight: 500;
         }

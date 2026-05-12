@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient, uploadDocument, API_URL } from '../api/client';
+import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient, uploadDocument } from '../api/client';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -221,7 +221,7 @@ export default function DemandesEnAttente() {
         const { blob, name } = await generateDevisPdf(demande);
         const uploadResponse = await uploadDocument(demande.id, blob, 'devis', name);
         const doc = uploadResponse.data;
-        const mediaUrl = doc?.id ? `${API_URL}/api/media/documents/${doc.id}/` : undefined;
+        const mediaUrl = doc?.public_media_url || undefined;
 
         let blobUrl = URL.createObjectURL(blob);
         if (doc?.download_url) {
@@ -240,7 +240,7 @@ export default function DemandesEnAttente() {
         addToast('Génération du récapitulatif sur le serveur...', 'info');
         const response = await generateDocument(demande.id, type);
         const doc = response.data;
-        const mediaUrl = doc?.id ? `${API_URL}/api/media/documents/${doc.id}/` : undefined;
+        const mediaUrl = doc?.public_media_url || undefined;
         const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
         setShowPreviewModal({ 
           url: blobUrl, 
@@ -338,14 +338,12 @@ export default function DemandesEnAttente() {
 
   const handleDirectSendWhatsApp = async (demande: Demande, type: 'devis' | 'png') => {
     try {
-      let mediaUrl = undefined;
+      let mediaUrl: string | undefined = undefined;
       if (type === 'devis') {
         addToast('Préparation du document...', 'info');
         const { blob, name } = await generateDevisPdf(demande);
         const res = await uploadDocument(demande.id, blob, 'devis', name);
-        if (res.data?.id) {
-          mediaUrl = `${API_URL}/api/media/documents/${res.data.id}/`;
-        }
+        mediaUrl = res.data?.public_media_url || undefined;
       }
 
       addToast(`Envoi du ${type === 'devis' ? 'devis' : 'récapitulatif'} via WhatsApp...`, 'info');
