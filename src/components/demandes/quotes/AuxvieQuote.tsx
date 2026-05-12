@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
+import type { QuotePrestationLine } from "./QuoteSection";
 
-export default function AuxvieQuote({ demande }: { demande: any }) {
+interface AuxvieQuoteProps {
+  demande: any;
+  onPrestationsChange?: (prestations: QuotePrestationLine[], total: number, extra?: Record<string, any>) => void;
+}
+
+export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuoteProps) {
   const data = demande.formulaire_data || {};
   
   const [mode, setMode] = useState("240");
@@ -16,7 +22,26 @@ export default function AuxvieQuote({ demande }: { demande: any }) {
   const totalJ = jours * semaines;
   const opj = (opts.toilette ? 50 : 0) + (opts.repas ? 40 : 0) + (opts.medic ? 30 : 0) + (opts.sortie ? 80 : 0);
   const base = tarif * totalJ * cd;
-  const total = base + opj * totalJ;
+  const optionsTotal = opj * totalJ;
+  const total = base + optionsTotal;
+
+  const modeLabel = mode === "240" ? "Journée (8h)" : mode === "420" ? "Nuit (12h)" : "24h";
+  const dureeLabel = cd === 1.2 ? "Ponctuelle" : cd === 1 ? "Court terme" : "Long terme (−10%)";
+
+  useEffect(() => {
+    if (!onPrestationsChange) return;
+    const prestations: QuotePrestationLine[] = [
+      { designation: `Auxiliaire de vie — ${modeLabel} — ${totalJ} jours — ${dureeLabel}`, montant: Math.round(base) },
+    ];
+    if (opts.toilette) prestations.push({ designation: `Aide à la toilette (${totalJ} jours × 50 DH)`, montant: 50 * totalJ });
+    if (opts.repas) prestations.push({ designation: `Préparation repas (${totalJ} jours × 40 DH)`, montant: 40 * totalJ });
+    if (opts.medic) prestations.push({ designation: `Suivi médicaments (${totalJ} jours × 30 DH)`, montant: 30 * totalJ });
+    if (opts.sortie) prestations.push({ designation: `Accompagnement sorties (${totalJ} jours × 80 DH)`, montant: 80 * totalJ });
+    onPrestationsChange(prestations, total, {
+      tarif_journalier: tarif, nb_jours: jours, nb_semaines: semaines,
+      coefficient_duree: cd, duree: dureeLabel,
+    });
+  }, [mode, jours, semaines, duree, opts, base, total, totalJ]);
 
   return (
     <div className="quote-calculator">

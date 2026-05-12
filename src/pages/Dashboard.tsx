@@ -7,12 +7,13 @@ import {
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, uploadDocument } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
+import { generateDevisPdf } from '../lib/devis/generate-devis';
 
 // Services qui nécessitent un devis PDF (les autres ont un récapitulatif PNG)
 const isDevisRequired = (d: Demande | null): boolean => {
@@ -240,16 +241,28 @@ export default function Dashboard() {
   const handlePreviewDocument = async (type: 'devis' | 'png' | 'facture') => {
     if (!selectedDemande) return;
     try {
-      const typeLabel = type === 'devis' ? 'devis' : (type === 'facture' ? 'de la facture' : 'du récapitulatif');
-      addToast(`Génération ${typeLabel} sur le serveur...`, 'info');
-      const response = await generateDocument(selectedDemande.id, type);
-      const doc = response.data;
+      const typeLabel = type === 'devis' ? 'du devis' : (type === 'facture' ? 'de la facture' : 'du récapitulatif');
+      if (type === 'devis') {
+        addToast('Génération du devis côté frontend...', 'info');
+        const { blob, name } = await generateDevisPdf(selectedDemande);
+        const uploadResponse = await uploadDocument(selectedDemande.id, blob, 'devis', name);
+        const doc = uploadResponse.data;
 
-      // Utilise le download_url sécurisé — jamais le chemin physique
-      const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
-      setShowPreviewModal({ url: blobUrl, type, name: doc.nom, demandeId: selectedDemande.id });
+        let blobUrl = URL.createObjectURL(blob);
+        if (doc?.download_url) {
+          const secure = await fetchSecureDocBlob(doc.download_url);
+          blobUrl = secure.blobUrl;
+        }
 
-      // Refresh demandes and sync selectedDemande so the history updates
+        setShowPreviewModal({ url: blobUrl, type, name: doc?.nom || name, demandeId: selectedDemande.id });
+      } else {
+        addToast(`Génération ${typeLabel} sur le serveur...`, 'info');
+        const response = await generateDocument(selectedDemande.id, type);
+        const doc = response.data;
+        const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
+        setShowPreviewModal({ url: blobUrl, type, name: doc.nom, demandeId: selectedDemande.id });
+      }
+
       const refreshed = await getDemandes();
       const allResults: Demande[] = Array.isArray(refreshed.data?.results)
         ? refreshed.data.results

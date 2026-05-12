@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
+import type { QuotePrestationLine } from "./QuoteSection";
 
-export default function PlacementQuote({ demande }: { demande: any }) {
+interface PlacementQuoteProps {
+  demande: any;
+  onPrestationsChange?: (prestations: QuotePrestationLine[], total: number, extra?: Record<string, any>) => void;
+}
+
+export default function PlacementQuote({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const [mode, setMode] = useState("flex");
   return (
     <div className="quote-calculator">
@@ -11,12 +17,12 @@ export default function PlacementQuote({ demande }: { demande: any }) {
             style={{ ...s.subTab, ...(mode === k ? s.subTabOn : {}) }}>{l}</button>
         ))}
       </div>
-      {mode === "flex" ? <FlexCalc demande={demande} /> : <G360Calc demande={demande} />}
+      {mode === "flex" ? <FlexCalc demande={demande} onPrestationsChange={onPrestationsChange} /> : <G360Calc demande={demande} onPrestationsChange={onPrestationsChange} />}
     </div>
   );
 }
 
-function FlexCalc({ demande }: { demande: any }) {
+function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const data = demande.formulaire_data || {};
   const [hj, setHj] = useState(4);
   const [js, setJs] = useState("22");
@@ -32,6 +38,34 @@ function FlexCalc({ demande }: { demande: any }) {
   const mensuel = Math.round(base * (1 - reduction));
   const tenueCost = tenue ? 200 * nb : 0;
   const total = mensuel + tenueCost;
+  const reductionMontant = Math.round(base * reduction);
+  const engLabel = eng === "0.05" ? "6 mois" : eng === "0.10" ? "12 mois" : "";
+  const engPct = Math.round(reduction * 100);
+  const jsSem = jm === 22 ? 5 : jm === 26 ? 6 : 7;
+
+  useEffect(() => {
+    if (!onPrestationsChange) return;
+    const prestations: QuotePrestationLine[] = [
+      { designation: `Mise à disposition — ${nb} intervenante — ${hj}h/j × ${jsSem}j/sem (${hm}h/mois)`, montant: Math.round(base) },
+    ];
+    if (reductionMontant > 0) {
+      prestations.push({ designation: `Réduction engagement ${engLabel} (–${engPct}%)`, montant: -reductionMontant, isReduction: true });
+    }
+    if (tenueCost > 0) {
+      prestations.push({ designation: `Tenue de travail fournie (${nb} personne${nb > 1 ? "s" : ""})`, montant: tenueCost });
+    }
+    if (ferie) {
+      prestations.push({ designation: "Majoration jours fériés (+20%)", montant: "Inclus" });
+    }
+    onPrestationsChange(prestations, total, {
+      heures_par_jour: hj, jours_par_semaine: jsSem, heures_par_mois: hm,
+      nb_intervenantes: nb, nb_intervenants: nb, prix_base: Math.round(base),
+      reduction: reductionMontant, reduction_montant: reductionMontant,
+      reduction_pourcentage: engPct, engagement_mois: eng === "0.05" ? 6 : eng === "0.10" ? 12 : 0,
+      tenue_travail: tenueCost,
+      service_type: "flexible",
+    });
+  }, [hj, js, nb, eng, ferie, tenue, base, total, reductionMontant, tenueCost, hm, jsSem]);
 
   return (
     <div>
@@ -73,7 +107,7 @@ function FlexCalc({ demande }: { demande: any }) {
   );
 }
 
-function G360Calc({ demande }: { demande: any }) {
+function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const data = demande.formulaire_data || {};
   const [hj, setHj] = useState(4);
   const [js, setJs] = useState("22");
@@ -88,6 +122,32 @@ function G360Calc({ demande }: { demande: any }) {
   const reduction = parseFloat(eng);
   const superv = nbS < 3 ? 800 : 0;
   const total = Math.round(base * (1 - reduction)) + superv;
+  const reductionMontant = Math.round(base * reduction);
+  const engLabel = eng === "0.05" ? "6 mois" : eng === "0.10" ? "12 mois" : "";
+  const engPct = Math.round(reduction * 100);
+  const jsSem = jm === 22 ? 5 : jm === 26 ? 6 : 7;
+
+  useEffect(() => {
+    if (!onPrestationsChange) return;
+    const prestations: QuotePrestationLine[] = [
+      { designation: `Gestion 360° — ${nbS} intervenante(s) — ${hj}h/j × ${jsSem}j/sem (${hm}h/mois)`, montant: Math.round(base) },
+    ];
+    if (reductionMontant > 0) {
+      prestations.push({ designation: `Réduction engagement ${engLabel} (–${engPct}%)`, montant: -reductionMontant, isReduction: true });
+    }
+    prestations.push({ designation: `Tenues de travail incluses (${nbS} personne${nbS > 1 ? "s" : ""})`, montant: "Inclus" });
+    prestations.push({ designation: "Supervision qualité incluse (≥3 personnes)", montant: "Inclus" });
+    if (superv > 0) {
+      prestations.push({ designation: "Supplément supervision (< 3 personnes)", montant: superv });
+    }
+    onPrestationsChange(prestations, total, {
+      heures_par_jour: hj, jours_par_semaine: jsSem, heures_par_mois: hm,
+      nb_intervenantes: nbS, nb_intervenants: nbS, prix_base: Math.round(base),
+      reduction: reductionMontant, reduction_montant: reductionMontant,
+      reduction_pourcentage: engPct, engagement_mois: eng === "0.05" ? 6 : eng === "0.10" ? 12 : 3,
+      service_type: "gestion360",
+    });
+  }, [hj, js, nb, eng, ferie, base, total, reductionMontant, superv, hm, jsSem, nbS]);
 
   return (
     <div>

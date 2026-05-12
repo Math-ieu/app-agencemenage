@@ -1,3 +1,4 @@
+import { useRef, useCallback } from "react";
 import { Eye, Send } from "lucide-react";
 import AirbnbQuote from "./AirbnbQuote";
 import ChantierQuote from "./ChantierQuote";
@@ -6,9 +7,16 @@ import SinistreQuote from "./SinistreQuote";
 import BureauxQuote from "./BureauxQuote";
 import PlacementQuote from "./PlacementQuote";
 
+export interface QuotePrestationLine {
+  designation: string;
+  montant: number | string;
+  isReduction?: boolean;
+  isMajoration?: boolean;
+}
+
 interface QuoteSectionProps {
   demande: any;
-  onPreview: (id: number, type: 'devis' | 'png') => void;
+  onPreview: (demande: any, type: 'devis' | 'png') => void;
   onSend: (id: number, type: 'devis' | 'png') => void;
 }
 
@@ -21,13 +29,43 @@ export default function QuoteSection({ demande, onPreview, onSend }: QuoteSectio
   
   const type = isDevis ? 'devis' : 'png';
 
+  // Store the latest prestations from the calculator
+  const prestationsRef = useRef<QuotePrestationLine[]>([]);
+  const totalRef = useRef<number>(0);
+  const extraDataRef = useRef<Record<string, any>>({});
+
+  const handlePrestationsChange = useCallback((
+    prestations: QuotePrestationLine[],
+    total: number,
+    extraData?: Record<string, any>
+  ) => {
+    prestationsRef.current = prestations;
+    totalRef.current = total;
+    if (extraData) extraDataRef.current = extraData;
+  }, []);
+
+  const handlePreview = () => {
+    // Inject the calculator prestations into the demande before preview
+    const enrichedDemande = {
+      ...demande,
+      prix: totalRef.current || demande.prix,
+      formulaire_data: {
+        ...(demande.formulaire_data || {}),
+        ...extraDataRef.current,
+        prestations: prestationsRef.current.length > 0 ? prestationsRef.current : undefined,
+        total: totalRef.current || undefined,
+      },
+    };
+    onPreview(enrichedDemande, type);
+  };
+
   const getComponent = () => {
-    if (service.includes("air bnb") || service.includes("airbnb")) return <AirbnbQuote demande={demande} />;
-    if (service.includes("chantier")) return <ChantierQuote demande={demande} />;
-    if (service.includes("auxiliaire")) return <AuxvieQuote demande={demande} />;
-    if (service.includes("sinistre")) return <SinistreQuote demande={demande} />;
-    if (service.includes("bureaux")) return <BureauxQuote demande={demande} />;
-    if (service.includes("placement") || service.includes("gestion")) return <PlacementQuote demande={demande} />;
+    if (service.includes("air bnb") || service.includes("airbnb")) return <AirbnbQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("chantier")) return <ChantierQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("auxiliaire")) return <AuxvieQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("sinistre")) return <SinistreQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("bureaux")) return <BureauxQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("placement") || service.includes("gestion")) return <PlacementQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
     return null;
   };
 
@@ -45,7 +83,7 @@ export default function QuoteSection({ demande, onPreview, onSend }: QuoteSectio
 
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
         <button 
-          onClick={() => onPreview(demande.id, type)}
+          onClick={handlePreview}
           style={{ 
             flex: 1, 
             display: "flex", 

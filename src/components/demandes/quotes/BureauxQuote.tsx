@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
+import type { QuotePrestationLine } from "./QuoteSection";
 
-export default function BureauxQuote({ demande }: { demande: any }) {
+interface BureauxQuoteProps {
+  demande: any;
+  onPrestationsChange?: (prestations: QuotePrestationLine[], total: number, extra?: Record<string, any>) => void;
+}
+
+export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQuoteProps) {
   const data = demande.formulaire_data || {};
   
   const [heures, setHeures] = useState(data.duree || data.duration || 3);
@@ -10,9 +16,26 @@ export default function BureauxQuote({ demande }: { demande: any }) {
   const [opts, setOpts] = useState({ produits: Boolean(data.produits), serpiere: Boolean(data.torchons), zone: false });
   const tog = (k: keyof typeof opts) => setOpts(o => ({ ...o, [k]: !o[k] }));
 
+  const isAbo = parseFloat(freq) < 1;
   const base = heures * personnes * 60 * parseFloat(freq);
   const op = (opts.produits ? 90 : 0) + (opts.serpiere ? 40 : 0) + (opts.zone ? 50 : 0);
   const total = base + op;
+
+  useEffect(() => {
+    if (!onPrestationsChange) return;
+    const prestations: QuotePrestationLine[] = [
+      { designation: `Ménage bureaux — ${heures}h × ${personnes} intervenante × 4 passages/mois${isAbo ? " (abonnement –10%)" : ""}`, montant: Math.round(base) },
+    ];
+    if (opts.produits) prestations.push({ designation: "Produits ménagers professionnels fournis par l'agence", montant: 90 });
+    if (opts.serpiere) prestations.push({ designation: "Torchons et serpillières fournis", montant: 40 });
+    if (opts.zone) prestations.push({ designation: "Supplément zone éloignée", montant: 50 });
+    onPrestationsChange(prestations, total, {
+      nb_heures: heures, heures, nb_intervenantes: personnes, nb_intervenants: personnes,
+      nb_passages_mois: 4, reduction_abonnement: isAbo ? 10 : 0,
+      prix_base: Math.round(base), prix_produits: opts.produits ? 90 : 0,
+      produits: opts.produits, torchons: opts.serpiere,
+    });
+  }, [heures, personnes, freq, opts, base, total, isAbo]);
 
   return (
     <div className="quote-calculator">

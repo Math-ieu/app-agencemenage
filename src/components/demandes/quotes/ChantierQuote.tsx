@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
+import type { QuotePrestationLine } from "./QuoteSection";
 
-export default function ChantierQuote({ demande }: { demande: any }) {
+interface ChantierQuoteProps {
+  demande: any;
+  onPrestationsChange?: (prestations: QuotePrestationLine[], total: number, extra?: Record<string, any>) => void;
+}
+
+export default function ChantierQuote({ demande, onPrestationsChange }: ChantierQuoteProps) {
   const data = demande.formulaire_data || {};
   
   const [surface, setSurface] = useState(data.surface || data.surfaceArea || 150);
@@ -11,6 +17,7 @@ export default function ChantierQuote({ demande }: { demande: any }) {
   const [dechets, setDechets] = useState("0");
   const [marbre, setMarbre] = useState(false);
   const [surfMarbre, setSurfMarbre] = useState(30);
+  const [terrasse, setTerrasse] = useState(false);
 
   const MIN = 1500;
   const baseRaw = surface * parseFloat(grattage);
@@ -20,6 +27,43 @@ export default function ChantierQuote({ demande }: { demande: any }) {
   const devisSpe = dechets === "-1";
   const marbreCost = marbre ? surfMarbre * 25 : 0;
   const total = base + vitresCost + dechetsCost + marbreCost;
+
+  const grattageLabel = parseFloat(grattage) <= 12 ? 'sans grattage' : parseFloat(grattage) <= 15 ? 'grattage léger' : 'rénovation totale';
+
+  // Notify parent of prestation changes
+  useEffect(() => {
+    if (!onPrestationsChange) return;
+    const prestations: QuotePrestationLine[] = [
+      { designation: `Nettoyage fin de chantier — ${surface} m² (${grattageLabel})`, montant: base },
+    ];
+    if (terrasse) {
+      prestations.push({ designation: "Terrasse et rooftop (inclus dans forfait)", montant: "Inclus" });
+    }
+    if (vitresCost > 0) {
+      prestations.push({
+        designation: vitres === "150" ? "Grattage vitres léger" : `Grattage vitres profond — ${surfVitres} m² vitrés`,
+        montant: vitresCost,
+      });
+    }
+    if (dechetsCost > 0) {
+      const poidsLabel = dechets === "200" ? "< 100 kg" : dechets === "380" ? "100-300 kg" : dechets === "650" ? "300-500 kg" : "";
+      prestations.push({ designation: `Ramassage et évacuation déchets — ${poidsLabel}`, montant: dechetsCost });
+    }
+    if (marbreCost > 0) {
+      prestations.push({ designation: `Cristallisation du marbre — ${surfMarbre} m²`, montant: marbreCost });
+    }
+    onPrestationsChange(prestations, total, {
+      surface, grattage: parseFloat(grattage), grattage_rate: parseFloat(grattage),
+      surface_vitres: vitres === "25" ? surfVitres : 0,
+      prix_vitres: vitresCost,
+      poids_dechets: dechetsCost > 0 ? (dechets === "200" ? 100 : dechets === "380" ? 200 : dechets === "650" ? 400 : 0) : 0,
+      prix_dechets: dechetsCost,
+      surface_marbre: marbre ? surfMarbre : 0,
+      prix_marbre: marbreCost,
+      terrasse_incluse: terrasse,
+      prix_base: base,
+    });
+  }, [surface, grattage, vitres, surfVitres, dechets, marbre, surfMarbre, terrasse, base, vitresCost, dechetsCost, marbreCost, total]);
 
   const detail = `${surface} m² × ${grattage} DH = ${fmt(baseRaw)} DH${baseRaw < MIN ? ` (min ${fmt(MIN)})` : ""}` +
     (vitresCost ? ` + vitres` : "") +
@@ -73,6 +117,7 @@ export default function ChantierQuote({ demande }: { demande: any }) {
               <input type="number" value={surfMarbre} onChange={e => setSurfMarbre(+e.target.value)} style={s.input as any} />
             </Field>
           )}
+          <OptRow label="Terrasse / Rooftop" price="Inclus" checked={terrasse} onChange={setTerrasse} />
         </div>
       </div>
       <ResultBar detail={detail} total={`${fmt(total)}${devisSpe ? " +" : ""} DH`} label="Devis HT" />

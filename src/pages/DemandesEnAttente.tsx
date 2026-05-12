@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient } from '../api/client';
+import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient, uploadDocument } from '../api/client';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
+import { generateDevisPdf } from '../lib/devis/generate-devis';
 import {
   RefreshCw, Search, XCircle,
   Calendar,
@@ -213,16 +214,30 @@ export default function DemandesEnAttente() {
     }
   };
 
-  const handlePreviewDocument = async (demandeId: number, type: 'devis' | 'png') => {
+  const handlePreviewDocument = async (demande: Demande, type: 'devis' | 'png') => {
     try {
-      addToast(`Génération du ${type === 'devis' ? 'devis' : 'récapitulatif'} sur le serveur...`, 'info');
-      const response = await generateDocument(demandeId, type);
-      const doc = response.data;
+      if (type === 'devis') {
+        addToast('Génération du devis côté frontend...', 'info');
+        const { blob, name } = await generateDevisPdf(demande);
+        const uploadResponse = await uploadDocument(demande.id, blob, 'devis', name);
+        const doc = uploadResponse.data;
 
-      // Utilise le download_url sécurisé — jamais le chemin physique
-      const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
-      setShowPreviewModal({ url: blobUrl, type: type === 'devis' ? 'devis' : 'png', name: doc.nom, demandeId });
-      fetchDemandes(); // Refresh list to show generated file in history
+        let blobUrl = URL.createObjectURL(blob);
+        if (doc?.download_url) {
+          const secure = await fetchSecureDocBlob(doc.download_url);
+          blobUrl = secure.blobUrl;
+        }
+
+        setShowPreviewModal({ url: blobUrl, type: 'devis', name: doc?.nom || name, demandeId: demande.id });
+      } else {
+        addToast('Génération du récapitulatif sur le serveur...', 'info');
+        const response = await generateDocument(demande.id, type);
+        const doc = response.data;
+        const { blobUrl } = await fetchSecureDocBlob(doc.download_url);
+        setShowPreviewModal({ url: blobUrl, type: 'png', name: doc.nom, demandeId: demande.id });
+      }
+
+      fetchDemandes();
       addToast('Aperçu prêt', 'success');
     } catch (error) {
       console.error(error);
@@ -1670,7 +1685,7 @@ export default function DemandesEnAttente() {
                   </button>
                   <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} type="button" onClick={() => {
                     const isDevis = isDevisRequired(editingDemande);
-                    handlePreviewDocument(editingDemande.id, isDevis ? 'devis' : 'png');
+                    handlePreviewDocument(editingDemande, isDevis ? 'devis' : 'png');
                   }}>
                     <Eye size={16} /> Aperçu du {isDevisRequired(editingDemande) ? 'Devis' : 'Récapitulatif'}
                   </button>
