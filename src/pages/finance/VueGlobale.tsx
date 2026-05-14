@@ -819,8 +819,8 @@ export default function VueGlobale() {
     }
 
     // Fusionner les données : Missions prioritaires, puis Demandes sans mission
-    const missionDemandeIds = new Set(missions.map(m => m.demande_detail?.id).filter(Boolean));
-    const uniqueDemands = demands.filter(d => !missionDemandeIds.has(d.id));
+    const missionDemandeIds = new Set(missions.map(m => String(m.demande_detail?.id)).filter(id => id !== 'undefined' && id !== 'null'));
+    const uniqueDemands = demands.filter(d => !missionDemandeIds.has(String(d.id)));
 
     const missionRows = missions.map(mapMissionToFacturationRow);
     const demandRows = uniqueDemands.map(mapDemandeToFacturationRow);
@@ -899,12 +899,20 @@ export default function VueGlobale() {
           const profile = grouped.get(accountKey)!;
 
           profile.missions += 1;
-          if (item.statut === 'Facturation annulée' || item.statutPaiementUi === 'facturation_annulee') {
+          const isAnnule = item.statut === 'Facturation annulée' || item.statutPaiementUi === 'facturation_annulee';
+
+          if (isAnnule) {
             if (item.profilSeraPaye) {
               const annulationAmount = Number(item.montantProfilAnnulation || 0) / (item.parts_repartition?.length || 1);
               profile.factAnnulee += annulationAmount;
               profile.partProfil += annulationAmount;
-              if (item.encaissePar === 'Agence') profile.totalDueToProfile += annulationAmount;
+              
+              if (item.encaissePar === 'Agence') {
+                profile.totalDueToProfile += annulationAmount;
+                if (item.reglementInterne === 'Réglé') {
+                  profile.verseAuProfil += annulationAmount;
+                }
+              }
             }
           } else {
             profile.caTotal += (amount + splitPartAgence);
@@ -912,14 +920,16 @@ export default function VueGlobale() {
             profile.partProfil += amount;
 
             if (item.encaissePar === 'Agence') {
-              profile.totalDueToProfile += amount;
+              const due = Number(item.montantAgenceDoitProfil || amount);
+              profile.totalDueToProfile += due;
               if (item.reglementInterne === 'Réglé') {
-                profile.verseAuProfil += amount;
+                profile.verseAuProfil += due;
               }
             } else if (item.encaissePar === 'Profil') {
-              profile.totalDueToAgence += splitPartAgence;
+              const due = Number(item.montantProfilDoitAgence || splitPartAgence);
+              profile.totalDueToAgence += due;
               if (item.reglementInterne === 'Réglé') {
-                profile.recuDuProfil += splitPartAgence;
+                profile.recuDuProfil += due;
               }
             }
           }
@@ -955,12 +965,20 @@ export default function VueGlobale() {
 
         const profile = grouped.get(accountKey)!;
         profile.missions += 1;
-        if (item.statut === 'Facturation annulée' || item.statutPaiementUi === 'facturation_annulee') {
+        const isAnnule = item.statut === 'Facturation annulée' || item.statutPaiementUi === 'facturation_annulee';
+        
+        if (isAnnule) {
           if (item.profilSeraPaye) {
             const annulationAmount = Number(item.montantProfilAnnulation || 0);
             profile.factAnnulee += annulationAmount;
             profile.partProfil += annulationAmount;
-            if (item.encaissePar === 'Agence') profile.totalDueToProfile += annulationAmount;
+            
+            if (item.encaissePar === 'Agence') {
+              profile.totalDueToProfile += annulationAmount;
+              if (item.reglementInterne === 'Réglé') {
+                profile.verseAuProfil += annulationAmount;
+              }
+            }
           }
         } else {
           profile.caTotal += partProfil;

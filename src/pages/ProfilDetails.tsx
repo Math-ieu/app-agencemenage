@@ -429,15 +429,35 @@ export default function ProfilDetails() {
 
     if (!agent) return { totalCa: 0, cumulProfil: 0, nombreMissions: 0, profilDoitAgence: 0, agenceDoitProfil: 0, totalPerte: 0, nbAnnulees: 0 };
 
+
     const processItem = (sourceData: any, isMission: boolean) => {
       const demande = isMission ? sourceData.demande_detail || {} : sourceData;
       const facturation = demande.formulaire_data?.facturation || {};
       const montantTotal = Number(demande.prix || facturation.montant_ttc || 0);
 
-      if (demande.statut === 'annule' || facturation.facturation_annulee) {
-        const partProfil = Number(facturation.part_profil || (montantTotal * 0.5));
+      // Detection of cancellation compensation
+      const isAnnule = demande.statut === 'annule' || 
+                       facturation.facturation_annulee || 
+                       sourceData.paiement_client_statut === 'facturation_annulee';
+
+      const partProfilVersee = isMission 
+        ? (sourceData.part_profil_versee || sourceData.part_agence_reversee || false)
+        : (facturation.part_profil_versee || facturation.part_agence_reversee || false);
+
+      if (isAnnule) {
+        // For cancelled billing, the part_profil is the compensation amount
+        const partProfil = Number(sourceData.montant_agence_doit_profil || facturation.part_profil || (montantTotal * 0.5));
         totalPerte += partProfil;
         nbAnnulees += 1;
+
+        // If agency owes compensation and it's not yet paid
+        if (partProfil > 0) {
+          if (partProfilVersee) {
+            cumulProfil += partProfil; // It's part of her net income
+          } else {
+            agenceDoitProfil += partProfil; // Still owed
+          }
+        }
         return;
       }
 
@@ -450,7 +470,6 @@ export default function ProfilDetails() {
         else if (sourceData.part_profil_versee || facturation.part_profil_versee) encaissePar = 'Agence';
       }
 
-      const partProfilVersee = encaissePar === 'Agence' ? (sourceData.part_profil_versee ?? facturation.part_profil_versee ?? false) : (sourceData.part_agence_reversee ?? facturation.part_agence_reversee ?? false);
       const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
 
       const partsRep: any[] = Array.isArray(facturation.parts_repartition) ? facturation.parts_repartition : (Array.isArray(demande.parts_repartition) ? demande.parts_repartition : []);
@@ -477,10 +496,10 @@ export default function ProfilDetails() {
         cumulProfil += partProfil;
 
         if (encaissePar === 'Agence' && reglementInterne !== 'Réglé') {
-          const due = Number(facturation.montant_agence_doit_profil || partProfil);
+          const due = Number(sourceData.montant_agence_doit_profil || facturation.montant_agence_doit_profil || partProfil);
           agenceDoitProfil += due;
         } else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé') {
-          const due = Number(facturation.montant_profil_doit_agence || partAgenceGlobal);
+          const due = Number(sourceData.montant_profil_doit_agence || facturation.montant_profil_doit_agence || partAgenceGlobal);
           profilDoitAgence += due;
         }
       }
@@ -489,13 +508,13 @@ export default function ProfilDetails() {
     // Traiter les missions
     const missionDemandeIds = new Set();
     missions.forEach(m => {
-      if (m.demande_detail?.id) missionDemandeIds.add(m.demande_detail.id);
+      if (m.demande_detail?.id) missionDemandeIds.add(String(m.demande_detail.id));
       processItem(m, true);
     });
 
     // Traiter l'historique non couvert par les missions
     historyDemandes.forEach(d => {
-      if (!missionDemandeIds.has(d.id)) {
+      if (!missionDemandeIds.has(String(d.id))) {
         processItem(d, false);
       }
     });
