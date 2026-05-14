@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import {
   Search, Eye, Share2, ClipboardCheck, ThumbsUp, ThumbsDown,
-  TrendingUp, Star, Trash2, Download, ChevronDown
+  TrendingUp, Star, Trash2, Download, ChevronDown, X
 } from 'lucide-react';
 import { Feedback } from '../types';
 import { useToastStore } from '../store/toast';
@@ -31,6 +31,7 @@ export default function Qualite() {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
   const { addToast } = useToastStore();
 
   const [search, setSearch] = useState('');
@@ -552,7 +553,7 @@ export default function Qualite() {
                             Icon: Share2, hoverBg: '#eff6ff', hoverColor: '#3b82f6', title: 'Partager', 
                             onClick: () => handleShare(f.demande) 
                           },
-                          { Icon: Eye, hoverBg: '#eff6ff', hoverColor: '#3b82f6', title: 'Voir détails', onClick: () => {} },
+                          { Icon: Eye, hoverBg: '#eff6ff', hoverColor: '#3b82f6', title: 'Voir détails', onClick: () => setSelectedFeedback(f) },
                           {
                             Icon: Trash2, hoverBg: '#fff1f2', hoverColor: '#ef4444', title: 'Supprimer',
                             onClick: () => handleDelete(f.id)
@@ -597,6 +598,56 @@ export default function Qualite() {
           </table>
         </div>
       </div>
+      {/* Feedback Detail Modal */}
+      {selectedFeedback && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }} onClick={() => setSelectedFeedback(null)}>
+          <div style={{
+            background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 500, position: 'relative',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setSelectedFeedback(null)} style={{
+              position: 'absolute', top: 20, right: 20,
+              background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
+              width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: '#64748b', transition: 'all 0.15s'
+            }}>
+              <X size={18} />
+            </button>
+            
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 24px 0', paddingRight: 40 }}>
+              Détail feedback — {selectedFeedback.client_name}
+            </h2>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px', marginBottom: 24, fontSize: 14 }}>
+              <div><span style={{ color: '#64748b' }}>Satisfaction :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{getSatisfactionLabel(selectedFeedback.note_agence)}</span></div>
+              <div><span style={{ color: '#64748b' }}>Qualité ménage :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{getSatisfactionLabel(selectedFeedback.note_intervenant)}</span></div>
+              
+              <div><span style={{ color: '#64748b' }}>Professionnel :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedFeedback.note_intervenant >= 4 ? 'Bien' : selectedFeedback.note_intervenant === 3 ? 'Moyen' : 'Mauvais'}</span></div>
+              <div><span style={{ color: '#64748b' }}>Recommande profil :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedFeedback.note_intervenant >= 4 ? 'Oui' : 'Non'}</span></div>
+              
+              <div><span style={{ color: '#64748b' }}>Recommande agence :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedFeedback.note_agence >= 4 ? 'Oui' : 'Non'}</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ color: '#64748b' }}>Note agence :</span> {renderStars(selectedFeedback.note_agence)}</div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ color: '#64748b' }}>Note profil :</span> {renderStars(selectedFeedback.note_intervenant)}</div>
+            </div>
+
+            <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+              <div style={{ color: '#64748b', fontSize: 13, marginBottom: 8 }}>Commentaire</div>
+              <div style={{ color: '#0f172a', fontSize: 14, lineHeight: 1.5, wordBreak: 'break-word' }}>
+                {selectedFeedback.commentaire || 'Aucun commentaire fourni.'}
+              </div>
+            </div>
+
+            <div style={{ color: '#64748b', fontSize: 13 }}>
+              Soumis le {selectedFeedback.date ? new Date(selectedFeedback.date).toLocaleDateString('fr-FR') : '—'}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

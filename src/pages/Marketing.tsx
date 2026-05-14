@@ -520,8 +520,9 @@ export default function Marketing() {
                         {statusLabel(item.status)}
                       </span>
                     </td>
-                    <td>
-                      <button className="icon-btn" title="Modifier" onClick={() => {
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button className="icon-btn" title="Modifier" onClick={() => {
                         setPromoForm({
                           nom: item.name, statut: item.status, code_promo: item.code,
                           type_reduction: item.reduction_type || 'pourcentage',
@@ -552,7 +553,8 @@ export default function Marketing() {
                       }}>
                         {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                       </button>
-                    </td>
+                    </div>
+                  </td>
                   </tr>
                 ))}
                 {filteredCodes.length === 0 && (
@@ -623,8 +625,9 @@ export default function Marketing() {
                     <td style={{ fontWeight: 600 }}>{Number(item.total_a_payer || 0).toFixed(2)} MAD</td>
                     <td style={{ color: '#0f766e' }}>{Number(item.part_agence || 0).toFixed(2)} MAD</td>
                     <td style={{ color: '#0369a1' }}>{Number(item.part_profil || 0).toFixed(2)} MAD</td>
-                    <td>
-                      <button className="icon-btn" title="Modifier" onClick={() => {
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button className="icon-btn" title="Modifier" onClick={() => {
                         setGestureForm({
                           demande_id: item.demande_id ? String(item.demande_id) : '',
                           client_nom: item.client_name, client_telephone: '', ville: '', quartier: '',
@@ -657,7 +660,8 @@ export default function Marketing() {
                       }}>
                         {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                       </button>
-                    </td>
+                    </div>
+                  </td>
                   </tr>
                 ))}
                 {filteredGestes.length === 0 && (
@@ -732,8 +736,9 @@ export default function Marketing() {
                         {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                       </span>
                     </td>
-                    <td>
-                      <button className="icon-btn" title="Modifier" onClick={() => {
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button className="icon-btn" title="Modifier" onClick={() => {
                         setCampaignForm({
                           nom: item.title, message: item.message || '', statut: item.status,
                           cible: item.target.toLowerCase(), segment_cible: item.segment, critere_ciblage: item.criteria || 'tous',
@@ -765,7 +770,8 @@ export default function Marketing() {
                       }}>
                         {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                       </button>
-                    </td>
+                    </div>
+                  </td>
                   </tr>
                 ))}
                 {filteredCampagnes.length === 0 && (
