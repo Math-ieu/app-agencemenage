@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { Client, Demande } from '../types';
-import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
+import { renderPaymentStatusBadge } from '../utils/statusUtils';
 
 export interface ActionLog {
   id: number;
