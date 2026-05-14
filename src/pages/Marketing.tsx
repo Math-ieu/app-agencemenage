@@ -57,7 +57,7 @@ interface CampaignItem {
   date: string;
   title: string;
   message: string;
-  target: 'Profil' | 'Client';
+  target: 'profil' | 'client';
   segment: SegmentLabel;
   criteria: string;
   channel: string | string[];
@@ -124,6 +124,10 @@ export default function Marketing() {
   const [showCreateCampaign, setShowCreateCampaign] = useState(false);
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const { user } = useAuthStore();
+
+  const [editingPromoId, setEditingPromoId] = useState<number | null>(null);
+  const [editingGesteId, setEditingGesteId] = useState<number | null>(null);
+  const [editingCampagneId, setEditingCampagneId] = useState<number | null>(null);
 
   useEffect(() => {
     getDemandes().then(res => {
@@ -289,16 +293,30 @@ export default function Marketing() {
       message_promotionnel: promoForm.message_promotionnel,
     };
 
-    createPromoCode(payload).then((res) => {
-      setPromoCodes((prev) => [res.data, ...prev]);
-      setPromoForm({
-        nom: '', statut: 'brouillon', code_promo: '', type_reduction: 'pourcentage',
-        valeur_reduction: '', segment_client: 'particulier', statut_client: 'tous',
-        services: [], canaux: [], message_promotionnel: '',
-        date_debut: toInputDate(new Date()), date_fin: '', date_indeterminee: false,
-      });
-      setShowCreatePromo(false);
-    }).catch(console.error);
+    if (editingPromoId) {
+      updatePromoCode(editingPromoId, payload).then((res) => {
+        setPromoCodes((prev) => prev.map((x) => x.id === editingPromoId ? res.data : x));
+        setPromoForm({
+          nom: '', statut: 'brouillon', code_promo: '', type_reduction: 'pourcentage',
+          valeur_reduction: '', segment_client: 'particulier', statut_client: 'tous',
+          services: [], canaux: [], message_promotionnel: '',
+          date_debut: toInputDate(new Date()), date_fin: '', date_indeterminee: false,
+        });
+        setEditingPromoId(null);
+        setShowCreatePromo(false);
+      }).catch(console.error);
+    } else {
+      createPromoCode(payload).then((res) => {
+        setPromoCodes((prev) => [res.data, ...prev]);
+        setPromoForm({
+          nom: '', statut: 'brouillon', code_promo: '', type_reduction: 'pourcentage',
+          valeur_reduction: '', segment_client: 'particulier', statut_client: 'tous',
+          services: [], canaux: [], message_promotionnel: '',
+          date_debut: toInputDate(new Date()), date_fin: '', date_indeterminee: false,
+        });
+        setShowCreatePromo(false);
+      }).catch(console.error);
+    }
   };
 
   const createGesture = () => {
@@ -331,19 +349,36 @@ export default function Marketing() {
       canal_diffusion: gestureForm.canal_diffusion,
     };
 
-    createCommercialGesture(payload).then((res) => {
-      setGestures((prev) => [res.data, ...prev]);
-      setGestureForm({
-        demande_id: '', client_nom: '', client_telephone: '', ville: '', quartier: '',
-        fidelite: 'Nouveau client', frequence: 'Une seule fois',
-        date_geste: toInputDate(new Date()), statut_geste: 'en_attente',
-        type_geste: 'reduction_tarif', montant_ht: '', tva_active: false,
-        reduction_type: 'montant', reduction_valeur: '',
-        part_profil: '', part_agence: '', motif: '',
-        envoyer_message: false, message_client: '', canal_diffusion: [], cree_par: user?.first_name || '',
-      });
-      setShowCreateGesture(false);
-    }).catch(console.error);
+    if (editingGesteId) {
+      updateCommercialGesture(editingGesteId, payload).then((res) => {
+        setGestures((prev) => prev.map((x) => x.id === editingGesteId ? res.data : x));
+        setGestureForm({
+          demande_id: '', client_nom: '', client_telephone: '', ville: '', quartier: '',
+          fidelite: 'Nouveau client', frequence: 'Une seule fois',
+          date_geste: toInputDate(new Date()), statut_geste: 'en_attente',
+          type_geste: 'reduction_tarif', montant_ht: '', tva_active: false,
+          reduction_type: 'montant', reduction_valeur: '',
+          part_profil: '', part_agence: '', motif: '',
+          envoyer_message: false, message_client: '', canal_diffusion: [], cree_par: user?.first_name || '',
+        });
+        setEditingGesteId(null);
+        setShowCreateGesture(false);
+      }).catch(console.error);
+    } else {
+      createCommercialGesture(payload).then((res) => {
+        setGestures((prev) => [res.data, ...prev]);
+        setGestureForm({
+          demande_id: '', client_nom: '', client_telephone: '', ville: '', quartier: '',
+          fidelite: 'Nouveau client', frequence: 'Une seule fois',
+          date_geste: toInputDate(new Date()), statut_geste: 'en_attente',
+          type_geste: 'reduction_tarif', montant_ht: '', tva_active: false,
+          reduction_type: 'montant', reduction_valeur: '',
+          part_profil: '', part_agence: '', motif: '',
+          envoyer_message: false, message_client: '', canal_diffusion: [], cree_par: user?.first_name || '',
+        });
+        setShowCreateGesture(false);
+      }).catch(console.error);
+    }
   };
 
   const createCampaignFunc = () => {
@@ -352,7 +387,7 @@ export default function Marketing() {
     const payload = {
       title: campaignForm.nom.trim(),
       message: campaignForm.message,
-      target: campaignForm.cible.charAt(0).toUpperCase() + campaignForm.cible.slice(1),
+      target: campaignForm.cible,
       segment: campaignForm.segment_cible,
       criteria: campaignForm.critere_ciblage,
       channel: campaignForm.canal,
@@ -364,16 +399,30 @@ export default function Marketing() {
       status: campaignForm.statut,
     };
 
-    createCampaign(payload).then((res) => {
-      setCampaigns((prev) => [res.data, ...prev]);
-      setCampaignForm({
-        nom: '', message: '', statut: 'brouillon', cible: 'client',
-        segment_cible: 'tous', critere_ciblage: 'tous', canal: [],
-        ville_ciblage: 'Casablanca', heure_debut: '', heure_fin: '',
-        date_diffusion: '', nombre_destinataires_jour: '',
-      });
-      setShowCreateCampaign(false);
-    }).catch(console.error);
+    if (editingCampagneId) {
+      updateCampaign(editingCampagneId, payload).then((res) => {
+        setCampaigns((prev) => prev.map((x) => x.id === editingCampagneId ? res.data : x));
+        setCampaignForm({
+          nom: '', message: '', statut: 'brouillon', cible: 'client',
+          segment_cible: 'tous', critere_ciblage: 'tous', canal: [],
+          ville_ciblage: 'Casablanca', heure_debut: '', heure_fin: '',
+          date_diffusion: '', nombre_destinataires_jour: '',
+        });
+        setEditingCampagneId(null);
+        setShowCreateCampaign(false);
+      }).catch(console.error);
+    } else {
+      createCampaign(payload).then((res) => {
+        setCampaigns((prev) => [res.data, ...prev]);
+        setCampaignForm({
+          nom: '', message: '', statut: 'brouillon', cible: 'client',
+          segment_cible: 'tous', critere_ciblage: 'tous', canal: [],
+          ville_ciblage: 'Casablanca', heure_debut: '', heure_fin: '',
+          date_diffusion: '', nombre_destinataires_jour: '',
+        });
+        setShowCreateCampaign(false);
+      }).catch(console.error);
+    }
   };
 
   const tabTitle =
@@ -400,6 +449,9 @@ export default function Marketing() {
     setShowCreatePromo(false);
     setShowCreateGesture(false);
     setShowCreateCampaign(false);
+    setEditingPromoId(null);
+    setEditingGesteId(null);
+    setEditingCampagneId(null);
   };
 
   const copyCode = async (code: string) => {
@@ -532,7 +584,7 @@ export default function Marketing() {
                           services: [], canaux: [], message_promotionnel: '',
                           date_debut: item.valid_from, date_fin: item.valid_until, date_indeterminee: !item.valid_until,
                         });
-                        setPromoCodes((prev) => prev.filter((x) => x.id !== item.id));
+                        setEditingPromoId(item.id);
                         setShowCreatePromo(true);
                       }}>
                         <Pencil size={14} />
@@ -639,7 +691,7 @@ export default function Marketing() {
                           part_profil: String(item.part_profil), part_agence: String(item.part_agence), motif: item.motif,
                           envoyer_message: item.envoyer_message, message_client: item.message_client, canal_diffusion: item.canal_diffusion || [], cree_par: item.commercial_name,
                         });
-                        setGestures((prev) => prev.filter((x) => x.id !== item.id));
+                        setEditingGesteId(item.id);
                         setShowCreateGesture(true);
                       }}>
                         <Pencil size={14} />
@@ -706,14 +758,13 @@ export default function Marketing() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Date création</th>
+                  <th>Date</th>
                   <th>Titre</th>
-                  <th>Message</th>
                   <th>Cible</th>
-                  <th>Segment / Critère</th>
+                  <th>Segment</th>
                   <th>Canal</th>
                   <th>Ville</th>
-                  <th>Diffusion</th>
+                  <th>Date diffusion</th>
                   <th>Dest./jour</th>
                   <th>Statut</th>
                   <th>Actions</th>
@@ -723,13 +774,12 @@ export default function Marketing() {
                 {filteredCampagnes.map((item) => (
                   <tr key={item.id}>
                     <td>{fmtDate(item.created_at || item.date)}</td>
-                    <td>{item.title}</td>
-                    <td style={{ maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.message}>{item.message || '—'}</td>
-                    <td>{item.target}</td>
-                    <td>{item.target === 'Client' ? segmentLabel(item.segment) : item.criteria}</td>
-                    <td>{Array.isArray(item.channel) ? item.channel.join(', ') : item.channel}</td>
+                    <td style={{ fontWeight: 600 }}>{item.title}</td>
+                    <td style={{ textTransform: 'capitalize' }}>{item.target}</td>
+                    <td>{item.target === 'client' ? segmentLabel(item.segment as any) : item.criteria}</td>
+                    <td>{Array.isArray(item.channel) ? item.channel.join(',') : item.channel}</td>
                     <td>{item.city || '—'}</td>
-                    <td>{fmtDate(item.broadcast_date)} {item.broadcast_time_start && `(${item.broadcast_time_start} - ${item.broadcast_time_end})`}</td>
+                    <td>{fmtDate(item.broadcast_date)}</td>
                     <td>{item.per_day_dest}</td>
                     <td>
                       <span className={`mk-status-chip ${item.status === 'programmee' ? 'mk-status-blue' : item.status === 'envoyee' ? 'mk-status-green' : item.status === 'annulee' ? 'mk-status-red' : 'mk-status-grey'}`}>
@@ -746,13 +796,20 @@ export default function Marketing() {
                           heure_debut: item.broadcast_time_start || '', heure_fin: item.broadcast_time_end || '',
                           date_diffusion: item.broadcast_date || '', nombre_destinataires_jour: String(item.per_day_dest || 0),
                         });
-                        setCampaigns((prev) => prev.filter((x) => x.id !== item.id));
+                        setEditingCampagneId(item.id);
                         setShowCreateCampaign(true);
                       }}>
                         <Pencil size={14} />
                       </button>
                       <button className="icon-btn" title="Envoyer">
                         <Send size={14} />
+                      </button>
+                      <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
+                        updateCampaign(item.id, { archived: !item.archived }).then((res) => {
+                          setCampaigns((prev) => prev.map((x) => x.id === item.id ? res.data : x));
+                        }).catch(console.error);
+                      }}>
+                        {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                       </button>
                       <button className="icon-btn" title="Supprimer" onClick={() => {
                         if (window.confirm('Supprimer cette campagne ?')) {
@@ -763,20 +820,13 @@ export default function Marketing() {
                       }}>
                         <Trash2 size={14} />
                       </button>
-                      <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
-                        updateCampaign(item.id, { archived: !item.archived }).then((res) => {
-                          setCampaigns((prev) => prev.map((x) => x.id === item.id ? res.data : x));
-                        }).catch(console.error);
-                      }}>
-                        {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                      </button>
                     </div>
                   </td>
                   </tr>
                 ))}
                 {filteredCampagnes.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="empty-row">{showArchived ? 'Aucune campagne archivée' : 'Aucune campagne'}</td>
+                    <td colSpan={10} className="empty-row">{showArchived ? 'Aucune campagne archivée' : 'Aucune campagne'}</td>
                   </tr>
                 )}
               </tbody>
