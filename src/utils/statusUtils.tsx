@@ -82,3 +82,48 @@ export const renderStatusBadge = (statut: string, cao?: boolean) => {
   const { label, badgeClass } = getStatusInfo(statut, cao);
   return <span className={`badge ${badgeClass}`}>{label}</span>;
 };
+
+/**
+ * Standardized payment status logic.
+ * Normalizes labels and visual badges (colors/classes).
+ */
+export const getPaymentStatusInfo = (statutUi: string | undefined, legacyStatut?: string): StatusInfo => {
+  const s = (statutUi || legacyStatut || '').toLowerCase().trim();
+
+  // Mapping specialized labels
+  if (s === 'paye' || s === 'integral' || s === 'effectue') {
+    return { label: 'Payé', badgeClass: 'badge-green' };
+  }
+  if (s === 'agence_payee_client' || s === 'agence payé / client') {
+    return { label: 'Agence payé / Client', badgeClass: 'badge-orange' };
+  }
+  if (s === 'profil_paye_client' || s === 'profil payé / client') {
+    return { label: 'Profil payé / Client', badgeClass: 'badge-orange' };
+  }
+  if (s === 'paiement_partiel' || s === 'partiel' || s === 'paiement partiel') {
+    return { label: 'Paiement partiel', badgeClass: 'badge-orange' };
+  }
+  if (s === 'paiement_en_attente' || s === 'acompte' || s === 'paiement en attente') {
+    return { label: 'Paiement en attente', badgeClass: 'badge-orange' };
+  }
+  if (s === 'facturation_annulee') {
+    return { label: 'Facturation annulée', badgeClass: 'badge-red' };
+  }
+  if (s === 'non_confirme' || s === 'non_paye' || s === 'non payé') {
+    return { label: 'Non confirmé', badgeClass: 'badge-gray' };
+  }
+
+  // Fallback
+  return { 
+    label: s ? s.replace(/_/g, ' ') : 'Non confirmé', 
+    badgeClass: 'badge-gray' 
+  };
+};
+
+/**
+ * Helper to render the standardized payment status badge.
+ */
+export const renderPaymentStatusBadge = (statutUi: string | undefined, legacyStatut?: string) => {
+  const { label, badgeClass } = getPaymentStatusInfo(statutUi, legacyStatut);
+  return <span className={`badge ${badgeClass}`}>{label}</span>;
+};

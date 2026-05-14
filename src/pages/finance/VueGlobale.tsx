@@ -77,7 +77,7 @@ interface FacturationRow {
   partProfil: number;
   encaissePar: 'Agence' | 'Profil';
   paiement: 'non_paye' | 'partiellement_paye' | 'paye';
-  statut: 'Facturation annulée' | 'Confirmée' | 'Terminée' | 'Payé';
+  statut: 'Facturation annulée' | 'Confirmée' | 'Terminée' | 'Payé' | 'En attente';
   reglementInterne: string;
   montantPaye?: number;
   montantEncaisseProfil?: number;
@@ -248,7 +248,7 @@ const getPaymentUiLabel = (uiCode: string | undefined): string => {
   if (!uiCode) return 'Non payé';
   const labels: Record<string, string> = {
     paye: 'Payé',
-    agence_payee_client: 'Agence payée / Client',
+    agence_payee_client: 'Agence payé / Client',
     profil_paye_client: 'Profil payé / Client',
     paiement_partiel: 'Paiement partiel',
     paiement_en_attente: 'Paiement en attente',
@@ -486,9 +486,9 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   }
 
   const paiement: FacturationRow['paiement'] =
-    ['paye', 'agence_payee_client', 'profil_paye_client', 'Agence payée / Client', 'Profil payé / Client', 'effectue', 'integral'].includes(rawStatutPaiementUi)
+    ['paye', 'integral', 'effectue'].includes(rawStatutPaiementUi)
       ? 'paye'
-      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi)
+      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte', 'agence_payee_client', 'profil_paye_client', 'Agence payé / Client', 'Profil payé / Client'].includes(rawStatutPaiementUi)
         ? 'partiellement_paye'
         : 'non_paye';
 
@@ -500,7 +500,9 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
         ? 'Payé'
         : missionStatus === 'terminee'
           ? 'Terminée'
-          : 'Confirmée';
+          : missionStatus === 'en_attente'
+            ? 'En attente'
+            : 'Confirmée';
   const partProfilVersee = encaissePar === 'Agence'
     ? (item.part_profil_versee ?? false)
     : (item.part_agence_reversee ?? false);
@@ -616,14 +618,16 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
   }
 
   const paiement: FacturationRow['paiement'] =
-    ['paye', 'agence_payee_client', 'profil_paye_client', 'Agence payée / Client', 'Profil payé / Client', 'integral', 'effectue'].includes(rawStatutPaiementUi)
+    ['paye', 'integral', 'effectue'].includes(rawStatutPaiementUi)
       ? 'paye'
-      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi)
+      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte', 'agence_payee_client', 'profil_paye_client', 'Agence payé / Client', 'Profil payé / Client'].includes(rawStatutPaiementUi)
         ? 'partiellement_paye'
         : 'non_paye';
 
   const statut: FacturationRow['statut'] =
-    demande.statut === 'annule' ? 'Facturation annulée' : paiement === 'paye' ? 'Payé' : 'Confirmée';
+    demande.statut === 'annule' ? 'Facturation annulée' :
+      paiement === 'paye' ? 'Payé' :
+        demande.statut === 'en_attente' ? 'En attente' : 'Confirmée';
 
   // For demands without missions, we check if payment was marked in formulaire_data
   const partProfilVersee = Boolean(facturationData.part_profil_versee);
@@ -1039,8 +1043,9 @@ export default function VueGlobale() {
 
   const globalTableRows = useMemo(() => {
     return facturationData.filter((row) => {
-      // Filtrer uniquement pour afficher "Non payé"
-      if (row.paiement !== 'non_paye') return false;
+      // Filtrer pour n'afficher que les éléments avec des dettes/crédits réels
+      if (row.statut === 'En attente') return false; // Exclure les demandes en attente de traitement
+      if (row.paiement === 'paye') return false; // Exclure les éléments déjà entièrement payés
 
       if (row.encaissePar === 'Profil' && row.reglementInterne === 'Réglé') return false;
 
@@ -1075,8 +1080,8 @@ export default function VueGlobale() {
         const rowUi = row.statutPaiementUi;
         if (suiviPaiementFilter === 'Non payé' && rowUi !== 'non_paye' && rowUi !== 'non_confirme') return false;
         if (suiviPaiementFilter === 'Paiement en attente' && rowUi !== 'paiement_en_attente') return false;
-        if (suiviPaiementFilter === 'Agence payé/client' && rowUi !== 'agence_payee_client') return false;
-        if (suiviPaiementFilter === 'Profil payé/client' && rowUi !== 'profil_paye_client') return false;
+        if (suiviPaiementFilter === 'Agence payé / Client' && rowUi !== 'agence_payee_client') return false;
+        if (suiviPaiementFilter === 'Profil payé / Client' && rowUi !== 'profil_paye_client') return false;
         if (suiviPaiementFilter === 'Paiement partiel' && rowUi !== 'paiement_partiel') return false;
         if (suiviPaiementFilter === 'Payé' && rowUi !== 'paye') return false;
         if (suiviPaiementFilter === 'Confirmé' && row.statut !== 'Confirmée') return false;
@@ -2566,26 +2571,27 @@ export default function VueGlobale() {
                     return formatted;
                   };
 
-                  let statusContent: React.ReactNode = row.statut;
+                  let statusContent: React.ReactNode = getPaymentUiLabel(row.statutPaiementUi);
                   let statusPillClass = 'fg-pill-pale-orange';
 
-                  if (row.statut === 'Facturation annulée') {
+                  if (row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee') {
                     statusPillClass = 'fg-pill-pale-red';
                     statusContent = 'Facturation annulée';
-                  } else if (row.statut === 'Payé' || (row.reglementInterne === 'Réglé' && row.paiement === 'paye')) {
+                  } else if (row.statutPaiementUi === 'paye' || row.statutPaiementUi === 'integral' || row.statutPaiementUi === 'effectue') {
                     statusPillClass = 'fg-pill-pale-green';
                     statusContent = 'Payé';
-                  } else if (row.reglementInterne === 'Réglé' && row.paiement !== 'paye') {
+                  } else if (row.statutPaiementUi === 'agence_payee_client') {
+                    statusPillClass = 'fg-pill-pale-orange';
+                    statusContent = <>Agence<br />payé /<br />Client</>;
+                  } else if (row.statutPaiementUi === 'profil_paye_client') {
                     statusPillClass = 'fg-pill-pale-orange';
                     statusContent = <>Profil<br />payé /<br />Client</>;
-                  } else {
-                    // Fallback sur le statut de paiement détaillé
+                  } else if (row.paiement === 'non_paye') {
+                    statusPillClass = 'fg-pill-outline';
                     statusContent = getPaymentUiLabel(row.statutPaiementUi);
-                    if (row.paiement === 'non_paye') {
-                      statusPillClass = 'fg-pill-outline';
-                    } else {
-                      statusPillClass = 'fg-pill-pale-orange';
-                    }
+                  } else {
+                    statusPillClass = 'fg-pill-pale-orange';
+                    statusContent = getPaymentUiLabel(row.statutPaiementUi);
                   }
 
                   return (

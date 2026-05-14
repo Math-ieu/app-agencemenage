@@ -225,7 +225,7 @@ export default function LaCaisse() {
       for (const m of missions) {
         const dem = m.demande_detail || {};
         const fact = dem?.formulaire_data?.facturation || {};
-        const rawStatus = fact.statut_paiement_ui || m.paiement_client_statut || (dem?.statut_paiement === 'integral' ? 'paye' : dem?.statut_paiement === 'acompte' ? 'paiement_en_attente' : 'non_paye');
+        const rawStatus = fact.statut_paiement_ui || m.paiement_client_statut || (dem?.statut_paiement === 'integral' ? 'paye' : dem?.statut_paiement === 'acompte' ? 'paiement_en_attente' : dem?.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
         const montant = Number(dem?.prix ?? 0);
         const partAgence = Number(fact.part_agence ?? montant * 0.5);
         const montantPaye = Number(m.montant_paye) || (['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? montant : 0);
@@ -243,7 +243,7 @@ export default function LaCaisse() {
       // Process demands without missions
       for (const d of uniqueDemands) {
         const fact = d?.formulaire_data?.facturation || {};
-        const rawStatus = fact.statut_paiement_ui || d.statut_paiement_ui || (d.statut_paiement === 'integral' ? 'paye' : d.statut_paiement === 'acompte' ? 'paiement_en_attente' : 'non_confirme');
+        const rawStatus = fact.statut_paiement_ui || d.statut_paiement_ui || (d.statut_paiement === 'integral' ? 'paye' : d.statut_paiement === 'acompte' ? 'paiement_en_attente' : d.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_confirme');
         const montant = Number(d?.prix ?? 0);
         const partAgence = Number(d?.part_agence ?? fact.part_agence ?? montant * 0.5);
         const paiement = ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? 'paye' : 'non_paye';

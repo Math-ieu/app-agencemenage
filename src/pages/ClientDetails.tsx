@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { Client, Demande } from '../types';
+import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
 
 export interface ActionLog {
   id: number;
@@ -194,6 +195,13 @@ export default function ClientDetails() {
   const [saving, setSaving] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string; type: string; name: string } | null>(null);
   const addToast = useToastStore(state => state.addToast);
+
+  const renderPaymentStatus = (demande: any) => {
+    const facturation = demande.formulaire_data?.facturation || {};
+    const rawStatutPaiementUi = facturation.statut_paiement_ui || (demande.statut_paiement === 'integral' ? 'paye' : demande.statut_paiement === 'acompte' ? 'paiement_en_attente' : demande.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
+    
+    return renderPaymentStatusBadge(rawStatutPaiementUi);
+  };
 
   const fetchData = async () => {
     if (!id) return;
@@ -427,7 +435,7 @@ export default function ClientDetails() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
-                  <Th>Date</Th><Th>Nom du service</Th><Th>Profils proposés</Th><Th>Segment</Th><Th>Statut</Th><Th center>Actions</Th>
+                  <Th>Date</Th><Th>Nom du service</Th><Th>Profils proposés</Th><Th>Segment</Th><Th>Statut</Th><Th>Paiement</Th><Th center>Actions</Th>
                 </tr></thead>
                 <tbody>
                   {demandes.map(d => (
@@ -486,6 +494,9 @@ export default function ClientDetails() {
                              d.statut === 'pres_terminee' ? 'Pres. terminée' :
                              'Nouveau besoin'}
                           </Badge>
+                        </Td>
+                        <Td>
+                          {renderPaymentStatus(d)}
                         </Td>
                         <Td center>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>

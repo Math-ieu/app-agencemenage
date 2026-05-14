@@ -4,6 +4,7 @@ import { getDemandesHistorique, updateDemande } from '../api/client';
 import { Search, CalendarDays, History as HistoryIcon, RefreshCw } from 'lucide-react';
 import { encodeId } from '../utils/obfuscation';
 import { useToastStore } from '../store/toast';
+import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
 
 interface Demande {
   id: number;
@@ -29,39 +30,12 @@ const getSegmentLabel = (segment: string): string => {
   return segment || '—';
 };
 
-const getStatutBesoinLabel = (demande: Demande): string => {
-  if (demande.statut_besoin_label) return demande.statut_besoin_label;
-  if (demande.statut === 'en_attente') return 'Nouveau besoin';
-  if (demande.statut === 'en_cours') return demande.cao ? 'Confirmé' : 'En attente';
-  if (demande.statut === 'termine') return 'Paye';
-  if (demande.statut === 'annule') return 'Annule';
-  return (demande.statut || '').replace(/_/g, ' ');
+const getStatutBesoinBadge = (demande: Demande) => {
+  return renderStatusBadge(demande.statut, demande.cao);
 };
 
-const getStatutBesoinClass = (statut: string): string => {
-  if (statut === 'en_attente') return 'badge-blue';
-  if (statut === 'en_cours') return 'badge-gray';
-  if (statut === 'termine') return 'badge-green';
-  if (statut === 'annule') return 'badge-red';
-  return 'badge-gray';
-};
-
-const getStatutPaiementLabel = (demande: Demande): string => {
-  if (demande.statut_paiement_label) return demande.statut_paiement_label;
-
-  if (demande.statut_paiement === 'non_paye') return 'Non confirme';
-  if (demande.statut_paiement === 'acompte') return 'Paiement en attente';
-  if (demande.statut_paiement === 'partiel') return 'Paiement partiel';
-  if (demande.statut_paiement === 'integral') return 'Paye';
-  return (demande.statut_paiement || '—').replace(/_/g, ' ');
-};
-
-const getStatutPaiementClass = (demande: Demande): string => {
-  const label = getStatutPaiementLabel(demande).toLowerCase();
-  if (label.includes('paye')) return 'badge-green';
-  if (label.includes('partiel') || label.includes('attente')) return 'badge-orange';
-  if (label.includes('annulee')) return 'badge-red';
-  return 'badge-gray';
+const getStatutPaiementBadge = (demande: Demande) => {
+  return renderPaymentStatusBadge(demande.statut_paiement_ui, demande.statut_paiement);
 };
 
 const formatCreationDate = (value: string): string => {
@@ -217,16 +191,8 @@ export default function Historique() {
                       </Link>
                     ) : (d.profil_name || '—')}
                   </td>
-                  <td>
-                    <span className={`badge ${getStatutBesoinClass(d.statut)}`}>
-                      {getStatutBesoinLabel(d)}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`badge ${getStatutPaiementClass(d)}`}>
-                      {getStatutPaiementLabel(d)}
-                    </span>
-                  </td>
+                  <td>{getStatutBesoinBadge(d)}</td>
+                  <td>{getStatutPaiementBadge(d)}</td>
                   <td>
                     {d.motif || '—'}
                   </td>

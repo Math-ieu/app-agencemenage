@@ -13,7 +13,7 @@ import {
   ClipboardCheck, Search, Send, PlusCircle, AlertTriangle, Image
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { renderStatusBadge } from '../utils/statusUtils';
+import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
 import { Agent } from '../types';
 import { useToastStore } from '../store/toast';
 import AddProfileModal from './ProfilEditModal';
@@ -266,6 +266,10 @@ export default function ProfilDetails() {
         const parts = Array.isArray(fact.parts_repartition) ? fact.parts_repartition : (Array.isArray(d.parts_repartition) ? d.parts_repartition : []);
         if (parts.some((p: any) => Number(p.profile_id) === realId)) return true;
         if (fact.profil_id && Number(fact.profil_id) === realId) return true;
+        // Also include demandes where the profile was assigned via profils_envoyes
+        // This catches cancelled demandes where parts_repartition was never populated
+        const profilsEnvoyes = Array.isArray(d.profils_envoyes) ? d.profils_envoyes : [];
+        if (profilsEnvoyes.some((p: any) => Number(p.id || p) === realId)) return true;
         return false;
       });
 
@@ -330,6 +334,13 @@ export default function ProfilDetails() {
 
   const getStatutBadge = (statut: string) => {
     return renderStatusBadge(statut);
+  };
+
+  const renderPaymentStatus = (demande: any, sourceData: any) => {
+    const facturation = demande.formulaire_data?.facturation || {};
+    const rawStatutPaiementUi = facturation.statut_paiement_ui || sourceData.paiement_client_statut || (demande.statut_paiement === 'integral' ? 'paye' : demande.statut_paiement === 'acompte' ? 'paiement_en_attente' : demande.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
+    
+    return renderPaymentStatusBadge(rawStatutPaiementUi);
   };
 
   const formatAction = (log: any) => {
@@ -446,29 +457,49 @@ export default function ProfilDetails() {
         : (facturation.part_profil_versee || facturation.part_agence_reversee || false);
 
       if (isAnnule) {
-        // For cancelled billing, the part_profil is the compensation amount
-        const partProfil = Number(
+        nbAnnulees += 1;
+
+        // For cancelled billing:
+        // - Any debt from profil to agency is CANCELLED (client didn't pay)
+        // - The agency's LOSS = the compensation it pays to the profil
+        // - The agency's commission is also cancelled (no revenue)
+        
+
+        // The compensation amount the agency must pay the profil
+        const compensation = Number(
           sourceData.montant_agence_doit_profil || 
           sourceData.montant_profil_annulation || 
-          facturation.montant_profil_annulation || 
+          facturation.montant_profil_annulation ||
+          facturation.montant_agence_doit_profil ||
           facturation.part_profil || 
           (montantTotal * 0.5)
         );
-        totalPerte += partProfil;
-        nbAnnulees += 1;
 
-        // If agency owes compensation and it's not yet paid
-        if (partProfil > 0) {
+        // The agency's loss = the compensation paid to the profil
+        totalPerte += compensation;
+
+        // If the compensation has already been paid, it's part of the profil's net income
+        // If not, it's still owed by the agency
+        if (compensation > 0) {
           if (partProfilVersee) {
-            cumulProfil += partProfil; // It's part of her net income
+            cumulProfil += compensation;
           } else {
-            agenceDoitProfil += partProfil; // Still owed
+            agenceDoitProfil += compensation;
           }
         }
+
+        // Note: profilDoitAgence is NOT incremented — the debt is cancelled
+        // Note: totalCa is NOT incremented — no revenue was generated
         return;
       }
 
-      const rawStatutPaiementUi = facturation.statut_paiement_ui || sourceData.paiement_client_statut || (demande.statut_paiement === 'integral' ? 'paye' : 'non_paye');
+      const rawStatutPaiementUi =
+        facturation.statut_paiement_ui ||
+        sourceData.paiement_client_statut ||
+        (demande.statut_paiement === 'integral' ? 'paye' :
+          demande.statut_paiement === 'acompte' ? 'paiement_en_attente' :
+            demande.statut_paiement === 'partiel' ? 'paiement_partiel' :
+              'non_paye');
       let encaissePar = (sourceData.encaisse_par === 'profil' || demande.mode_paiement === 'sur_place') ? 'Profil' : 'Agence';
       if (['profil_paye_client', 'Profil payé / Client'].includes(rawStatutPaiementUi)) encaissePar = 'Profil';
       else if (['agence_payee_client', 'Agence payée / Client'].includes(rawStatutPaiementUi)) encaissePar = 'Agence';
@@ -957,7 +988,7 @@ export default function ProfilDetails() {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                <Th>N°</Th><Th>Date</Th><Th>Client</Th><Th>Service</Th><Th>Montant</Th><Th>Statut</Th>
+                <Th>N°</Th><Th>Date</Th><Th>Client</Th><Th>Service</Th><Th>Montant</Th><Th>Statut</Th><Th>Paiement</Th>
               </tr></thead>
               <tbody>
                 {combinedHistorique.map((item, i) => {
@@ -986,6 +1017,9 @@ export default function ProfilDetails() {
                         ) : (
                           getStatutBadge(d.statut)
                         )}
+                      </Td>
+                      <Td>
+                        {renderPaymentStatus(d, item.data)}
                       </Td>
                     </tr>
                   );
