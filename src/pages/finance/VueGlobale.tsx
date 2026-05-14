@@ -824,11 +824,13 @@ export default function VueGlobale() {
 
     const missionRows = missions.map(mapMissionToFacturationRow);
     const demandRows = uniqueDemands.map(mapDemandeToFacturationRow);
-    const allRows = [...missionRows, ...demandRows].sort((a, b) => {
-      const dateA = parseFrenchDate(a.date)?.getTime() || 0;
-      const dateB = parseFrenchDate(b.date)?.getTime() || 0;
-      return dateB - dateA;
-    });
+    const allRows = [...missionRows, ...demandRows]
+      .filter((row) => row.clientId != null && row.originalDemande?.statut !== 'en_attente')
+      .sort((a, b) => {
+        const dateA = parseFrenchDate(a.date)?.getTime() || 0;
+        const dateB = parseFrenchDate(b.date)?.getTime() || 0;
+        return dateB - dateA;
+      });
 
     setFacturationData(allRows);
 
