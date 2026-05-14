@@ -903,7 +903,7 @@ export default function VueGlobale() {
 
           if (isAnnule) {
             if (item.profilSeraPaye) {
-              const annulationAmount = Number(item.montantProfilAnnulation || 0) / (item.parts_repartition?.length || 1);
+              const annulationAmount = Number(item.montantProfilAnnulation || item.partProfil || 0) / (item.parts_repartition?.length || 1);
               profile.factAnnulee += annulationAmount;
               profile.partProfil += annulationAmount;
               
@@ -969,7 +969,7 @@ export default function VueGlobale() {
         
         if (isAnnule) {
           if (item.profilSeraPaye) {
-            const annulationAmount = Number(item.montantProfilAnnulation || 0);
+            const annulationAmount = Number(item.montantProfilAnnulation || item.partProfil || 0);
             profile.factAnnulee += annulationAmount;
             profile.partProfil += annulationAmount;
             

@@ -437,7 +437,8 @@ export default function ProfilDetails() {
 
       // Detection of cancellation compensation
       const isAnnule = demande.statut === 'annule' || 
-                       facturation.facturation_annulee || 
+                       (isMission && sourceData.statut === 'annulee') ||
+                       facturation.facturation_annulee === true || 
                        sourceData.paiement_client_statut === 'facturation_annulee';
 
       const partProfilVersee = isMission 
@@ -446,7 +447,13 @@ export default function ProfilDetails() {
 
       if (isAnnule) {
         // For cancelled billing, the part_profil is the compensation amount
-        const partProfil = Number(sourceData.montant_agence_doit_profil || facturation.part_profil || (montantTotal * 0.5));
+        const partProfil = Number(
+          sourceData.montant_agence_doit_profil || 
+          sourceData.montant_profil_annulation || 
+          facturation.montant_profil_annulation || 
+          facturation.part_profil || 
+          (montantTotal * 0.5)
+        );
         totalPerte += partProfil;
         nbAnnulees += 1;
 
