@@ -241,6 +241,15 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.text(`${formatNumber(totalHT)} DH`, right - 5, y + 5.5, { align: 'right' });
   y += rowHeight + 6;
 
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const footerThreshold = pageHeight - 40;
+
+  // Check for page break before inclusions note
+  if (y > footerThreshold - 15) {
+    doc.addPage();
+    y = 24;
+  }
+
   doc.setFillColor(241, 245, 249);
   doc.roundedRect(margin, y, tableWidth, 12, 2, 2, 'F');
   doc.setFont('helvetica', 'italic');
@@ -253,6 +262,12 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
     { maxWidth: contentWidth - 8 }
   );
   y += 18;
+
+  // Check for page break before Notes section
+  if (y > footerThreshold - 20) {
+    doc.addPage();
+    y = 24;
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
@@ -322,7 +337,6 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.text('de "Bon pour accord"', margin + 95, y + 5, { align: 'left' });
 
   // Footer sur toutes les pages
-  const pageHeight = doc.internal.pageSize.getHeight();
   const totalPages = (doc.internal as any).getNumberOfPages?.() ?? doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);

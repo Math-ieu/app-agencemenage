@@ -235,16 +235,34 @@ async function genererDevis(data: DevisData, logoBase64?: string): Promise<Blob>
   doc.text(`${formatNumber(totalHT)} DH`, right - 2, y + 3.5, { align: 'right' });
   y += 14;
 
-  const noteText = "Note : Ce devis a été établi sur la base des informations communiquées. Une visite préalable peut être organisée pour affiner l'estimation. Devis soumis à validation avant envoi.";
-  doc.setFontSize(9.5);
-  doc.setFont('helvetica', 'normal');
-  const noteWrapped = doc.splitTextToSize(noteText, contentWidth - 8);
-  const noteBoxH = noteWrapped.length * 4.5 + 8;
-  doc.setFillColor(236, 253, 245);
-  doc.rect(margin, y, contentWidth, noteBoxH, 'F');
-  doc.setTextColor(22, 101, 52);
-  doc.text(noteWrapped, margin + 4, y + 6);
-  y += noteBoxH + 6;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const footerThreshold = pageHeight - 40;
+
+  // Check for page break before orange note
+  if (y > footerThreshold - 15) {
+    doc.addPage();
+    y = 24;
+  }
+
+  // Note indicative orange
+  doc.setFillColor(255, 247, 237); // Fond orange clair
+  doc.roundedRect(margin, y, contentWidth, 12, 1, 1, 'F');
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(154, 52, 18); // Texte orange foncé
+  doc.text(
+    "• Ce devis a été établi sur la base des informations communiquées. Une visite préalable peut être organisée pour affiner l'estimation. Devis soumis à validation avant envoi.",
+    margin + 4,
+    y + 5,
+    { maxWidth: contentWidth - 8 }
+  );
+  y += 18;
+
+  // Check for page break before Notes section
+  if (y > footerThreshold - 20) {
+    doc.addPage();
+    y = 24;
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
@@ -260,6 +278,10 @@ async function genererDevis(data: DevisData, logoBase64?: string): Promise<Blob>
   doc.text('• La terrasse et le rooftop sont inclus dans la surface globale au même taux au m2.', margin, y);
   y += 6.5;
   doc.text('• La cristallisation du marbre sera réalisée après le nettoyage de base.', margin, y);
+  y += 6.5;
+  doc.text("• Délai d'intervention : 48 à 72h après acceptation du devis.", margin, y);
+  y += 6.5;
+  doc.text('• Minimum facturable : 1 500 DH HT.', margin, y);
   y += 10;
 
   doc.addPage();
@@ -313,7 +335,6 @@ async function genererDevis(data: DevisData, logoBase64?: string): Promise<Blob>
   doc.text('de "Bon pour accord"', margin + 95, y + 5, { align: 'left' });
 
   // Footer sur toutes les pages
-  const pageHeight = doc.internal.pageSize.getHeight();
   const totalPages = (doc.internal as any).getNumberOfPages?.() ?? doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);

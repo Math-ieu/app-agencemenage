@@ -237,18 +237,34 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   doc.text(`${formatNumber(totalHT)} DH`, right - 5, y + 5.5, { align: 'right' });
   y += rowHeight + 6;
 
-  doc.setFillColor(241, 245, 249);
-  doc.roundedRect(margin, y, tableWidth, 12, 2, 2, 'F');
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const footerThreshold = pageHeight - 40;
+
+  // Check for page break before green note
+  if (y > footerThreshold - 15) {
+    doc.addPage();
+    y = 24;
+  }
+
+  // Note abonnement verte
+  doc.setFillColor(240, 253, 244); // Fond vert clair
+  doc.roundedRect(margin, y, tableWidth, 12, 1, 1, 'F');
   doc.setFont('helvetica', 'italic');
-  doc.setFontSize(9);
-  doc.setTextColor(71, 85, 105);
+  doc.setFontSize(8.5);
+  doc.setTextColor(21, 128, 61); // Texte vert foncé
   doc.text(
-    `Tarif abonnement appliqué (–${data.details.reductionAbonnement}%). Planning adapté à vos horaires (matin ou soir). Remplacement assuré en cas d'absence.`,
+    `• Tarif abonnement appliqué (–${data.details.reductionAbonnement}%). Planning adapté à vos horaires (matin ou soir). Remplacement assuré en cas d'absence.`,
     margin + 4,
-    y + 7,
-    { maxWidth: contentWidth - 8 }
+    y + 5,
+    { maxWidth: tableWidth - 8 }
   );
   y += 18;
+
+  // Check for page break before Notes section
+  if (y > footerThreshold - 20) {
+    doc.addPage();
+    y = 24;
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
@@ -316,7 +332,6 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   doc.text('de "Bon pour accord"', margin + 95, y + 5, { align: 'left' });
 
   // Footer sur toutes les pages
-  const pageHeight = doc.internal.pageSize.getHeight();
   const totalPages = (doc.internal as any).getNumberOfPages?.() ?? doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
