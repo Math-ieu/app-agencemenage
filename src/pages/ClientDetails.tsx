@@ -348,12 +348,12 @@ export default function ClientDetails() {
                 color: 'white', fontSize: 20, fontWeight: 700,
                 backgroundColor: C.teal,
               }}>
-                {(client.full_name || client.entity_name || client.last_name || client.first_name || 'C').trim()[0].toUpperCase()}
+                {(client.display_name || client.full_name || client.entity_name || client.last_name || client.first_name || 'C').trim()[0].toUpperCase()}
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a202c', margin: 0, textTransform: 'capitalize' }}>
-                    {client.full_name || `${client.first_name || ''} ${client.last_name || ''}`.trim()}
+                    {client.display_name || client.full_name || client.entity_name || `${client.first_name || ''} ${client.last_name || ''}`.trim()}
                   </h1>
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 4,
@@ -418,7 +418,7 @@ export default function ClientDetails() {
         {/* ── 1. Informations Client ── */}
         <Accordion title="Informations Client" icon={<User size={18} />} isOpen={openSections.info} onToggle={() => toggle('info')} color={C.teal}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px 32px' }}>
-            <InfoField label="NOM COMPLET" value={client.full_name || `${client.first_name || ''} ${client.last_name || ''}`.trim()} />
+            <InfoField label="NOM / RAISON SOCIALE" value={client.display_name || client.full_name || client.entity_name || `${client.first_name || ''} ${client.last_name || ''}`.trim()} />
             <InfoField label="SEGMENT" value={client.segment} />
             <InfoField label="TÉLÉPHONE DIRECT" value={client.phone} />
             <InfoField label="WHATSAPP" value={client.whatsapp} />
