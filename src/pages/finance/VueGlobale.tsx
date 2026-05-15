@@ -364,6 +364,19 @@ const getCommissionAgenceEncaissee = (row: FacturationRow): number => {
   return 0;
 };
 
+const getISODateLocal = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getISOMonthLocal = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+
 const formatDateFR = (value?: string): string => {
   if (!value) return '—';
   if (value.includes('/')) return value;
@@ -736,9 +749,9 @@ export default function VueGlobale() {
   const [manualAmount, setManualAmount] = useState('0');
 
   const [globalPeriodMode, setGlobalPeriodMode] = useState<'jour' | 'semaine' | 'mois' | 'periode'>('mois');
-  const [globalDay, setGlobalDay] = useState(() => new Date().toISOString().slice(0, 10));
+  const [globalDay, setGlobalDay] = useState(() => getISODateLocal(new Date()));
   const [globalWeek, setGlobalWeek] = useState(() => getIsoWeekValue(new Date()));
-  const [globalMonth, setGlobalMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [globalMonth, setGlobalMonth] = useState(() => getISOMonthLocal(new Date()));
   const [globalDateFrom, setGlobalDateFrom] = useState('');
   const [globalDateTo, setGlobalDateTo] = useState('');
   const [globalTableDateFrom, setGlobalTableDateFrom] = useState('');
@@ -762,7 +775,7 @@ export default function VueGlobale() {
   });
   const [suiviDateTo, setSuiviDateTo] = useState(() => {
     const today = new Date();
-    return new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+    return getISODateLocal(new Date(today.getFullYear(), today.getMonth() + 1, 0));
   });
   const [suiviPaiementFilter, setSuiviPaiementFilter] = useState('Tous les paiements');
   const [suiviSegmentFilter, setSuiviSegmentFilter] = useState('Tous les segments');
@@ -1064,7 +1077,7 @@ export default function VueGlobale() {
     return facturationData.filter((row) => {
       const date = parseFrenchDate(row.date);
       if (!date) return false;
-      const isoDate = date.toISOString().slice(0, 10);
+      const isoDate = getISODateLocal(date);
 
       if (globalPeriodMode === 'jour') {
         return isoDate === globalDay;
@@ -1095,7 +1108,7 @@ export default function VueGlobale() {
 
       const date = parseFrenchDate(row.date);
       if (!date) return false;
-      const isoDate = date.toISOString().slice(0, 10);
+      const isoDate = getISODateLocal(date);
 
       if (globalTableDateFrom && isoDate < globalTableDateFrom) return false;
       if (globalTableDateTo && isoDate > globalTableDateTo) return false;
@@ -1293,7 +1306,7 @@ export default function VueGlobale() {
     return debitRows.filter((row) => {
       const rowDate = parseFrenchDate(row.date);
       if (!rowDate) return false;
-      const isoDate = rowDate.toISOString().slice(0, 10);
+      const isoDate = getISODateLocal(rowDate);
 
       if (debitDateFrom && isoDate < debitDateFrom) return false;
       if (debitDateTo && isoDate > debitDateTo) return false;
@@ -1330,7 +1343,7 @@ export default function VueGlobale() {
     return creditRows.filter((row) => {
       const rowDate = parseFrenchDate(row.date);
       if (!rowDate) return false;
-      const isoDate = rowDate.toISOString().slice(0, 10);
+      const isoDate = getISODateLocal(rowDate);
 
       if (creditDateFrom && isoDate < creditDateFrom) return false;
       if (creditDateTo && isoDate > creditDateTo) return false;
@@ -1670,7 +1683,7 @@ export default function VueGlobale() {
 
   const updateCreditPaymentStatus = async (row: FacturationRow, nextStatus: 'Payé' | 'Non payé') => {
     const isPaid = nextStatus === 'Payé';
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = getISODateLocal(new Date());
 
     if (row.missionId) {
       await updateMission(row.missionId, {
@@ -1719,7 +1732,7 @@ export default function VueGlobale() {
 
   const updateDebitPaymentStatus = async (row: FacturationRow, nextStatus: 'Payé' | 'Non payé') => {
     const isPaid = nextStatus === 'Payé';
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = getISODateLocal(new Date());
 
     if (row.missionId) {
       await updateMission(row.missionId, {
@@ -1998,7 +2011,7 @@ export default function VueGlobale() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `suivi-facturation-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `suivi-facturation-${getISODateLocal(new Date())}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
