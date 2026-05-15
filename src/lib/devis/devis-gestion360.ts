@@ -250,16 +250,17 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
     y = 24;
   }
 
-  doc.setFillColor(241, 245, 249);
-  doc.roundedRect(margin, y, tableWidth, 12, 2, 2, 'F');
+  // Note inclusions orange
+  doc.setFillColor(255, 247, 237); // Fond orange clair
+  doc.roundedRect(margin, y, tableWidth, 12, 1, 1, 'F');
   doc.setFont('helvetica', 'italic');
-  doc.setFontSize(9);
-  doc.setTextColor(71, 85, 105);
+  doc.setFontSize(8.5);
+  doc.setTextColor(154, 52, 18); // Texte orange foncé
   doc.text(
-    'Inclus sans supplément : tenues de travail, check-lists qualité, inspections régulières, remplacement le jour même en cas d\'absence, reporting mensuel, SLA réclamations 24h.',
+    '• Inclus sans supplément : tenues de travail, check-lists qualité, inspections régulières, remplacement le jour même en cas d\'absence, reporting mensuel, SLA réclamations 24h.',
     margin + 4,
-    y + 7,
-    { maxWidth: contentWidth - 8 }
+    y + 5,
+    { maxWidth: tableWidth - 8 }
   );
   y += 18;
 
@@ -299,9 +300,8 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  const interlocuteurNom = data.client.interlocuteur.split('—')[0].trim();
   const msgLines = [
-    `${interlocuteurNom},`,
+    `Bonjour ${data.client.interlocuteur},`,
     '',
     'Suite à notre visite de vos locaux, nous avons le plaisir de vous soumettre notre proposition Gestion 360°, notre offre premium clé en main.',
     '',

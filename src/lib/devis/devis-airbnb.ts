@@ -196,6 +196,15 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
   doc.text(`${formatNumber(data.totalHT)} DH`, RIGHT - 4, y + 2, { align: 'right' });
   y += 12;
 
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const footerThreshold = pageHeight - 40;
+
+  // Check for page break before note
+  if (y > footerThreshold - 15) {
+    doc.addPage();
+    y = 24;
+  }
+
   // Note box
   const noteText = `Note : ${data.note || "Ce tarif est valable pour chaque passage. En cas de fréquence mensuelle (4 passages ou plus), un tarif préférentiel peut être discuté avec votre chargé de clientèle."}`;
   doc.setFontSize(9.5);
@@ -204,9 +213,18 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
   const noteBoxH = noteWrapped.length * 4.5 + 8;
   doc.setFillColor(236, 253, 245);
   doc.rect(MARGIN, y, CONTENT_W, noteBoxH, 'F');
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'italic');
   doc.setTextColor(22, 101, 52);
-  doc.text(noteWrapped, MARGIN + 4, y + 6);
+  doc.text('•', MARGIN + 4, y + 6);
+  doc.text(noteWrapped, MARGIN + 8, y + 6);
   y += noteBoxH + 6;
+
+  // Check for page break before Conditions section
+  if (y > footerThreshold - 20) {
+    doc.addPage();
+    y = 24;
+  }
 
   // Conditions
   doc.setFont('helvetica', 'bold');
@@ -249,7 +267,7 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
   doc.setFontSize(10.5);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const msgLines = [
-    `Bonjour ${data.client.nom.split(' ')[0] || 'M.'},`,
+    `Bonjour ${data.client.nom},`,
     '',
     "Suite à notre échange, veuillez trouver ci-dessous notre proposition pour l'entretien de votre appartement Airbnb. Notre Formule B intègre le ménage complet ainsi que la collecte, le lavage et le repassage du linge, vous permettant de proposer un logement toujours frais à vos voyageurs.",
     '',

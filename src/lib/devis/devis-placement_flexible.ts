@@ -191,7 +191,7 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   
   const msgLines = [
-    `Bonjour ${data.client.interlocuteur.split(' ')[0] || 'M.'},`,
+    `Bonjour ${data.client.interlocuteur},`,
     '',
     "Suite à notre échange, nous avons le plaisir de vous soumettre notre proposition pour la mise à disposition de personnel (Placement Flexible).",
     '',

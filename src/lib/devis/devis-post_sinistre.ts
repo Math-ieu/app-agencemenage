@@ -235,6 +235,15 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   doc.text(`${formatNumber(totalHT)} DH`, right - 5, y + 5.5, { align: 'right' });
   y += rowHeight + 6;
 
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const footerThreshold = pageHeight - 40;
+
+  // Check for page break before orange note
+  if (y > footerThreshold - 15) {
+    doc.addPage();
+    y = 24;
+  }
+
   // Note indicative orange
   doc.setFillColor(255, 247, 237); // Fond orange clair
   doc.roundedRect(margin, y, tableWidth, 12, 1, 1, 'F');
@@ -248,6 +257,12 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
     { maxWidth: tableWidth - 8 }
   );
   y += 18;
+
+  // Check for page break before Notes section
+  if (y > footerThreshold - 20) {
+    doc.addPage();
+    y = 24;
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
@@ -314,7 +329,6 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   doc.text('de "Bon pour accord"', margin + 95, y + 5, { align: 'left' });
 
   // Footer sur toutes les pages
-  const pageHeight = doc.internal.pageSize.getHeight();
   const totalPages = (doc.internal as any).getNumberOfPages?.() ?? doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);

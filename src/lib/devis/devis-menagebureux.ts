@@ -296,9 +296,8 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  const interlocuteurNom = data.client.interlocuteur.split('—')[0].trim();
   const msgLines = [
-    `${interlocuteurNom}.`,
+    `Bonjour ${data.client.interlocuteur},`,
     '',
     "Suite à notre échange, nous vous adressons notre proposition pour l'entretien régulier de vos locaux.",
     '',

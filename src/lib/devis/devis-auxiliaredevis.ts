@@ -36,8 +36,8 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   const GREEN_TEXT = [22, 101, 52];
   const BORDER_GREY = [229, 231, 235];
   
-  const pageWidth = 210;
-  const pageHeight = 297;
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 20;
   const contentWidth = pageWidth - 2 * margin;
   let y = 24;
@@ -207,20 +207,30 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   const noteLines = pdf.splitTextToSize(noteText, contentWidth - 15);
   const noteHeight = noteLines.length * 5 + 6;
 
+  const footerThreshold = pageHeight - 40;
+
+  // Check for page break before note
+  if (y > footerThreshold - 15) {
+    pdf.addPage();
+    y = 24;
+  }
+
   pdf.setFillColor(GREEN_BG[0], GREEN_BG[1], GREEN_BG[2]);
   pdf.roundedRect(margin, y, contentWidth, noteHeight, 1.5, 1.5, 'F');
   
-  pdf.setFontSize(9);
-  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8.5);
+  pdf.setFont('helvetica', 'italic');
   pdf.setTextColor(GREEN_TEXT[0], GREEN_TEXT[1], GREEN_TEXT[2]);
   
-  // Draw a custom bullet/checkmark manually for safety
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('>', margin + 5, y + 5.5);
-  
-  pdf.setFont('helvetica', 'normal');
+  pdf.text('•', margin + 5, y + 5.5);
   pdf.text(noteLines, margin + 9, y + 5.5);
   y += noteHeight + 12;
+
+  // Check for page break before Notes section
+  if (y > footerThreshold - 20) {
+    pdf.addPage();
+    y = 24;
+  }
 
   // ==================== NOTES ET CONDITIONS PARTICULIÈRES ====================
   pdf.setFontSize(12);
@@ -266,7 +276,7 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
   
-  const message = data.message || `Cher M. Benali,
+  const message = data.message || `Bonjour ${data.client.donneurOrdre},
 
 Nous comprenons l'importance de trouver une personne de confiance pour accompagner votre mère au quotidien. Nous vous assurons de notre engagement à vous proposer une auxiliaire de vie attentive, professionnelle et stable tout au long de la mission.
 
