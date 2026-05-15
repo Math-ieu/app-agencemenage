@@ -66,6 +66,8 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   const BORDER: [number, number, number] = [226, 232, 240];
   let y = 24;
 
+  const isAbonnement = data.details.nbPassagesParMois > 1;
+
   const formatAmount = (value: number | string) =>
     typeof value === 'number' ? `${formatNumber(value)} DH` : value;
 
@@ -165,7 +167,7 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   doc.setFontSize(11);
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
   doc.text(
-    `OBJET : Ménage bureaux — Abonnement hebdomadaire — ${data.details.dureeParSession}h × ${data.details.nbIntervenantes} intervenante`,
+    `OBJET : Ménage bureaux — ${isAbonnement ? 'Abonnement mensuel' : 'Prestation ponctuelle'} — ${data.details.dureeParSession}h × ${data.details.nbIntervenantes} intervenante`,
     margin,
     y
   );
@@ -247,18 +249,20 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   }
 
   // Note abonnement verte
-  doc.setFillColor(240, 253, 244); // Fond vert clair
-  doc.roundedRect(margin, y, tableWidth, 12, 1, 1, 'F');
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8.5);
-  doc.setTextColor(21, 128, 61); // Texte vert foncé
-  doc.text(
-    `• Tarif abonnement appliqué (–${data.details.reductionAbonnement}%). Planning adapté à vos horaires (matin ou soir). Remplacement assuré en cas d'absence.`,
-    margin + 4,
-    y + 5,
-    { maxWidth: tableWidth - 8 }
-  );
-  y += 18;
+  if (isAbonnement) {
+    doc.setFillColor(240, 253, 244); // Fond vert clair
+    doc.roundedRect(margin, y, tableWidth, 12, 1, 1, 'F');
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(21, 128, 61); // Texte vert foncé
+    doc.text(
+      `• Tarif abonnement appliqué (–${data.details.reductionAbonnement}%). Planning adapté à vos horaires (matin ou soir). Remplacement assuré en cas d'absence.`,
+      margin + 4,
+      y + 5,
+      { maxWidth: tableWidth - 8 }
+    );
+    y += 18;
+  }
 
   // Check for page break before Notes section
   if (y > footerThreshold - 20) {
@@ -299,9 +303,13 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   const msgLines = [
     `Bonjour ${data.client.interlocuteur},`,
     '',
-    "Suite à notre échange, nous vous adressons notre proposition pour l'entretien régulier de vos locaux.",
+    isAbonnement 
+      ? "Suite à notre échange, nous vous adressons notre proposition pour l'entretien régulier de vos locaux."
+      : "Suite à notre échange, nous vous adressons notre proposition pour l'entretien de vos locaux.",
     '',
-    "L'abonnement mensuel vous permet de bénéficier d'un tarif préférentiel tout en garantissant une intervenante stable et formée à vos standards.",
+    isAbonnement
+      ? "L'abonnement mensuel vous permet de bénéficier d'un tarif préférentiel tout en garantissant une intervenante stable et formée à vos standards."
+      : "Cette prestation comprend un nettoyage complet de vos espaces de travail par une intervenante professionnelle formée à nos standards de qualité.",
     '',
     "Nous nous adaptons entièrement à vos contraintes horaires et pouvons organiser une première visite de vos locaux à votre convenance.",
     '',
@@ -369,19 +377,19 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 // Fonction pour générer le devis avec logo
-async function genererDevisMenageBureauxAvecLogo(logoUrl?: string): Promise<Blob | null> {
+async function genererDevisMenageBureauxAvecLogo(data: DevisMenageBureauxData, logoUrl?: string): Promise<Blob | null> {
   if (logoUrl) {
     try {
       const logoResponse = await fetch(logoUrl);
       const logoBlob = await logoResponse.blob();
       const logoBase64 = await blobToBase64(logoBlob);
-      return await genererDevisMenageBureaux(devisMenageBureauxData, logoBase64);
+      return await genererDevisMenageBureaux(data, logoBase64);
     } catch (error) {
       console.warn("Logo non trouvé, génération sans logo");
-      return await genererDevisMenageBureaux(devisMenageBureauxData);
+      return await genererDevisMenageBureaux(data);
     }
   }
-  return await genererDevisMenageBureaux(devisMenageBureauxData);
+  return await genererDevisMenageBureaux(data);
 }
 
 // ==================== EXPORT ====================

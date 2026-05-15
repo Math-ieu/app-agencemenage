@@ -320,17 +320,29 @@ const buildMenageBureauxData = (demande: Demande): DevisMenageBureauxData => {
   const nbPassages = toNumber(form.nb_passages_mois || form.nb_passages || 4);
   const prixBase = toNumber(form.prix_base || form.prixBase || total);
   const prixProduits = toNumber(form.prix_produits || form.prixProduits || 0);
+
   const baseDesignation = form.description_tarif ||
     `Ménage bureaux — ${heures}h × ${nbIntervenantes} intervenante × ${nbPassages} passages/mois`;
-  const prestations: Array<{ designation: string; montant: number | string }> = [
-    { designation: baseDesignation, montant: prixBase },
-  ];
-  if (prixProduits > 0) {
-    prestations.push({
-      designation: "Produits ménagers professionnels fournis par l'agence",
-      montant: prixProduits,
+
+  const prestations: Array<{ designation: string; montant: number | string }> = [];
+
+  if (Array.isArray(form.prestations) && form.prestations.length > 0) {
+    form.prestations.forEach((p: any) => {
+      prestations.push({
+        designation: p.desc || p.designation || p.label || 'Prestation',
+        montant: parseMoney(p.montant || p.prix || 0)
+      });
     });
+  } else {
+    prestations.push({ designation: baseDesignation, montant: prixBase });
+    if (prixProduits > 0) {
+      prestations.push({
+        designation: "Produits ménagers professionnels fournis par l'agence",
+        montant: prixProduits,
+      });
+    }
   }
+
   return {
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
