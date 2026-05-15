@@ -61,77 +61,109 @@ const devisGestion360Data: DevisGestion360Data = {
 async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: string): Promise<Blob> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 18;
+  const margin = 20;
   const right = pageWidth - margin;
   const contentWidth = right - margin;
   const BLUE: [number, number, number] = [30, 58, 138];
   const TEXT: [number, number, number] = [15, 23, 42];
   const MUTED: [number, number, number] = [100, 116, 139];
-  const LIGHT_BG: [number, number, number] = [248, 250, 252];
   const BORDER: [number, number, number] = [226, 232, 240];
-  let y = 16;
+  let y = 24;
 
   const formatAmount = (value: number | string) =>
     typeof value === 'number' ? `${formatNumber(value)} DH` : value;
 
-  doc.setFillColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.rect(0, 0, pageWidth, 24, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  doc.text('DEVIS', margin, 15);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.text('Gestion 360° All Inclusive', margin, 21);
+  // Header — Logo
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, 'PNG', right - 34, 4.5, 30, 14);
+      doc.addImage(logoBase64, 'PNG', margin, y - 6, 38, 18);
       doc.setFont('helvetica', 'italic');
-      doc.setFontSize(8);
-      doc.setTextColor(255, 255, 255);
-      doc.text('Premium, tout simplement.', right - 4, 21, { align: 'right' });
+      doc.setFontSize(10);
+      doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+      doc.text('Premium, tout simplement.', margin, y + 16);
     } catch {
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text('Agence Ménage', right - 5, 14, { align: 'right' });
+      doc.setFontSize(22);
+      doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+      doc.text('Agence Ménage', margin, y);
       doc.setFont('helvetica', 'italic');
-      doc.setFontSize(8);
-      doc.text('Premium, tout simplement.', right - 5, 19, { align: 'right' });
+      doc.setFontSize(10);
+      doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+      doc.text('Premium, tout simplement.', margin, y + 6);
     }
   } else {
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('Agence Ménage', right - 5, 14, { align: 'right' });
+    doc.setFontSize(22);
+    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    doc.text('Agence Ménage', margin, y);
     doc.setFont('helvetica', 'italic');
-    doc.setFontSize(8);
-    doc.text('Premium, tout simplement.', right - 5, 19, { align: 'right' });
+    doc.setFontSize(10);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text('Premium, tout simplement.', margin, y + 6);
   }
-  y = 30;
 
-  doc.setFillColor(LIGHT_BG[0], LIGHT_BG[1], LIGHT_BG[2]);
-  doc.roundedRect(margin, y, 112, 30, 2, 2, 'F');
+  // Right side - DEVIS
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(32);
+  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('DEVIS', right, y, { align: 'right' });
+  
+  doc.setFontSize(14);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('INFORMATIONS CLIENT', margin + 6, y + 7);
+  doc.text(`N° ${data.numDevis}`, right, y + 10, { align: 'right' });
+  
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`Raison sociale : ${data.client.raisonSociale}`, margin + 6, y + 14);
-  doc.text(`Interlocuteur : ${data.client.interlocuteur}`, margin + 6, y + 20);
-  doc.text(`Téléphone : ${data.client.telephone}`, margin + 6, y + 26);
-  doc.text(`WhatsApp : ${data.client.whatsapp}`, margin + 62, y + 14);
-  doc.text(`Email : ${data.client.email}`, margin + 62, y + 20);
-  doc.text(`Adresse : ${data.client.adresse}`, margin + 62, y + 26);
+  doc.setFontSize(11);
+  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text(`Date : ${data.date}`, right, y + 17, { align: 'right' });
+  doc.text('Valable 30 jours', right, y + 24, { align: 'right' });
 
-  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
-  doc.rect(margin + 118, y, 60, 30);
+  // Agency address
+  y += 34;
+  doc.setFontSize(9);
+  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", margin, y);
+  doc.text('Tél : 06 64 22 67 90 | contact@agencemenage.ma', margin, y + 5);
+  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('agencemenage.ma', margin, y + 10);
+
+  y += 18;
+  doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 12;
+
+  // ==================== INFORMATIONS CLIENT ====================
   doc.setFont('helvetica', 'bold');
-  doc.text('INFORMATIONS DEVIS', margin + 121, y + 7);
-  doc.text(`N° : ${data.numDevis}`, margin + 121, y + 14);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Date : ${data.date}`, margin + 121, y + 20);
-  doc.text('Validité : 30 jours', margin + 121, y + 26);
-  y += 40;
+  doc.setFontSize(12);
+  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('INFORMATIONS CLIENT', margin, y);
+  y += 3;
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 8;
+
+  const clientInfo = [
+    { label: "Raison sociale", value: data.client.raisonSociale },
+    { label: "Interlocuteur", value: data.client.interlocuteur },
+    { label: "Téléphone", value: data.client.telephone },
+    { label: "WhatsApp", value: data.client.whatsapp },
+    { label: "Email", value: data.client.email },
+    { label: "Adresse", value: data.client.adresse },
+  ];
+
+  doc.setFontSize(10);
+  for (const info of clientInfo) {
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    doc.text(info.label, margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text(`: ${info.value}`, margin + 40, y);
+    y += 6.5;
+  }
+  y += 6;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);

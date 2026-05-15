@@ -57,14 +57,13 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   // Header
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, 'PNG', margin, y - 12, 28, 28);
+      doc.addImage(logoBase64, 'PNG', margin, y - 6, 38, 18);
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(10);
       doc.setTextColor(...MUTED);
-      doc.text('Premium, tout simplement.', margin, y + 18);
-      y += 10;
+      doc.text('Premium, tout simplement.', margin, y + 16);
     } catch (e) {
-      doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...TEXT);
+      doc.setFont('helvetica', 'bold').setFontSize(22).setTextColor(...TEXT);
       doc.text('Agence Ménage', margin, y);
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(10);
@@ -72,7 +71,7 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
       doc.text('Premium, tout simplement.', margin, y + 6);
     }
   } else {
-    doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...TEXT);
+    doc.setFont('helvetica', 'bold').setFontSize(22).setTextColor(...TEXT);
     doc.text('Agence Ménage', margin, y);
     doc.setFont('helvetica', 'italic').setFontSize(10).setTextColor(...MUTED);
     doc.text('Premium, tout simplement.', margin, y + 6);
@@ -88,14 +87,16 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   doc.text(`Date : ${data.date}`,  right, y + 17, { align: 'right' });
   doc.text('Valable 30 jours',     right, y + 24, { align: 'right' });
 
-  doc.setFontSize(9.5).setTextColor(...MUTED);
-  doc.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", margin, y + 16);
-  doc.text('Tél : 06 64 22 67 90 | contact@agencemenage.ma', margin, y + 22);
-  doc.setTextColor(...BLUE).text('agencemenage.ma', margin, y + 28);
+  // Agency address
+  y += 34;
+  doc.setFontSize(9).setTextColor(...MUTED);
+  doc.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", margin, y);
+  doc.text('Tél : 06 64 22 67 90 | contact@agencemenage.ma', margin, y + 5);
+  doc.setTextColor(...BLUE).text('agencemenage.ma', margin, y + 10);
 
-  y += 36;
-  doc.setDrawColor(...BLUE).setLineWidth(0.4).line(margin, y, right, y);
-  y += 8;
+  y += 18;
+  doc.setDrawColor(...BLUE).setLineWidth(0.5).line(margin, y, right, y);
+  y += 12;
 
   // Objet
   doc.setTextColor(...TEXT).setFont('helvetica', 'bold').setFontSize(11);

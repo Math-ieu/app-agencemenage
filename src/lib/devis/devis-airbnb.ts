@@ -49,7 +49,7 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
       doc.text('Premium, tout simplement.', MARGIN, y + 16);
     } catch {
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(20);
+      doc.setFontSize(22);
       doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
       doc.text('Agence Ménage', MARGIN, y);
       doc.setFont('helvetica', 'italic');
@@ -59,7 +59,7 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
     }
   } else {
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(20);
+    doc.setFontSize(22);
     doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
     doc.text('Agence Ménage', MARGIN, y);
     doc.setFont('helvetica', 'italic');
@@ -83,17 +83,18 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
   doc.text(`Date : ${data.date}`, RIGHT, y + 17, { align: 'right' });
   doc.text('Valable 30 jours', RIGHT, y + 24, { align: 'right' });
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9.5);
-  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-  doc.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", MARGIN, y + 16);
-  doc.text('Tél : 06 64 22 67 90 | contact@agencemenage.ma', MARGIN, y + 22);
-  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text('agencemenage.ma', MARGIN, y + 28);
-
+  // Agency address
   y += 34;
+  doc.setFontSize(9);
+  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", MARGIN, y);
+  doc.text('Tél : 06 64 22 67 90 | contact@agencemenage.ma', MARGIN, y + 5);
+  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('agencemenage.ma', MARGIN, y + 10);
+
+  y += 18;
   doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.setLineWidth(0.4);
+  doc.setLineWidth(0.5);
   doc.line(MARGIN, y, RIGHT, y);
   y += 7;
 
