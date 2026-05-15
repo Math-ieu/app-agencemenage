@@ -27,7 +27,7 @@ import {
   AlertCircle,
   AlertTriangle,
 } from 'lucide-react';
-import { fetchSecureDocBlob, generateDocument, getAgents, getDemandesHistorique, getMissions, sendWhatsApp, updateMission, updateDemande, getUsers } from '../../api/client';
+import { fetchSecureDocBlob, generateDocument, getAgents, getDemandes, getDemandesHistorique, getMissions, sendWhatsApp, updateMission, updateDemande, getUsers, sendProfilToDemande, removeProfilFromDemande, getDemande } from '../../api/client';
 import { User as ApiUser } from '../../types';
 import { encodeId } from '../../utils/obfuscation';
 import { useToastStore } from '../../store/toast';
@@ -772,6 +772,7 @@ export default function VueGlobale() {
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const [isSendingInvoice, setIsSendingInvoice] = useState(false);
   const [showInvoicePreviewPopup, setShowInvoicePreviewPopup] = useState(false);
+  const [activeProfilIds, setActiveProfilIds] = useState<Set<number>>(new Set());
 
   const loadFinanceData = useCallback(async () => {
     const missions: MissionApiItem[] = [];
@@ -835,6 +836,51 @@ export default function VueGlobale() {
       });
 
     setFacturationData(allRows);
+
+    // Construire le set des profils actifs à partir des demandes Dashboard (profils_envoyes)
+    try {
+      const dashRes = await getDemandes({ no_page: 'true' });
+      const dashData = dashRes.data;
+      const dashDemandes: any[] = Array.isArray(dashData?.results) ? dashData.results : (Array.isArray(dashData) ? dashData : []);
+      const activeIds = new Set<number>();
+
+      for (const d of dashDemandes) {
+        if (d.statut === 'annule') continue;
+
+        // Collecter depuis profils_envoyes
+        if (Array.isArray(d.profils_envoyes)) {
+          for (const p of d.profils_envoyes) {
+            if (p.id) activeIds.add(p.id);
+          }
+        }
+
+        // Collecter aussi depuis parts_repartition (formulaire_data)
+        const factData = d.formulaire_data?.facturation || {};
+        const parts = d.parts_repartition || factData.parts_repartition || d.formulaire_data?.parts_repartition || [];
+        if (Array.isArray(parts)) {
+          for (const part of parts) {
+            const pid = Number(part.profile_id);
+            if (pid) activeIds.add(pid);
+          }
+        }
+      }
+
+      setActiveProfilIds(activeIds);
+    } catch {
+      // Fallback: all profiles with missions are active
+      const fallbackIds = new Set<number>();
+      for (const row of allRows) {
+        if (row.parts_repartition && row.parts_repartition.length > 0) {
+          for (const part of row.parts_repartition) {
+            const pid = Number(part.profile_id);
+            if (pid) fallbackIds.add(pid);
+          }
+        } else if (row.profilId) {
+          fallbackIds.add(row.profilId);
+        }
+      }
+      setActiveProfilIds(fallbackIds);
+    }
 
     const grouped = new Map<string, ProfileAccount>();
 
@@ -1147,6 +1193,7 @@ export default function VueGlobale() {
   const profileBalances = useMemo<ProfileBalance[]>(
     () =>
       profileAccountsData
+        .filter((profile) => activeProfilIds.has(profile.id))
         .map((profile) => {
           const profilDoitAgence = Math.max(0, profile.totalDueToAgence - profile.recuDuProfil);
           const agenceDoitProfil = Math.max(0, profile.totalDueToProfile - profile.verseAuProfil);
@@ -1160,7 +1207,7 @@ export default function VueGlobale() {
         .filter((profile) =>
           `${profile.name} ${profile.city}`.toLowerCase().includes(searchProfiles.toLowerCase())
         ),
-    [profileAccountsData, searchProfiles]
+    [profileAccountsData, searchProfiles, activeProfilIds]
   );
 
   const availableManualServices = useMemo(
@@ -1854,6 +1901,31 @@ export default function VueGlobale() {
 
         // Supprimer explicitement commercial_name s'il n'est pas supporté en backend
         await updateDemande(selectedMission.demandeId, demandePayload);
+
+        // Synchroniser profils_envoyes avec parts_repartition
+        const newParts = missionEditForm.partsRepartition || [];
+        const newPartIds = newParts
+          .map((p: any) => Number(p.profile_id))
+          .filter((id: number) => !isNaN(id) && id > 0);
+
+        try {
+          const demandeRes = await getDemande(selectedMission.demandeId);
+          const existingProfilIds: number[] = (demandeRes.data?.profils_envoyes || []).map((p: any) => p.id);
+
+          // Ajouter les nouveaux profils
+          const toAdd = newPartIds.filter((id: number) => !existingProfilIds.includes(id));
+          for (const id of toAdd) {
+            try { await sendProfilToDemande(selectedMission.demandeId, id); } catch { /* ignore */ }
+          }
+
+          // Retirer les profils supprimés
+          const toRemove = existingProfilIds.filter((id: number) => !newPartIds.includes(id));
+          for (const id of toRemove) {
+            try { await removeProfilFromDemande(selectedMission.demandeId, id); } catch { /* ignore */ }
+          }
+        } catch (err) {
+          console.error('Erreur lors de la synchronisation des profils envoyés', err);
+        }
       }
 
       const refreshedRows = await loadFinanceData();

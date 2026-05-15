@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, uploadDocument } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, removeProfilFromDemande, uploadDocument } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
@@ -694,19 +694,33 @@ export default function Dashboard() {
 
       // Assignation automatique des profils (Gestion des parts)
       const existingProfilIds = selectedDemande.profils_envoyes?.map((p: any) => p.id) || [];
-      const newProfilIds = partsRepartition
-        .map((p) => p.profile_id)
-        .filter((id) => id && !existingProfilIds.includes(parseInt(id as unknown as string)));
+      const currentProfilIds = partsRepartition
+        .map((p) => parseInt(p.profile_id as unknown as string))
+        .filter((id) => !isNaN(id));
+      const newProfilIds = currentProfilIds.filter((id) => !existingProfilIds.includes(id));
 
       if (newProfilIds.length > 0) {
         for (const id of newProfilIds) {
           try {
-            await sendProfilToDemande(selectedDemande.id, parseInt(id as unknown as string));
+            await sendProfilToDemande(selectedDemande.id, id);
           } catch (err) {
             console.error("Erreur lors de l'assignation automatique du profil", err);
           }
         }
         addToast(`${newProfilIds.length} profil(s) automatiquement assigné(s) au besoin`, 'success');
+      }
+
+      // Retrait automatique des profils supprimés de la répartition
+      const removedProfilIds = existingProfilIds.filter((id: number) => !currentProfilIds.includes(id));
+      if (removedProfilIds.length > 0) {
+        for (const id of removedProfilIds) {
+          try {
+            await removeProfilFromDemande(selectedDemande.id, id);
+          } catch (err) {
+            console.error("Erreur lors du retrait automatique du profil", err);
+          }
+        }
+        addToast(`${removedProfilIds.length} profil(s) retiré(s) du besoin`, 'info');
       }
 
       // Mettre à jour selectedDemande

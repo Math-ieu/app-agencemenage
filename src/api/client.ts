@@ -116,6 +116,9 @@ export const affecterDemande = (id: number, commercial_id: number) =>
 export const sendProfilToDemande = (demandeId: number, agentId: number) =>
   apiClient.post(`/api/demandes/${demandeId}/envoyer_profil/`, { agent_id: agentId });
 
+export const removeProfilFromDemande = (demandeId: number, agentId: number) =>
+  apiClient.post(`/api/demandes/${demandeId}/retirer_profil/`, { agent_id: agentId });
+
 export const confirmerCAO = (id: number) =>
   apiClient.post(`/api/demandes/${id}/confirmer_cao/`);
 
