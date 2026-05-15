@@ -490,8 +490,14 @@ export const generateDevisPdf = async (demande: Demande): Promise<{ blob: Blob; 
     const data = buildGestion360Data(demande);
     blob = await genererDevisGestion360(data, logoBase64);
   } else if (serviceKey.includes('placement') || serviceKey.includes('gestion')) {
-    const data = buildPlacementFlexibleData(demande);
-    blob = await genererDevisPlacementFlexible(data, logoBase64);
+    const serviceType = demande.formulaire_data?.service_type;
+    if (serviceType === 'premium' || serviceType === 'gestion360') {
+      const data = buildGestion360Data(demande);
+      blob = await genererDevisGestion360(data, logoBase64);
+    } else {
+      const data = buildPlacementFlexibleData(demande);
+      blob = await genererDevisPlacementFlexible(data, logoBase64);
+    }
   } else {
     const data = buildAirbnbData(demande);
     blob = await genererDevisAirbnb(data, logoBase64);

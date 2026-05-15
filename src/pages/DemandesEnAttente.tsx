@@ -1131,7 +1131,7 @@ export default function DemandesEnAttente() {
 
                     <div className="ws-section-header" style={{ background: '#f1f5f9', color: 'var(--primary)', fontSize: '0.9rem' }}>Type de service</div>
                     <div className="ws-radio-pills">
-                      {[{ v: 'flexible', l: 'Service ménage flexible' }, { v: 'premium', l: 'Service ménage Premium' }].map(o => (
+                      {[{ v: 'flexible', l: 'Service ménage flexible' }, { v: 'gestion360', l: 'Service ménage Premium' }].map(o => (
                         <label key={o.v} className="ws-radio-pill">
                           <input type="radio" name="placementServiceType" value={o.v} checked={formData.service_type === o.v} onChange={e => setFormData({ ...formData, service_type: e.target.value })} />
                           <span>{o.l}</span>

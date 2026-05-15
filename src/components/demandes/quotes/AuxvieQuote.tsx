@@ -47,6 +47,7 @@ export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuot
     <div className="quote-calculator">
       <FormulaBox>
         <B>Base :</B> Tarif × Jours × Semaines × Coeff
+        <br /><span style={{ fontSize: 10, display: "block", marginTop: 3 }}>Usage interne : tarification basée sur les forfaits 8h/12h/24h.</span>
       </FormulaBox>
       <div style={s.grid2}>
         <div>
@@ -57,31 +58,31 @@ export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuot
               <option value="580">24h — 580 DH</option>
             </select>
           </Field>
-          <Field label="Jours/sem">
+          <Field label="Jours / semaine">
             <input type="number" value={jours} min={1} max={7} onChange={e => setJours(+e.target.value)} style={s.input as any} />
           </Field>
-          <Field label="Semaines">
-            <input type="number" value={semaines} min={1} onChange={e => setSemaines(+e.target.value)} style={s.input as any} />
+          <Field label="Durée de la mission (semaines)">
+            <input type="number" value={semaines} min={1} max={52} onChange={e => setSemaines(+e.target.value)} style={s.input as any} />
           </Field>
           <Field label="Durée mission">
             <select value={duree} onChange={e => setDuree(e.target.value)} style={s.input as any}>
-              <option value="1.20">Ponctuelle (&lt; 1 sem) (×1,20)</option>
-              <option value="1.00">Court terme (1 à 4 sem) (×1,00)</option>
-              <option value="0.90">Long terme (&gt; 1 mois) (×0,90)</option>
+              <option value="1.20">Ponctuelle — moins d'1 semaine (×1,20)</option>
+              <option value="1.00">Court terme — 1 à 4 semaines (×1,00)</option>
+              <option value="0.90">Long terme — plus d'1 mois (×0,90)</option>
             </select>
           </Field>
         </div>
         <div>
-          <div style={s.optTitle}>Options / jour</div>
-          <OptRow label="Toilette" price="+50 DH" checked={opts.toilette} onChange={() => tog("toilette")} />
-          <OptRow label="Repas" price="+40 DH" checked={opts.repas} onChange={() => tog("repas")} />
-          <OptRow label="Médicaments" price="+30 DH" checked={opts.medic} onChange={() => tog("medic")} />
-          <OptRow label="Sorties" price="+80 DH" checked={opts.sortie} onChange={() => tog("sortie")} />
+          <div style={s.optTitle}>Options / jour de présence</div>
+          <OptRow label="Aide à la toilette" price="+50 DH/j" checked={opts.toilette} onChange={() => tog("toilette")} />
+          <OptRow label="Préparation des repas" price="+40 DH/j" checked={opts.repas} onChange={() => tog("repas")} />
+          <OptRow label="Suivi prise de médicaments" price="+30 DH/j" checked={opts.medic} onChange={() => tog("medic")} />
+          <OptRow label="Accompagnement sorties" price="+80 DH/j" checked={opts.sortie} onChange={() => tog("sortie")} />
         </div>
       </div>
       <ResultBar
-        detail={`${totalJ}j × ${cd === 1 ? '' : cd + ' × '}${fmt(tarif)} DH + options`}
-        total={`${fmt(total)} DH`} label="Total mission" />
+        detail={`${mode === "240" ? "8h" : mode === "420" ? "12h" : "24h"} × ${totalJ} j × ${cd.toFixed(2)} = ${fmt(base)} DH + options ${fmt(opj * totalJ)} DH`}
+        total={`${fmt(total)} DH`} label="Total mission HT" />
     </div>
   );
 }

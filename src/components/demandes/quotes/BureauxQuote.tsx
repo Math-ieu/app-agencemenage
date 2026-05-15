@@ -40,7 +40,8 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
   return (
     <div className="quote-calculator">
       <FormulaBox>
-        <B>Base :</B> Heures × Pers × 60 DH · <B>Abo :</B> −10%
+        <B>Base :</B> Heures × Personnes × 60 DH/h · <B>Abonnement :</B> −10% · <B>Zone éloignée :</B> +50 DH
+        <br /><span style={{ fontSize: 10, marginTop: 3, display: "block" }}>Tarification identique au site actuel agencemenage.ma</span>
       </FormulaBox>
       <div style={s.grid2}>
         <div>
@@ -59,14 +60,14 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
         </div>
         <div>
           <div style={s.optTitle}>Options</div>
-          <OptRow label="Produits fournis" price="+90 DH" checked={opts.produits} onChange={() => tog("produits")} />
-          <OptRow label="Torchons / Serpières" price="+40 DH" checked={opts.serpiere} onChange={() => tog("serpiere")} />
-          <OptRow label="Zone éloignée" price="+50 DH" checked={opts.zone} onChange={() => tog("zone")} />
+          <OptRow label="Produits fournis par l'agence" note="Nettoyants multi-usage, désinfectants, vitres..." price="+90 DH" checked={opts.produits} onChange={() => tog("produits")} />
+          <OptRow label="Torchons et serpillères" price="+40 DH" checked={opts.serpiere} onChange={() => tog("serpiere")} />
+          <OptRow label="Supplément zone éloignée" note="Bouskoura, Dar Bouazza, Mohammédia..." price="+50 DH" checked={opts.zone} onChange={() => tog("zone")} />
         </div>
       </div>
       <ResultBar
-        detail={`${heures}h × ${personnes} pers × 60 DH${parseFloat(freq) < 1 ? ' × 0.9' : ''} + options`}
-        total={`${fmt(total)} DH`} label="Total mission HT" />
+        detail={`${heures}h × ${personnes} pers × 60 DH${parseFloat(freq) < 1 ? ` × abo ${freq}` : ""} = ${fmt(base)} DH + options ${fmt(op)} DH`}
+        total={`${fmt(total)} DH`} label="Total intervention HT" />
     </div>
   );
 }

@@ -59,7 +59,17 @@ export default function SinistreQuote({ demande, onPrestationsChange }: Sinistre
   return (
     <div className="quote-calculator">
       <FormulaBox>
-        <B>Base :</B> max(Surface × Taux, 1 200 DH) × Urgence
+        <B>Base :</B> max(Surface × Taux, 1 200 DH) × Coeff urgence + options
+        <div style={{ overflowX: "auto", marginTop: 7 }}>
+          <table style={{ fontSize: 10, borderCollapse: "collapse", minWidth: 300 }}>
+            <thead><tr>{["Type", "Léger", "Moyen", "Grave"].map(h => <th key={h} style={{ padding: "3px 8px", borderBottom: "0.5px solid var(--c-bord)", textAlign: "left", fontWeight: 500, whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {[["Dégât des eaux", "15", "28", "45"], ["Incendie", "28", "50", "75"], ["Inondation", "20", "35", "58"]].map(r => (
+                <tr key={r[0]}>{r.map((c, i) => <td key={i} style={{ padding: "3px 8px", borderBottom: "0.5px solid var(--c-bord)" }}>{i > 0 ? c + " DH/m²" : c}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </FormulaBox>
       <div style={s.grid2}>
         <div>
@@ -90,14 +100,18 @@ export default function SinistreQuote({ demande, onPrestationsChange }: Sinistre
             </select>
           </Field>
           <div style={s.optTitle}>Options</div>
-          <OptRow label="Désinfection" price="+200 DH" checked={opts.desod} onChange={() => tog("desod")} />
-          <OptRow label="Évacuation mobilier" price="+350 DH" checked={opts.evac} onChange={() => tog("evac")} />
-          <OptRow label="Rapport PDF" price="+150 DH" checked={opts.rapport} onChange={() => tog("rapport")} />
+          <OptRow label="Désodorisation / désinfection" price="+200 DH" checked={opts.desod} onChange={() => tog("desod")} />
+          <OptRow label="Évacuation mobilier endommagé" price="+350 DH" checked={opts.evac} onChange={() => tog("evac")} />
+          <OptRow label="Rapport photographique PDF" note="Photos avant/après + dossier assurance" price="+150 DH" checked={opts.rapport} onChange={() => tog("rapport")} />
+          <div style={{ marginTop: 10 }}>
+            <span style={{ fontSize: 10, background: "#FEF3C7", color: "#92400E", borderRadius: 4, padding: "2px 8px" }}>Visite préalable recommandée</span>
+          </div>
         </div>
       </div>
       <ResultBar
-        detail={`${surface} m² × ${taux} DH${baseRaw < MIN ? ' (min)' : ''} × ${u}`}
-        total={`${fmt(total)} DH`} label="Devis HT" />
+        detail={`${surface} m² × ${taux} DH/m²${baseRaw < MIN ? ` → min ${fmt(MIN)}` : ""} DH = ${fmt(base)} DH × ${u.toFixed(2)} + options ${fmt(op)} DH`}
+        total={`${fmt(total)} DH`} label="Devis estimatif HT"
+        warn="Brouillon — validation requise" />
     </div>
   );
 }

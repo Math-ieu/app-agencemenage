@@ -8,7 +8,8 @@ interface PlacementQuoteProps {
 }
 
 export default function PlacementQuote({ demande, onPrestationsChange }: PlacementQuoteProps) {
-  const [mode, setMode] = useState("flex");
+  const initialMode = demande.formulaire_data?.service_type === 'premium' || demande.formulaire_data?.service_type === 'gestion360' ? 'g360' : 'flex';
+  const [mode, setMode] = useState(initialMode);
   return (
     <div className="quote-calculator">
       <div style={s.subTabs}>
@@ -70,7 +71,8 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   return (
     <div>
       <FormulaBox>
-        <B>Modèle Flexible :</B> Heures/mois × 32 DH/h
+        <B>Modèle A — Facturation horaire :</B> Heures/mois × 32 DH/h × Nb personnes
+        <br />Le client pilote les opérations. L'agence gère tout le back-office RH (contrats, paie, remplacements).
       </FormulaBox>
       <div style={s.grid2}>
         <div>
@@ -97,7 +99,7 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
             </select>
           </Field>
           <OptRow label="Jours fériés" price="+20%" checked={ferie} onChange={setFerie} />
-          <OptRow label="Tenues" price="+200 DH/p" checked={tenue} onChange={setTenue} />
+          <OptRow label="Tenue de travail fournie" note="+200 DH/pers — coût unique facturé au 1er mois" price="+200 DH/pers" checked={tenue} onChange={setTenue} />
         </div>
       </div>
       <ResultBar
@@ -152,7 +154,8 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   return (
     <div>
       <FormulaBox>
-        <B>Gestion 360 :</B> All-inclusive · <B>Taux :</B> 45 DH/h
+        <B>Gestion 360 :</B> L'agence pilote de A à Z — équipes, méthodes, produits, supervision, reporting. <B>Taux :</B> 45 DH/h/personne
+        <br /><span style={{ fontSize: 10, display: "block", marginTop: 3 }}>Inclus : tenues, check-lists qualité, remplacement le jour même, SLA réclamations 24h, reporting mensuel. Supervision gratuite dès 3 personnes.</span>
       </FormulaBox>
       <div style={s.grid2}>
         <div>
@@ -180,8 +183,9 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
         <div>
           <OptRow label="Jours fériés" price="+20%" checked={ferie} onChange={setFerie} />
           <div style={{ marginTop: 8, padding: "8px", background: "#F0FDF4", borderRadius: 8, fontSize: 10, color: "#166534" }}>
-            ✓ Tenues incluses · ✓ Supervision incluse (≥3 pers)
-            {nbS < 3 && <div style={{ color: "#92400E" }}>⚠ &lt; 3 pers : supervision +800 DH</div>}
+            ✓ Tenues fournies incluses ·<br></br>✓ Supervision incluse (≥3 personnes)
+·{nbS < 3 && <div style={{ color: "#92400E" }}>⚠ 2 personnes : supervision +800 DH/mois</div>}✓ Engagement minimum 3 mois
+            
           </div>
         </div>
       </div>

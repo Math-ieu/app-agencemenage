@@ -73,45 +73,45 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
   return (
     <div className="quote-calculator">
       <FormulaBox>
-        <B>Base :</B> Surface × Grattage (min 1 500 DH)
+        <B>Base :</B> max(Surface × taux grattage, 1 500 DH) · <B>Terrasse / rooftop :</B> inclus au même taux · <B>Minimum facturable :</B> 1 500 DH
       </FormulaBox>
       <div style={s.grid2}>
         <div>
-          <Field label="Surface (m²)">
-            <input type="number" value={surface} onChange={e => setSurface(+e.target.value)} style={s.input as any} />
+          <Field label="Surface totale (m²)">
+            <input type="number" value={surface} min={20} onChange={e => setSurface(+e.target.value)} style={s.input as any} />
           </Field>
-          <Field label="Grattage">
+          <Field label="État général — grattage murs / sols">
             <select value={grattage} onChange={e => setGrattage(e.target.value)} style={s.input as any}>
-              <option value="12">Sans (12 DH/m²)</option>
-              <option value="15">Léger (15 DH/m²)</option>
-              <option value="22">Profond (22 DH/m²)</option>
+              <option value="12">Sans grattage (12 DH/m²)</option>
+              <option value="15">Grattage léger — peinture, résidus (15 DH/m²)</option>
+              <option value="22">Grattage profond — béton, décappage (22 DH/m²)</option>
             </select>
           </Field>
-          <Field label="Vitres">
+          <Field label="Grattage vitres / marquages">
             <select value={vitres} onChange={e => setVitres(e.target.value)} style={s.input as any}>
               <option value="0">Aucun</option>
-              <option value="150">Léger (+150 DH)</option>
-              <option value="25">Profond (25 DH/m²)</option>
+              <option value="150">Léger — stickers, traces (forfait +150 DH)</option>
+              <option value="25">Profond — silicone, béton (25 DH/m² vitrage)</option>
             </select>
           </Field>
           {vitres === "25" && (
-            <Field label="Surf. Vitrée">
-              <input type="number" value={surfVitres} onChange={e => setSurfVitres(+e.target.value)} style={s.input as any} />
+            <Field label="Surface vitrée concernée (m²)">
+              <input type="number" value={surfVitres} min={1} onChange={e => setSurfVitres(+e.target.value)} style={s.input as any} />
             </Field>
           )}
         </div>
         <div>
-          <Field label="Déchets">
+          <Field label="Ramassage de déchets">
             <select value={dechets} onChange={e => setDechets(e.target.value)} style={s.input as any}>
-              <option value="0">Non</option>
-              <option value="200">&lt;100 kg (+200 DH)</option>
-              <option value="380">100-300 kg (+380 DH)</option>
-              <option value="650">300-500 kg (+650 DH)</option>
-              <option value="-1">&gt;500 kg (Devis)</option>
+              <option value="0">Pas de ramassage</option>
+              <option value="200">Moins de 100 kg (+200 DH)</option>
+              <option value="380">100 à 300 kg (+380 DH)</option>
+              <option value="650">300 à 500 kg (+650 DH)</option>
+              <option value="-1">Plus de 500 kg → devis spécifique</option>
             </select>
           </Field>
-          <div style={s.optTitle}>Options</div>
-          <OptRow label="Cristallisation marbre" price="25 DH/m²" checked={marbre} onChange={setMarbre} />
+          <div style={s.optTitle}>Option premium</div>
+          <OptRow label="Cristallisation marbre" note="25 DH/m² — résultat brillant garanti" price="25 DH/m²" checked={marbre} onChange={setMarbre} />
           {marbre && (
             <Field label="Surf. Marbre">
               <input type="number" value={surfMarbre} onChange={e => setSurfMarbre(+e.target.value)} style={s.input as any} />

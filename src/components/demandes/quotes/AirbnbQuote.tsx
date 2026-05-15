@@ -56,7 +56,8 @@ export default function AirbnbQuote({ demande, onPrestationsChange }: AirbnbQuot
   return (
     <div className="quote-calculator">
       <FormulaBox>
-        <B>Formule A</B> — Ménage seul · <B>Formule B</B> — Ménage + Linge (+90 DH)
+        <B>Formule A</B> — Ménage seul · <B>Formule B</B> — Ménage + collecte linge + lavage + repassage (+90 DH)
+        <br /><span style={{ fontSize: 10, marginTop: 4, display: "block" }}>Base horaire : 65 DH/h (usage interne uniquement — ne pas communiquer au client)</span>
       </FormulaBox>
 
       <div style={s.seg}>
