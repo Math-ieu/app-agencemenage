@@ -67,6 +67,10 @@ async function genererDevis(data: DevisData, logoBase64?: string): Promise<Blob>
   if (logoBase64) {
     try {
       doc.addImage(logoBase64, 'PNG', margin, y - 6, 38, 18);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(10);
+      doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+      doc.text('Premium, tout simplement.', margin, y + 16);
     } catch {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(20);
@@ -89,15 +93,19 @@ async function genererDevis(data: DevisData, logoBase64?: string): Promise<Blob>
   }
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
+  doc.setFontSize(32);
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
   doc.text('DEVIS', right, y, { align: 'right' });
+  
+  doc.setFontSize(14);
+  doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  doc.text(`N° ${data.numDevis}`, right, y + 10, { align: 'right' });
+  
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
+  doc.setFontSize(11);
   doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-  doc.text(`N° ${data.numDevis}`, right, y + 8, { align: 'right' });
-  doc.text(`Date : ${data.date}`, right, y + 14, { align: 'right' });
-  doc.text('Valable 30 jours', right, y + 20, { align: 'right' });
+  doc.text(`Date : ${data.date}`, right, y + 17, { align: 'right' });
+  doc.text('Valable 30 jours', right, y + 24, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);

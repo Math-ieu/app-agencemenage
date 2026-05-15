@@ -78,19 +78,33 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.rect(0, 0, pageWidth, 24, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
+  doc.setFontSize(22);
   doc.text('DEVIS', margin, 15);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  doc.text('Gestion 360° All Inclusive', margin, 20);
+  doc.text('Gestion 360° All Inclusive', margin, 21);
   if (logoBase64) {
     try {
       doc.addImage(logoBase64, 'PNG', right - 34, 4.5, 30, 14);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.text('Premium, tout simplement.', right - 4, 21, { align: 'right' });
     } catch {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
       doc.text('Agence Ménage', right - 5, 14, { align: 'right' });
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.text('Premium, tout simplement.', right - 5, 19, { align: 'right' });
     }
+  } else {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Agence Ménage', right - 5, 14, { align: 'right' });
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.text('Premium, tout simplement.', right - 5, 19, { align: 'right' });
   }
   y = 30;
 
@@ -113,8 +127,8 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.rect(margin + 118, y, 60, 30);
   doc.setFont('helvetica', 'bold');
   doc.text('INFORMATIONS DEVIS', margin + 121, y + 7);
-  doc.setFont('helvetica', 'normal');
   doc.text(`N° : ${data.numDevis}`, margin + 121, y + 14);
+  doc.setFont('helvetica', 'normal');
   doc.text(`Date : ${data.date}`, margin + 121, y + 20);
   doc.text('Validité : 30 jours', margin + 121, y + 26);
   y += 40;

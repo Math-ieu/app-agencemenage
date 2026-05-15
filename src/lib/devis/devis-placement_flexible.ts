@@ -58,10 +58,18 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   if (logoBase64) {
     try {
       doc.addImage(logoBase64, 'PNG', margin, y - 12, 28, 28);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(10);
+      doc.setTextColor(...MUTED);
+      doc.text('Premium, tout simplement.', margin, y + 18);
       y += 10;
     } catch (e) {
       doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...TEXT);
       doc.text('Agence Ménage', margin, y);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(10);
+      doc.setTextColor(...MUTED);
+      doc.text('Premium, tout simplement.', margin, y + 6);
     }
   } else {
     doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(...TEXT);
@@ -70,13 +78,15 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
     doc.text('Premium, tout simplement.', margin, y + 6);
   }
 
-  doc.setFont('helvetica', 'bold').setFontSize(16).setTextColor(...BLUE);
+  doc.setFont('helvetica', 'bold').setFontSize(32).setTextColor(...BLUE);
   doc.text('DEVIS', right, y, { align: 'right' });
-
-  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(...MUTED);
-  doc.text(`N° ${data.numDevis}`, right, y + 8,  { align: 'right' });
-  doc.text(`Date : ${data.date}`,  right, y + 14, { align: 'right' });
-  doc.text('Valable 30 jours',     right, y + 20, { align: 'right' });
+  
+  doc.setFontSize(14).setTextColor(...TEXT);
+  doc.text(`N° ${data.numDevis}`, right, y + 10, { align: 'right' });
+  
+  doc.setFont('helvetica', 'normal').setFontSize(11).setTextColor(...MUTED);
+  doc.text(`Date : ${data.date}`,  right, y + 17, { align: 'right' });
+  doc.text('Valable 30 jours',     right, y + 24, { align: 'right' });
 
   doc.setFontSize(9.5).setTextColor(...MUTED);
   doc.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", margin, y + 16);
@@ -161,10 +171,72 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   doc.setTextColor(...BLUE).text(`${formatNumber(totalHT)} DH`, right - 4, y + 2, { align: 'right' });
   y += 15;
 
-  // Footer / Signatures
-  const footerY = pageHeight - 20;
-  doc.setFontSize(8).setTextColor(...MUTED);
-  doc.text("Agence Ménage — Casablanca | 06 64 22 67 90 | agencemenage.ma", pageWidth/2, footerY, { align: 'center' });
+  // ==================== MESSAGE D'ACCOMPAGNEMENT (Page 2) ====================
+  doc.addPage();
+  y = margin + 10;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text("MESSAGE D'ACCOMPAGNEMENT", margin, y);
+  y += 3;
+  doc.setDrawColor(229, 231, 235);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, right, y);
+  y += 8;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10.5);
+  doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  
+  const msgLines = [
+    `Bonjour ${data.client.interlocuteur.split(' ')[0] || 'M.'},`,
+    '',
+    "Suite à notre échange, nous avons le plaisir de vous soumettre notre proposition pour la mise à disposition de personnel (Placement Flexible).",
+    '',
+    `Cette solution vous permet de bénéficier de ${data.details.nbIntervenantes} intervenante(s) qualifiée(s) pour un volume de ${data.details.heuresParMois}h par mois, avec une gestion administrative et RH entièrement prise en charge par Agence Ménage.`,
+    '',
+    "Nous restons à votre entière disposition pour finaliser les détails de cette collaboration et organiser le démarrage de la mission.",
+    '',
+    "Bien cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
+  ];
+  for (const para of msgLines) {
+    if (para === '') { y += 3; continue; }
+    const wrapped = doc.splitTextToSize(para, contentWidth);
+    doc.text(wrapped, margin, y);
+    y += wrapped.length * 5;
+  }
+  y += 20;
+
+  // Signatures
+  doc.setFont('helvetica', 'bold');
+  doc.text('Pour Agence Ménage :', margin, y);
+  doc.text('Pour le client :', margin + 100, y);
+  y += 15;
+  doc.setDrawColor(156, 163, 175);
+  doc.line(margin, y, margin + 65, y);
+  doc.line(margin + 100, y, margin + 165, y);
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text('Nom et cachet', margin, y);
+  doc.text('Nom, date et signature précédée de "Bon pour accord"', margin + 100, y);
+
+  // Footer sur toutes les pages
+  const totalPages = (doc.internal as any).getNumberOfPages?.() ?? doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    const footY = pageHeight - 25;
+    doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.2);
+    doc.line(margin, footY, right, footY);
+    doc.setFontSize(7.5);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    const footerText = "Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | agencemenage.ma";
+    doc.text(footerText, pageWidth/2, footY + 5, { align: 'center' });
+    doc.text("Ce devis est valable 30 jours. Toute acceptation vaut engagement contractuel.", pageWidth/2, footY + 10, { align: 'center' });
+  }
 
   return doc.output('blob');
 }

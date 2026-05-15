@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 
-/** Format number with regular space as thousands separator (jsPDF can't render non-breaking spaces from toLocaleString) */
+/** Format number with regular space as thousands separator */
 const formatNumber = (n: number): string => {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 };
@@ -15,206 +15,227 @@ interface DevisAuxiliaireClient {
 interface DevisAuxiliaireData {
   numDevis: string;
   date: string;
-  validite: string;
   objet: string;
   client: DevisAuxiliaireClient;
-  prestations: Array<{ desc: string; montant: string | number }>;
-  totalHT: string | number;
+  prestations: Array<{ desc: string; montant: number }>;
+  totalHT: number;
+  validite?: string;
   message?: string;
 }
 
 async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: string): Promise<Blob> {
   const pdf = new jsPDF('p', 'mm', 'a4');
-  const BLUE = [29, 78, 216];
-  const MUTED = [107, 114, 128];
-  const TEXT = [31, 41, 55];
+  
+  // Colors
+  const DARK_GREY = [31, 41, 55];
+  const MEDIUM_GREY = [75, 85, 99];
+  const LIGHT_GREY = [107, 114, 128];
+  const BLUE = [37, 99, 235];
+  const LIGHT_BLUE = [239, 246, 255];
+  const GREEN_BG = [236, 253, 245];
+  const GREEN_TEXT = [22, 101, 52];
+  const BORDER_GREY = [229, 231, 235];
+  
   const pageWidth = 210;
   const pageHeight = 297;
   const margin = 20;
   const contentWidth = pageWidth - 2 * margin;
-  const right = pageWidth - margin;
   let y = 24;
 
-  // Header — Logo
+  // ==================== HEADER ====================
+  // Logo area
   if (logoBase64) {
     try {
-      pdf.addImage(logoBase64, 'PNG', margin, y - 6, 38, 18);
+      pdf.addImage(logoBase64, 'PNG', margin, y - 6, 45, 20);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setFontSize(10);
+      pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
+      pdf.text('Premium, tout simplement.', margin, y + 18);
     } catch {
       pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(20);
-      pdf.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+      pdf.setFontSize(22);
+      pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
       pdf.text('Agence Ménage', margin, y);
       pdf.setFont('helvetica', 'italic');
       pdf.setFontSize(10);
-      pdf.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+      pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
       pdf.text('Premium, tout simplement.', margin, y + 6);
     }
   } else {
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(20);
-    pdf.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    pdf.setFontSize(22);
+    pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
     pdf.text('Agence Ménage', margin, y);
     pdf.setFont('helvetica', 'italic');
     pdf.setFontSize(10);
-    pdf.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
     pdf.text('Premium, tout simplement.', margin, y + 6);
   }
 
+  // Right side - DEVIS
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(16);
+  pdf.setFontSize(32);
   pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  pdf.text('DEVIS', right, y, { align: 'right' });
+  pdf.text('DEVIS', pageWidth - margin, y, { align: 'right' });
+  
+  pdf.setFontSize(14);
+  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+  pdf.text(`N° ${data.numDevis}`, pageWidth - margin, y + 10, { align: 'right' });
+  
   pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(10);
-  pdf.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-  pdf.text(`N° ${data.numDevis}`, right, y + 8, { align: 'right' });
-  pdf.text(`Date : ${data.date}`, right, y + 14, { align: 'right' });
-  pdf.text(data.validite, right, y + 20, { align: 'right' });
-
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9.5);
-  pdf.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-  pdf.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", margin, y + 16);
-  pdf.text('Tél : 06 64 22 67 90 | contact@agencemenage.ma', margin, y + 22);
-  pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  pdf.text('agencemenage.ma', margin, y + 28);
-
+  pdf.setFontSize(11);
+  pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
+  pdf.text(`Date : ${data.date}`, pageWidth - margin, y + 17, { align: 'right' });
+  pdf.text('Valable 30 jours', pageWidth - margin, y + 24, { align: 'right' });
+  
+  // Agency address
   y += 34;
-  pdf.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
-  pdf.setLineWidth(0.4);
-  pdf.line(margin, y, right, y);
-  y += 7;
+  pdf.setFontSize(9);
+  pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
+  pdf.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", margin, y);
+  pdf.text('Tél : 06 64 22 67 90 | contact@agencemenage.ma', margin, y + 5);
+  pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  pdf.text('agencemenage.ma', margin, y + 10);
 
-  pdf.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  y += 18;
+  pdf.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
+  pdf.setLineWidth(0.5);
+  pdf.line(margin, y, pageWidth - margin, y);
+  y += 8;
+
+  // ==================== OBJET ====================
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(11);
+  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
   pdf.text('Objet :', margin, y);
   pdf.setFont('helvetica', 'normal');
-  pdf.text(data.objet, margin + 14, y);
-  y += 10;
+  pdf.text(data.objet, margin + 18, y);
+  y += 12;
 
-  // ---- Bloc informations client ----
+  // ==================== INFORMATIONS CLIENT ====================
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
+  pdf.setFontSize(12);
   pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
   pdf.text('INFORMATIONS CLIENT', margin, y);
-  y += 2.5;
-  pdf.setDrawColor(226, 232, 240);
-  pdf.setLineWidth(0.2);
-  pdf.line(margin, y, right, y);
-  y += 7;
+  y += 3;
+  pdf.setDrawColor(BORDER_GREY[0], BORDER_GREY[1], BORDER_GREY[2]);
+  pdf.setLineWidth(0.3);
+  pdf.line(margin, y, pageWidth - margin, y);
+  y += 8;
 
-  const labels = ["Bénéficiaire", "Donneur d'ordre", "Téléphone", "Adresse"];
-  const values = [
+  const clientLabels = ["Bénéficiaire", "Donneur d'ordre", "Téléphone", "Adresse"];
+  const clientValues = [
     data.client.beneficiaire,
     data.client.donneurOrdre,
     data.client.telephone,
     data.client.adresse,
   ];
-  const labelX = margin;
-  const valueX = margin + 55;
+  
   pdf.setFontSize(10);
-  for (let i = 0; i < labels.length; i++) {
+  for (let i = 0; i < clientLabels.length; i++) {
     pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-    pdf.text(labels[i], labelX, y);
+    pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+    pdf.text(clientLabels[i], margin, y);
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(55, 65, 81);
-    pdf.text(values[i], valueX, y);
+    pdf.setTextColor(MEDIUM_GREY[0], MEDIUM_GREY[1], MEDIUM_GREY[2]);
+    pdf.text(clientValues[i], margin + 50, y);
     y += 6.5;
   }
+  y += 6;
 
-  y += 3;
-
-  // ---- Texte de remerciement ----
-  pdf.setFontSize(9);
+  // ==================== TEXTE DE REMERCIEMENT ====================
+  pdf.setFontSize(9.5);
   pdf.setFont('helvetica', 'italic');
-  pdf.text(
-    "Nous vous remercions de la confiance que vous nous accordez pour l'accompagnement de votre proche. " +
-    "Agence Ménage met à disposition des auxiliaires de vie formées, attentionnées et expérimentées, " +
-    "sélectionnées pour leur sens du soin et leur bienveillance. Notre engagement est de garantir confort, " +
-    "sécurité et qualité de vie au quotidien.",
-    margin, y,
-    { maxWidth: contentWidth, align: 'justify' }
-  );
-  y += 12;
+  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+  const remerciement = "Nous vous remercions de la confiance que vous nous accordez pour l'accompagnement de votre proche. Agence Ménage met à disposition des auxiliaires de vie formées, attentionnées et expérimentées, sélectionnées pour leur sens du soin et leur bienveillance. Notre engagement est de garantir confort, sécurité et qualité de vie au quotidien.";
+  pdf.text(remerciement, margin, y, { maxWidth: contentWidth, align: 'justify' });
+  y += 14;
 
-  // ---- Tableau DÉTAIL DE LA PRESTATION ----
-  pdf.setFontSize(11);
+  // ==================== TABLEAU DÉTAIL DE LA PRESTATION ====================
+  pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
   pdf.text('DÉTAIL DE LA PRESTATION', margin, y);
   y += 6;
 
-  const colDescX = margin;
+  // Table header
   pdf.setFillColor(243, 244, 246);
-  pdf.rect(margin, y, contentWidth, 8, 'F');
+  pdf.rect(margin, y, contentWidth, 9, 'F');
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(55, 65, 81);
-  pdf.text('Désignation', colDescX + 4, y + 5.5);
-  pdf.text('Montant HT', pageWidth - margin - 4, y + 5.5, { align: 'right' });
-  y += 10;
+  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+  pdf.text('Désignation', margin + 5, y + 6);
+  pdf.text('Montant HT', pageWidth - margin - 5, y + 6, { align: 'right' });
+  y += 9;
 
+  // Table rows
   pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  data.prestations.forEach((ligne, idx) => {
-    if (idx % 2 === 1) {
-      pdf.setFillColor(249, 250, 251);
-      pdf.rect(margin, y - 4.5, contentWidth, 8, 'F');
-    }
-    pdf.text(ligne.desc, colDescX + 4, y, { maxWidth: 115 });
-    const montant = typeof ligne.montant === 'number'
-      ? `${formatNumber(ligne.montant)} DH`
-      : ligne.montant;
-    pdf.text(montant, pageWidth - margin - 4, y, { align: 'right' });
-    y += 8;
-  });
+  pdf.setFontSize(10);
+  const descColWidth = contentWidth - 40;
+  for (let i = 0; i < data.prestations.length; i++) {
+    const prestation = data.prestations[i];
+    const lines = pdf.splitTextToSize(prestation.desc, descColWidth);
+    const rowHeight = Math.max(8, lines.length * 5 + 2);
 
-  // Ligne Total
+    if (i % 2 === 1) {
+      pdf.setFillColor(249, 250, 251);
+      pdf.rect(margin, y, contentWidth, rowHeight, 'F');
+    }
+    
+    pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+    pdf.text(lines, margin + 5, y + 5);
+    pdf.text(`${formatNumber(prestation.montant)} DH`, pageWidth - margin - 5, y + 5, { align: 'right' });
+    y += rowHeight;
+  }
+
+  // Total line
   pdf.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
   pdf.setLineWidth(0.4);
-  pdf.line(margin, y - 4, pageWidth - margin, y - 4);
-  pdf.setFillColor(239, 246, 255);
-  pdf.rect(margin, y - 4, contentWidth, 10, 'F');
+  pdf.line(margin, y + 1, pageWidth - margin, y + 1);
+  pdf.setFillColor(LIGHT_BLUE[0], LIGHT_BLUE[1], LIGHT_BLUE[2]);
+  pdf.rect(margin, y + 1, contentWidth, 10, 'F');
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(12);
-  pdf.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  pdf.text('TOTAL HT', pageWidth - margin - 50, y + 2, { align: 'right' });
-  const totalHT = typeof data.totalHT === 'number'
-    ? `${formatNumber(data.totalHT)} DH`
-    : data.totalHT;
-  pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  pdf.text(totalHT, pageWidth - margin - 4, y + 2, { align: 'right' });
-  y += 12;
-
-  // Note tarif longue durée
-  pdf.setFillColor(236, 253, 245);
-  pdf.rect(margin, y, contentWidth, 12, 'F');
-  pdf.setFontSize(9.5);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(22, 101, 52);
-  pdf.text(
-    '✓ Pour les missions de plus d\'un mois, un tarif préférentiel de −10% est appliqué automatiquement. Contactez-nous pour un devis mission longue durée.',
-    margin + 4,
-    y + 7,
-    { maxWidth: contentWidth - 8 }
-  );
-  y += 18;
-
-  // ---- NOTES ET CONDITIONS PARTICULIÈRES ----
   pdf.setFontSize(11);
+  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+  pdf.text('TOTAL HT', pageWidth - margin - 55, y + 7);
+  pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  pdf.text(`${formatNumber(data.totalHT)} DH`, pageWidth - margin - 5, y + 7, { align: 'right' });
+  y += 17;
+
+  // ==================== NOTE MISSION LONGUE DURÉE ====================
+  const noteText = "Pour les missions de plus d'un mois, un tarif préférentiel de -10% est appliqué automatiquement. Contactez-nous pour un devis mission longue durée.";
+  const noteLines = pdf.splitTextToSize(noteText, contentWidth - 15);
+  const noteHeight = noteLines.length * 5 + 6;
+
+  pdf.setFillColor(GREEN_BG[0], GREEN_BG[1], GREEN_BG[2]);
+  pdf.roundedRect(margin, y, contentWidth, noteHeight, 1.5, 1.5, 'F');
+  
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(GREEN_TEXT[0], GREEN_TEXT[1], GREEN_TEXT[2]);
+  
+  // Draw a custom bullet/checkmark manually for safety
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('>', margin + 5, y + 5.5);
+  
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(noteLines, margin + 9, y + 5.5);
+  y += noteHeight + 12;
+
+  // ==================== NOTES ET CONDITIONS PARTICULIÈRES ====================
+  pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
   pdf.text('NOTES ET CONDITIONS PARTICULIÈRES', margin, y);
-  y += 2.5;
-  pdf.setDrawColor(226, 232, 240);
-  pdf.setLineWidth(0.2);
-  pdf.line(margin, y, right, y);
-  y += 7;
+  y += 3;
+  pdf.setDrawColor(BORDER_GREY[0], BORDER_GREY[1], BORDER_GREY[2]);
+  pdf.setLineWidth(0.3);
+  pdf.line(margin, y, pageWidth - margin, y);
+  y += 8;
+  
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
   const notes = [
     "• Intervenant(e) dédié(e) et stable sur toute la durée de la mission.",
     "• Remplacement garanti en cas d'absence de l'intervenante.",
@@ -223,95 +244,87 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   ];
   for (const note of notes) {
     pdf.text(note, margin + 5, y);
-    y += 5;
+    y += 5.5;
   }
-  y += 7;
+  y += 8;
 
-  // ---- MESSAGE D'ACCOMPAGNEMENT ----
-  pdf.setFontSize(11);
+  // ==================== MESSAGE D'ACCOMPAGNEMENT ====================
+  pdf.addPage();
+  y = margin + 10;
+  
+  pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
   pdf.text("MESSAGE D'ACCOMPAGNEMENT", margin, y);
-  y += 2.5;
-  pdf.setDrawColor(226, 232, 240);
-  pdf.setLineWidth(0.2);
-  pdf.line(margin, y, right, y);
-  y += 6.5;
+  y += 3;
+  pdf.setDrawColor(BORDER_GREY[0], BORDER_GREY[1], BORDER_GREY[2]);
+  pdf.setLineWidth(0.3);
+  pdf.line(margin, y, pageWidth - margin, y);
+  y += 8;
+  
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+  
+  const message = data.message || `Cher M. Benali,
 
-  const defaultMessage = `Cher M. Benali,
-
-Nous comprenons l’importance de trouver une personne de confiance pour accompagner votre mère au quotidien. Nous vous assurons de notre engagement à vous proposer une auxiliaire de vie attentive, professionnelle et stable tout au long de la mission.
+Nous comprenons l'importance de trouver une personne de confiance pour accompagner votre mère au quotidien. Nous vous assurons de notre engagement à vous proposer une auxiliaire de vie attentive, professionnelle et stable tout au long de la mission.
 
 Ce devis couvre 4 semaines d'accompagnement avec les prestations sélectionnées. N'hésitez pas à nous contacter pour ajuster la mission à l'évolution des besoins.
 
 Avec toute notre disponibilité,
-  L’équipe Agence Ménage — 06 64 22 67 90`;
-
-  const message = data.message || defaultMessage;
+L'équipe Agence Ménage — 06 64 22 67 90`;
 
   const messageLines = pdf.splitTextToSize(message, contentWidth);
-  const lineHeight = 5; // mm par ligne
-  const messageBlockHeight = messageLines.length * lineHeight;
-  if (y + messageBlockHeight > 270) {
-    pdf.addPage();
-    y = margin;
-  }
+  const messageHeight = messageLines.length * 5;
+  
   pdf.text(messageLines, margin, y);
-  y += messageBlockHeight + 12;
+  y += messageHeight + 12;
 
-  // ---- Bloc signatures ----
-  const sigBlockHeight = 25;
-  if (y + sigBlockHeight > 270) {
-    pdf.addPage();
-    y = margin;
-  }
-
-  const sigLeftX = margin;
-  const sigRightX = margin + 100;
+  // ==================== SIGNATURES ====================
   const sigY = y;
-
+  
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'bold');
-  pdf.text("Pour Agence Ménage :", sigLeftX, sigY);
-  pdf.line(sigLeftX, sigY + 5, sigLeftX + 75, sigY + 5);
-  pdf.setFontSize(7.5);
+  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+  pdf.text("Pour Agence Ménage :", margin, sigY);
+  pdf.line(margin, sigY + 5, margin + 80, sigY + 5);
+  pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
-  pdf.text("Nom et cachet", sigLeftX, sigY + 9);
-
+  pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
+  pdf.text("Nom et cachet", margin, sigY + 9);
+  
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'bold');
-  pdf.text("Pour le client :", sigRightX, sigY);
-  pdf.line(sigRightX, sigY + 5, sigRightX + 75, sigY + 5);
-  pdf.setFontSize(7.5);
+  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+  pdf.text("Pour le client :", margin + 110, sigY);
+  pdf.line(margin + 110, sigY + 5, margin + 190, sigY + 5);
+  pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
-  pdf.text('Nom, date et signature précédée de "Bon pour accord"', sigRightX, sigY + 9);
+  pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
+  pdf.text('Nom, date et signature précédée de "Bon pour accord"', margin + 110, sigY + 9);
 
-  y = sigY + 20;
+  y = sigY + 25;
 
-  const totalPages = (pdf.internal as any).getNumberOfPages?.() ?? pdf.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
+  // ==================== FOOTER (all pages) ====================
+  const pageCount = pdf.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
     pdf.setPage(i);
-    pdf.setFontSize(7.5);
-    pdf.setTextColor(100);
-    const footerLineY = pageHeight - 22;
-    pdf.setDrawColor(226, 232, 240);
-    pdf.line(margin, footerLineY, pageWidth - margin, footerLineY);
+    const footerY = pageHeight - 30;
     
-    pdf.text(
-      "Agence Ménage — 36 Boulevard d’Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | contact@agencemenage.ma | agencemenage.ma",
-      pageWidth / 2,
-      footerLineY + 4,
-      { align: 'center', maxWidth: contentWidth }
-    );
-    pdf.text(
-      "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d’émission. Toute acceptation vaut engagement contractuel.",
-      pageWidth / 2,
-      footerLineY + 12,
-      { align: 'center', maxWidth: contentWidth }
-    );
+    pdf.setDrawColor(BORDER_GREY[0], BORDER_GREY[1], BORDER_GREY[2]);
+    pdf.setLineWidth(0.3);
+    pdf.line(margin, footerY, pageWidth - margin, footerY);
+    
+    pdf.setFontSize(7.5);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
+    
+    const footerText1 = "Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | contact@agencemenage.ma | agencemenage.ma";
+    pdf.text(footerText1, pageWidth / 2, footerY + 4, { align: 'center', maxWidth: contentWidth });
+    
+    const footerText2 = "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.";
+    pdf.text(footerText2, pageWidth / 2, footerY + 11, { align: 'center', maxWidth: contentWidth });
   }
 
   return pdf.output('blob');
@@ -340,8 +353,28 @@ async function genererDevisAuxiliaireAvecLogo(data: DevisAuxiliaireData, logoUrl
   return await genererDevisAuxiliaire(data);
 }
 
+// Exemple d'utilisation avec les données du devis original
+const exempleDevisData: DevisAuxiliaireData = {
+  numDevis: "DEV-2024-001",
+  date: "15/05/2026",
+  objet: "Auxiliaire de vie — Accompagnement journée — Mission 4 semaines",
+  client: {
+    beneficiaire: "Mme Fatima Benali (mère de M. Khalil Benali)",
+    donneurOrdre: "M. Khalil Benali",
+    telephone: "06 61 23 45 67",
+    adresse: "123 Avenue des FAR, Casablanca"
+  },
+  prestations: [
+    { desc: "Accompagnement journée (8h/j) — 5 j/semaine × 4 semaines (20 jours)", montant: 4800 },
+    { desc: "Aide à la toilette — 20 jours", montant: 1000 },
+    { desc: "Préparation des repas — 20 jours", montant: 800 }
+  ],
+  totalHT: 6600
+};
+
 export {
   genererDevisAuxiliaire,
   genererDevisAuxiliaireAvecLogo,
   type DevisAuxiliaireData,
+  exempleDevisData
 };

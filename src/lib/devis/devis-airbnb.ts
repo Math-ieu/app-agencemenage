@@ -43,6 +43,10 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
   if (logoBase64) {
     try {
       doc.addImage(logoBase64, 'PNG', MARGIN, y - 6, 38, 18);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(10);
+      doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+      doc.text('Premium, tout simplement.', MARGIN, y + 16);
     } catch {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(20);
@@ -65,15 +69,19 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
   }
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
+  doc.setFontSize(32);
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
   doc.text('DEVIS', RIGHT, y, { align: 'right' });
+  
+  doc.setFontSize(14);
+  doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  doc.text(`N° ${data.numero}`, RIGHT, y + 10, { align: 'right' });
+  
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
+  doc.setFontSize(11);
   doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-  doc.text(`N° ${data.numero}`, RIGHT, y + 8, { align: 'right' });
-  doc.text(`Date : ${data.date}`, RIGHT, y + 14, { align: 'right' });
-  doc.text('Valable 30 jours', RIGHT, y + 20, { align: 'right' });
+  doc.text(`Date : ${data.date}`, RIGHT, y + 17, { align: 'right' });
+  doc.text('Valable 30 jours', RIGHT, y + 24, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
@@ -222,9 +230,20 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
     y += 6.5;
   });
 
-  // Page 2
+  // Page 2 - Message d'accompagnement
   doc.addPage();
-  y = 30;
+  y = MARGIN + 10;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text("MESSAGE D'ACCOMPAGNEMENT", MARGIN, y);
+  y += 3;
+  doc.setDrawColor(229, 231, 235);
+  doc.setLineWidth(0.3);
+  doc.line(MARGIN, y, RIGHT, y);
+  y += 8;
+
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10.5);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
