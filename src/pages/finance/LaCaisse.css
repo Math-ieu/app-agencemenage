@@ -243,6 +243,11 @@
   font-weight: 700;
 }
 
+.lc-type-pill-sortie {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
 .lc-libelle {
   font-weight: 700;
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X } from 'lucide-react';
 import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement, getMissions, getDemandesHistorique } from '../../api/client';
+import { useAuthStore } from '../../store/auth';
 import './LaCaisse.css';
 
 interface CashRow {
@@ -71,6 +72,7 @@ const extractAmount = (value: string): string => {
 };
 
 export default function LaCaisse() {
+  const user = useAuthStore(state => state.user);
   const [rows, setRows] = useState<CashRow[]>([]);
   const [operationsCount, setOperationsCount] = useState(0);
   const [stats, setStats] = useState({ total_entrees: 0, total_sorties: 0, solde: 0, solde_jour: 0 });
@@ -287,7 +289,7 @@ export default function LaCaisse() {
     setMovementAmount('0.00');
     setMovementLabel('');
     setMovementClient('');
-    setMovementUser('');
+    setMovementUser(user?.full_name || user?.first_name || '');
     setMovementNotes('');
     setMovementDocumentName('Cliquer pour télécharger (facture, reçu...)');
     setMovementDocumentFile(null);
@@ -477,7 +479,7 @@ export default function LaCaisse() {
               {rows.map((row) => (
                 <tr key={row.id}>
                   <td>{row.date}</td>
-                  <td><span className="lc-type-pill">{row.type}</span></td>
+                  <td><span className={`lc-type-pill ${row.typeCode === 'sortie' ? 'lc-type-pill-sortie' : ''}`}>{row.type}</span></td>
                   <td className="lc-libelle">{row.libelle}</td>
                   <td>{row.client}</td>
                   <td>{row.modePaiement}</td>

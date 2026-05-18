@@ -18,9 +18,12 @@ interface QuoteSectionProps {
   demande: any;
   onPreview: (demande: any, type: 'devis' | 'png') => void;
   onSend: (demande: any, type: 'devis' | 'png') => void;
+  formData?: any;
+  setFormData?: (data: any) => void;
+  onUpdateDemandeData?: (demandeId: number, patch: Record<string, any>) => void;
 }
 
-export default function QuoteSection({ demande, onPreview, onSend }: QuoteSectionProps) {
+export default function QuoteSection({ demande, onPreview, onSend, formData, setFormData, onUpdateDemandeData }: QuoteSectionProps) {
   const service = (demande.service || "").toLowerCase();
   const isDevis = demande.segment === 'entreprise' || 
     service.includes('air bnb') || service.includes('airbnb') || 
@@ -74,7 +77,7 @@ export default function QuoteSection({ demande, onPreview, onSend }: QuoteSectio
   };
 
   const getComponent = () => {
-    if (service.includes("air bnb") || service.includes("airbnb")) return <AirbnbQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("air bnb") || service.includes("airbnb")) return <AirbnbQuote demande={demande} onPrestationsChange={handlePrestationsChange} formData={formData} setFormData={setFormData} onUpdateDemandeData={patch => onUpdateDemandeData?.(demande.id, patch)} />;
     if (service.includes("chantier")) return <ChantierQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
     if (service.includes("auxiliaire")) return <AuxvieQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
     if (service.includes("sinistre")) return <SinistreQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;

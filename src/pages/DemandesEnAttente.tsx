@@ -15,6 +15,7 @@ import { normalizeFrequence, normalizePayment, normalizeStructure, normalizeTime
 import { usePriceCalculator } from '../hooks/usePriceCalculator';
 import { useResourceEstimator } from '../hooks/useResourceEstimator';
 import QuoteSection from '../components/demandes/quotes/QuoteSection';
+import { DynamicServiceForm } from '../components/demandes/forms/DynamicServiceForm';
 
 const isDevisRequired = (d: Demande | null) => {
   if (!d) return false;
@@ -114,7 +115,12 @@ export default function DemandesEnAttente() {
       toilettesLavabo: 0,
       rooftop: 0,
       escalier: 0
-    } as Record<string, number>
+    } as Record<string, number>,
+    // AirBnB
+    formula: 'A' as 'A' | 'B',
+    size_tier: '1chambre',
+    conso: false,
+    linen_sets: 0
   });
 
   const { user } = useAuthStore();
@@ -129,14 +135,20 @@ export default function DemandesEnAttente() {
 
   const selectedServiceKey = normalizeServiceLabel(selectedService);
   const isAuxiliaireService = selectedServiceKey.includes('auxiliaire de vie');
+  // @ts-ignore
   const isPlacementGestionService = selectedServiceKey.includes('placement & gestion') || selectedServiceKey.includes('placement et gestion');
   const isCleaningService = selectedServiceKey.includes('menage') || selectedServiceKey.includes('nettoyage');
   const isMenageBureauxService = selectedServiceKey.includes('menage bureaux');
+  // @ts-ignore
   const isPostSinistreService = selectedServiceKey.includes('post-sinistre') || selectedServiceKey.includes('post sinistre');
+  // @ts-ignore
   const isPostDemenagementService = selectedServiceKey.includes('post-demenagement') || selectedServiceKey.includes('post demenagement');
+  // @ts-ignore
   const isMenageStandardService = selectedServiceKey.includes('menage standard');
   const isGrandMenageService = selectedServiceKey.includes('grand menage');
+  // @ts-ignore
   const isMenageAirBnBService = selectedServiceKey.includes('air bnb') || selectedServiceKey.includes('airbnb');
+  // @ts-ignore
   const isFinChantierService = selectedServiceKey.includes('fin de chantier') || selectedServiceKey.includes('fin chantier');
   const minDuree = isGrandMenageService ? 6 : isMenageBureauxService ? 2 : 4;
 
@@ -422,7 +434,8 @@ export default function DemandesEnAttente() {
       rooms: {
         cuisine: 1, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 1, chambre: 1,
         salonMarocain: 0, salonEuropeen: 1, toilettesLavabo: 0, rooftop: 0, escalier: 0
-      }
+      },
+      formula: 'A', size_tier: '1chambre', conso: false, linen_sets: 0
     });
     setShowCreateModal(true);
     setShowNewMenu(false);
@@ -476,7 +489,11 @@ export default function DemandesEnAttente() {
       rooms: d.formulaire_data?.rooms || {
         cuisine: 1, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 1, chambre: 1,
         salonMarocain: 0, salonEuropeen: 1, toilettesLavabo: 0, rooftop: 0, escalier: 0
-      }
+      },
+      formula: d.formulaire_data?.formula || 'A',
+      size_tier: d.formulaire_data?.size_tier || d.formulaire_data?.sizeTier || '1chambre',
+      conso: d.formulaire_data?.conso || false,
+      linen_sets: d.formulaire_data?.linen_sets || d.formulaire_data?.linenSets || 0
     });
     setShowCreateModal(true);
   };
@@ -589,7 +606,14 @@ export default function DemandesEnAttente() {
           whatsappNumber: finalWhatsApp,
           notes: formData.notes,
           // Detailed rooms
-          rooms: formData.rooms
+          rooms: formData.rooms,
+          // AirBnB
+          formula: formData.formula,
+          size_tier: formData.size_tier,
+          sizeTier: formData.size_tier,
+          conso: formData.conso,
+          linen_sets: formData.linen_sets,
+          linenSets: formData.linen_sets
         }
       };
 
@@ -609,6 +633,38 @@ export default function DemandesEnAttente() {
     } catch (err) {
       console.error(err);
       addToast('Erreur lors de l\'enregistrement.', 'error');
+    }
+  };
+
+  const handleQuoteUpdate = async (demandeId: number, patch: Record<string, any>) => {
+    // 1. Local optimistic update so UI is immediately responsive
+    setDemandes(prev => prev.map(d => {
+      if (d.id === demandeId) {
+        return {
+          ...d,
+          formulaire_data: {
+            ...(d.formulaire_data || {}),
+            ...patch
+          }
+        };
+      }
+      return d;
+    }));
+
+    // 2. Background API update
+    try {
+      const targetDemande = demandes.find(d => d.id === demandeId);
+      if (!targetDemande) return;
+
+      await updateDemande(demandeId, {
+        formulaire_data: {
+          ...(targetDemande.formulaire_data || {}),
+          ...patch
+        }
+      });
+    } catch (e) {
+      console.error('Erreur lors de la synchro du devis', e);
+      addToast('Erreur lors de la synchronisation du devis.', 'error');
     }
   };
 
@@ -897,6 +953,7 @@ export default function DemandesEnAttente() {
                     demande={d} 
                     onPreview={handlePreviewDocument}
                     onSend={handleDirectSendWhatsApp}
+                    onUpdateDemandeData={handleQuoteUpdate}
                   />
 
                   <div className="pending-footer">
@@ -1004,6 +1061,7 @@ export default function DemandesEnAttente() {
                     demande={d} 
                     onPreview={handlePreviewDocument}
                     onSend={handleDirectSendWhatsApp}
+                    onUpdateDemandeData={handleQuoteUpdate}
                   />
                 </div>
 
@@ -1057,402 +1115,179 @@ export default function DemandesEnAttente() {
                 {/* ====== CONDITIONAL SERVICE SECTIONS ====== */}
                 {isAuxiliaireService ? (
                   /* Auxiliaire de vie - Service sur mesure */
-                  <div className="ws-form-block">
-                    <div className="ws-section-header">Service sur mesure — {selectedService}</div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <div className="ws-section-header" style={{ background: '#f1f5f9', color: 'var(--primary)', fontSize: '0.9rem' }}>Lieu de la garde</div>
-                        <div className="ws-radio-pills">
-                          {['domicile', 'clinique', 'hopital'].map(loc => (
-                            <label key={loc} className="ws-radio-pill">
-                              <input type="radio" name="careLocation" value={loc} checked={formData.lieu_garde === loc} onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })} />
-                              <span>{loc === 'domicile' ? 'Domicile' : loc === 'clinique' ? 'Clinique' : 'Hôpital'}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="form-group">
-                        <label className="label-teal">Fréquence *</label>
-                        <select className="ws-select" required value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })}>
-                          <option value="">Sélectionner...</option>
-                          <option value="une fois">Une fois - Tranche 24h</option>
-                          <option value="1/sem">Abonnement - 1 fois / semaine</option>
-                          <option value="quotidien">Abonnement - Quotidien</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="label-teal">Nombre de jours *</label>
-                        <div className="ws-counter">
-                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_jours: Math.max(1, formData.nb_jours - 1) })} disabled={formData.nb_jours <= 1}>−</button>
-                          <span className="ws-counter-value">{formData.nb_jours}</span>
-                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_jours: formData.nb_jours + 1 })}>+</button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="ws-section-header" style={{ marginTop: '1rem', background: '#f1f5f9', color: 'var(--primary)', fontSize: '0.9rem' }}>Profil de la personne aidée</div>
-                    <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
-                      <div className="form-group">
-                        <label className="label-teal">Âge *</label>
-                        <input type="number" placeholder="Ans" required value={formData.age_personne} onChange={e => setFormData({ ...formData, age_personne: e.target.value })} />
-                      </div>
-                      <div className="form-group">
-                        <label className="label-teal">Sexe *</label>
-                        <select className="ws-select" required value={formData.sexe_personne} onChange={e => setFormData({ ...formData, sexe_personne: e.target.value })}>
-                          <option value="">Sélectionner...</option>
-                          <option value="femme">Femme</option>
-                          <option value="homme">Homme</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="label-teal">Mobilité *</label>
-                        <select className="ws-select" required value={formData.mobilite} onChange={e => setFormData({ ...formData, mobilite: e.target.value })}>
-                          <option value="">Sélectionner...</option>
-                          <option value="adulte">Adulte</option>
-                          <option value="agee">Personne Agée</option>
-                          <option value="autonome">Autonome</option>
-                          <option value="besoin_aide">Besoin d'aide</option>
-                          <option value="alitee">Alité(e)</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="label-teal">Pathologie / Situation médicale *</label>
-                        <textarea rows={2} placeholder="Précisez la situation..." required value={formData.situation_medicale} onChange={e => setFormData({ ...formData, situation_medicale: e.target.value })}></textarea>
-                      </div>
-                    </div>
-                  </div>
-                ) : isPlacementGestionService ? (
-                  /* Placement & gestion - Service sur mesure */
-                  <div className="ws-form-block">
-                    <div className="ws-section-header">Service sur mesure — {selectedService}</div>
-                    <p style={{ textAlign: 'center', color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>Un chargé de clientèle prendra contact avec l'entreprise pour établir une offre personnalisée.</p>
-
-                    <div className="ws-section-header" style={{ background: '#f1f5f9', color: 'var(--primary)', fontSize: '0.9rem' }}>Type de service</div>
-                    <div className="ws-radio-pills">
-                      {[{ v: 'flexible', l: 'Service ménage flexible' }, { v: 'gestion360', l: 'Service ménage Premium' }].map(o => (
-                        <label key={o.v} className="ws-radio-pill">
-                          <input type="radio" name="placementServiceType" value={o.v} checked={formData.service_type === o.v} onChange={e => setFormData({ ...formData, service_type: e.target.value })} />
-                          <span>{o.l}</span>
-                        </label>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem', marginTop: '0.75rem' }}>
-                      <div className="form-group">
-                        <label className="label-teal">Type de structure *</label>
-                        <select className="ws-select" required value={formData.structure_type} onChange={e => setFormData({ ...formData, structure_type: e.target.value })}>
-                          <option value="">Sélectionner...</option>
-                          <option value="bureaux">Bureaux</option>
-                          <option value="magasin">Magasin/Boutique</option>
-                          <option value="restaurant">Restaurant/Café</option>
-                          <option value="clinique">Clinique / Hôpital</option>
-                          <option value="hotel">Hôtel / Riad</option>
-                          <option value="residence">Immeuble/Résidence/Luxe</option>
-                          <option value="entrepot">Entrepôt</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="label-teal">Fréquence *</label>
-                        <select className="ws-select" required value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })}>
-                          <option value="">Sélectionner...</option>
-                          <option value="une fois">Une fois</option>
-                          <option value="1/sem">1 fois / semaine</option>
-                          <option value="2/sem">2 fois / semaine</option>
-                          <option value="3/sem">3 fois / semaine</option>
-                          <option value="1/mois">1 fois / mois</option>
-                          <option value="quotidien">Quotidien</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="label-teal">Nombre de personnel *</label>
-                        <div className="ws-counter">
-                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_personnel: Math.max(1, formData.nb_personnel - 1) })} disabled={formData.nb_personnel <= 1}>−</button>
-                          <span className="ws-counter-value">{formData.nb_personnel}</span>
-                          <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_personnel: formData.nb_personnel + 1 })}>+</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* ====== STANDARD MÉNAGE SERVICES ====== */
                   <>
-                    {/* Type d'habitation */}
-                    {isCleaningService && !isGrandMenageService && !isMenageBureauxService && (
-                      <div className="ws-form-block">
-                        <div className="ws-section-header">
-                          Type d'habitation
-                        </div>
-                        <div className="ws-radio-pills">
-                          {['Studio', 'Appartement', 'Duplex', 'Villa', 'Maison'].map(type => (
-                            <label key={type} className="ws-radio-pill">
-                              <input type="radio" name="propertyType" value={type} checked={formData.type_habitation === type} onChange={e => setFormData({ ...formData, type_habitation: e.target.value })} />
-                              <span>{type}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Nature d'intervention (Post-sinistre) */}
-                    {isPostSinistreService && (
-                      <div className="ws-form-block">
-                        <div className="ws-section-header">Nature de l'intervention</div>
-                        <div className="ws-nature-cards">
-                          {[
-                            { v: 'sinistre', l: 'Après sinistre' },
-                            { v: 'event', l: 'Post évènement' },
-                            { v: 'express', l: 'Remise en état express' },
-                            { v: 'autre', l: 'Autre situation urgente' }
-                          ].map(n => (
-                            <div key={n.v} className={`ws-nature-card ${formData.intervention_nature === n.v ? 'active' : ''}`} onClick={() => setFormData({ ...formData, intervention_nature: n.v })}>
-                              {n.l}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* État du logement (Déménagement) */}
-                    {isPostDemenagementService && (
-                      <div className="ws-form-block">
-                        <div className="ws-section-header">État du logement</div>
-                        <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
-                          <div className="form-group">
-                            <label className="label-teal">État du logement *</label>
-                            <select className="ws-select" required value={formData.accommodation_state} onChange={e => setFormData({ ...formData, accommodation_state: e.target.value })}>
-                              <option value="">Choisir...</option>
-                              <option value="vide">Vide</option>
-                              <option value="meuble">Meublé</option>
-                            </select>
-                          </div>
-                          <div className="form-group">
-                            <label className="label-teal">Niveau de salissure *</label>
-                            <select className="ws-select" required value={formData.cleanliness_type} onChange={e => setFormData({ ...formData, cleanliness_type: e.target.value })}>
-                              <option value="">Choisir...</option>
-                              <option value="normal">Normal</option>
-                              <option value="intensif">Intensif</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Fréquence */}
-                    {/* Surface bureau (cards) */}
-                    {isMenageBureauxService && (
-                      <div className="ws-form-block">
-                        <div className="ws-section-header">Superficie de vos locaux</div>
-                        <div className="ws-surface-cards">
-                          {[
-                            { v: '0-70', l: '0 - 70 m²' },
-                            { v: '71-150', l: '71 - 150 m²' },
-                            { v: '151-300', l: '151 - 300 m²' },
-                            { v: '300+', l: '300 m² et plus' }
-                          ].map(s => (
-                            <div key={s.v} className={`ws-surface-card ${String(formData.surface) === s.v ? 'active' : ''}`} onClick={() => setFormData({ ...formData, surface: s.v as any })}>
-                              {s.l}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
                     <div className="ws-form-block">
                       <div className="ws-section-header">Choisissez la fréquence</div>
-                      <div className="ws-freq-toggle">
-                        <button type="button" className={formData.frequence === 'une fois' || !formData.frequence ? 'active' : ''} onClick={() => setFormData({ ...formData, frequence: 'une fois' })}>
-                          Une fois
-                        </button>
-                        <button type="button" className={formData.frequence !== 'une fois' && formData.frequence ? 'active' : ''} onClick={() => setFormData({ ...formData, frequence: '1/sem' })}>
-                          Abonnement
-                        </button>
-                      </div>
-                      {formData.frequence && formData.frequence !== 'une fois' && (
-                        <div style={{ maxWidth: '380px', margin: '0 auto' }}>
-                          <div className="ws-discount-badge">-10 % de réduction sur l'abonnement</div>
-                          <select className="ws-select" value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })}>
-                            <option value="1/sem">1 fois par semaine</option>
-                            <option value="2/sem">2 fois par semaine</option>
-                            <option value="3/sem">3 fois par semaine</option>
-                            <option value="4/sem">4 fois par semaine</option>
-                            <option value="5/sem">5 fois par semaine</option>
-                            <option value="6/sem">6 fois par semaine</option>
-                            <option value="7/sem">7 fois par semaine</option>
-                            <option value="1/mois">1 fois par mois</option>
-                            <option value="2/mois">2 fois par mois</option>
-                            <option value="3/mois">3 fois par mois</option>
-                            <option value="4/mois">4 fois par mois</option>
-                          </select>
+                      <div className="p-4" style={{ backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                        <div className="ws-radio-pills" style={{ display: 'flex', gap: '0.5rem', background: '#f1f5f9', padding: '0.25rem', borderRadius: '9999px', margin: '0 auto', maxWidth: '400px' }}>
+                          {['une fois', 'abonnement'].map(freq => {
+                            const isSelected = (formData.frequence === 'une fois' && freq === 'une fois') || (formData.frequence !== 'une fois' && formData.frequence !== '' && freq === 'abonnement');
+                            return (
+                              <label key={freq} style={{ flex: 1, textAlign: 'center', cursor: 'pointer', padding: '0.75rem', borderRadius: '9999px', fontWeight: 'bold', transition: 'all 0.2s', background: isSelected ? 'var(--primary)' : 'transparent', color: isSelected ? 'white' : '#64748b' }}>
+                                <input type="radio" name="frequence_type" value={freq} style={{ display: 'none' }}
+                                  checked={isSelected}
+                                  onChange={() => {
+                                    if (freq === 'une fois') setFormData({ ...formData, frequence: 'une fois' });
+                                    else setFormData({ ...formData, frequence: '1/sem' });
+                                  }} />
+                                <span>{freq === 'une fois' ? 'Une fois' : 'Abonnement'}</span>
+                              </label>
+                            );
+                          })}
                         </div>
-                      )}
+                        {formData.frequence !== 'une fois' && formData.frequence !== '' && (
+                          <div style={{ marginTop: '1.5rem', maxWidth: '400px', margin: '1.5rem auto 0' }}>
+                            <select className="ws-select" required value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })} style={{ width: '100%' }}>
+                              <option value="1/sem">1 fois par semaine</option>
+                              <option value="2/sem">2 fois par semaine</option>
+                              <option value="3/sem">3 fois par semaine</option>
+                              <option value="4/sem">4 fois par semaine</option>
+                              <option value="5/sem">5 fois par semaine</option>
+                              <option value="6/sem">6 fois par semaine</option>
+                              <option value="7/sem">7 fois par semaine</option>
+                              <option value="1/mois">1 fois par mois</option>
+                              <option value="2/mois">2 fois par mois</option>
+                              <option value="3/mois">3 fois par mois</option>
+                              <option value="4/mois">4 fois par mois</option>
+                              <option value="quotidien">Abonnement - Quotidien</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Détails des pièces (Ménage Standard uniquement) */}
-                    {isMenageStandardService && (
-                      <div className="ws-form-block">
-                        <div className="ws-section-header">Merci de nous décrire votre domicile</div>
-                        <p style={{ color: '#ef4444', fontSize: '0.75rem', textAlign: 'right', fontWeight: 700, marginBottom: '0.5rem' }}>
-                          Cliquez sur + ou - pour décrire les pièces
-                        </p>
-                        <div className="ws-rooms-grid" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.5rem' }}>
-                          {[
-                            { key: 'cuisine', label: 'Cuisine', time: '45 min' },
-                            { key: 'suiteAvecBain', label: 'Suite parentale avec salle de bain', time: '75 min' },
-                            { key: 'suiteSansBain', label: 'Suite parentale sans salle de bain', time: '45 min' },
-                            { key: 'salleDeBain', label: 'Salle de bain', time: '30 min' },
-                            { key: 'chambre', label: 'Chambre/pièce/bureau', time: '40 min' },
-                            { key: 'salonMarocain', label: 'Salon Marocain', time: '35 min' },
-                            { key: 'salonEuropeen', label: 'Salon européen', time: '35 min' },
-                            { key: 'toilettesLavabo', label: 'Toilette Lavabo', time: '25 min' },
-                            { key: 'rooftop', label: 'Rooftop', time: '30 min' },
-                            { key: 'escalier', label: 'Escalier', time: '25 min' }
-                          ].map(room => (
-                            <div key={room.key} className="ws-room-row">
-                              <div>
-                                <div className="ws-room-label">{room.label}</div>
-                                <div className="ws-room-time">{room.time}</div>
-                              </div>
-                              <div className="ws-room-counter">
-                                <button type="button" className="ws-room-btn" onClick={() => setFormData({ ...formData, rooms: { ...formData.rooms, [room.key]: Math.max(0, (formData.rooms[room.key] || 0) - 1) } })}>−</button>
-                                <span className="ws-room-count">{formData.rooms[room.key] || 0}</span>
-                                <button type="button" className="ws-room-btn" onClick={() => setFormData({ ...formData, rooms: { ...formData.rooms, [room.key]: (formData.rooms[room.key] || 0) + 1 } })}>+</button>
-                              </div>
+                    <div className="ws-form-block">
+                      <div className="ws-section-header">Nombre de personne</div>
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '2rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                        <button type="button" onClick={() => setFormData({ ...formData, nb_personnel: Math.max(1, (formData.nb_personnel || 1) - 1) })} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e2e8f0', color: 'var(--primary)', fontSize: '1.5rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>−</button>
+                        <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)', minWidth: '40px', textAlign: 'center' }}>{formData.nb_personnel || 1}</span>
+                        <button type="button" onClick={() => setFormData({ ...formData, nb_personnel: (formData.nb_personnel || 1) + 1 })} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e2e8f0', color: 'var(--primary)', fontSize: '1.5rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>+</button>
+                      </div>
+                    </div>
+
+                    <div className="ws-form-block">
+                      <div className="ws-section-header">Planning de la demande</div>
+                      <div className="p-6" style={{ backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div style={{ textAlign: 'center' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 'bold', color: 'var(--primary)', fontSize: '0.875rem', cursor: 'pointer' }}>
+                              <input type="radio" name="scheduling_type" value="fixed" checked={formData.scheduling_type === 'fixed'} onChange={() => setFormData({ ...formData, scheduling_type: 'fixed' })} />
+                              Je souhaite une heure fixe
+                            </label>
+                            <input type="time" disabled={formData.scheduling_type !== 'fixed'} value={formData.heure || ''} onChange={e => setFormData({ ...formData, heure: e.target.value })} style={{ marginTop: '1rem', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', fontSize: '1.25rem', fontWeight: 'bold', textAlign: 'center', width: '120px' }} />
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 'bold', color: 'var(--primary)', fontSize: '0.875rem', cursor: 'pointer' }}>
+                              <input type="radio" name="scheduling_type" value="flexible" checked={formData.scheduling_type === 'flexible'} onChange={() => setFormData({ ...formData, scheduling_type: 'flexible' })} />
+                              Je suis flexible
+                            </label>
+                            <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: '500' }}>
+                                <input type="radio" name="preference_horaire" value="matin" disabled={formData.scheduling_type !== 'flexible'} checked={formData.preference_horaire === 'matin'} onChange={() => setFormData({ ...formData, preference_horaire: 'matin' })} />
+                                Le matin
+                              </label>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: '500' }}>
+                                <input type="radio" name="preference_horaire" value="apres_midi" disabled={formData.scheduling_type !== 'flexible'} checked={formData.preference_horaire === 'apres_midi'} onChange={() => setFormData({ ...formData, preference_horaire: 'apres_midi' })} />
+                                L'après midi
+                              </label>
                             </div>
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <label style={{ fontWeight: 'bold', color: 'var(--primary)', display: 'block', marginBottom: '1rem', fontSize: '0.875rem' }}>Date</label>
+                            <input type="date" value={formData.date || ''} onChange={e => setFormData({ ...formData, date: e.target.value })} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', width: '100%', maxWidth: '200px' }} />
+                          </div>
+                        </div>
+
+                        <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '1.5rem', marginTop: '1.5rem', textAlign: 'center' }}>
+                          <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.875rem', display: 'block', marginBottom: '1rem' }}>Nombre de jours</label>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '1.5rem', background: 'white', padding: '0.5rem 1.5rem', borderRadius: '9999px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                            <button type="button" onClick={() => setFormData({ ...formData, nb_jours: Math.max(1, formData.nb_jours - 1) })} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#f1f5f9', color: 'var(--primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>−</button>
+                            <span style={{ fontWeight: 'bold', color: '#334155', fontSize: '0.875rem', textTransform: 'uppercase' }}>{formData.nb_jours || 1} JOUR(S)</span>
+                            <button type="button" onClick={() => setFormData({ ...formData, nb_jours: (formData.nb_jours || 1) + 1 })} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#f1f5f9', color: 'var(--primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>+</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="ws-form-block">
+                      <div className="ws-section-header">Profil de la personne aidée</div>
+                      <div className="p-6" style={{ backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                          <div>
+                            <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.875rem', display: 'block', marginBottom: '0.5rem' }}>Âge :</label>
+                            <div style={{ position: 'relative' }}>
+                              <input type="number" placeholder="Âge de la personne" required value={formData.age_personne || ''} onChange={e => setFormData({ ...formData, age_personne: e.target.value })} style={{ width: '100%', padding: '0.5rem 3rem 0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }} />
+                              <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '10px', fontWeight: 'bold', color: '#94a3b8' }}>ANS</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.875rem', display: 'block', marginBottom: '0.5rem' }}>Sexe :</label>
+                            <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.5rem' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: '500' }}>
+                                <input type="radio" name="sexe_personne" value="femme" checked={formData.sexe_personne === 'femme'} onChange={() => setFormData({ ...formData, sexe_personne: 'femme' })} />
+                                Femme
+                              </label>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: '500' }}>
+                                <input type="radio" name="sexe_personne" value="homme" checked={formData.sexe_personne === 'homme'} onChange={() => setFormData({ ...formData, sexe_personne: 'homme' })} />
+                                Homme
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div>
+                            <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.875rem', display: 'block', marginBottom: '0.5rem' }}>Mobilité et Type :</label>
+                            <div style={{ background: 'white', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                              {["Adulte", "Personne Agée", "Autonome", "Besoin d'aide", "Alité(e)"].map(mob => (
+                                <label key={mob} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', fontWeight: '500', color: '#334155' }}>
+                                  <input type="radio" name="mobilite" value={mob} checked={formData.mobilite === mob} onChange={() => setFormData({ ...formData, mobilite: mob })} />
+                                  {mob}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.875rem', display: 'block', marginBottom: '0.5rem' }}>Pathologie :</label>
+                            <textarea rows={5} placeholder="Détaillez ici la situation médicale..." required value={formData.situation_medicale || ''} onChange={e => setFormData({ ...formData, situation_medicale: e.target.value })} style={{ width: '100%', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', fontSize: '0.875rem', resize: 'none' }}></textarea>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="ws-form-block">
+                      <div className="ws-section-header">Autre précision</div>
+                      <div className="p-4" style={{ backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                        <textarea rows={3} placeholder="Ex: besoin d'un auxiliaire de vie homme, barrière de langue, régime particulier..." value={formData.notes || ''} onChange={e => setFormData({ ...formData, notes: e.target.value })} style={{ width: '100%', minHeight: '80px', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', fontSize: '0.875rem', resize: 'none' }}></textarea>
+                      </div>
+                    </div>
+
+                    <div className="ws-form-block">
+                      <div className="ws-section-header">Lieu de la garde</div>
+                      <div className="p-4" style={{ backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                        <div className="grid grid-cols-3 gap-4">
+                          {['domicile', 'clinique', 'hopital'].map(loc => (
+                            <label key={loc} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0.75rem', borderRadius: '0.75rem', border: formData.lieu_garde === loc ? '2px solid var(--primary)' : '2px solid transparent', background: formData.lieu_garde === loc ? 'white' : 'rgba(255,255,255,0.5)', cursor: 'pointer', transition: 'all 0.2s' }}>
+                              <input type="radio" name="careLocation" value={loc} style={{ marginBottom: '0.5rem' }} checked={formData.lieu_garde === loc} onChange={e => setFormData({ ...formData, lieu_garde: e.target.value })} />
+                              <span style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#334155', textTransform: 'capitalize' }}>{loc === 'hopital' ? 'Hôpital' : loc}</span>
+                            </label>
                           ))}
                         </div>
                       </div>
-                    )}
-
-                    {/* Surface (Grand Ménage, Fin Chantier, Déménagement) */}
-                    {(isGrandMenageService || isFinChantierService || isPostDemenagementService || isPostSinistreService || isMenageBureauxService) && (                      <div className="ws-form-block">
-                        <div className="ws-section-header">Superficie de votre bien en m²</div>
-                        <div className="ws-slider-container">
-                          <div className="ws-slider-value">{formData.surface} m²</div>
-                          <input type="range" className="ws-slider-input" min={0} max={300} step={10} value={formData.surface} onChange={e => setFormData({ ...formData, surface: parseInt(e.target.value) })} />
-                          <div className="ws-slider-labels">
-                            <span>0 m²</span>
-                            <span>150 m²</span>
-                            <span>300 m²</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Durée */}
-                    {(isMenageStandardService || isGrandMenageService || isMenageAirBnBService || isMenageBureauxService || isPostDemenagementService || isPostSinistreService || isFinChantierService) && (
-                      <div className="ws-form-block">
-                        <div className="ws-section-header">Précisez le temps qui vous convient</div>
-                        <p style={{ color: '#ef4444', fontSize: '0.65rem', textAlign: 'center', marginBottom: '0.5rem' }}>
-                          La durée minimale est de {minDuree} heures
-                        </p>
-                        <div className="flex items-center justify-center gap-4">
-                          <div className="ws-counter">
-                            <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: Math.max(minDuree, formData.duree - 1) })} disabled={formData.duree <= minDuree}>−</button>
-                            <span className="ws-counter-value">{formData.duree} h</span>
-                            <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: formData.duree + 1 })}>+</button>
-                          </div>
-                          {estimatedResources && formData.duree !== estimatedResources.duration && (
-                            <button 
-                              type="button"
-                              onClick={() => setFormData({ ...formData, duree: estimatedResources.duration })}
-                              className="text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded-full border border-teal-200 hover:bg-teal-200"
-                            >
-                              Suggéré: {estimatedResources.duration}h
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Nombre de personnes */}
-                    {(isMenageStandardService || isGrandMenageService || isMenageAirBnBService || isMenageBureauxService || isPostDemenagementService || isPostSinistreService || isFinChantierService) && (
-                      <div className="ws-form-block">
-                        <div className="ws-section-header">Nombre de personne</div>
-                        <div className="flex items-center justify-center gap-4">
-                          <div className="ws-counter">
-                            <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: Math.max(1, formData.nb_intervenants - 1) })} disabled={formData.nb_intervenants <= 1}>−</button>
-                            <span className="ws-counter-value">{formData.nb_intervenants}</span>
-                            <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: formData.nb_intervenants + 1 })}>+</button>
-                          </div>
-                          {estimatedResources && formData.nb_intervenants !== estimatedResources.people && (
-                            <button 
-                              type="button"
-                              onClick={() => setFormData({ ...formData, nb_intervenants: estimatedResources.people })}
-                              className="text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded-full border border-teal-200 hover:bg-teal-200"
-                            >
-                              Suggéré: {estimatedResources.people}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Planning */}
-                    <div className="ws-form-block">
-                      <div className="ws-section-header">Planning pour votre demande</div>
-                      <div className="ws-planning-grid">
-                        <div className="ws-planning-col">
-                          <label className="ws-planning-radio-label">
-                            <input type="radio" name="schedulingType" value="fixed" checked={formData.scheduling_type === 'fixed'} onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })} />
-                            <span>Heure fixe</span>
-                          </label>
-                          <input type="time" value={formData.heure} onChange={e => setFormData({ ...formData, heure: e.target.value })} disabled={formData.scheduling_type !== 'fixed'} style={{ width: '120px', textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px' }} />
-                        </div>
-                        <div className="ws-planning-col">
-                          <label className="ws-planning-radio-label">
-                            <input type="radio" name="schedulingType" value="flexible" checked={formData.scheduling_type === 'flexible'} onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })} />
-                            <span>Je suis flexible</span>
-                          </label>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500 }}>
-                              <input type="radio" name="timePref" value="matin" checked={formData.preference_horaire === 'matin'} onChange={() => setFormData({ ...formData, preference_horaire: 'matin' })} disabled={formData.scheduling_type !== 'flexible'} style={{ accentColor: 'var(--primary)' }} />
-                              Le matin
-                            </label>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500 }}>
-                              <input type="radio" name="timePref" value="apres_midi" checked={formData.preference_horaire === 'apres_midi'} onChange={() => setFormData({ ...formData, preference_horaire: 'apres_midi' })} disabled={formData.scheduling_type !== 'flexible'} style={{ accentColor: 'var(--primary)' }} />
-                              L'après-midi
-                            </label>
-                          </div>
-                        </div>
-                        <div className="ws-planning-col">
-                          <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--primary)' }}>Date</div>
-                          <input type="date" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} style={{ padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem' }} />
-                        </div>
-                      </div>
                     </div>
-
-                    {/* Services optionnels */}
-                    {isCleaningService && !isFinChantierService && (
-                      <div className="ws-form-block">
-                        <div className="ws-section-header">Services optionnels</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem' }}>
-                          <div className="optional-service-card">
-                            <div className="optional-service-info">
-                              <span className="text-2xl">🧴</span>
-                              <span>Produits de nettoyage (+90 MAD)</span>
-                            </div>
-                            <label className="toggle-switch">
-                              <input type="checkbox" checked={formData.produits} onChange={e => setFormData({ ...formData, produits: e.target.checked })} />
-                              <span className="toggle-slider"></span>
-                            </label>
-                          </div>
-                          <div className="optional-service-card">
-                            <div className="optional-service-info">
-                              <span className="text-2xl">🧹</span>
-                              <span>Torchons et serpillères (+40 MAD)</span>
-                            </div>
-                            <label className="toggle-switch">
-                              <input type="checkbox" checked={formData.torchons} onChange={e => setFormData({ ...formData, torchons: e.target.checked })} />
-                              <span className="toggle-slider"></span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                  </>
+                ) : (
+                  <>
+                    <DynamicServiceForm
+                      serviceKey={selectedServiceKey}
+                      formData={formData}
+                      setFormData={setFormData}
+                      minDuree={minDuree}
+                      estimatedResources={estimatedResources}
+                    />
                   </>
                 )}
+
 
                 {/* ====== LOCALISATION (all services) ====== */}
                 <div className="ws-form-block">

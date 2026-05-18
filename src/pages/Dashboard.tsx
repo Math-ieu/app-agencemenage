@@ -14,7 +14,7 @@ import { encodeId } from '../utils/obfuscation';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
-
+import { DynamicServiceForm } from '../components/demandes/forms/DynamicServiceForm';
 // Services qui nécessitent un devis PDF (les autres ont un récapitulatif PNG)
 const isDevisRequired = (d: Demande | null): boolean => {
   if (!d) return false;
@@ -638,6 +638,12 @@ export default function Dashboard() {
         accommodation_state: editFormData.accommodation_state || '',
         cleanliness_type: editFormData.cleanliness_type || '',
         heure: editFormData.heure || editFormData.heure_intervention || '',
+        formula: editFormData.formula || previousFormData.formula || 'A',
+        size_tier: editFormData.size_tier || previousFormData.size_tier || '1chambre',
+        sizeTier: editFormData.size_tier || previousFormData.size_tier || '1chambre',
+        conso: Boolean(editFormData.conso),
+        linen_sets: parseInt(editFormData.linen_sets) || 0,
+        linenSets: parseInt(editFormData.linen_sets) || 0,
         date: editFormData.date || editFormData.date_intervention || '',
         nb_personnel: parseInt(editFormData.nb_personnel) || 1,
         lieu_garde: editFormData.lieu_garde || 'domicile',
@@ -842,6 +848,10 @@ export default function Dashboard() {
       mobilite: normalizeMobilite(formData.mobilite || ''),
       situation_medicale: formData.situation_medicale || '',
       nb_jours: formData.nb_jours || 1,
+      formula: formData.formula || 'A',
+      size_tier: formData.size_tier || formData.sizeTier || '1chambre',
+      conso: formData.conso || false,
+      linen_sets: formData.linen_sets || formData.linenSets || 0,
       regenerer_devis: false,
       envoyer_whatsapp: false
     });
@@ -926,14 +936,17 @@ export default function Dashboard() {
   const exactEditService = (editFormData.service || selectedDemande?.service || '').toString();
   const exactEditServiceLower = exactEditService.toLowerCase();
   const isCleaningService = exactEditServiceLower.includes('ménage') || exactEditServiceLower.includes('menage') || exactEditServiceLower.includes('nettoyage') || exactEditServiceLower.includes('chantier') || exactEditServiceLower.includes('sinistre') || exactEditServiceLower.includes('déménagement');
+  // @ts-ignore
   const isMenageStandardService = exactEditService === 'Ménage Standard';
   const isMenageAirBnBService = exactEditService === 'Ménage AirBnB';
   const isGrandMenageService = exactEditService === 'Grand Ménage';
   const isFinChantierService = exactEditService === 'Ménage fin de chantier';
   const isMenageBureauxService = exactEditService === 'Ménage Bureaux';
   const isPostDemenagementService = exactEditService === 'Ménage post-déménagement';
+  // @ts-ignore
   const isPostSinistreService = exactEditService === 'Ménage post-sinistre';
   const isAuxiliaireService = exactEditService.includes('Auxiliaire de vie');
+  // @ts-ignore
   const isPlacementGestionService = exactEditService === 'Placement & Gestion';
   const minDuree = (isGrandMenageService || isPostDemenagementService || isFinChantierService) ? 4 : (isMenageBureauxService || isMenageAirBnBService) ? 2 : 3;
 
@@ -1661,381 +1674,178 @@ export default function Dashboard() {
                         {/* ====== CONDITIONAL SERVICE SECTIONS ====== */}
                         {isAuxiliaireService ? (
                           /* Auxiliaire de vie - Service sur mesure */
-                          <div className="ws-form-block">
-                            <div className="ws-section-header">Service sur mesure — {exactEditService}</div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
-                              <div style={{ gridColumn: 'span 2' }}>
-                                <div className="ws-section-header" style={{ background: '#f1f5f9', color: 'var(--primary)', fontSize: '0.9rem' }}>Lieu de la garde</div>
-                                <div className="ws-radio-pills">
-                                  {['domicile', 'clinique', 'hopital'].map(loc => (
-                                    <label key={loc} className="ws-radio-pill">
-                                      <input type="radio" name="careLocation" value={loc} checked={editFormData.lieu_garde === loc} onChange={e => setEditFormData({ ...editFormData, lieu_garde: e.target.value })} />
-                                      <span>{loc === 'domicile' ? 'Domicile' : loc === 'clinique' ? 'Clinique' : 'Hôpital'}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="form-group">
-                                <label className="label-teal">Fréquence *</label>
-                                <select className="ws-select" required value={editFormData.frequence} onChange={e => setEditFormData({ ...editFormData, frequence: e.target.value })}>
-                                  <option value="">Sélectionner...</option>
-                                  <option value="une fois">Une fois - Tranche 24h</option>
-                                  <option value="1/sem">Abonnement - 1 fois / semaine</option>
-                                  <option value="quotidien">Abonnement - Quotidien</option>
-                                </select>
-                              </div>
-                              <div className="form-group">
-                                <label className="label-teal">Nombre de jours *</label>
-                                <div className="ws-counter">
-                                  <button type="button" className="ws-counter-btn" onClick={() => setEditFormData({ ...editFormData, nb_jours: Math.max(1, editFormData.nb_jours - 1) })} disabled={editFormData.nb_jours <= 1}>−</button>
-                                  <span className="ws-counter-value">{editFormData.nb_jours}</span>
-                                  <button type="button" className="ws-counter-btn" onClick={() => setEditFormData({ ...editFormData, nb_jours: editFormData.nb_jours + 1 })}>+</button>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="ws-section-header" style={{ marginTop: '1rem', background: '#f1f5f9', color: 'var(--primary)', fontSize: '0.9rem' }}>Profil de la personne aidée</div>
-                            <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
-                              <div className="form-group">
-                                <label className="label-teal">Âge *</label>
-                                <input type="number" placeholder="Ans" required value={editFormData.age_personne} onChange={e => setEditFormData({ ...editFormData, age_personne: e.target.value })} />
-                              </div>
-                              <div className="form-group">
-                                <label className="label-teal">Sexe *</label>
-                                <select className="ws-select" required value={editFormData.sexe_personne} onChange={e => setEditFormData({ ...editFormData, sexe_personne: e.target.value })}>
-                                  <option value="">Sélectionner...</option>
-                                  <option value="femme">Femme</option>
-                                  <option value="homme">Homme</option>
-                                </select>
-                              </div>
-                              <div className="form-group">
-                                <label className="label-teal">Mobilité *</label>
-                                <select className="ws-select" required value={editFormData.mobilite} onChange={e => setEditFormData({ ...editFormData, mobilite: e.target.value })}>
-                                  <option value="">Sélectionner...</option>
-                                  <option value="adulte">Adulte</option>
-                                  <option value="agee">Personne Agée</option>
-                                  <option value="autonome">Autonome</option>
-                                  <option value="besoin_aide">Besoin d'aide</option>
-                                  <option value="alitee">Alité(e)</option>
-                                </select>
-                              </div>
-                              <div className="form-group">
-                                <label className="label-teal">Pathologie / Situation médicale *</label>
-                                <textarea rows={2} placeholder="Précisez la situation..." required value={editFormData.situation_medicale} onChange={e => setEditFormData({ ...editFormData, situation_medicale: e.target.value })}></textarea>
-                              </div>
-                            </div>
-                          </div>
-                        ) : isPlacementGestionService ? (
-                          /* Placement & gestion - Service sur mesure */
-                          <div className="ws-form-block">
-                            <div className="ws-section-header">Service sur mesure — {exactEditService}</div>
-                            <p style={{ textAlign: 'center', color: '#64748b', fontSize: '0.875rem', marginBottom: '1rem' }}>Un chargé de clientèle prendra contact avec l'entreprise pour établir une offre personnalisée.</p>
-
-                            <div className="ws-section-header" style={{ background: '#f1f5f9', color: 'var(--primary)', fontSize: '0.9rem' }}>Type de service</div>
-                            <div className="ws-radio-pills">
-                              {[{ v: 'flexible', l: 'Service ménage flexible' }, { v: 'premium', l: 'Service ménage Premium' }].map(o => (
-                                <label key={o.v} className="ws-radio-pill">
-                                  <input type="radio" name="placementServiceType" value={o.v} checked={editFormData.service_type === o.v} onChange={e => setEditFormData({ ...editFormData, service_type: e.target.value })} />
-                                  <span>{o.l}</span>
-                                </label>
-                              ))}
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem', marginTop: '0.75rem' }}>
-                              <div className="form-group">
-                                <label className="label-teal">Type de structure *</label>
-                                <select className="ws-select" required value={editFormData.structure_type} onChange={e => setEditFormData({ ...editFormData, structure_type: e.target.value })}>
-                                  <option value="">Sélectionner...</option>
-                                  <option value="bureaux">Bureaux</option>
-                                  <option value="magasin">Magasin/Boutique</option>
-                                  <option value="restaurant">Restaurant/Café</option>
-                                  <option value="clinique">Clinique / Hôpital</option>
-                                  <option value="hotel">Hôtel / Riad</option>
-                                  <option value="residence">Immeuble/Résidence/Luxe</option>
-                                  <option value="entrepot">Entrepôt</option>
-                                </select>
-                              </div>
-                              <div className="form-group">
-                                <label className="label-teal">Fréquence *</label>
-                                <select className="ws-select" required value={editFormData.frequence} onChange={e => setEditFormData({ ...editFormData, frequence: e.target.value })}>
-                                  <option value="">Sélectionner...</option>
-                                  <option value="une fois">Une fois</option>
-                                  <option value="1/sem">1 fois / semaine</option>
-                                  <option value="2/sem">2 fois / semaine</option>
-                                  <option value="3/sem">3 fois / semaine</option>
-                                  <option value="1/mois">1 fois / mois</option>
-                                  <option value="quotidien">Quotidien</option>
-                                </select>
-                              </div>
-                              <div className="form-group">
-                                <label className="label-teal">Nombre de personnel *</label>
-                                <div className="ws-counter">
-                                  <button type="button" className="ws-counter-btn" onClick={() => setEditFormData({ ...editFormData, nb_personnel: Math.max(1, editFormData.nb_personnel - 1) })} disabled={editFormData.nb_personnel <= 1}>−</button>
-                                  <span className="ws-counter-value">{editFormData.nb_personnel}</span>
-                                  <button type="button" className="ws-counter-btn" onClick={() => setEditFormData({ ...editFormData, nb_personnel: editFormData.nb_personnel + 1 })}>+</button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          /* ====== STANDARD MÉNAGE SERVICES ====== */
                           <>
-                            {/* Type d'habitation */}
-                            {isCleaningService && !isMenageBureauxService && (
-                              <div className="ws-form-block">
-                                <div className="ws-section-header">
-                                  Type d'habitation
-                                </div>
-                                <div className="ws-radio-pills">
-                                  {['Studio', 'Appartement', 'Duplex', 'Villa', 'Maison'].map(type => (
-                                    <label key={type} className="ws-radio-pill">
-                                      <input type="radio" name="propertyType" value={type} checked={editFormData.type_habitation === type} onChange={e => setEditFormData({ ...editFormData, type_habitation: e.target.value })} />
-                                      <span>{type}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Nature d'intervention (Post-sinistre) */}
-                            {isPostSinistreService && (
-                              <div className="ws-form-block">
-                                <div className="ws-section-header">Nature de l'intervention</div>
-                                <div className="ws-nature-cards">
-                                  {[
-                                    { v: 'sinistre', l: 'Après sinistre' },
-                                    { v: 'event', l: 'Post évènement' },
-                                    { v: 'express', l: 'Remise en état express' },
-                                    { v: 'autre', l: 'Autre situation urgente' }
-                                  ].map(n => (
-                                    <div key={n.v} className={`ws-nature-card ${editFormData.intervention_nature === n.v ? 'active' : ''}`} onClick={() => setEditFormData({ ...editFormData, intervention_nature: n.v })}>
-                                      {n.l}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* État du logement (Déménagement) */}
-                            {isPostDemenagementService && (
-                              <div className="ws-form-block">
-                                <div className="ws-section-header">État du logement</div>
-                                <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
-                                  <div className="form-group">
-                                    <label className="label-teal">État du logement *</label>
-                                    <select className="ws-select" required value={editFormData.accommodation_state} onChange={e => setEditFormData({ ...editFormData, accommodation_state: e.target.value })}>
-                                      <option value="">Choisir...</option>
-                                      <option value="vide">Vide</option>
-                                      <option value="meuble">Meublé</option>
-                                    </select>
-                                  </div>
-                                  <div className="form-group">
-                                    <label className="label-teal">Niveau de salissure *</label>
-                                    <select className="ws-select" required value={editFormData.cleanliness_type} onChange={e => setEditFormData({ ...editFormData, cleanliness_type: e.target.value })}>
-                                      <option value="">Choisir...</option>
-                                      <option value="normal">Normal</option>
-                                      <option value="intensif">Intensif</option>
-                                    </select>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Fréquence */}
-                            {/* Surface bureau (cards) */}
-                            {isMenageBureauxService && (
-                              <div className="ws-form-block">
-                                <div className="ws-section-header">Superficie de vos locaux</div>
-                                <div className="ws-surface-cards">
-                                  {[
-                                    { v: '0-70', l: '0 - 70 m²' },
-                                    { v: '71-150', l: '71 - 150 m²' },
-                                    { v: '151-300', l: '151 - 300 m²' },
-                                    { v: '300+', l: '300 m² et plus' }
-                                  ].map(s => (
-                                    <div key={s.v} className={`ws-surface-card ${String(editFormData.surface) === s.v ? 'active' : ''}`} onClick={() => setEditFormData({ ...editFormData, surface: s.v as any })}>
-                                      {s.l}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
                             <div className="ws-form-block">
                               <div className="ws-section-header">Choisissez la fréquence</div>
-                              <div className="ws-freq-toggle">
-                                <button type="button" className={editFormData.frequence === 'une fois' || !editFormData.frequence ? 'active' : ''} onClick={() => setEditFormData({ ...editFormData, frequence: 'une fois' })}>
-                                  Une fois
-                                </button>
-                                <button type="button" className={editFormData.frequence !== 'une fois' && editFormData.frequence ? 'active' : ''} onClick={() => setEditFormData({ ...editFormData, frequence: '1/sem' })}>
-                                  Abonnement
-                                </button>
-                              </div>
-                              {editFormData.frequence && editFormData.frequence !== 'une fois' && (
-                                <div style={{ maxWidth: '380px', margin: '0 auto' }}>
-                                  <div className="ws-discount-badge">-10 % de réduction sur l'abonnement</div>
-                                  <select className="ws-select" value={editFormData.frequence} onChange={e => setEditFormData({ ...editFormData, frequence: e.target.value })}>
-                                    <option value="1/sem">1 fois par semaine</option>
-                                    <option value="2/sem">2 fois par semaine</option>
-                                    <option value="3/sem">3 fois par semaine</option>
-                                    <option value="4/sem">4 fois par semaine</option>
-                                    <option value="5/sem">5 fois par semaine</option>
-                                    <option value="6/sem">6 fois par semaine</option>
-                                    <option value="7/sem">7 fois par semaine</option>
-                                    <option value="1/mois">1 fois par mois</option>
-                                    <option value="2/mois">2 fois par mois</option>
-                                    <option value="3/mois">3 fois par mois</option>
-                                    <option value="4/mois">4 fois par mois</option>
-                                  </select>
+                              <div className="p-4" style={{ backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                                <div className="ws-radio-pills" style={{ display: 'flex', gap: '0.5rem', background: '#f1f5f9', padding: '0.25rem', borderRadius: '9999px', margin: '0 auto', maxWidth: '400px' }}>
+                                  {['une fois', 'abonnement'].map(freq => {
+                                    const isSelected = (editFormData.frequence === 'une fois' && freq === 'une fois') || (editFormData.frequence !== 'une fois' && editFormData.frequence !== '' && freq === 'abonnement');
+                                    return (
+                                      <label key={freq} style={{ flex: 1, textAlign: 'center', cursor: 'pointer', padding: '0.75rem', borderRadius: '9999px', fontWeight: 'bold', transition: 'all 0.2s', background: isSelected ? 'var(--primary)' : 'transparent', color: isSelected ? 'white' : '#64748b' }}>
+                                        <input type="radio" name="frequence_type" value={freq} style={{ display: 'none' }}
+                                          checked={isSelected}
+                                          onChange={() => {
+                                            if (freq === 'une fois') setEditFormData({ ...editFormData, frequence: 'une fois' });
+                                            else setEditFormData({ ...editFormData, frequence: '1/sem' });
+                                          }} />
+                                        <span>{freq === 'une fois' ? 'Une fois' : 'Abonnement'}</span>
+                                      </label>
+                                    );
+                                  })}
                                 </div>
-                              )}
+                                {editFormData.frequence !== 'une fois' && editFormData.frequence !== '' && (
+                                  <div style={{ marginTop: '1.5rem', maxWidth: '400px', margin: '1.5rem auto 0' }}>
+                                    <select className="ws-select" required value={editFormData.frequence} onChange={e => setEditFormData({ ...editFormData, frequence: e.target.value })} style={{ width: '100%' }}>
+                                      <option value="1/sem">1 fois par semaine</option>
+                                      <option value="2/sem">2 fois par semaine</option>
+                                      <option value="3/sem">3 fois par semaine</option>
+                                      <option value="4/sem">4 fois par semaine</option>
+                                      <option value="5/sem">5 fois par semaine</option>
+                                      <option value="6/sem">6 fois par semaine</option>
+                                      <option value="7/sem">7 fois par semaine</option>
+                                      <option value="1/mois">1 fois par mois</option>
+                                      <option value="2/mois">2 fois par mois</option>
+                                      <option value="3/mois">3 fois par mois</option>
+                                      <option value="4/mois">4 fois par mois</option>
+                                      <option value="quotidien">Abonnement - Quotidien</option>
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
                             </div>
 
-                            {/* Détails des pièces (Ménage Standard & Grand Ménage) */}
-                            {(isMenageStandardService || isGrandMenageService) && (
-                              <div className="ws-form-block">
-                                <div className="ws-section-header">Merci de nous décrire votre domicile</div>
-                                <p style={{ color: '#ef4444', fontSize: '0.75rem', textAlign: 'right', fontWeight: 700, marginBottom: '0.5rem' }}>
-                                  Cliquez sur + ou - pour décrire les pièces
-                                </p>
-                                <div className="ws-rooms-grid" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.5rem' }}>
-                                  {[
-                                    { key: 'cuisine', label: 'Cuisine', time: '45 min' },
-                                    { key: 'suiteAvecBain', label: 'Suite parentale avec salle de bain', time: '75 min' },
-                                    { key: 'suiteSansBain', label: 'Suite parentale sans salle de bain', time: '45 min' },
-                                    { key: 'salleDeBain', label: 'Salle de bain', time: '30 min' },
-                                    { key: 'chambre', label: 'Chambre/pièce/bureau', time: '40 min' },
-                                    { key: 'salonMarocain', label: 'Salon Marocain', time: '35 min' },
-                                    { key: 'salonEuropeen', label: 'Salon européen', time: '35 min' },
-                                    { key: 'toilettesLavabo', label: 'Toilette Lavabo', time: '25 min' },
-                                    { key: 'rooftop', label: 'Rooftop', time: '30 min' },
-                                    { key: 'escalier', label: 'Escalier', time: '25 min' }
-                                  ].map(room => (
-                                    <div key={room.key} className="ws-room-row">
-                                      <div>
-                                        <div className="ws-room-label">{room.label}</div>
-                                        <div className="ws-room-time">{room.time}</div>
-                                      </div>
-                                      <div className="ws-room-counter">
-                                        <button type="button" className="ws-room-btn" onClick={() => setEditFormData({ ...editFormData, rooms: { ...editFormData.rooms, [room.key]: Math.max(0, (editFormData.rooms[room.key] || 0) - 1) } })}>−</button>
-                                        <span className="ws-room-count">{editFormData.rooms[room.key] || 0}</span>
-                                        <button type="button" className="ws-room-btn" onClick={() => setEditFormData({ ...editFormData, rooms: { ...editFormData.rooms, [room.key]: (editFormData.rooms[room.key] || 0) + 1 } })}>+</button>
-                                      </div>
+                            <div className="ws-form-block">
+                              <div className="ws-section-header">Nombre de personne</div>
+                              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '2rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                                <button type="button" onClick={() => setEditFormData({ ...editFormData, nb_personnel: Math.max(1, (editFormData.nb_personnel || 1) - 1) })} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e2e8f0', color: 'var(--primary)', fontSize: '1.5rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>−</button>
+                                <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)', minWidth: '40px', textAlign: 'center' }}>{editFormData.nb_personnel || 1}</span>
+                                <button type="button" onClick={() => setEditFormData({ ...editFormData, nb_personnel: (editFormData.nb_personnel || 1) + 1 })} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e2e8f0', color: 'var(--primary)', fontSize: '1.5rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>+</button>
+                              </div>
+                            </div>
+
+                            <div className="ws-form-block">
+                              <div className="ws-section-header">Planning de la demande</div>
+                              <div className="p-6" style={{ backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                  <div style={{ textAlign: 'center' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 'bold', color: 'var(--primary)', fontSize: '0.875rem', cursor: 'pointer' }}>
+                                      <input type="radio" name="scheduling_type" value="fixed" checked={editFormData.scheduling_type === 'fixed'} onChange={() => setEditFormData({ ...editFormData, scheduling_type: 'fixed' })} />
+                                      Je souhaite une heure fixe
+                                    </label>
+                                    <input type="time" disabled={editFormData.scheduling_type !== 'fixed'} value={editFormData.heure || ''} onChange={e => setEditFormData({ ...editFormData, heure: e.target.value })} style={{ marginTop: '1rem', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', fontSize: '1.25rem', fontWeight: 'bold', textAlign: 'center', width: '120px' }} />
+                                  </div>
+                                  <div style={{ textAlign: 'center' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 'bold', color: 'var(--primary)', fontSize: '0.875rem', cursor: 'pointer' }}>
+                                      <input type="radio" name="scheduling_type" value="flexible" checked={editFormData.scheduling_type === 'flexible'} onChange={() => setEditFormData({ ...editFormData, scheduling_type: 'flexible' })} />
+                                      Je suis flexible
+                                    </label>
+                                    <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: '500' }}>
+                                        <input type="radio" name="preference_horaire" value="matin" disabled={editFormData.scheduling_type !== 'flexible'} checked={editFormData.preference_horaire === 'matin'} onChange={() => setEditFormData({ ...editFormData, preference_horaire: 'matin' })} />
+                                        Le matin
+                                      </label>
+                                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: '500' }}>
+                                        <input type="radio" name="preference_horaire" value="apres_midi" disabled={editFormData.scheduling_type !== 'flexible'} checked={editFormData.preference_horaire === 'apres_midi'} onChange={() => setEditFormData({ ...editFormData, preference_horaire: 'apres_midi' })} />
+                                        L'après midi
+                                      </label>
                                     </div>
+                                  </div>
+                                  <div style={{ textAlign: 'center' }}>
+                                    <label style={{ fontWeight: 'bold', color: 'var(--primary)', display: 'block', marginBottom: '1rem', fontSize: '0.875rem' }}>Date</label>
+                                    <input type="date" value={editFormData.date || ''} onChange={e => setEditFormData({ ...editFormData, date: e.target.value })} style={{ padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', width: '100%', maxWidth: '200px' }} />
+                                  </div>
+                                </div>
+
+                                <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '1.5rem', marginTop: '1.5rem', textAlign: 'center' }}>
+                                  <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.875rem', display: 'block', marginBottom: '1rem' }}>Nombre de jours</label>
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '1.5rem', background: 'white', padding: '0.5rem 1.5rem', borderRadius: '9999px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                                    <button type="button" onClick={() => setEditFormData({ ...editFormData, nb_jours: Math.max(1, editFormData.nb_jours - 1) })} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#f1f5f9', color: 'var(--primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>−</button>
+                                    <span style={{ fontWeight: 'bold', color: '#334155', fontSize: '0.875rem', textTransform: 'uppercase' }}>{editFormData.nb_jours || 1} JOUR(S)</span>
+                                    <button type="button" onClick={() => setEditFormData({ ...editFormData, nb_jours: (editFormData.nb_jours || 1) + 1 })} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#f1f5f9', color: 'var(--primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>+</button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="ws-form-block">
+                              <div className="ws-section-header">Profil de la personne aidée</div>
+                              <div className="p-6" style={{ backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                                  <div>
+                                    <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.875rem', display: 'block', marginBottom: '0.5rem' }}>Âge :</label>
+                                    <div style={{ position: 'relative' }}>
+                                      <input type="number" placeholder="Âge de la personne" required value={editFormData.age_personne || ''} onChange={e => setEditFormData({ ...editFormData, age_personne: e.target.value })} style={{ width: '100%', padding: '0.5rem 3rem 0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }} />
+                                      <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '10px', fontWeight: 'bold', color: '#94a3b8' }}>ANS</span>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.875rem', display: 'block', marginBottom: '0.5rem' }}>Sexe :</label>
+                                    <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.5rem' }}>
+                                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: '500' }}>
+                                        <input type="radio" name="sexe_personne" value="femme" checked={editFormData.sexe_personne === 'femme'} onChange={() => setEditFormData({ ...editFormData, sexe_personne: 'femme' })} />
+                                        Femme
+                                      </label>
+                                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: '500' }}>
+                                        <input type="radio" name="sexe_personne" value="homme" checked={editFormData.sexe_personne === 'homme'} onChange={() => setEditFormData({ ...editFormData, sexe_personne: 'homme' })} />
+                                        Homme
+                                      </label>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                  <div>
+                                    <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.875rem', display: 'block', marginBottom: '0.5rem' }}>Mobilité et Type :</label>
+                                    <div style={{ background: 'white', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                      {["Adulte", "Personne Agée", "Autonome", "Besoin d'aide", "Alité(e)"].map(mob => (
+                                        <label key={mob} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', fontWeight: '500', color: '#334155' }}>
+                                          <input type="radio" name="mobilite" value={mob} checked={editFormData.mobilite === mob} onChange={() => setEditFormData({ ...editFormData, mobilite: mob })} />
+                                          {mob}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '0.875rem', display: 'block', marginBottom: '0.5rem' }}>Pathologie :</label>
+                                    <textarea rows={5} placeholder="Détaillez ici la situation médicale..." required value={editFormData.situation_medicale || ''} onChange={e => setEditFormData({ ...editFormData, situation_medicale: e.target.value })} style={{ width: '100%', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', fontSize: '0.875rem', resize: 'none' }}></textarea>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="ws-form-block">
+                              <div className="ws-section-header">Autre précision</div>
+                              <div className="p-4" style={{ backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                                <textarea rows={3} placeholder="Ex: besoin d'un auxiliaire de vie homme, barrière de langue, régime particulier..." value={editFormData.notes || ''} onChange={e => setEditFormData({ ...editFormData, notes: e.target.value })} style={{ width: '100%', minHeight: '80px', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', fontSize: '0.875rem', resize: 'none' }}></textarea>
+                              </div>
+                            </div>
+
+                            <div className="ws-form-block">
+                              <div className="ws-section-header">Lieu de la garde</div>
+                              <div className="p-4" style={{ backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
+                                <div className="grid grid-cols-3 gap-4">
+                                  {['domicile', 'clinique', 'hopital'].map(loc => (
+                                    <label key={loc} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0.75rem', borderRadius: '0.75rem', border: editFormData.lieu_garde === loc ? '2px solid var(--primary)' : '2px solid transparent', background: editFormData.lieu_garde === loc ? 'white' : 'rgba(255,255,255,0.5)', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                      <input type="radio" name="careLocation" value={loc} style={{ marginBottom: '0.5rem' }} checked={editFormData.lieu_garde === loc} onChange={e => setEditFormData({ ...editFormData, lieu_garde: e.target.value })} />
+                                      <span style={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#334155', textTransform: 'capitalize' }}>{loc === 'hopital' ? 'Hôpital' : loc}</span>
+                                    </label>
                                   ))}
                                 </div>
                               </div>
-                            )}
-
-                            {/* Surface (Grand Ménage, Fin Chantier, Déménagement) */}
-                            {(isGrandMenageService || isFinChantierService || isPostDemenagementService) && (
-                              <div className="ws-form-block">
-                                <div className="ws-section-header">Superficie de votre bien en m²</div>
-                                <div className="ws-slider-container">
-                                  <div className="ws-slider-value">{editFormData.surface} m²</div>
-                                  <input type="range" className="ws-slider-input" min={0} max={300} step={10} value={editFormData.surface} onChange={e => setEditFormData({ ...editFormData, surface: parseInt(e.target.value) })} />
-                                  <div className="ws-slider-labels">
-                                    <span>0 m²</span>
-                                    <span>150 m²</span>
-                                    <span>300 m²</span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Durée */}
-                            {(isMenageStandardService || isGrandMenageService || isMenageAirBnBService || isMenageBureauxService) && (
-                              <div className="ws-form-block">
-                                <div className="ws-section-header">Précisez le temps qui vous convient</div>
-                                <p style={{ color: '#ef4444', fontSize: '0.65rem', textAlign: 'center', marginBottom: '0.5rem' }}>
-                                  La durée minimale est de {minDuree} heures
-                                </p>
-                                <div className="ws-counter">
-                                  <button type="button" className="ws-counter-btn" onClick={() => setEditFormData({ ...editFormData, duree: Math.max(minDuree, editFormData.duree - 1) })} disabled={editFormData.duree <= minDuree}>−</button>
-                                  <span className="ws-counter-value">{editFormData.duree}</span>
-                                  <button type="button" className="ws-counter-btn" onClick={() => setEditFormData({ ...editFormData, duree: editFormData.duree + 1 })}>+</button>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Nombre de personnes */}
-                            {(isMenageStandardService || isGrandMenageService || isMenageAirBnBService || isMenageBureauxService) && (
-                              <div className="ws-form-block">
-                                <div className="ws-section-header">Nombre de personne</div>
-                                <div className="ws-counter">
-                                  <button type="button" className="ws-counter-btn" onClick={() => setEditFormData({ ...editFormData, nb_intervenants: Math.max(1, editFormData.nb_intervenants - 1) })} disabled={editFormData.nb_intervenants <= 1}>−</button>
-                                  <span className="ws-counter-value">{editFormData.nb_intervenants}</span>
-                                  <button type="button" className="ws-counter-btn" onClick={() => setEditFormData({ ...editFormData, nb_intervenants: editFormData.nb_intervenants + 1 })}>+</button>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Planning */}
-                            <div className="ws-form-block">
-                              <div className="ws-section-header">Planning pour votre demande</div>
-                              <div className="ws-planning-grid">
-                                <div className="ws-planning-col">
-                                  <label className="ws-planning-radio-label">
-                                    <input type="radio" name="schedulingType" value="fixed" checked={editFormData.scheduling_type === 'fixed'} onChange={e => setEditFormData({ ...editFormData, scheduling_type: e.target.value })} />
-                                    <span>Heure fixe</span>
-                                  </label>
-                                  <input type="time" value={editFormData.heure} onChange={e => setEditFormData({ ...editFormData, heure: e.target.value })} disabled={editFormData.scheduling_type !== 'fixed'} style={{ width: '120px', textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px' }} />
-                                </div>
-                                <div className="ws-planning-col">
-                                  <label className="ws-planning-radio-label">
-                                    <input type="radio" name="schedulingType" value="flexible" checked={editFormData.scheduling_type === 'flexible'} onChange={e => setEditFormData({ ...editFormData, scheduling_type: e.target.value })} />
-                                    <span>Je suis flexible</span>
-                                  </label>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500 }}>
-                                      <input type="radio" name="timePref" value="matin" checked={editFormData.preference_horaire === 'matin'} onChange={() => setEditFormData({ ...editFormData, preference_horaire: 'matin' })} disabled={editFormData.scheduling_type !== 'flexible'} style={{ accentColor: 'var(--primary)' }} />
-                                      Le matin
-                                    </label>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500 }}>
-                                      <input type="radio" name="timePref" value="apres_midi" checked={editFormData.preference_horaire === 'apres_midi'} onChange={() => setEditFormData({ ...editFormData, preference_horaire: 'apres_midi' })} disabled={editFormData.scheduling_type !== 'flexible'} style={{ accentColor: 'var(--primary)' }} />
-                                      L'après-midi
-                                    </label>
-                                  </div>
-                                </div>
-                                <div className="ws-planning-col">
-                                  <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--primary)' }}>Date</div>
-                                  <input type="date" required value={editFormData.date} onChange={e => setEditFormData({ ...editFormData, date: e.target.value })} style={{ padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem' }} />
-                                </div>
-                              </div>
                             </div>
-
-                            {/* Services optionnels */}
-                            {isCleaningService && !isFinChantierService && (
-                              <div className="ws-form-block">
-                                <div className="ws-section-header">Services optionnels</div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem' }}>
-                                  <div className="optional-service-card">
-                                    <div className="optional-service-info">
-                                      <span className="text-2xl">🧴</span>
-                                      <span>Produits de nettoyage (+90 MAD)</span>
-                                    </div>
-                                    <label className="toggle-switch">
-                                      <input type="checkbox" checked={editFormData.produits} onChange={e => setEditFormData({ ...editFormData, produits: e.target.checked })} />
-                                      <span className="toggle-slider"></span>
-                                    </label>
-                                  </div>
-                                  <div className="optional-service-card">
-                                    <div className="optional-service-info">
-                                      <span className="text-2xl">🧹</span>
-                                      <span>Torchons et serpillères (+40 MAD)</span>
-                                    </div>
-                                    <label className="toggle-switch">
-                                      <input type="checkbox" checked={editFormData.torchons} onChange={e => setEditFormData({ ...editFormData, torchons: e.target.checked })} />
-                                      <span className="toggle-slider"></span>
-                                    </label>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
+                          </>
+                        ) : (
+                          <>
+                            <DynamicServiceForm
+                              serviceKey={exactEditService}
+                              formData={editFormData}
+                              setFormData={setEditFormData}
+                              minDuree={minDuree}
+                            />
                           </>
                         )}
+
 
                         {/* ====== LOCALISATION (all services) ====== */}
                         <div className="ws-form-block">
