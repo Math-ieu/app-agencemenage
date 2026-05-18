@@ -228,6 +228,15 @@ export default function DemandesEnAttente() {
 
   const handlePreviewDocument = async (demande: Demande, type: 'devis' | 'png') => {
     try {
+      // 1. Sauvegarder explicitement les données actuelles (dont le devis enrichi) avant génération et rafraîchissement
+      const payload: any = {
+        formulaire_data: demande.formulaire_data
+      };
+      if (demande.prix !== undefined) payload.prix = demande.prix;
+      if (demande.nb_heures !== undefined) payload.nb_heures = demande.nb_heures;
+      if (demande.nb_intervenants !== undefined) payload.nb_intervenants = demande.nb_intervenants;
+      await updateDemande(demande.id, payload);
+
       if (type === 'devis') {
         addToast('Génération du devis côté frontend...', 'info');
         const { blob, name } = await generateDevisPdf(demande);
@@ -350,6 +359,15 @@ export default function DemandesEnAttente() {
 
   const handleDirectSendWhatsApp = async (demande: Demande, type: 'devis' | 'png') => {
     try {
+      // 1. Sauvegarder explicitement les données actuelles (dont le devis enrichi) avant génération et rafraîchissement
+      const payload: any = {
+        formulaire_data: demande.formulaire_data
+      };
+      if (demande.prix !== undefined) payload.prix = demande.prix;
+      if (demande.nb_heures !== undefined) payload.nb_heures = demande.nb_heures;
+      if (demande.nb_intervenants !== undefined) payload.nb_intervenants = demande.nb_intervenants;
+      await updateDemande(demande.id, payload);
+
       let mediaUrl: string | undefined = undefined;
       if (type === 'devis') {
         addToast('Préparation du document...', 'info');
@@ -390,6 +408,21 @@ export default function DemandesEnAttente() {
   const handleAction = async (id: number, action: 'valider' | 'nrp' | 'annuler') => {
     try {
       if (action === 'valider') {
+        const d = demandes.find(x => x.id === id);
+        if (d && d.formulaire_data) {
+          const payload: any = {};
+          if (d.formulaire_data.montant !== undefined) payload.prix = d.formulaire_data.montant;
+          else if (d.formulaire_data.prix !== undefined) payload.prix = d.formulaire_data.prix;
+
+          if (d.formulaire_data.duree !== undefined) payload.nb_heures = d.formulaire_data.duree;
+          else if (d.formulaire_data.nb_heures !== undefined) payload.nb_heures = d.formulaire_data.nb_heures;
+
+          if (d.formulaire_data.nb_intervenants !== undefined) payload.nb_intervenants = d.formulaire_data.nb_intervenants;
+
+          if (Object.keys(payload).length > 0) {
+            await updateDemande(id, payload);
+          }
+        }
         await validerDemande(id);
         addToast('Demande validée !', 'success');
       }
@@ -642,6 +675,9 @@ export default function DemandesEnAttente() {
       if (d.id === demandeId) {
         return {
           ...d,
+          prix: patch.montant !== undefined ? patch.montant : patch.prix !== undefined ? patch.prix : d.prix,
+          nb_heures: patch.duree !== undefined ? patch.duree : patch.nb_heures !== undefined ? patch.nb_heures : d.nb_heures,
+          nb_intervenants: patch.nb_intervenants !== undefined ? patch.nb_intervenants : d.nb_intervenants,
           formulaire_data: {
             ...(d.formulaire_data || {}),
             ...patch
@@ -656,12 +692,22 @@ export default function DemandesEnAttente() {
       const targetDemande = demandes.find(d => d.id === demandeId);
       if (!targetDemande) return;
 
-      await updateDemande(demandeId, {
+      const payload: any = {
         formulaire_data: {
           ...(targetDemande.formulaire_data || {}),
           ...patch
         }
-      });
+      };
+
+      if (patch.montant !== undefined) payload.prix = patch.montant;
+      else if (patch.prix !== undefined) payload.prix = patch.prix;
+
+      if (patch.duree !== undefined) payload.nb_heures = patch.duree;
+      else if (patch.nb_heures !== undefined) payload.nb_heures = patch.nb_heures;
+
+      if (patch.nb_intervenants !== undefined) payload.nb_intervenants = patch.nb_intervenants;
+
+      await updateDemande(demandeId, payload);
     } catch (e) {
       console.error('Erreur lors de la synchro du devis', e);
       addToast('Erreur lors de la synchronisation du devis.', 'error');

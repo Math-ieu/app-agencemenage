@@ -18,11 +18,15 @@ interface SinistreQuoteProps {
 export default function SinistreQuote({ demande, onPrestationsChange }: SinistreQuoteProps) {
   const data = demande.formulaire_data || {};
   
-  const [type, setType] = useState(data.interventionNature === 'incendie' ? 'incendie' : (data.interventionNature === 'inondation' ? 'inondation' : 'deau'));
+  const [type, setType] = useState(data.interventionNature === 'incendie' ? 'incendie' : (data.interventionNature === 'inondation' ? 'inondation' : (data.interventionNature || 'deau')));
   const [surface, setSurface] = useState(data.surface || data.surfaceArea || 60);
-  const [niveau, setNiveau] = useState("moyen");
-  const [urgence, setUrgence] = useState("1.00");
-  const [opts, setOpts] = useState({ desod: false, evac: false, rapport: false });
+  const [niveau, setNiveau] = useState(data.niveau || "moyen");
+  const [urgence, setUrgence] = useState(data.urgence?.toString() || data.coefficient_majoration?.toString() || "1.00");
+  const [opts, setOpts] = useState({ 
+    desod: Boolean(data.desodorisation), 
+    evac: Boolean(data.evacuation || data.evacuation_mobilier), 
+    rapport: Boolean(data.rapport_photo) 
+  });
   const tog = (k: keyof typeof opts) => setOpts(o => ({ ...o, [k]: !o[k] }));
 
   const MIN = 1200;

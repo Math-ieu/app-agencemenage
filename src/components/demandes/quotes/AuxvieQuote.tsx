@@ -10,11 +10,16 @@ interface AuxvieQuoteProps {
 export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuoteProps) {
   const data = demande.formulaire_data || {};
   
-  const [mode, setMode] = useState("240");
+  const [mode, setMode] = useState(data.tarif_journalier?.toString() || data.mode || "240");
   const [jours, setJours] = useState(data.nb_jours || data.numberOfDays || 5);
-  const [semaines, setSemaines] = useState(4);
-  const [duree, setDuree] = useState("1.00");
-  const [opts, setOpts] = useState({ toilette: false, repas: false, medic: false, sortie: false });
+  const [semaines, setSemaines] = useState(data.nb_semaines || 4);
+  const [duree, setDuree] = useState(data.coefficient_duree?.toString() || data.duree_coef || "1.00");
+  const [opts, setOpts] = useState({ 
+    toilette: Boolean(data.toilette), 
+    repas: Boolean(data.repas), 
+    medic: Boolean(data.medic), 
+    sortie: Boolean(data.sortie) 
+  });
   const tog = (k: keyof typeof opts) => setOpts(o => ({ ...o, [k]: !o[k] }));
 
   const tarif = parseFloat(mode);
@@ -40,6 +45,7 @@ export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuot
     onPrestationsChange(prestations, total, {
       tarif_journalier: tarif, nb_jours: jours, nb_semaines: semaines,
       coefficient_duree: cd, duree: dureeLabel,
+      toilette: opts.toilette, repas: opts.repas, medic: opts.medic, sortie: opts.sortie
     });
   }, [mode, jours, semaines, duree, opts, base, total, totalJ]);
 

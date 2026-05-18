@@ -444,7 +444,6 @@ export default function ProfilDetails() {
     const processItem = (sourceData: any, isMission: boolean) => {
       const demande = isMission ? sourceData.demande_detail || {} : sourceData;
       const facturation = demande.formulaire_data?.facturation || {};
-      const montantTotal = Number(demande.prix || facturation.montant_ttc || 0);
 
       // Detection of cancellation compensation
       const isAnnule = demande.statut === 'annule' || 
@@ -472,7 +471,7 @@ export default function ProfilDetails() {
           facturation.montant_profil_annulation ||
           facturation.montant_agence_doit_profil ||
           facturation.part_profil || 
-          (montantTotal * 0.5)
+          0
         );
 
         // The agency's loss = the compensation paid to the profil
@@ -511,7 +510,7 @@ export default function ProfilDetails() {
       const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
 
       const partsRep: any[] = Array.isArray(facturation.parts_repartition) ? facturation.parts_repartition : (Array.isArray(demande.parts_repartition) ? demande.parts_repartition : []);
-      const partAgenceGlobal = Number(demande.part_agence ?? facturation.part_agence ?? (montantTotal * 0.5));
+      const partAgenceGlobal = Number(demande.part_agence ?? facturation.part_agence ?? 0);
 
       if (partsRep.length > 0) {
         const myPart = partsRep.find((p: any) => Number(p.profile_id) === agent.id);
@@ -528,7 +527,7 @@ export default function ProfilDetails() {
           else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isDelegate) profilDoitAgence += partAgenceGlobal;
         }
       } else {
-        const partProfil = Number(facturation.part_profil ?? (montantTotal * 0.5));
+        const partProfil = Number(facturation.part_profil ?? 0);
         nombreMissions += 1;
         totalCa += (partProfil + partAgenceGlobal);
         cumulProfil += partProfil;

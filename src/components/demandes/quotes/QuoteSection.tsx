@@ -42,10 +42,30 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
     total: number,
     extraData?: Record<string, any>
   ) => {
+    let hasChanged = total !== totalRef.current;
+    
+    if (JSON.stringify(prestationsRef.current) !== JSON.stringify(prestations)) {
+      hasChanged = true;
+    }
     prestationsRef.current = prestations;
+
+    if (extraData) {
+      if (JSON.stringify(extraDataRef.current) !== JSON.stringify(extraData)) {
+        hasChanged = true;
+      }
+      extraDataRef.current = extraData;
+    }
     totalRef.current = total;
-    if (extraData) extraDataRef.current = extraData;
-  }, []);
+
+    if (hasChanged && onUpdateDemandeData) {
+      onUpdateDemandeData(demande.id, { 
+        ...extraData, 
+        montant: total,
+        total: total,
+        prestations: prestations.length > 0 ? prestations : undefined
+      });
+    }
+  }, [demande.id, onUpdateDemandeData]);
 
   const handlePreview = () => {
     // Inject the calculator prestations into the demande before preview

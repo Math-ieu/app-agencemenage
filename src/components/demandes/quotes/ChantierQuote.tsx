@@ -11,13 +11,13 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
   const data = demande.formulaire_data || {};
   
   const [surface, setSurface] = useState(data.surface || data.surfaceArea || 150);
-  const [grattage, setGrattage] = useState("15");
-  const [vitres, setVitres] = useState("0");
-  const [surfVitres, setSurfVitres] = useState(15);
-  const [dechets, setDechets] = useState("0");
-  const [marbre, setMarbre] = useState(false);
-  const [surfMarbre, setSurfMarbre] = useState(30);
-  const [terrasse, setTerrasse] = useState(false);
+  const [grattage, setGrattage] = useState(data.grattage?.toString() || data.grattage_rate?.toString() || "15");
+  const [vitres, setVitres] = useState(data.vitres?.toString() || (data.prix_vitres === 150 ? "150" : data.surface_vitres > 0 ? "25" : "0"));
+  const [surfVitres, setSurfVitres] = useState(data.surface_vitres || 15);
+  const [dechets, setDechets] = useState(data.dechets?.toString() || (data.poids_dechets === 100 ? "200" : data.poids_dechets === 200 ? "380" : data.poids_dechets === 400 ? "650" : data.prix_dechets === -1 ? "-1" : "0"));
+  const [marbre, setMarbre] = useState(Boolean(data.marbre || data.surface_marbre > 0));
+  const [surfMarbre, setSurfMarbre] = useState(data.surface_marbre || 30);
+  const [terrasse, setTerrasse] = useState(Boolean(data.terrasse_incluse));
 
   const MIN = 1500;
   const baseRaw = surface * parseFloat(grattage);

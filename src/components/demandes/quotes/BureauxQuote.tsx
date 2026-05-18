@@ -10,10 +10,10 @@ interface BureauxQuoteProps {
 export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQuoteProps) {
   const data = demande.formulaire_data || {};
   
-  const [heures, setHeures] = useState(data.duree || data.duration || 3);
-  const [personnes, setPersonnes] = useState(data.nb_intervenants || data.numberOfPeople || 1);
-  const [freq, setFreq] = useState(demande.frequency === 'abonnement' ? "0.90" : "1.00");
-  const [opts, setOpts] = useState({ produits: Boolean(data.produits), serpiere: Boolean(data.torchons), zone: false });
+  const [heures, setHeures] = useState(data.nb_heures || data.heures || data.duree || data.duration || 3);
+  const [personnes, setPersonnes] = useState(data.nb_intervenantes || data.nb_intervenants || data.numberOfPeople || 1);
+  const [freq, setFreq] = useState(data.reduction_abonnement === 10 ? "0.90" : (demande.frequency === 'abonnement' ? "0.90" : "1.00"));
+  const [opts, setOpts] = useState({ produits: Boolean(data.produits), serpiere: Boolean(data.torchons), zone: Boolean(data.zone_eloignee) });
   const tog = (k: keyof typeof opts) => setOpts(o => ({ ...o, [k]: !o[k] }));
 
   const isAbo = parseFloat(freq) < 1;
@@ -33,7 +33,7 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
       nb_heures: heures, heures, nb_intervenantes: personnes, nb_intervenants: personnes,
       nb_passages_mois: 4, reduction_abonnement: isAbo ? 10 : 0,
       prix_base: Math.round(base), prix_produits: opts.produits ? 90 : 0,
-      produits: opts.produits, torchons: opts.serpiere,
+      produits: opts.produits, torchons: opts.serpiere, zone_eloignee: opts.zone
     });
   }, [heures, personnes, freq, opts, base, total, isAbo]);
 

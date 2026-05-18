@@ -97,6 +97,7 @@ export interface Demande {
   date_intervention: string;
   heure_intervention?: string;
   nb_heures?: number;
+  nb_intervenants?: number;
   preference_horaire?: string;
   frequency: string;
   frequency_label?: string;

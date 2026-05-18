@@ -25,12 +25,12 @@ export default function PlacementQuote({ demande, onPrestationsChange }: Placeme
 
 function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const data = demande.formulaire_data || {};
-  const [hj, setHj] = useState(4);
-  const [js, setJs] = useState("22");
-  const [nb, setNb] = useState(data.nb_personnel || 1);
-  const [eng, setEng] = useState("0");
-  const [ferie, setFerie] = useState(false);
-  const [tenue, setTenue] = useState(false);
+  const [hj, setHj] = useState(data.heures_par_jour || 4);
+  const [js, setJs] = useState(data.jours_par_semaine ? (data.jours_par_semaine === 7 ? "30" : data.jours_par_semaine === 6 ? "26" : "22") : "22");
+  const [nb, setNb] = useState(data.nb_intervenantes || data.nb_intervenants || data.nb_personnel || 1);
+  const [eng, setEng] = useState(data.engagement_mois === 12 ? "0.10" : data.engagement_mois === 6 ? "0.05" : "0");
+  const [ferie, setFerie] = useState(Boolean(data.ferie || data.majoration_ferie));
+  const [tenue, setTenue] = useState(Boolean(data.tenue_travail));
 
   const jm = parseFloat(js);
   const hm = hj * jm;
@@ -111,11 +111,11 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
 
 function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const data = demande.formulaire_data || {};
-  const [hj, setHj] = useState(4);
-  const [js, setJs] = useState("22");
-  const [nb, setNb] = useState(Math.max(2, data.nb_personnel || 2));
-  const [eng, setEng] = useState("0");
-  const [ferie, setFerie] = useState(false);
+  const [hj, setHj] = useState(data.heures_par_jour || 4);
+  const [js, setJs] = useState(data.jours_par_semaine ? (data.jours_par_semaine === 7 ? "30" : data.jours_par_semaine === 6 ? "26" : "22") : "22");
+  const [nb, setNb] = useState(Math.max(2, data.nb_intervenantes || data.nb_intervenants || data.nb_personnel || 2));
+  const [eng, setEng] = useState(data.engagement_mois === 12 ? "0.10" : data.engagement_mois === 6 ? "0.05" : "0");
+  const [ferie, setFerie] = useState(Boolean(data.ferie || data.majoration_ferie));
 
   const nbS = Math.max(nb, 2);
   const jm = parseFloat(js);

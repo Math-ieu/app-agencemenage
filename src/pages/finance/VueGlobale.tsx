@@ -304,8 +304,10 @@ const getPartProfilDueFromAgence = (row: FacturationRow): number => {
     return row.montantAgenceDoitProfil;
   }
 
-  const due = Number((getMontantPaye(row) * 0.5).toFixed(2));
-  if (due > 0) return Math.min(row.partProfil, due);
+  if (row.montant > 0) {
+    const due = Number((getMontantPaye(row) * (row.partProfil / row.montant)).toFixed(2));
+    if (due > 0) return Math.min(row.partProfil, due);
+  }
 
   return row.partProfil;
 };
@@ -325,8 +327,10 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
     return row.montantProfilDoitAgence;
   }
 
-  const due = Number((getMontantEncaisseProfil(row) * 0.5).toFixed(2));
-  if (due > 0) return Math.min(row.partAgence, due);
+  if (row.montant > 0) {
+    const due = Number((getMontantEncaisseProfil(row) * (row.partAgence / row.montant)).toFixed(2));
+    if (due > 0) return Math.min(row.partAgence, due);
+  }
 
   return row.partAgence;
 };
@@ -524,7 +528,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   let montantPaye = rawMontantPaye;
   if (montantPaye === 0) {
     if (paiement === 'paye') montantPaye = montant;
-    else if (paiement === 'partiellement_paye') montantPaye = Number((montant * 0.5).toFixed(2));
+    else if (paiement === 'partiellement_paye') montantPaye = 0;
   }
 
   let montantEncaisseProfil = item.montant_encaisse_profil !== undefined ? Number(item.montant_encaisse_profil) : 0;
@@ -540,7 +544,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 
   const partAgence = (d_part_agence !== null && d_part_agence !== undefined)
     ? Number(d_part_agence)
-    : Number(facturationData.part_agence ?? (montant * 0.5));
+    : Number(facturationData.part_agence ?? 0);
 
   const partProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
     ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
@@ -599,7 +603,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
 
   const partAgence = (d_part_agence !== null && d_part_agence !== undefined)
     ? Number(d_part_agence)
-    : Number(facturationData.part_agence ?? (montant * 0.5));
+    : Number(facturationData.part_agence ?? 0);
 
   const partProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
     ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
@@ -668,7 +672,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     reglementInterne,
     montantPaye: paiement === 'paye'
       ? (Number(facturationData.montant_verse) || montant)
-      : (paiement === 'partiellement_paye' ? (Number(facturationData.montant_verse) || Number((montant * 0.5).toFixed(2))) : 0),
+      : (paiement === 'partiellement_paye' ? (Number(facturationData.montant_verse) || 0) : 0),
     montantEncaisseProfil: Number(facturationData.montant_encaisse_profil || 0),
     datePaiement: facturationData.date_paiement ? formatDateFR(facturationData.date_paiement) : '—',
     modePaiementReel: demande?.mode_paiement_label || modeLabelFromCode(demande?.mode_paiement) || '—',
