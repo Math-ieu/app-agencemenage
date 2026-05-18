@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { Client, Demande } from '../types';
-import { renderPaymentStatusBadge } from '../utils/statusUtils';
+import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
 
 export interface ActionLog {
   id: number;
@@ -367,24 +367,7 @@ export default function ClientDetails() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#a0aec0' }}>#{client.id}</span>
                   <Badge bg={C.lime} color="white">{client.segment}</Badge>
-                  {latest && (
-                    <Badge 
-                      bg={
-                        latest.statut === 'annule' ? '#E53E3E' : 
-                        latest.statut === 'termine' ? '#2F855A' :
-                        latest.statut === 'en_cours' ? (latest.cao ? '#2F855A' : '#3B82F6') :
-                        '#DD6B20'
-                      } 
-                      color="white"
-                    >
-                      {latest.statut === 'en_cours' ? (latest.cao ? 'Confirmé' : 'Nouveau besoin') :
-                       latest.statut === 'termine' ? 'Terminé' :
-                       latest.statut === 'annule' ? 'Annulée' :
-                       latest.statut === 'pres_en_cours' ? 'Pres. en cours' :
-                       latest.statut === 'pres_terminee' ? 'Pres. terminée' :
-                       'Nouveau besoin'}
-                    </Badge>
-                  )}
+                  {latest && renderStatusBadge(latest.statut, latest.cao)}
                 </div>
               </div>
             </div>
@@ -478,22 +461,7 @@ export default function ClientDetails() {
                           </Badge>
                         </Td>
                         <Td>
-                          <Badge 
-                            bg={
-                              d.statut === 'annule' ? '#E53E3E' : 
-                              d.statut === 'termine' ? '#2F855A' :
-                              d.statut === 'en_cours' ? (d.cao ? '#2F855A' : '#3B82F6') :
-                              '#DD6B20'
-                            } 
-                            color="white"
-                          >
-                            {d.statut === 'en_cours' ? (d.cao ? 'Confirmé' : 'Nouveau besoin') :
-                             d.statut === 'termine' ? 'Terminé' :
-                             d.statut === 'annule' ? 'Annulée' :
-                             d.statut === 'pres_en_cours' ? 'Pres. en cours' :
-                             d.statut === 'pres_terminee' ? 'Pres. terminée' :
-                             'Nouveau besoin'}
-                          </Badge>
+                          {renderStatusBadge(d.statut, d.cao)}
                         </Td>
                         <Td>
                           {renderPaymentStatus(d)}
