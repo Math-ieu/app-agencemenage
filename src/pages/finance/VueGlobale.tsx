@@ -98,6 +98,7 @@ interface FacturationRow {
   phone?: string;
   tvaActive?: boolean;
   originalDemande?: any;
+  originalMission?: any;
   parts_repartition?: any[];
 }
 
@@ -589,6 +590,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     statutPaiementUi: rawStatutPaiementUi,
     tvaActive: Boolean(facturationData.tva_active ?? (demande as any)?.tva_active),
     originalDemande: demande,
+    originalMission: item,
     parts_repartition: Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : Array.isArray(facturationData.parts_repartition) ? facturationData.parts_repartition : undefined,
   };
 };
@@ -691,6 +693,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     statutPaiementUi: rawStatutPaiementUi,
     tvaActive: Boolean(facturationData.tva_active ?? demande?.tva_active),
     originalDemande: demande,
+    originalMission: null,
     parts_repartition: Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : Array.isArray(facturationData.parts_repartition) ? facturationData.parts_repartition : undefined,
   };
 };
@@ -892,8 +895,8 @@ export default function VueGlobale() {
       // Fallback: all profiles with missions are active
       const fallbackIds = new Set<number>();
       for (const row of allRows) {
-        if (row.statut === 'annule' || row.statut === 'En attente' || row.statut === 'Pres. terminée' || row.statut === 'Facturation annulée') continue;
-        if (row.paiement === 'paye' || row.statutPaiementUi === 'paye' || row.paiement === 'integral' || row.paiement === 'effectue') continue;
+        if (row.statut === 'En attente' || row.statut === 'Terminée' || row.statut === 'Facturation annulée') continue;
+        if (row.paiement === 'paye' || row.statutPaiementUi === 'paye' || row.statutPaiementUi === 'integral' || row.statutPaiementUi === 'effectue') continue;
 
         if (row.parts_repartition && row.parts_repartition.length > 0) {
           for (const part of row.parts_repartition) {
@@ -979,7 +982,7 @@ export default function VueGlobale() {
               const annulationAmount = Number(item.montantProfilAnnulation || item.partProfil || 0) / (item.parts_repartition?.length || 1);
               profile.factAnnulee += annulationAmount;
               profile.partProfil += annulationAmount;
-              
+
               if (item.encaissePar === 'Agence') {
                 profile.totalDueToProfile += annulationAmount;
                 if (item.reglementInterne === 'Réglé') {
@@ -1039,13 +1042,13 @@ export default function VueGlobale() {
         const profile = grouped.get(accountKey)!;
         profile.missions += 1;
         const isAnnule = item.statut === 'Facturation annulée' || item.statutPaiementUi === 'facturation_annulee';
-        
+
         if (isAnnule) {
           if (item.profilSeraPaye) {
             const annulationAmount = Number(item.montantProfilAnnulation || item.partProfil || 0);
             profile.factAnnulee += annulationAmount;
             profile.partProfil += annulationAmount;
-            
+
             if (item.encaissePar === 'Agence') {
               profile.totalDueToProfile += annulationAmount;
               if (item.reglementInterne === 'Réglé') {
@@ -1287,9 +1290,13 @@ export default function VueGlobale() {
     const cancelledRows = periodFilteredRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
 
     const missionsEnCours = activeRows.filter(row => {
-      if (row.statut === 'annule' || row.statut === 'En attente' || row.statut === 'Pres. terminée' || row.statut === 'Facturation annulée') return false;
-      if (row.paiement === 'paye' || row.statutPaiementUi === 'paye' || row.paiement === 'integral' || row.paiement === 'effectue') return false;
-      return true;
+      const opDemandeStatut = row.originalDemande?.statut;
+      const opMissionStatut = row.originalMission?.statut;
+
+      if (row.missionId) {
+        return opMissionStatut === 'en_cours' || opMissionStatut === 'confirmee' || opDemandeStatut === 'en_cours' || opDemandeStatut === 'pres_en_cours';
+      }
+      return opDemandeStatut === 'en_cours' || opDemandeStatut === 'pres_en_cours';
     });
 
     const missions = missionsEnCours.length;
