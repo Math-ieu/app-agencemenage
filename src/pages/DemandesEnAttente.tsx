@@ -105,13 +105,13 @@ export default function DemandesEnAttente() {
     nb_jours: 1,
     // Detailed rooms for Ménage Standard
     rooms: {
-      cuisine: 1,
+      cuisine: 0,
       suiteAvecBain: 0,
       suiteSansBain: 0,
-      salleDeBain: 1,
-      chambre: 1,
+      salleDeBain: 0,
+      chambre: 0,
       salonMarocain: 0,
-      salonEuropeen: 1,
+      salonEuropeen: 0,
       toilettesLavabo: 0,
       rooftop: 0,
       escalier: 0
@@ -464,8 +464,8 @@ export default function DemandesEnAttente() {
       lieu_garde: 'domicile', age_personne: '', sexe_personne: '',
       mobilite: '', situation_medicale: '', nb_jours: 1,
       rooms: {
-        cuisine: 1, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 1, chambre: 1,
-        salonMarocain: 0, salonEuropeen: 1, toilettesLavabo: 0, rooftop: 0, escalier: 0
+        cuisine: 0, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 0, chambre: 0,
+        salonMarocain: 0, salonEuropeen: 0, toilettesLavabo: 0, rooftop: 0, escalier: 0
       },
       formula: 'A', size_tier: '1chambre', conso: false, linen_sets: 0
     });
@@ -519,8 +519,8 @@ export default function DemandesEnAttente() {
       situation_medicale: d.formulaire_data?.situation_medicale || '',
       nb_jours: d.formulaire_data?.nb_jours || 1,
       rooms: d.formulaire_data?.rooms || {
-        cuisine: 1, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 1, chambre: 1,
-        salonMarocain: 0, salonEuropeen: 1, toilettesLavabo: 0, rooftop: 0, escalier: 0
+        cuisine: 0, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 0, chambre: 0,
+        salonMarocain: 0, salonEuropeen: 0, toilettesLavabo: 0, rooftop: 0, escalier: 0
       },
       formula: d.formulaire_data?.formula || 'A',
       size_tier: d.formulaire_data?.size_tier || d.formulaire_data?.sizeTier || '1chambre',
