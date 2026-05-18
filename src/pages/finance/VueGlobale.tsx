@@ -463,10 +463,9 @@ const paiementStatusCodeFromLabel = (value: string): string => {
 const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   const demande = item.demande_detail;
   const agent = item.agent_detail;
-  const montant = Number(demande?.prix ?? 0);
-  const rawMontantPaye = item.montant_paye !== undefined ? Number(item.montant_paye) : 0;
-
   const facturationData = (demande as any)?.formulaire_data?.facturation || {};
+  const montant = Number(demande?.prix) || Number(facturationData?.montant_ht) || 0;
+  const rawMontantPaye = item.montant_paye !== undefined ? Number(item.montant_paye) : 0;
 
   // Source de vérité : formulaire_data.facturation.statut_paiement_ui (défini par le Dashboard)
   // Puis statut mission, puis mapping des valeurs API legacy de statut_paiement
@@ -502,9 +501,9 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   }
 
   const paiement: FacturationRow['paiement'] =
-    ['paye', 'integral', 'effectue'].includes(rawStatutPaiementUi)
+    ['paye', 'integral', 'effectue', 'agence_payee_client', 'profil_paye_client', 'Agence payée / Client', 'Profil payé / Client'].includes(rawStatutPaiementUi)
       ? 'paye'
-      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte', 'agence_payee_client', 'profil_paye_client', 'Agence payé / Client', 'Profil payé / Client'].includes(rawStatutPaiementUi)
+      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi)
         ? 'partiellement_paye'
         : 'non_paye';
 
@@ -514,11 +513,13 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
       ? 'Facturation annulée'
       : paiement === 'paye'
         ? 'Payé'
-        : missionStatus === 'terminee'
-          ? 'Terminée'
-          : missionStatus === 'en_attente'
-            ? 'En attente'
-            : 'Confirmée';
+        : paiement === 'partiellement_paye'
+          ? 'Confirmée' // Un paiement partiel implique que ce n'est plus en attente
+          : missionStatus === 'terminee'
+            ? 'Terminée'
+            : missionStatus === 'en_attente'
+              ? 'En attente'
+              : 'Confirmée';
   const partProfilVersee = encaissePar === 'Agence'
     ? (item.part_profil_versee ?? false)
     : (item.part_agence_reversee ?? false);
@@ -593,8 +594,8 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 };
 
 const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
-  const montant = Number(demande?.prix ?? 0);
   const facturationData = demande?.formulaire_data?.facturation || {};
+  const montant = Number(demande?.prix) || Number(facturationData?.montant_ht) || 0;
 
   // Nouveaux champs top-level du modèle Demande (Dashboard)
   const d_part_agence = demande?.part_agence;
@@ -634,16 +635,17 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
   }
 
   const paiement: FacturationRow['paiement'] =
-    ['paye', 'integral', 'effectue'].includes(rawStatutPaiementUi)
+    ['paye', 'integral', 'effectue', 'agence_payee_client', 'profil_paye_client', 'Agence payée / Client', 'Profil payé / Client'].includes(rawStatutPaiementUi)
       ? 'paye'
-      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte', 'agence_payee_client', 'profil_paye_client', 'Agence payé / Client', 'Profil payé / Client'].includes(rawStatutPaiementUi)
+      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi)
         ? 'partiellement_paye'
         : 'non_paye';
 
   const statut: FacturationRow['statut'] =
     demande.statut === 'annule' ? 'Facturation annulée' :
       paiement === 'paye' ? 'Payé' :
-        demande.statut === 'en_attente' ? 'En attente' : 'Confirmée';
+        paiement === 'partiellement_paye' ? 'Confirmée' :
+          demande.statut === 'en_attente' ? 'En attente' : 'Confirmée';
 
   // For demands without missions, we check if payment was marked in formulaire_data
   const partProfilVersee = Boolean(facturationData.part_profil_versee);
@@ -844,7 +846,7 @@ export default function VueGlobale() {
     const missionRows = missions.map(mapMissionToFacturationRow);
     const demandRows = uniqueDemands.map(mapDemandeToFacturationRow);
     const allRows = [...missionRows, ...demandRows]
-      .filter((row) => !!row.clientId && row.originalDemande?.statut !== 'en_attente')
+      .filter((row) => !!row.clientId && (row.originalDemande?.statut !== 'en_attente' || row.statutPaiementUi))
       .sort((a, b) => {
         const dateA = parseFrenchDate(a.date)?.getTime() || 0;
         const dateB = parseFrenchDate(b.date)?.getTime() || 0;
