@@ -18,7 +18,7 @@ const generateSlug = (title) =>
 
 const SERVICES = [
   "Menage standard", "Grand Menage", "Menage Airbnb",
-  "Nettoyage post-demenagement", "Menage fin de chantier",
+  "Menage fin de chantier",
   "Auxiliaire de vie / Garde malade", "Menage Post-sinistre",
   "Menages bureaux", "Placement & Gestion",
   "Nettoyage Fin de chantier (Entreprise)", "Menage Post-sinistre (Entreprise)",
