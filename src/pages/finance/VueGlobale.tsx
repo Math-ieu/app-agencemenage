@@ -863,7 +863,11 @@ export default function VueGlobale() {
       const activeIds = new Set<number>();
 
       for (const d of dashDemandes) {
-        if (d.statut === 'annule') continue;
+        if (d.statut === 'annule' || d.statut === 'en_attente' || d.statut === 'pres_terminee') continue;
+
+        const factDataDef = d.formulaire_data?.facturation || {};
+        const stPaiement = factDataDef.statut_paiement_ui || d.statut_paiement_ui || d.statut_paiement;
+        if (stPaiement === 'paye' || stPaiement === 'integral' || stPaiement === 'effectue') continue;
 
         // Collecter depuis profils_envoyes
         if (Array.isArray(d.profils_envoyes)) {
@@ -888,6 +892,9 @@ export default function VueGlobale() {
       // Fallback: all profiles with missions are active
       const fallbackIds = new Set<number>();
       for (const row of allRows) {
+        if (row.statut === 'annule' || row.statut === 'En attente' || row.statut === 'Pres. terminée' || row.statut === 'Facturation annulée') continue;
+        if (row.paiement === 'paye' || row.statutPaiementUi === 'paye' || row.paiement === 'integral' || row.paiement === 'effectue') continue;
+
         if (row.parts_repartition && row.parts_repartition.length > 0) {
           for (const part of row.parts_repartition) {
             const pid = Number(part.profile_id);
