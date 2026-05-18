@@ -384,7 +384,8 @@ const getISOMonthLocal = (date: Date): string => {
 const formatDateFR = (value?: string): string => {
   if (!value) return '—';
   if (value.includes('/')) return value;
-  const [year, month, day] = value.split('-');
+  const cleanValue = value.includes('T') ? value.split('T')[0] : value.split(' ')[0];
+  const [year, month, day] = cleanValue.split('-');
   if (!year || !month || !day) return value;
   return `${day}/${month}/${year}`;
 };
@@ -659,7 +660,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     clientId: demande?.client,
     profilId: demande?.profil_id,
     missionNo: `DEM-${String(demande?.id).padStart(6, '0')}`,
-    date: formatDateFR(demande?.date_intervention) || formatDateFR(demande?.created_at),
+    date: demande?.date_intervention ? formatDateFR(demande.date_intervention) : formatDateFR(demande?.created_at),
     client: demande?.client_name || '—',
     ville: demande?.client_city || 'Casablanca',
     profil: demande?.profil_name || '—',
@@ -1290,6 +1291,10 @@ export default function VueGlobale() {
     const cancelledRows = periodFilteredRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
 
     const missionsEnCours = activeRows.filter(row => {
+      // Exclude fully paid/settled missions (same as Dashboard)
+      const ui = row.statutPaiementUi;
+      if (ui === 'paye' || ui === 'integral' || ui === 'effectue') return false;
+
       const opDemandeStatut = row.originalDemande?.statut;
       const opMissionStatut = row.originalMission?.statut;
 

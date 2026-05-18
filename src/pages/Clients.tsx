@@ -16,6 +16,8 @@ interface LatestDemande {
   id: number;
   statut: string;
   statut_paiement: string;
+  statut_paiement_ui?: string;
+  facturation_annulee?: boolean;
   commercial: string | null;
   cao?: boolean;
   created_at: string;
@@ -39,6 +41,16 @@ interface Client {
   avis_commercial?: string;
   avis_operationnel?: string;
 }
+
+const PAYMENT_STATUS_OPTIONS = [
+  { value: 'non_confirme', apiValue: 'non_paye', label: 'Non confirmé' },
+  { value: 'paiement_en_attente', apiValue: 'acompte', label: 'Paiement en attente' },
+  { value: 'agence_payee_client', apiValue: 'partiel', label: 'Agence payé / Client' },
+  { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
+  { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
+  { value: 'paye', apiValue: 'integral', label: 'Payé' },
+  { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Facturation annulée' },
+];
 
 const TABS = [
   { id: 'tout', label: 'Tout' },
@@ -297,6 +309,33 @@ export default function Clients() {
     return renderStatusBadge(latest.statut, latest.cao);
   };
 
+  const getPaymentStatusBadge = (client: Client) => {
+    const latest = client.latest_demande;
+    if (!latest) return <span className="badge badge-red">Non payé</span>;
+
+    const statutPaiement = latest.statut_paiement || 'non_paye';
+    const facturationAnnulee = Boolean(latest.facturation_annulee);
+    
+    let statutUi = latest.statut_paiement_ui;
+    if (!statutUi) {
+      if (facturationAnnulee) statutUi = 'facturation_annulee';
+      else if (statutPaiement === 'integral') statutUi = 'paye';
+      else if (statutPaiement === 'acompte') statutUi = 'paiement_en_attente';
+      else if (statutPaiement === 'partiel') statutUi = 'paiement_partiel';
+      else statutUi = 'non_confirme';
+    }
+
+    const option = PAYMENT_STATUS_OPTIONS.find(o => o.value === statutUi);
+    const label = option ? option.label : 'Non payé';
+
+    let badgeClass = 'badge-red';
+    if (statutUi === 'paye' || statutUi === 'integral') badgeClass = 'badge-green';
+    else if (['agence_payee_client', 'profil_paye_client', 'paiement_partiel', 'paiement_en_attente'].includes(statutUi)) badgeClass = 'badge-orange';
+    else if (statutUi === 'facturation_annulee') badgeClass = 'badge-red';
+
+    return <span className={`badge ${badgeClass}`}>{label}</span>;
+  };
+
   const getRowClass = (client: Client) => {
     const latest = client.latest_demande;
     if (!latest) return '';
@@ -473,6 +512,7 @@ export default function Clients() {
               <tr>
                 <th style={{ width: '100px' }}>Actions</th>
                 <th>Statut besoin</th>
+                <th>Statut paiem.</th>
                 <th>Segment</th>
                 <th>Commercial</th>
                 <th>Nom client</th>
@@ -546,6 +586,7 @@ export default function Clients() {
                     </div>
                   </td>
                   <td>{getStatusBadge(c)}</td>
+                  <td>{getPaymentStatusBadge(c)}</td>
                   <td>
                     <span className={`badge ${c.segment === 'particulier' ? 'badge-dark-teal' : 'badge-lime'}`}>
                       {c.segment === 'particulier' ? 'Particulier' : 'Entreprise'}
