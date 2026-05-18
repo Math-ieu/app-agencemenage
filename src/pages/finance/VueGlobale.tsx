@@ -1107,7 +1107,7 @@ export default function VueGlobale() {
     return facturationData.filter((row) => {
       // Filtrer pour n'afficher que les éléments avec des dettes/crédits réels
       if (row.statut === 'En attente') return false; // Exclure les demandes en attente de traitement
-      if (row.paiement === 'paye') return false; // Exclure les éléments déjà entièrement payés
+      if (row.paiement === 'paye' && row.reglementInterne === 'Réglé') return false; // Exclure les éléments déjà entièrement payés ET réglés en interne
 
       if (row.encaissePar === 'Profil' && row.reglementInterne === 'Réglé') return false;
 
@@ -1507,7 +1507,7 @@ export default function VueGlobale() {
   const globalTableTotals = useMemo(() => {
     return globalTableRows.reduce(
       (acc, row) => {
-        const isDebit = row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
+        const isDebit = row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil') || (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil');
         const isCredit = row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence');
 
         if (isDebit) acc.debit += getPartAgenceDueFromProfil(row);
@@ -1522,7 +1522,7 @@ export default function VueGlobale() {
   const expandedGlobalTableRows = useMemo(() => {
     const result: any[] = [];
     for (const row of globalTableRows) {
-      const isDebit = row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
+      const isDebit = row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil') || (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil');
       const isCredit = row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence');
 
       if (row.parts_repartition && row.parts_repartition.length > 0) {
