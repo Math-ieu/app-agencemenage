@@ -1286,7 +1286,13 @@ export default function VueGlobale() {
     const activeRows = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
     const cancelledRows = periodFilteredRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
 
-    const missions = activeRows.length;
+    const missionsEnCours = activeRows.filter(row => {
+      if (row.statut === 'annule' || row.statut === 'En attente' || row.statut === 'Pres. terminée' || row.statut === 'Facturation annulée') return false;
+      if (row.paiement === 'paye' || row.statutPaiementUi === 'paye' || row.paiement === 'integral' || row.paiement === 'effectue') return false;
+      return true;
+    });
+
+    const missions = missionsEnCours.length;
     const chiffreAffaires = activeRows
       .filter((row) => row.paiement !== 'non_paye')
       .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
