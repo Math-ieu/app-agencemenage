@@ -867,11 +867,36 @@ export default function VueGlobale() {
       const activeIds = new Set<number>();
 
       for (const d of dashDemandes) {
-        if (d.statut === 'annule' || d.statut === 'en_attente' || d.statut === 'pres_terminee') continue;
+        if (d.statut === 'en_attente') continue;
 
         const factDataDef = d.formulaire_data?.facturation || {};
         const stPaiement = factDataDef.statut_paiement_ui || d.statut_paiement_ui || d.statut_paiement;
+        
+        const isAnnule = d.statut === 'annule' || stPaiement === 'facturation_annulee' || factDataDef.facturation_annulee;
+        if (isAnnule) {
+          const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(factDataDef.profil_sera_paye);
+          if (profilSeraPaye) {
+            const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
+            if (Array.isArray(parts) && parts.length > 0) {
+              for (const part of parts) {
+                if (!part.part_profil_versee) {
+                  const pid = Number(part.profile_id);
+                  if (pid) activeIds.add(pid);
+                }
+              }
+            } else if (!factDataDef.part_profil_versee) {
+              if (Array.isArray(d.profils_envoyes)) {
+                for (const p of d.profils_envoyes) {
+                  if (p.id) activeIds.add(p.id);
+                }
+              }
+            }
+          }
+          continue;
+        }
+
         if (stPaiement === 'paye' || stPaiement === 'integral' || stPaiement === 'effectue') continue;
+        if (d.statut === 'annule' || d.statut === 'pres_terminee') continue;
 
         // Collecter depuis profils_envoyes
         if (Array.isArray(d.profils_envoyes)) {
@@ -896,7 +921,26 @@ export default function VueGlobale() {
       // Fallback: all profiles with missions are active
       const fallbackIds = new Set<number>();
       for (const row of allRows) {
-        if (row.statut === 'En attente' || row.statut === 'Terminée' || row.statut === 'Facturation annulée') continue;
+        if (row.statut === 'En attente') continue;
+        
+        const isAnnule = row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee';
+        if (isAnnule) {
+          if (row.profilSeraPaye) {
+            if (row.parts_repartition && row.parts_repartition.length > 0) {
+              for (const part of row.parts_repartition) {
+                if (!part.part_profil_versee) {
+                  const pid = Number(part.profile_id);
+                  if (pid) fallbackIds.add(pid);
+                }
+              }
+            } else if (!row.partProfilVersee && row.profilId) {
+              fallbackIds.add(row.profilId);
+            }
+          }
+          continue;
+        }
+
+        if (row.statut === 'Terminée' || row.statut === 'Facturation annulée') continue;
         if (row.paiement === 'paye' || row.statutPaiementUi === 'paye' || row.statutPaiementUi === 'integral' || row.statutPaiementUi === 'effectue') continue;
 
         if (row.parts_repartition && row.parts_repartition.length > 0) {

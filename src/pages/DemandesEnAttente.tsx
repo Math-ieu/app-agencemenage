@@ -352,6 +352,10 @@ export default function DemandesEnAttente() {
 
   const isExpanded = (cardId: number, section: string) => {
     const cardState = expandedCards[cardId];
+    if (section === 'devis') {
+      if (cardState === undefined) return false;
+      return cardState[section] === true;
+    }
     if (cardState === undefined) return true; // Default open
     return cardState[section] !== false;
   };
@@ -533,7 +537,15 @@ export default function DemandesEnAttente() {
   const handleCreateDemande = async () => {
     setFormSubmitted(true);
     const form = document.getElementById('create-request-form') as HTMLFormElement;
-    if (!form?.checkValidity()) return;
+    if (!form?.checkValidity()) {
+      const firstInvalid = form?.querySelector(':invalid') as HTMLElement;
+      if (firstInvalid) {
+        firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstInvalid.focus();
+        addToast("Veuillez remplir tous les champs obligatoires", "error");
+      }
+      return;
+    }
 
     try {
       const frequencyValue = formData.frequence === 'une fois' ? 'oneshot' : 'abonnement';
@@ -994,12 +1006,22 @@ export default function DemandesEnAttente() {
                     </div>
                   )}
 
-                  <QuoteSection 
-                    demande={d} 
-                    onPreview={handlePreviewDocument}
-                    onSend={handleDirectSendWhatsApp}
-                    onUpdateDemandeData={handleQuoteUpdate}
-                  />
+                  <div className="accordion mt-3">
+                    <div className="accordion-header" onClick={() => toggleSection(d.id, 'devis')}>
+                      <span>Preparer le devis</span>
+                      {isExpanded(d.id, 'devis') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                    {isExpanded(d.id, 'devis') && (
+                      <div className="accordion-content" style={{ display: 'block' }}>
+                        <QuoteSection 
+                          demande={d} 
+                          onPreview={handlePreviewDocument}
+                          onSend={handleDirectSendWhatsApp}
+                          onUpdateDemandeData={handleQuoteUpdate}
+                        />
+                      </div>
+                    )}
+                  </div>
 
                   <div className="pending-footer">
                     <div className="detail-item">
@@ -1102,12 +1124,22 @@ export default function DemandesEnAttente() {
                       {!d.is_devis && d.mode_paiement && <span className="text-xs text-muted fw-normal"> ({d.mode_paiement})</span>}
                     </span>
                   </div>
-                   <QuoteSection 
-                    demande={d} 
-                    onPreview={handlePreviewDocument}
-                    onSend={handleDirectSendWhatsApp}
-                    onUpdateDemandeData={handleQuoteUpdate}
-                  />
+                  <div className="accordion mt-3">
+                    <div className="accordion-header" onClick={() => toggleSection(d.id, 'devis')}>
+                      <span>Preparer le devis</span>
+                      {isExpanded(d.id, 'devis') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                    {isExpanded(d.id, 'devis') && (
+                      <div className="accordion-content" style={{ display: 'block' }}>
+                        <QuoteSection 
+                          demande={d} 
+                          onPreview={handlePreviewDocument}
+                          onSend={handleDirectSendWhatsApp}
+                          onUpdateDemandeData={handleQuoteUpdate}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mobile-card-actions">

@@ -4,7 +4,8 @@ import {
   ServiceTypePlacementBlock,
   StructureTypePlacementBlock,
   FrequenceBlock,
-  PeopleBlock
+  PeopleBlock,
+  PlanningBlock
 } from '../ServiceFormBlocks';
 
 interface PlacementFormProps extends FormBlockProps {
@@ -19,6 +20,7 @@ export const PlacementForm: React.FC<PlacementFormProps> = (props) => {
       <StructureTypePlacementBlock {...props} />
       <FrequenceBlock {...props} />
       <PeopleBlock {...props} />
+      <PlanningBlock {...props} />
     </>
   );
 };

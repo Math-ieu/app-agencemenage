@@ -111,11 +111,6 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
 
   return (
     <div className="quote-section-card" style={{ marginTop: 12, borderTop: "1px dashed var(--border-color)", paddingTop: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, color: "var(--text-main)" }}>
-        <div style={{ width: 4, height: 16, background: "var(--primary)", borderRadius: 2 }}></div>
-        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em" }}>Estimation Devis Interne</h4>
-      </div>
-      
       {component}
 
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>

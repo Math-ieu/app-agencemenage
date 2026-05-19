@@ -340,17 +340,40 @@ export default function Dashboard() {
 
       const enAttenteList = allResults.filter(d => d.statut === 'en_attente');
       const results = allResults.filter(d => {
-        if (d.statut === 'en_attente' || d.statut === 'annule') return false;
+        if (d.statut === 'en_attente') return false;
         
         const facturation = d.formulaire_data?.facturation || {};
         const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
-        if (statutUi === 'paye') return false;
+        
+        const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || facturation.facturation_annulee;
+        if (isAnnule) {
+          const profilSeraPaye = (d as any).profil_sera_paye !== undefined ? Boolean((d as any).profil_sera_paye) : Boolean(facturation.profil_sera_paye);
+          if (profilSeraPaye) {
+            let allProfilesPaid = false;
+            const parts = (d as any).parts_repartition || facturation.parts_repartition || d.formulaire_data?.parts_repartition || [];
+            if (Array.isArray(parts) && parts.length > 0) {
+              allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+            } else {
+              allProfilesPaid = Boolean(facturation.part_profil_versee);
+            }
+            if (!allProfilesPaid) return true; // Keep it on the dashboard
+          }
+          return false;
+        }
+
+        if (statutUi === 'paye' || statutUi === 'integral' || statutUi === 'effectue') return false;
         
         return true;
       });
       setDemandes(results);
 
-      const enCours = results.filter(d => d.statut === 'en_cours');
+      const enCours = results.filter(d => {
+        if (d.statut === 'en_cours') return true;
+        const facturation = d.formulaire_data?.facturation || {};
+        const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
+        const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || facturation.facturation_annulee;
+        return isAnnule; // since we already filtered results, any isAnnule here means it needs to be paid
+      });
       const enCoursParticulier = enCours.filter(d => d.segment === 'particulier').length;
       const enCoursEntreprise = enCours.filter(d => d.segment === 'entreprise').length;
       const enCoursNouveau = enCours.filter(d => !d.cao).length;
@@ -555,6 +578,18 @@ export default function Dashboard() {
 
   const handleUpdate = async () => {
     if (!selectedDemande) return;
+    
+    const form = document.getElementById('edit-mission-form') as HTMLFormElement;
+    if (form && !form.checkValidity()) {
+      const firstInvalid = form.querySelector(':invalid') as HTMLElement;
+      if (firstInvalid) {
+        firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstInvalid.focus();
+        addToast("Veuillez remplir tous les champs obligatoires", "error");
+      }
+      return;
+    }
+    
     try {
       const montantHT = toNumber(editFormData.montant_ht ?? editFormData.prix);
       const tvaActive = Boolean(editFormData.tva_active);
@@ -1655,7 +1690,7 @@ export default function Dashboard() {
             </div>
             <div className="sheet-body px-6">
               {isEditing ? (
-                <div className="edit-form-full">
+                <form id="edit-mission-form" className="edit-form-full" onSubmit={(e) => e.preventDefault()}>
                   <div className="form-collapsible-section">
                     <div
                       className="form-section-header demande form-section-header-soft"
@@ -2207,7 +2242,7 @@ export default function Dashboard() {
                       </div>
                     )}
                   </div>
-                </div>
+                </form>
               ) : (
                 <>
                   <div className="detail-section">

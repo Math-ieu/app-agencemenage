@@ -2,7 +2,8 @@ import React from 'react';
 import { FormBlockProps } from '../ServiceFormBlocks';
 import { 
   HabitationTypeBlock,
-  SurfacePostSinistreBlock
+  SurfacePostSinistreBlock,
+  PlanningBlock
 } from '../ServiceFormBlocks';
 
 interface FinChantierFormProps extends FormBlockProps {
@@ -15,6 +16,7 @@ export const FinChantierForm: React.FC<FinChantierFormProps> = (props) => {
     <>
       <HabitationTypeBlock {...props} />
       <SurfacePostSinistreBlock {...props} />
+      <PlanningBlock {...props} />
     </>
   );
 };
