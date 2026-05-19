@@ -1008,7 +1008,7 @@ export default function DemandesEnAttente() {
 
                   <div className="accordion mt-3">
                     <div className="accordion-header" onClick={() => toggleSection(d.id, 'devis')}>
-                      <span>Preparer le devis</span>
+                      <span>Préparer le devis</span>
                       {isExpanded(d.id, 'devis') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     </div>
                     {isExpanded(d.id, 'devis') && (
@@ -1126,7 +1126,7 @@ export default function DemandesEnAttente() {
                   </div>
                   <div className="accordion mt-3">
                     <div className="accordion-header" onClick={() => toggleSection(d.id, 'devis')}>
-                      <span>Preparer le devis</span>
+                      <span>Préparer le devis</span>
                       {isExpanded(d.id, 'devis') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     </div>
                     {isExpanded(d.id, 'devis') && (

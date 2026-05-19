@@ -249,12 +249,34 @@ export default function ProfilDetails() {
         return rows;
       };
 
-      const [agentMissions, delegueMissions, intervenantMissions, allDemandsRaw] = await Promise.all([
+      const [agentMissions, delegueMissions, intervenantMissions, allDemandsRaw, dashDemandsRes] = await Promise.all([
         fetchAllMissions({ agent: realId }),
         fetchAllMissions({ delegue: realId }),
         fetchAllMissions({ intervenants: realId }),
-        fetchAllDemands()
+        fetchAllDemands(),
+        getDemandes({ no_page: 'true' }).catch(() => ({ data: [] }))
       ]);
+
+      const dashDemandsRaw = Array.isArray(dashDemandsRes?.data?.results) ? dashDemandsRes.data.results : (Array.isArray(dashDemandsRes?.data) ? dashDemandsRes.data : []);
+      const dashDemandsMap = new Map<number, any>();
+      dashDemandsRaw.forEach((d: any) => {
+        if (d.id) dashDemandsMap.set(Number(d.id), d);
+      });
+
+      // Enrichir allDemandsRaw avec les données Dashboard complètes
+      allDemandsRaw.forEach((d: any) => {
+        const dashD = dashDemandsMap.get(Number(d.id));
+        if (dashD) {
+          d.profils_envoyes = dashD.profils_envoyes;
+          d.parts_repartition = dashD.parts_repartition || d.parts_repartition;
+          if (d.formulaire_data && dashD.formulaire_data) {
+            d.formulaire_data.facturation = {
+              ...d.formulaire_data.facturation,
+              ...dashD.formulaire_data.facturation,
+            };
+          }
+        }
+      });
 
       const missionsById = new Map<number, any>();
       for (const mission of [...agentMissions, ...delegueMissions, ...intervenantMissions]) {
@@ -508,34 +530,55 @@ export default function ProfilDetails() {
       }
 
       const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
+      const isPaidOrPartiel = !['non_paye', 'non_confirme', 'en_attente'].includes(rawStatutPaiementUi);
 
-      const partsRep: any[] = Array.isArray(facturation.parts_repartition) ? facturation.parts_repartition : (Array.isArray(demande.parts_repartition) ? demande.parts_repartition : []);
+      let partsRep: any[] = Array.isArray(facturation.parts_repartition) ? facturation.parts_repartition : (Array.isArray(demande.parts_repartition) ? demande.parts_repartition : []);
+      let hasExplicitParts = true;
+      if ((!partsRep || partsRep.length === 0) && demande.profils_envoyes && demande.profils_envoyes.length > 0) {
+        hasExplicitParts = false;
+        const count = demande.profils_envoyes.length;
+        const partProfil = Number(facturation.part_profil ?? 0);
+        const defaultAmount = partProfil / count;
+        partsRep = demande.profils_envoyes.map((p: any, idx: number) => ({
+          profile_id: p.id,
+          amount: defaultAmount,
+          is_delegate: idx === 0,
+        }));
+      }
       const partAgenceGlobal = Number(demande.part_agence ?? facturation.part_agence ?? 0);
+
+      const isConfirmed = demande.statut !== 'en_attente';
 
       if (partsRep.length > 0) {
         const myPart = partsRep.find((p: any) => Number(p.profile_id) === agent.id);
         if (myPart) {
           const amount = Number(myPart.amount);
-          const splitPartAgence = partAgenceGlobal / partsRep.length;
           const isDelegate = myPart === (partsRep.find((p: any) => p.is_delegate) || partsRep[0]);
 
           nombreMissions += 1;
-          totalCa += (amount + splitPartAgence);
-          cumulProfil += amount;
+          // Partage équitable du CA total généré entre tous les profils affectés
+          const demandPrice = Number(demande.prix ?? 0);
+          const sharedCa = demandPrice / partsRep.length;
+          totalCa += sharedCa;
+          if (isConfirmed && hasExplicitParts) {
+            cumulProfil += amount;
+          }
 
-          if (encaissePar === 'Agence' && reglementInterne !== 'Réglé') agenceDoitProfil += amount;
-          else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isDelegate) profilDoitAgence += partAgenceGlobal;
+          if (encaissePar === 'Agence' && reglementInterne !== 'Réglé' && isPaidOrPartiel && isConfirmed && hasExplicitParts) agenceDoitProfil += amount;
+          else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isDelegate && isPaidOrPartiel && isConfirmed && hasExplicitParts) profilDoitAgence += partAgenceGlobal;
         }
       } else {
         const partProfil = Number(facturation.part_profil ?? 0);
         nombreMissions += 1;
         totalCa += (partProfil + partAgenceGlobal);
-        cumulProfil += partProfil;
+        if (isConfirmed) {
+          cumulProfil += partProfil;
+        }
 
-        if (encaissePar === 'Agence' && reglementInterne !== 'Réglé') {
+        if (encaissePar === 'Agence' && reglementInterne !== 'Réglé' && isPaidOrPartiel && isConfirmed) {
           const due = Number(sourceData.montant_agence_doit_profil || facturation.montant_agence_doit_profil || partProfil);
           agenceDoitProfil += due;
-        } else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé') {
+        } else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isPaidOrPartiel && isConfirmed) {
           const due = Number(sourceData.montant_profil_doit_agence || facturation.montant_profil_doit_agence || partAgenceGlobal);
           profilDoitAgence += due;
         }
@@ -908,14 +951,14 @@ export default function ProfilDetails() {
             <FinancialCard label="NOMBRE DE MISSIONS" value={String(financeStats.nombreMissions)} color="#f1f5f9" textColor="#1e293b" />
             <FinancialCard
               label="LE PROFIL DOIT À L'AGENCE"
-              value={money(financeStats.profilDoitAgence)}
+              value={financeStats.profilDoitAgence > 0 ? money(financeStats.profilDoitAgence) : '—'}
               color="#FFF5F5"
               textColor="#C53030"
               subtext="Part agence non reversée"
             />
             <FinancialCard
               label="L'AGENCE DOIT AU PROFIL"
-              value={money(financeStats.agenceDoitProfil)}
+              value={financeStats.agenceDoitProfil > 0 ? money(financeStats.agenceDoitProfil) : '—'}
               color="#EBF8FF"
               textColor="#2B6CB0"
               subtext="Part profil non versée"
