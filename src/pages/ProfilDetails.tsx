@@ -467,6 +467,40 @@ export default function ProfilDetails() {
       const demande = isMission ? sourceData.demande_detail || {} : sourceData;
       const facturation = demande.formulaire_data?.facturation || {};
 
+      let partsRep: any[] = Array.isArray(facturation.parts_repartition) ? facturation.parts_repartition : (Array.isArray(demande.parts_repartition) ? demande.parts_repartition : []);
+      let hasExplicitParts = true;
+      if ((!partsRep || partsRep.length === 0) && demande.profils_envoyes && demande.profils_envoyes.length > 0) {
+        hasExplicitParts = false;
+        const count = demande.profils_envoyes.length;
+        const partProfil = Number(facturation.part_profil ?? 0);
+        const defaultAmount = partProfil / count;
+        partsRep = demande.profils_envoyes.map((p: any, idx: number) => ({
+          profile_id: p.id,
+          amount: defaultAmount,
+          is_delegate: idx === 0,
+        }));
+      }
+
+      // Check if this agent is assigned to this mission
+      let myPart: any = null;
+      if (partsRep.length > 0) {
+        myPart = partsRep.find((p: any) => Number(p.profile_id) === agent.id);
+      } else {
+        const agentId = Number(sourceData.agent_id || sourceData.agent || demande.agent_id || demande.agent);
+        if (agentId === agent.id) {
+          myPart = {
+            profile_id: agent.id,
+            amount: Number(facturation.part_profil ?? 0),
+            is_delegate: true
+          };
+        }
+      }
+
+      if (!myPart) {
+        // This agent is not on this mission, skip it completely!
+        return;
+      }
+
       // Detection of cancellation compensation
       const isAnnule = demande.statut === 'annule' || 
                        (isMission && sourceData.statut === 'annulee') ||
@@ -480,14 +514,8 @@ export default function ProfilDetails() {
       if (isAnnule) {
         nbAnnulees += 1;
 
-        // For cancelled billing:
-        // - Any debt from profil to agency is CANCELLED (client didn't pay)
-        // - The agency's LOSS = the compensation it pays to the profil
-        // - The agency's commission is also cancelled (no revenue)
-        
-
-        // The compensation amount the agency must pay the profil
-        const compensation = Number(
+        // Calculate the total compensation for this mission
+        const compensationGlobal = Number(
           sourceData.montant_agence_doit_profil || 
           sourceData.montant_profil_annulation || 
           facturation.montant_profil_annulation ||
@@ -496,7 +524,17 @@ export default function ProfilDetails() {
           0
         );
 
-        // The agency's loss = the compensation paid to the profil
+        // Calculate this profile's portion
+        let compensation = 0;
+        if (partsRep.length > 0) {
+          const portion = Number(myPart.amount || 0);
+          const totalProfilsAmount = partsRep.reduce((s: number, p: any) => s + Number(p.amount || 0), 0) || 1;
+          const ratio = portion / totalProfilsAmount;
+          compensation = compensationGlobal * ratio;
+        } else {
+          compensation = compensationGlobal;
+        }
+
         totalPerte += compensation;
 
         // If the compensation has already been paid, it's part of the profil's net income
@@ -508,9 +546,6 @@ export default function ProfilDetails() {
             agenceDoitProfil += compensation;
           }
         }
-
-        // Note: profilDoitAgence is NOT incremented — the debt is cancelled
-        // Note: totalCa is NOT incremented — no revenue was generated
         return;
       }
 
@@ -531,58 +566,23 @@ export default function ProfilDetails() {
 
       const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
       const isPaidOrPartiel = !['non_paye', 'non_confirme', 'en_attente'].includes(rawStatutPaiementUi);
-
-      let partsRep: any[] = Array.isArray(facturation.parts_repartition) ? facturation.parts_repartition : (Array.isArray(demande.parts_repartition) ? demande.parts_repartition : []);
-      let hasExplicitParts = true;
-      if ((!partsRep || partsRep.length === 0) && demande.profils_envoyes && demande.profils_envoyes.length > 0) {
-        hasExplicitParts = false;
-        const count = demande.profils_envoyes.length;
-        const partProfil = Number(facturation.part_profil ?? 0);
-        const defaultAmount = partProfil / count;
-        partsRep = demande.profils_envoyes.map((p: any, idx: number) => ({
-          profile_id: p.id,
-          amount: defaultAmount,
-          is_delegate: idx === 0,
-        }));
-      }
       const partAgenceGlobal = Number(demande.part_agence ?? facturation.part_agence ?? 0);
-
       const isConfirmed = demande.statut !== 'en_attente';
 
-      if (partsRep.length > 0) {
-        const myPart = partsRep.find((p: any) => Number(p.profile_id) === agent.id);
-        if (myPart) {
-          const amount = Number(myPart.amount);
-          const isDelegate = myPart === (partsRep.find((p: any) => p.is_delegate) || partsRep[0]);
+      const amount = Number(myPart.amount);
+      const isDelegate = myPart === (partsRep.find((p: any) => p.is_delegate) || partsRep[0]);
 
-          nombreMissions += 1;
-          // Partage équitable du CA total généré entre tous les profils affectés
-          const demandPrice = Number(demande.prix ?? 0);
-          const sharedCa = demandPrice / partsRep.length;
-          totalCa += sharedCa;
-          if (isConfirmed && hasExplicitParts) {
-            cumulProfil += amount;
-          }
-
-          if (encaissePar === 'Agence' && reglementInterne !== 'Réglé' && isPaidOrPartiel && isConfirmed && hasExplicitParts) agenceDoitProfil += amount;
-          else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isDelegate && isPaidOrPartiel && isConfirmed && hasExplicitParts) profilDoitAgence += partAgenceGlobal;
-        }
-      } else {
-        const partProfil = Number(facturation.part_profil ?? 0);
-        nombreMissions += 1;
-        totalCa += (partProfil + partAgenceGlobal);
-        if (isConfirmed) {
-          cumulProfil += partProfil;
-        }
-
-        if (encaissePar === 'Agence' && reglementInterne !== 'Réglé' && isPaidOrPartiel && isConfirmed) {
-          const due = Number(sourceData.montant_agence_doit_profil || facturation.montant_agence_doit_profil || partProfil);
-          agenceDoitProfil += due;
-        } else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isPaidOrPartiel && isConfirmed) {
-          const due = Number(sourceData.montant_profil_doit_agence || facturation.montant_profil_doit_agence || partAgenceGlobal);
-          profilDoitAgence += due;
-        }
+      nombreMissions += 1;
+      // Partage équitable du CA total généré entre tous les profils affectés
+      const demandPrice = Number(demande.prix ?? 0);
+      const sharedCa = demandPrice / (partsRep.length || 1);
+      totalCa += sharedCa;
+      if (isConfirmed && hasExplicitParts) {
+        cumulProfil += amount;
       }
+
+      if (encaissePar === 'Agence' && reglementInterne !== 'Réglé' && isPaidOrPartiel && isConfirmed && hasExplicitParts) agenceDoitProfil += amount;
+      else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isDelegate && isPaidOrPartiel && isConfirmed && hasExplicitParts) profilDoitAgence += partAgenceGlobal;
     };
 
     // Traiter les missions
