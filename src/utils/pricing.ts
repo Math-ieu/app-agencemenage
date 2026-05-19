@@ -54,7 +54,11 @@ export interface PricingInput {
     scheduling_type: string;
     heure: string;
     preference_horaire: string;
-    surface?: number;
+    surface?: number | string;
+    formula?: 'A' | 'B';
+    size_tier?: string;
+    conso?: boolean;
+    linen_sets?: number;
 }
 
 export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' => {
@@ -86,9 +90,7 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         'nettoyage fin de chantier',
         'garde malade',
         'placement & gestion',
-        'placement et gestion',
-        'air bnb',
-        'airbnb'
+        'placement et gestion'
     ];
 
     if (surDevisServices.some(s => serviceLower.includes(s))) {
@@ -103,7 +105,7 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
 
     // 1. Post-Déménagement (Fixed tiered pricing)
     if (serviceLower.includes('post-demenagement') || serviceLower.includes('post demenagement') || serviceLower.includes('demenagement')) {
-        const s = surface || 0;
+        const s = Number(surface) || 0;
         let basePrice = 0;
         if (s <= 50) basePrice = 590;
         else if (s <= 80) basePrice = 890;
@@ -114,6 +116,29 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
 
         const corePrice = basePrice * multiplier;
         return Math.round(corePrice);
+    }
+
+    // 1.5. Ménage Airbnb
+    if (serviceLower.includes('airbnb') || serviceLower.includes('air bnb')) {
+        const AIRBNB_PRICES = {
+            A: { studio: 130, '1chambre': 165, '2chambres': 195, '3chambres': 260, '4chambres': 325, villa: 390 },
+            B: { studio: 220, '1chambre': 255, '2chambres': 285, '3chambres': 350, '4chambres': 415, villa: 480 }
+        } as const;
+        
+        const formula = input.formula || 'A';
+        const sizeTier = (input.size_tier || '1chambre') as keyof typeof AIRBNB_PRICES.A;
+        const conso = !!input.conso;
+        const linenSets = Number(input.linen_sets || 0);
+
+        const basePrice = AIRBNB_PRICES[formula]?.[sizeTier] ?? AIRBNB_PRICES.A['1chambre'];
+        let total = basePrice;
+        if (conso) total += 25;
+        if (formula === 'B' && linenSets > 0) total += linenSets * 90;
+        
+        // Add location surcharge
+        total += locationSurcharge;
+
+        return Math.round(total * multiplier);
     }
 
     // 2. Subscriptions setup

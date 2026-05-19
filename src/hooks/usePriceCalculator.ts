@@ -17,7 +17,11 @@ export function usePriceCalculator(formData: any, selectedService: string) {
             scheduling_type: formData.scheduling_type,
             heure: formData.heure,
             preference_horaire: formData.preference_horaire,
-            surface: formData.surface
+            surface: formData.surface,
+            formula: formData.formula,
+            size_tier: formData.size_tier || formData.sizeTier,
+            conso: formData.conso,
+            linen_sets: formData.linen_sets || formData.linenSets
         };
 
         const result = calculateTotalPrice(input);
@@ -34,7 +38,13 @@ export function usePriceCalculator(formData: any, selectedService: string) {
         formData.scheduling_type,
         formData.heure,
         formData.preference_horaire,
-        formData.surface
+        formData.surface,
+        formData.formula,
+        formData.size_tier,
+        formData.sizeTier,
+        formData.conso,
+        formData.linen_sets,
+        formData.linenSets
     ]);
 
     return calculatedPrice;
