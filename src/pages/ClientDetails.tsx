@@ -377,14 +377,6 @@ export default function ClientDetails() {
           <div style={{ display: 'flex', gap: 10 }} className="flex-wrap">
             <button style={{
               display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 18px', border: '1px solid #e2e8f0',
-              borderRadius: 8, background: 'white', color: '#475569',
-              fontSize: 14, fontWeight: 600, cursor: 'pointer',
-            }}>
-              <RefreshCw size={16} color={C.teal} /> Renouveler
-            </button>
-            <button style={{
-              display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 18px', border: '1px solid #FEB2B2',
               borderRadius: 8, background: 'white', color: '#E53E3E',
               fontSize: 14, fontWeight: 600, cursor: 'pointer',
