@@ -1382,9 +1382,6 @@ export default function VueGlobale() {
     [selectedProfileAccount, facturationData]
   );
 
-  const displayedMissionCount = filteredSuiviRows.length;
-  const displayedMissionTotal = filteredSuiviRows.reduce((sum, row) => sum + row.montant, 0);
-
   const suiviRecap = useMemo(() => {
     const totalFacture = filteredSuiviRows.length;
     const activeRows = filteredSuiviRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
