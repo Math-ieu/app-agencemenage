@@ -335,7 +335,7 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
   return row.partAgence;
 };
 
-const getCommissionAgenceEncaissee = (row: FacturationRow): number => {
+const getCommissionAgenceEncaissee = (row: FacturationRow, forKpi = false): number => {
   if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée') {
     return row.profilSeraPaye ? -(Number(row.montantProfilAnnulation) || 0) : 0;
   }
@@ -348,12 +348,12 @@ const getCommissionAgenceEncaissee = (row: FacturationRow): number => {
     return row.partAgence;
   }
 
-  // Profil payé / Client : le profil a l'argent → commission seulement si le profil a réglé l'agence
+  // Profil payé / Client : le profil a l'argent → commission = partAgence (due par le profil)
   if (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client') {
-    if (row.reglementInterne === 'Réglé') {
-      return Number(row.montantProfilDoitAgence || row.partAgence || 0);
+    if (forKpi && row.reglementInterne !== 'Réglé') {
+      return 0;
     }
-    return 0;
+    return Number(row.montantProfilDoitAgence || row.partAgence || 0);
   }
 
   if (row.encaissePar === 'Agence') {
@@ -1394,7 +1394,7 @@ export default function VueGlobale() {
       .filter((row) => row.paiement !== 'non_paye')
       .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
 
-    const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
+    const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row, true), 0);
     const pertes = cancelledRows.reduce((sum, row) => sum + (row.profilSeraPaye ? Number(row.montantProfilAnnulation || 0) : 0), 0);
     const commissionAgence = commissionBrute - pertes;
 
@@ -1470,7 +1470,7 @@ export default function VueGlobale() {
       .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
 
     // Commission brute (hors annulations)
-    const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row), 0);
+    const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row, true), 0);
 
     // Perte = total payé au profil pour les facturations annulées
     const facturationAnnulee = cancelledRows
@@ -1484,6 +1484,7 @@ export default function VueGlobale() {
 
   const debitRows = useMemo(
     () => facturationData.filter((row) =>
+      row.reglementInterne !== 'Réglé' &&
       row.statut !== 'Facturation annulée' &&
       row.statutPaiementUi !== 'facturation_annulee' &&
       (row.statutPaiementUi === 'profil_paye_client' ||
@@ -1521,13 +1522,14 @@ export default function VueGlobale() {
 
   const creditRows = useMemo(
     () => facturationData.filter((row) =>
-      row.statutPaiementUi === 'agence_payee_client' ||
-      row.statutPaiementUi === 'Agence payée / Client' ||
-      (row.statutPaiementUi === 'paye' && row.encaissePar === 'Agence') ||
-      (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
-      (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) ||
-      (row.statut === 'Facturation annulée' && row.profilSeraPaye) ||
-      (!row.statutPaiementUi && row.encaissePar === 'Agence')
+      row.reglementInterne !== 'Réglé' &&
+      (row.statutPaiementUi === 'agence_payee_client' ||
+        row.statutPaiementUi === 'Agence payée / Client' ||
+        (row.statutPaiementUi === 'paye' && row.encaissePar === 'Agence') ||
+        (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
+        (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) ||
+        (row.statut === 'Facturation annulée' && row.profilSeraPaye) ||
+        (!row.statutPaiementUi && row.encaissePar === 'Agence'))
     ),
     [facturationData]
   );
@@ -1762,6 +1764,9 @@ export default function VueGlobale() {
             const isDelegate = part === (row.parts_repartition.find((p: any) => p.is_delegate) || row.parts_repartition[0]);
             if (!isDelegate) continue;
 
+            const isPaid = part.part_agence_reversee ?? row.partAgenceReversee;
+            if (isPaid) continue;
+
             const pId = Number(part.profile_id);
             const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
             const portion = totalDue;
@@ -1783,6 +1788,9 @@ export default function VueGlobale() {
           const totalPartsAmount = row.parts_repartition.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
           for (let i = 0; i < row.parts_repartition.length; i++) {
             const part = row.parts_repartition[i];
+            const isPaid = part.part_profil_versee ?? row.partProfilVersee;
+            if (isPaid) continue;
+
             const pId = Number(part.profile_id);
             const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
             const portion = totalPartsAmount > 0 ? Number(part.amount || 0) : (totalDue / row.parts_repartition.length);
@@ -1798,7 +1806,15 @@ export default function VueGlobale() {
               _isCredit: isCredit
             });
           }
-        } else {
+        }
+      } else {
+        const isPaid = isDebit
+          ? (row.partAgenceReversee || row.reglementInterne === 'Réglé')
+          : isCredit
+          ? (row.partProfilVersee || row.reglementInterne === 'Réglé')
+          : true; // neither debit nor credit outstanding by definition
+
+        if (!isPaid) {
           result.push({
             ...row,
             _partAgenceDue: getPartAgenceDueFromProfil(row),
@@ -1809,16 +1825,6 @@ export default function VueGlobale() {
             _isCredit: isCredit
           });
         }
-      } else {
-        result.push({
-          ...row,
-          _partAgenceDue: getPartAgenceDueFromProfil(row),
-          _partProfilDue: getPartProfilDueFromAgence(row),
-          _commission: getCommissionAgenceEncaissee(row),
-          _uniqueKey: row.missionNo,
-          _isDebit: isDebit,
-          _isCredit: isCredit
-        });
       }
     }
     return result;
@@ -2332,6 +2338,52 @@ export default function VueGlobale() {
     popup.print();
   }, [filteredSuiviRows]);
 
+  const modalIsCancelledAndProfilSeraPaye = selectedMission ? (selectedMission.statut === 'Facturation annulée' || selectedMission.statutPaiementUi === 'facturation_annulee') && selectedMission.profilSeraPaye : false;
+  const modalTtc = selectedMission ? (modalIsCancelledAndProfilSeraPaye ? -Number(selectedMission.montantProfilAnnulation || 0) : selectedMission.montant) : 0;
+  const modalTva = selectedMission ? (selectedMission.tvaActive && !modalIsCancelledAndProfilSeraPaye ? Math.round((modalTtc - Math.round((modalTtc / 1.20) * 100) / 100) * 100) / 100 : 0) : 0;
+  const modalHt = selectedMission ? (selectedMission.tvaActive && !modalIsCancelledAndProfilSeraPaye ? Math.round((modalTtc / 1.20) * 100) / 100 : modalTtc) : 0;
+  const modalPaye = selectedMission ? (modalIsCancelledAndProfilSeraPaye ? (selectedMission.reglementInterne === 'Réglé' || selectedMission.partProfilVersee ? modalTtc : 0) : (selectedMission.montantPaye ?? 0)) : 0;
+  const modalEcart = Number((modalTtc - modalPaye).toFixed(2));
+
+  const isProfilPayeClient = selectedMission ? (selectedMission.statutPaiementUi === 'profil_paye_client' || selectedMission.statutPaiementUi === 'Profil payé / Client') : false;
+
+  const modalPartProfil = selectedMission ? (
+    (selectedMission.parts_repartition && selectedMission.parts_repartition.length > 0)
+      ? selectedMission.parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+      : selectedMission.partProfil
+  ) : 0;
+
+  let modalStatusContent: React.ReactNode = '';
+  let modalStatusPillClass = 'fg-pill-pale-orange';
+
+  if (selectedMission) {
+    modalStatusContent = getPaymentUiLabel(selectedMission.statutPaiementUi);
+    if (selectedMission.statut === 'Facturation annulée' || selectedMission.statutPaiementUi === 'facturation_annulee') {
+      if (selectedMission.profilSeraPaye && (selectedMission.reglementInterne === 'Réglé' || selectedMission.partProfilVersee === true)) {
+        modalStatusPillClass = 'fg-pill-pale-green';
+        modalStatusContent = 'Payé';
+      } else {
+        modalStatusPillClass = 'fg-pill-pale-red';
+        modalStatusContent = 'Facturation annulée';
+      }
+    } else if (selectedMission.statutPaiementUi === 'paye' || selectedMission.statutPaiementUi === 'integral' || selectedMission.statutPaiementUi === 'effectue') {
+      modalStatusPillClass = 'fg-pill-pale-green';
+      modalStatusContent = 'Payé';
+    } else if (selectedMission.statutPaiementUi === 'agence_payee_client') {
+      modalStatusPillClass = 'fg-pill-pale-orange';
+      modalStatusContent = 'Agence payé / Client';
+    } else if (selectedMission.statutPaiementUi === 'profil_paye_client') {
+      modalStatusPillClass = 'fg-pill-pale-orange';
+      modalStatusContent = 'Profil payé / Client';
+    } else if (selectedMission.paiement === 'non_paye') {
+      modalStatusPillClass = 'fg-pill-outline';
+      modalStatusContent = getPaymentUiLabel(selectedMission.statutPaiementUi);
+    } else {
+      modalStatusPillClass = 'fg-pill-pale-orange';
+      modalStatusContent = getPaymentUiLabel(selectedMission.statutPaiementUi);
+    }
+  }
+
   return (
     <div className="page fg-page">
 
@@ -2521,7 +2573,7 @@ export default function VueGlobale() {
           <section className="fg-table-section">
             <div className="fg-section-head">
               <h3>Tableau Débit / Crédit</h3>
-              <span>{globalTableRows.length} ligne(s)</span>
+              <span>{expandedGlobalTableRows.length} ligne(s)</span>
             </div>
             <div className="table-wrapper">
               <table className="data-table">
@@ -2560,7 +2612,7 @@ export default function VueGlobale() {
                       </td>
                     </tr>
                   ))}
-                  {globalTableRows.length === 0 && (
+                  {expandedGlobalTableRows.length === 0 && (
                     <tr>
                       <td colSpan={6} className="empty-row">Aucune ligne trouvée pour ce filtre.</td>
                     </tr>
@@ -2776,7 +2828,6 @@ export default function VueGlobale() {
                         <span className={`fg-pill ${missionFinanceLabel(row) === 'Facturation annulée' ? 'fg-pill-pink' : 'fg-pill-light-green'}`}>
                           {missionFinanceLabel(row)}
                         </span>
-                        {row.statut === 'Facturation annulée' && <small>Montant profil: {money(row.partProfil)}</small>}
                       </td>
                       <td><span className="fg-pill fg-pill-blue">{row.segment}</span></td>
                       <td className="fw-semibold">
@@ -2941,8 +2992,9 @@ export default function VueGlobale() {
                     statusContent = getPaymentUiLabel(row.statutPaiementUi);
                   }
 
+                  const isCancelled = row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee';
                   return (
-                    <tr key={row.missionNo}>
+                    <tr key={row.missionNo} style={{ backgroundColor: isCancelled ? '#fef2f2' : undefined }}>
                       <td className="fw-bold" style={{ color: '#334155' }}>{row.commercialName || '—'}</td>
                       <td className="fw-bold fg-mission-no">{row.missionNo}</td>
                       <td>{row.date || '—'}</td>
@@ -2954,9 +3006,9 @@ export default function VueGlobale() {
                       </td>
                       <td style={{ color: '#64748b' }}>{row.service}</td>
                       <td><span className={`fg-pill ${row.segment === 'Particulier' ? 'fg-pill-outline-sky' : 'fg-pill-violet'}`}>{row.segment}</span></td>
-                      <td className="fw-bold" style={{ color: '#0f5f5b' }}>{renderMoney(ht)}</td>
+                      <td className="fw-bold" style={{ color: ht < 0 ? '#dc2626' : '#0f5f5b' }}>{renderMoney(ht)}</td>
                       <td style={{ color: '#0f5f5b' }}>{renderMoney(tva)}</td>
-                      <td className="fw-bold" style={{ color: '#0f5f5b' }}>{renderMoney(ttc)}</td>
+                      <td className="fw-bold" style={{ color: ttc < 0 ? '#dc2626' : '#0f5f5b' }}>{renderMoney(ttc)}</td>
                       <td style={{ color: '#64748b' }}>{row.modePaiementReel || row.modePaiement || '—'}</td>
                       <td className="fw-bold" style={{ color: '#059669' }}>{renderMoney(paye)}</td>
                       <td className="fw-bold" style={{ color: '#d97706' }}>{Math.abs(ecart) > 0.009 ? renderMoney(ecart) : renderMoney(0)}</td>
@@ -2982,16 +3034,7 @@ export default function VueGlobale() {
                   </tr>
                 )}
               </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={17}>
-                    <div className="fg-table-footer-summary">
-                      <span className="fg-summary-count">{displayedMissionCount} mission(s) affichée(s)</span>
-                      <span className="fg-summary-total">Total affiché : <strong>{money(displayedMissionTotal)}</strong></span>
-                    </div>
-                  </td>
-                </tr>
-              </tfoot>
+
             </table>
           </div>
         </>
@@ -3546,15 +3589,15 @@ export default function VueGlobale() {
             <div className="fg-mission-kpis">
               <div>
                 <p>Montant HT</p>
-                <strong>{money(selectedMission.tvaActive ? Number((selectedMission.montant / 1.2).toFixed(2)) : selectedMission.montant)}</strong>
+                <strong style={{ color: modalHt < 0 ? '#dc2626' : undefined }}>{money(modalHt)}</strong>
               </div>
               <div>
                 <p>TVA</p>
-                <strong className="fg-text-orange">{selectedMission.tvaActive ? money(Number((selectedMission.montant - Number((selectedMission.montant / 1.2).toFixed(2))).toFixed(2))) : money(0)}</strong>
+                <strong className="fg-text-orange">{money(modalTva)}</strong>
               </div>
               <div>
                 <p>Montant TTC</p>
-                <strong className="fg-text-blue">{money(selectedMission.montant)}</strong>
+                <strong className={modalTtc < 0 ? undefined : 'fg-text-blue'} style={{ color: modalTtc < 0 ? '#dc2626' : undefined }}>{money(modalTtc)}</strong>
               </div>
               <div>
                 <p>Commission</p>
@@ -3598,8 +3641,10 @@ export default function VueGlobale() {
                   <div className="fg-mission-status-box">
                     <p>Statut paiement</p>
                     <div>
-                      <span className={paiementClass(selectedMission.paiement)}>{selectedMission.paiement.replace('_', ' ')}</span>
-                      <span>Encaissé : {money(selectedMission.montantPaye ?? 0)} / {money(selectedMission.montant)}</span>
+                      <span className={`fg-pill ${modalStatusPillClass}`} style={{ border: 'none', padding: '0.35rem 0.55rem' }}>
+                        {modalStatusContent}
+                      </span>
+                      <span>Encaissé : {money(modalPaye)} / {money(modalTtc)}</span>
                     </div>
                   </div>
                 </>
@@ -3607,11 +3652,19 @@ export default function VueGlobale() {
 
               {missionDetailTab === 'paiement' && (
                 <div className="fg-mission-info-grid two-col">
-                  <div className="fg-mission-info-card"><span>Montant payé</span><strong>{money(selectedMission.montantPaye ?? 0)}</strong></div>
-                  <div className="fg-mission-info-card"><span>Reste à payer</span><strong className="fg-text-orange">{money(Math.max(selectedMission.montant - (selectedMission.montantPaye ?? 0), 0))}</strong></div>
-                  <div className="fg-mission-info-card"><span>Statut du paiement</span><strong>{paiementLabel(selectedMission.paiement)}</strong></div>
+                  <div className="fg-mission-info-card"><span>Montant payé</span><strong style={{ color: modalPaye < 0 ? '#dc2626' : undefined }}>{money(modalPaye)}</strong></div>
+                  <div className="fg-mission-info-card"><span>Reste à payer</span><strong className="fg-text-orange">{money(Math.abs(modalEcart) > 0.009 ? modalEcart : 0)}</strong></div>
+                  <div className="fg-mission-info-card"><span>Statut du paiement</span><strong>{modalStatusContent}</strong></div>
                   <div className="fg-mission-info-card"><span>Mode de paiement</span><strong>{selectedMission.modePaiementReel ?? '—'}</strong></div>
                   <div className="fg-mission-info-card"><span>Date de paiement</span><strong>{selectedMission.datePaiement ?? '—'}</strong></div>
+                  {isProfilPayeClient && (
+                    <div className="fg-mission-info-card" style={{ gridColumn: 'span 2', borderLeft: '3px solid #e11d48', background: 'rgba(225, 29, 72, 0.05)' }}>
+                      <span>Reste à reverser par le délégué à l'agence</span>
+                      <strong style={{ color: selectedMission.partAgenceReversee ? '#10b981' : '#f43f5e' }}>
+                        {selectedMission.partAgenceReversee ? '0,00 DH (Déjà reversé)' : `${money(selectedMission.partAgence)} (Non reversé)`}
+                      </strong>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -3619,7 +3672,7 @@ export default function VueGlobale() {
                 <>
                   <div className="fg-mission-share-grid">
                     <div className="fg-mission-share-card agency"><span>Part agence</span><strong>{money(selectedMission.partAgence)}</strong></div>
-                    <div className="fg-mission-share-card profile"><span>Part profil {selectedMission.parts_repartition && selectedMission.parts_repartition.length > 1 ? '(Total)' : ''}</span><strong>{money(selectedMission.partProfil)}</strong></div>
+                    <div className="fg-mission-share-card profile"><span>Part profil {selectedMission.parts_repartition && selectedMission.parts_repartition.length > 1 ? '(Total)' : ''}</span><strong>{money(modalPartProfil)}</strong></div>
                   </div>
                   <div className="fg-mission-internal-box" style={{ padding: '1rem', border: '1px solid #1E293B', borderRadius: '4px', marginTop: '1rem' }}>
                     <h4>Répartition et encaissement</h4>
@@ -3627,29 +3680,59 @@ export default function VueGlobale() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
                         {selectedMission.parts_repartition.map((p, idx) => {
                           const agentName = p.profile_name || agents.find(a => a.id === Number(p.profile_id))?.full_name || agents.find(a => a.id === Number(p.profile_id)) ? `${agents.find(a => a.id === Number(p.profile_id))?.first_name} ${agents.find(a => a.id === Number(p.profile_id))?.last_name}` : `Profil ${p.profile_id}`;
+                          const isDelegate = p.is_delegate || idx === 0;
+                          const isPartProfilPaid = isProfilPayeClient ? true : p.part_profil_versee;
+                          const partProfilStatusText = isProfilPayeClient ? 'Déjà encaissée' : (isPartProfilPaid ? 'Versée' : 'Non versée');
+                          const partProfilStatusColor = isPartProfilPaid ? '#10b981' : '#f43f5e';
+                          const isPartAgencePaid = p.part_agence_reversee ?? selectedMission.partAgenceReversee;
+                          
                           return (
-                            <div key={idx} style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                              <div>
-                                <p style={{ margin: 0, fontWeight: 'bold' }}>{agentName}</p>
-                                <p style={{ margin: 0, fontSize: '0.85em', color: '#94a3b8' }}>Montant: {money(p.amount)}</p>
+                            <div key={idx} style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                  <p style={{ margin: 0, fontWeight: 'bold' }}>{agentName}</p>
+                                  <p style={{ margin: 0, fontSize: '0.85em', color: '#94a3b8' }}>Montant: {money(p.amount)}</p>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <p style={{ margin: 0, fontSize: '0.85em', color: partProfilStatusColor }}>
+                                    {partProfilStatusText}
+                                  </p>
+                                  <p style={{ margin: 0, fontSize: '0.85em', color: '#94a3b8' }}>
+                                    {p.date_versement_profil ? p.date_versement_profil : '—'}
+                                  </p>
+                                </div>
                               </div>
-                              <div style={{ textAlign: 'right' }}>
-                                <p style={{ margin: 0, fontSize: '0.85em', color: p.part_profil_versee ? '#10b981' : '#f43f5e' }}>
-                                  {p.part_profil_versee ? 'Versée' : 'Non versée'}
-                                </p>
-                                <p style={{ margin: 0, fontSize: '0.85em', color: '#94a3b8' }}>
-                                  {p.date_versement_profil ? p.date_versement_profil : '—'}
-                                </p>
-                              </div>
+                              {isProfilPayeClient && isDelegate && (
+                                <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '0.85em', color: '#94a3b8' }}>Part agence à reverser : <strong>{money(selectedMission.partAgence)}</strong></span>
+                                  <span style={{ fontSize: '0.85em', color: isPartAgencePaid ? '#10b981' : '#f43f5e', fontWeight: 'bold' }}>
+                                    {isPartAgencePaid ? 'Reversée' : 'Non reversée'}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
                       </div>
                     ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-                        <div><p style={{ margin: 0, color: '#94a3b8' }}>Paiement encaissé par</p><strong style={{ color: '#fff' }}>{selectedMission.encaissePar === 'Agence' ? "L'agence" : 'Le profil'}</strong></div>
-                        <div><p style={{ margin: 0, color: '#94a3b8' }}>Part profil versée</p><strong style={{ color: '#fff' }}>{selectedMission.partProfilVersee ? 'Oui' : 'Non'}</strong></div>
-                        <div><p style={{ margin: 0, color: '#94a3b8' }}>Date versement profil</p><strong style={{ color: '#fff' }}>{selectedMission.dateVersementProfil ?? '—'}</strong></div>
+                      <div style={{ display: 'grid', gridTemplateColumns: isProfilPayeClient ? '1fr 1fr 1.2fr' : '1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                        <div><p style={{ margin: 0, color: '#94a3b8' }}>Paiement encaissé par</p><strong style={{ color: '#fff' }}>{isProfilPayeClient ? 'Le profil (Délégué)' : (selectedMission.encaissePar === 'Agence' ? "L'agence" : 'Le profil')}</strong></div>
+                        <div>
+                          <p style={{ margin: 0, color: '#94a3b8' }}>Part profil versée</p>
+                          <strong style={{ color: isProfilPayeClient || selectedMission.partProfilVersee ? '#10b981' : '#fff' }}>
+                            {isProfilPayeClient ? 'Déjà encaissée' : (selectedMission.partProfilVersee ? 'Oui' : 'Non')}
+                          </strong>
+                        </div>
+                        {isProfilPayeClient ? (
+                          <div>
+                            <p style={{ margin: 0, color: '#94a3b8' }}>Part agence reversée ({money(selectedMission.partAgence)})</p>
+                            <strong style={{ color: selectedMission.partAgenceReversee ? '#10b981' : '#f43f5e' }}>
+                              {selectedMission.partAgenceReversee ? 'Reversée' : 'Non reversée'}
+                            </strong>
+                          </div>
+                        ) : (
+                          <div><p style={{ margin: 0, color: '#94a3b8' }}>Date versement profil</p><strong style={{ color: '#fff' }}>{selectedMission.dateVersementProfil ?? '—'}</strong></div>
+                        )}
                       </div>
                     )}
                   </div>

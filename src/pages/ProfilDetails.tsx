@@ -546,6 +546,7 @@ export default function ProfilDetails() {
             agenceDoitProfil += compensation;
           }
         }
+        nombreMissions += 1;
         return;
       }
 

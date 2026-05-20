@@ -883,11 +883,13 @@ export default function DemandesEnAttente() {
                     {isExpanded(d.id, 'details') && (
                       <div className="accordion-content">
                         <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value text-main-teal fw-bold">{d.service}</span></div>
-                        <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">{d.formulaire_data?.type_habitation || d.formulaire_data?.structure_type || '—'}</span></div>
+                        {!(d.service || '').includes('Auxiliaire') && (
+                          <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">{d.formulaire_data?.type_habitation || d.formulaire_data?.structure_type || '—'}</span></div>
+                        )}
                         <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency_label || (d.frequency === 'oneshot' ? 'Une fois' : 'Abonnement')}</span></div>
                         <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.formulaire_data?.duree ? `${d.formulaire_data.duree}h` : (d.formulaire_data?.duration ? `${d.formulaire_data.duration}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—'))}</span></div>
                         <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || '—'}</span></div>
-                        {d.service.includes('Auxiliaire') ? (
+                        {(d.service || '').includes('Auxiliaire') ? (
                           <>
                             <div className="detail-item"><span className="detail-label">Âge / Sexe :</span> <span className="detail-value">{d.formulaire_data?.age_personne ? `${d.formulaire_data.age_personne} ans` : '—'} / {d.formulaire_data?.sexe_personne || '—'}</span></div>
                             <div className="detail-item"><span className="detail-label">Mobilité :</span> <span className="detail-value">{d.formulaire_data?.mobilite || '—'}</span></div>
@@ -897,10 +899,12 @@ export default function DemandesEnAttente() {
                             </div>
                           </>
                         ) : (
-                          <div className="detail-item">
-                            <span className="detail-label">Surface :</span>
-                            <span className="detail-value">{d.formulaire_data?.surface ? `${d.formulaire_data.surface} m²` : (d.formulaire_data?.officeSurface ? `${d.formulaire_data.officeSurface} m²` : (d.formulaire_data?.surfaceArea ? `${d.formulaire_data.surfaceArea} m²` : '—'))}</span>
-                          </div>
+                          !(d.service || '').toLowerCase().includes('standard') && !(d.service || '').toLowerCase().includes('air bnb') && !(d.service || '').toLowerCase().includes('airbnb') && (
+                            <div className="detail-item">
+                              <span className="detail-label">Surface :</span>
+                              <span className="detail-value">{d.formulaire_data?.surface ? `${d.formulaire_data.surface} m²` : (d.formulaire_data?.officeSurface ? `${d.formulaire_data.officeSurface} m²` : (d.formulaire_data?.surfaceArea ? `${d.formulaire_data.surfaceArea} m²` : '—'))}</span>
+                            </div>
+                          )
                         )}
                         {d.formulaire_data?.details_pieces && (
                           <div className="detail-item" style={{ gridColumn: 'span 2' }}><span className="detail-label">Pièces :</span> <span className="detail-value">{d.formulaire_data?.details_pieces || '—'}</span></div>
@@ -1088,14 +1092,14 @@ export default function DemandesEnAttente() {
                     <span className="mobile-detail-label">Service</span>
                     <span className="mobile-detail-value fw-bold text-primary">{d.service}</span>
                   </div>
-                  {d.formulaire_data?.surface && (
+                  {d.formulaire_data?.surface && !(d.service || '').toLowerCase().includes('standard') && !(d.service || '').toLowerCase().includes('air bnb') && !(d.service || '').toLowerCase().includes('airbnb') && (
                     <div className="mobile-detail-row">
                       <span className="mobile-detail-label">Surface</span>
                       <span className="mobile-detail-value">{d.formulaire_data?.surface || '—'} m²</span>
                     </div>
                   )}
 
-                  {d.formulaire_data?.structure_type && (
+                  {d.formulaire_data?.structure_type && !(d.service || '').includes('Auxiliaire') && (
                     <div className="mobile-detail-row">
                       <span className="mobile-detail-label">Structure</span>
                       <span className="mobile-detail-value">{d.formulaire_data?.structure_type || '—'}</span>
