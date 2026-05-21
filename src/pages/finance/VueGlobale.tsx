@@ -864,14 +864,38 @@ export default function VueGlobale() {
       const dashData = dashRes.data;
       dashDemandes = Array.isArray(dashData?.results) ? dashData.results : (Array.isArray(dashData) ? dashData : []);
 
+      const getPaymentUiValue = (statutPaiement: string, facturationAnnulee: boolean): string => {
+        if (facturationAnnulee) return 'facturation_annulee';
+        if (statutPaiement === 'integral') return 'paye';
+        if (statutPaiement === 'acompte') return 'paiement_en_attente';
+        if (statutPaiement === 'partiel') return 'paiement_partiel';
+        return 'non_confirme';
+      };
+
       for (const d of dashDemandes) {
         if (d.statut === 'en_attente') continue;
 
         const factDataDef = d.formulaire_data?.facturation || {};
-        const stPaiement = factDataDef.statut_paiement_ui || d.statut_paiement_ui || d.statut_paiement;
+        const statutUi = factDataDef.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(factDataDef.facturation_annulee));
 
-        const isPaye = stPaiement === 'paye';
-        if (isPaye) continue;
+        const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || factDataDef.facturation_annulee;
+        if (isAnnule) {
+          const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(factDataDef.profil_sera_paye);
+          if (profilSeraPaye) {
+            let allProfilesPaid = false;
+            const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
+            if (Array.isArray(parts) && parts.length > 0) {
+              allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+            } else {
+              allProfilesPaid = Boolean(factDataDef.part_profil_versee);
+            }
+            if (allProfilesPaid) continue;
+          } else {
+            continue;
+          }
+        } else if (statutUi === 'paye') {
+          continue;
+        }
 
         // Collecter depuis profils_envoyes
         if (Array.isArray(d.profils_envoyes)) {
