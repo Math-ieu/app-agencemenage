@@ -185,6 +185,7 @@ export default function ProfilDetails() {
   const [demandesSearch, setDemandesSearch] = useState('');
   const [selectedDemande, setSelectedDemande] = useState<any | null>(null);
   const [sending, setSending] = useState(false);
+  const [dashboardDemandes, setDashboardDemandes] = useState<any[]>([]);
 
   // History state
   const [history, setHistory] = useState<any[]>([]);
@@ -258,6 +259,7 @@ export default function ProfilDetails() {
       ]);
 
       const dashDemandsRaw = Array.isArray(dashDemandsRes?.data?.results) ? dashDemandsRes.data.results : (Array.isArray(dashDemandsRes?.data) ? dashDemandsRes.data : []);
+      setDashboardDemandes(dashDemandsRaw);
       const dashDemandsMap = new Map<number, any>();
       dashDemandsRaw.forEach((d: any) => {
         if (d.id) dashDemandsMap.set(Number(d.id), d);
@@ -328,7 +330,7 @@ export default function ProfilDetails() {
   useEffect(() => {
     if (!showPostulerModal) return;
     setDemandesLoading(true);
-    getDemandes({ exclude_statut: 'en_attente' })
+    getDemandes({ no_page: 'true' })
       .then(res => {
         const data = res.data;
         setAllDemandes(Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []));
@@ -354,8 +356,16 @@ export default function ProfilDetails() {
     }
   };
 
-  const getStatutBadge = (statut: string) => {
-    return renderStatusBadge(statut);
+  const getPaymentUiValue = (statutPaiement: string, facturationAnnulee: boolean): string => {
+    if (facturationAnnulee) return 'facturation_annulee';
+    if (statutPaiement === 'integral') return 'paye';
+    if (statutPaiement === 'acompte') return 'paiement_en_attente';
+    if (statutPaiement === 'partiel') return 'paiement_partiel';
+    return 'non_confirme';
+  };
+
+  const getStatutBadge = (statut: string, cao?: boolean) => {
+    return renderStatusBadge(statut, cao);
   };
 
   const renderPaymentStatus = (demande: any, sourceData: any) => {
@@ -382,11 +392,54 @@ export default function ProfilDetails() {
   };
 
   const isAgentBusy = useMemo(() => {
-    // L'agent est occupé s'il est affecté (via profils_envoyes) à une demande active.
-    // Ce champ est calculé côté backend (vérifie profils_envoyes sur les demandes non terminées).
-    if (agent?.is_assigned_active) return true;
+    const realId = agent?.id;
+    if (!realId) return false;
 
-    // Fallback: vérifier aussi les missions (si une mission existe sur une demande non payée)
+    // 1. L'agent est occupé si son ID figure dans les profils_envoyes ou parts_repartition de n'importe quelle demande active non payée du dashboard
+    const isBusyOnDashboard = dashboardDemandes.some(d => {
+      if (d.statut === 'en_attente') return false;
+
+      const factDataDef = d.formulaire_data?.facturation || {};
+      const statutUi = factDataDef.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(factDataDef.facturation_annulee));
+
+      // Une demande n'est pas active si elle est payée
+      if (statutUi === 'paye') return false;
+
+      // Si elle est annulée, elle reste sur le dashboard si les profils doivent être payés et ne le sont pas entièrement
+      const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || factDataDef.facturation_annulee;
+      if (isAnnule) {
+        const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(factDataDef.profil_sera_paye);
+        if (profilSeraPaye) {
+          let allProfilesPaid = false;
+          const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
+          if (Array.isArray(parts) && parts.length > 0) {
+            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+          } else {
+            allProfilesPaid = Boolean(factDataDef.part_profil_versee);
+          }
+          if (allProfilesPaid) return false;
+        } else {
+          return false;
+        }
+      }
+
+      // Vérifier profils_envoyes
+      if (Array.isArray(d.profils_envoyes) && d.profils_envoyes.some((p: any) => Number(p.id || p) === realId)) {
+        return true;
+      }
+
+      // Vérifier parts_repartition
+      const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
+      if (Array.isArray(parts) && parts.some((p: any) => Number(p.profile_id) === realId)) {
+        return true;
+      }
+
+      return false;
+    });
+
+    if (isBusyOnDashboard) return true;
+
+    // 2. Fallback: vérifier aussi les missions (si une mission active non payée existe)
     return missions.some(m => {
       if (m.statut === 'annulee') return false;
       const demande = m.demande_detail || {};
@@ -398,7 +451,7 @@ export default function ProfilDetails() {
       const isPaye = rawStatutPaiementUi === 'paye';
       return !isPaye;
     });
-  }, [agent, missions]);
+  }, [agent, missions, dashboardDemandes]);
 
   const filteredHistory = history.filter(log => {
     if (!historySearch) return true;
@@ -407,10 +460,40 @@ export default function ProfilDetails() {
     return actionDesc.includes(q) || (log.user_name || '').toLowerCase().includes(q);
   });
 
-  const ACTIVE_STATUTS = ['en_attente', 'en_cours'];
   const filteredDemandes = allDemandes.filter(d => {
-    // Only show active demands
-    if (!ACTIVE_STATUTS.includes(d.statut)) return false;
+    // Exclure les demandes "en attente"
+    if (d.statut === 'en_attente') return false;
+    
+    const facturation = d.formulaire_data?.facturation || {};
+    const statutUi = facturation.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
+    
+    const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || facturation.facturation_annulee;
+    if (isAnnule) {
+      const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(facturation.profil_sera_paye);
+      if (profilSeraPaye) {
+        let allProfilesPaid = false;
+        const parts = d.parts_repartition || facturation.parts_repartition || d.formulaire_data?.parts_repartition || [];
+        if (Array.isArray(parts) && parts.length > 0) {
+          allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+        } else {
+          allProfilesPaid = Boolean(facturation.part_profil_versee);
+        }
+        if (!allProfilesPaid) {
+          if (!demandesSearch) return true;
+          const q = demandesSearch.toLowerCase();
+          return (
+            String(d.id).includes(q) ||
+            (d.client_name || '').toLowerCase().includes(q) ||
+            (d.service || '').toLowerCase().includes(q) ||
+            (d.client_phone || '').includes(q)
+          );
+        }
+      }
+      return false;
+    }
+
+    if (statutUi === 'paye') return false;
+
     if (!demandesSearch) return true;
     const q = demandesSearch.toLowerCase();
     return (
@@ -1064,7 +1147,7 @@ export default function ProfilDetails() {
                         {isMission ? (
                           <Badge bg="#f1f5f9" color="#475569">{formatMissionStatus(item.data.statut)}</Badge>
                         ) : (
-                          getStatutBadge(d.statut)
+                          getStatutBadge(d.statut, d.cao)
                         )}
                       </Td>
                       <Td>
@@ -1223,7 +1306,7 @@ export default function ProfilDetails() {
                               Déjà affecté
                             </span>
                           )}
-                          {getStatutBadge(d.statut)}
+                          {getStatutBadge(d.statut, d.cao)}
                         </div>
                       </div>
                     );

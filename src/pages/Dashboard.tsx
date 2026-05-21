@@ -436,8 +436,8 @@ export default function Dashboard() {
       if (status === 'confirmed') {
         // Mark CAO as confirmed (cao = true)
         await confirmerCAO(demande.id);
-        // Change status to "en_cours" (Confirmé intervention)
-        const updateData: any = { statut: 'en_cours', cao: true, note_operationnel: caoNote || '' };
+        // Change status to "pres_en_cours" (Confirmation automatique)
+        const updateData: any = { statut: 'pres_en_cours', cao: true, note_operationnel: caoNote || '' };
         await updateDemande(demande.id, updateData);
 
         addToast('Besoin confirmé intervention avec succès (sans envoi WhatsApp automatique)', 'success');
@@ -1297,22 +1297,42 @@ export default function Dashboard() {
 
                             <div className="menu-divider" />
 
-                            <button className="menu-item" style={{ color: '#6366f1' }} onClick={async () => {
-                              await updateDemande(d.id, { statut: 'pres_en_cours' });
-                              addToast('Statut mis à jour : Prestation en cours', 'success');
-                              fetchData();
-                              setActiveMoreMenu(null);
-                            }}>
+                            <button 
+                              className="menu-item" 
+                              style={{ 
+                                color: '#6366f1',
+                                opacity: !d.cao ? 0.5 : 1,
+                                cursor: !d.cao ? 'not-allowed' : 'pointer'
+                              }} 
+                              disabled={!d.cao}
+                              onClick={async () => {
+                                if (!d.cao) return;
+                                await updateDemande(d.id, { statut: 'pres_en_cours' });
+                                addToast('Statut mis à jour : Prestation en cours', 'success');
+                                fetchData();
+                                setActiveMoreMenu(null);
+                              }}
+                            >
                               <CheckCircle size={16} /> Pres. en cours
                             </button>
 
-                            <button className="menu-item" style={{ color: '#0ea5e9' }} onClick={async () => {
-                              await updateDemande(d.id, { statut: 'pres_terminee' });
-                              addToast('Statut mis à jour : Prestation terminée', 'success');
-                              addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
-                              fetchData();
-                              setActiveMoreMenu(null);
-                            }}>
+                            <button 
+                              className="menu-item" 
+                              style={{ 
+                                color: '#0ea5e9',
+                                opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
+                                cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
+                              }} 
+                              disabled={!(d.cao && d.statut === 'pres_en_cours')}
+                              onClick={async () => {
+                                if (!(d.cao && d.statut === 'pres_en_cours')) return;
+                                await updateDemande(d.id, { statut: 'pres_terminee' });
+                                addToast('Statut mis à jour : Prestation terminée', 'success');
+                                addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
+                                fetchData();
+                                setActiveMoreMenu(null);
+                              }}
+                            >
                               <CheckCircle size={16} /> Pres. terminée
                             </button>
 
@@ -1431,22 +1451,42 @@ export default function Dashboard() {
 
                             <div className="menu-divider" />
 
-                            <button className="menu-item" style={{ color: '#6366f1' }} onClick={async () => {
-                              await updateDemande(d.id, { statut: 'pres_en_cours' });
-                              addToast('Statut mis à jour : Prestation en cours', 'success');
-                              fetchData();
-                              setActiveMoreMenu(null);
-                            }}>
+                            <button 
+                              className="menu-item" 
+                              style={{ 
+                                color: '#6366f1',
+                                opacity: !d.cao ? 0.5 : 1,
+                                cursor: !d.cao ? 'not-allowed' : 'pointer'
+                              }} 
+                              disabled={!d.cao}
+                              onClick={async () => {
+                                if (!d.cao) return;
+                                await updateDemande(d.id, { statut: 'pres_en_cours' });
+                                addToast('Statut mis à jour : Prestation en cours', 'success');
+                                fetchData();
+                                setActiveMoreMenu(null);
+                              }}
+                            >
                               <CheckCircle size={16} /> Pres. en cours
                             </button>
 
-                            <button className="menu-item" style={{ color: '#0ea5e9' }} onClick={async () => {
-                              await updateDemande(d.id, { statut: 'pres_terminee' });
-                              addToast('Statut mis à jour : Prestation terminée', 'success');
-                              addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
-                              fetchData();
-                              setActiveMoreMenu(null);
-                            }}>
+                            <button 
+                              className="menu-item" 
+                              style={{ 
+                                color: '#0ea5e9',
+                                opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
+                                cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
+                              }} 
+                              disabled={!(d.cao && d.statut === 'pres_en_cours')}
+                              onClick={async () => {
+                                if (!(d.cao && d.statut === 'pres_en_cours')) return;
+                                await updateDemande(d.id, { statut: 'pres_terminee' });
+                                addToast('Statut mis à jour : Prestation terminée', 'success');
+                                addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
+                                fetchData();
+                                setActiveMoreMenu(null);
+                              }}
+                            >
                               <CheckCircle size={16} /> Pres. terminée
                             </button>
 

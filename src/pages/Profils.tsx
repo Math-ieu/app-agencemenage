@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAgents, deleteAgent } from '../api/client';
+import { getAgents, deleteAgent, getDemandes } from '../api/client';
 import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2 } from 'lucide-react';
 import { Agent } from '../types';
 import { encodeId } from '../utils/obfuscation';
@@ -89,6 +89,7 @@ export default function Profils() {
   const { addToast } = useToastStore();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dashboardDemandes, setDashboardDemandes] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [dateDebut, setDateDebut] = useState('');
@@ -106,14 +107,78 @@ export default function Profils() {
       if (dateDebut) params.date_debut = dateDebut;
       if (dateFin) params.date_fin = dateFin;
 
-      const { data } = await getAgents(params);
-      setAgents(data.results || data);
+      const [agentsRes, demandsRes] = await Promise.all([
+        getAgents(params),
+        getDemandes({ no_page: 'true' }).catch(() => ({ data: [] }))
+      ]);
+
+      const agentsList = agentsRes.data.results || agentsRes.data || [];
+      const dashDemandes = Array.isArray(demandsRes?.data?.results) ? demandsRes.data.results : (Array.isArray(demandsRes?.data) ? demandsRes.data : []);
+
+      setAgents(agentsList);
+      setDashboardDemandes(dashDemandes);
     } catch (err) {
       console.error('Error fetching agents:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  const getPaymentUiValue = (statutPaiement: string, facturationAnnulee: boolean): string => {
+    if (facturationAnnulee) return 'facturation_annulee';
+    if (statutPaiement === 'integral') return 'paye';
+    if (statutPaiement === 'acompte') return 'paiement_en_attente';
+    if (statutPaiement === 'partiel') return 'paiement_partiel';
+    return 'non_confirme';
+  };
+
+  const busyAgentIds = useMemo(() => {
+    const activeIds = new Set<number>();
+    for (const d of dashboardDemandes) {
+      if (d.statut === 'en_attente') continue;
+
+      const factDataDef = d.formulaire_data?.facturation || {};
+      const statutUi = factDataDef.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(factDataDef.facturation_annulee));
+
+      // Une demande n'est pas active si elle est payée
+      if (statutUi === 'paye') continue;
+
+      // Si elle est annulée, elle reste sur le dashboard si les profils doivent être payés et ne le sont pas entièrement
+      const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || factDataDef.facturation_annulee;
+      if (isAnnule) {
+        const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(factDataDef.profil_sera_paye);
+        if (profilSeraPaye) {
+          let allProfilesPaid = false;
+          const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
+          if (Array.isArray(parts) && parts.length > 0) {
+            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+          } else {
+            allProfilesPaid = Boolean(factDataDef.part_profil_versee);
+          }
+          if (allProfilesPaid) continue;
+        } else {
+          continue;
+        }
+      }
+
+      // Collecter depuis profils_envoyes
+      if (Array.isArray(d.profils_envoyes)) {
+        for (const p of d.profils_envoyes) {
+          if (p.id) activeIds.add(p.id);
+        }
+      }
+
+      // Collecter aussi depuis parts_repartition (formulaire_data)
+      const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
+      if (Array.isArray(parts)) {
+        for (const part of parts) {
+          const pid = Number(part.profile_id);
+          if (pid) activeIds.add(pid);
+        }
+      }
+    }
+    return activeIds;
+  }, [dashboardDemandes]);
 
   useEffect(() => { fetchData(); }, [search, activeTab, dateDebut, dateFin]);
 
@@ -294,9 +359,15 @@ export default function Profils() {
                     </div>
                   </td>
                   <td>
-                    <span className={`badge ${agent.statut === 'disponible' ? 'badge-lime' : 'badge-status-annule'}`}>
-                      {agent.statut === 'disponible' ? 'Disponible' : 'Non disponible'}
-                    </span>
+                    {busyAgentIds.has(agent.id) ? (
+                      <span className="badge badge-status-annule" style={{ backgroundColor: '#f59e0b', color: 'white' }}>
+                        Occupé (Mission)
+                      </span>
+                    ) : (
+                      <span className={`badge ${agent.statut === 'disponible' ? 'badge-lime' : 'badge-status-annule'}`}>
+                        {agent.statut === 'disponible' ? 'Disponible' : 'Non disponible'}
+                      </span>
+                    )}
                   </td>
                   <td>
                     <span className="badge badge-status-attente">
