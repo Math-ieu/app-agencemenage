@@ -386,11 +386,17 @@ export default function ProfilDetails() {
     // Ce champ est calculé côté backend (vérifie profils_envoyes sur les demandes non terminées).
     if (agent?.is_assigned_active) return true;
 
-    // Fallback: vérifier aussi les missions (si une mission existe sur une demande non terminée)
+    // Fallback: vérifier aussi les missions (si une mission existe sur une demande non payée)
     return missions.some(m => {
       if (m.statut === 'annulee') return false;
-      const demandeStatut = m.demande_detail?.statut;
-      return !['termine', 'pres_terminee', 'annule'].includes(demandeStatut);
+      const demande = m.demande_detail || {};
+      if (demande.statut === 'annule') return false;
+
+      const facturation = demande.formulaire_data?.facturation || {};
+      const rawStatutPaiementUi = facturation.statut_paiement_ui || m.paiement_client_statut || (demande.statut_paiement === 'integral' ? 'paye' : demande.statut_paiement === 'acompte' ? 'paiement_en_attente' : demande.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
+      
+      const isPaye = rawStatutPaiementUi === 'paye';
+      return !isPaye;
     });
   }, [agent, missions]);
 

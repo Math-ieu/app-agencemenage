@@ -870,31 +870,8 @@ export default function VueGlobale() {
         const factDataDef = d.formulaire_data?.facturation || {};
         const stPaiement = factDataDef.statut_paiement_ui || d.statut_paiement_ui || d.statut_paiement;
 
-        const isAnnule = d.statut === 'annule' || stPaiement === 'facturation_annulee' || factDataDef.facturation_annulee;
-        if (isAnnule) {
-          const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(factDataDef.profil_sera_paye);
-          if (profilSeraPaye) {
-            const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
-            if (Array.isArray(parts) && parts.length > 0) {
-              for (const part of parts) {
-                if (!part.part_profil_versee) {
-                  const pid = Number(part.profile_id);
-                  if (pid) activeIds.add(pid);
-                }
-              }
-            } else if (!factDataDef.part_profil_versee) {
-              if (Array.isArray(d.profils_envoyes)) {
-                for (const p of d.profils_envoyes) {
-                  if (p.id) activeIds.add(p.id);
-                }
-              }
-            }
-          }
-          continue;
-        }
-
-        if (stPaiement === 'paye' || stPaiement === 'integral' || stPaiement === 'effectue') continue;
-        if (d.statut === 'annule' || d.statut === 'pres_terminee') continue;
+        const isPaye = stPaiement === 'paye';
+        if (isPaye) continue;
 
         // Collecter depuis profils_envoyes
         if (Array.isArray(d.profils_envoyes)) {
@@ -1439,26 +1416,9 @@ export default function VueGlobale() {
       const facturation = d.formulaire_data?.facturation || {};
       const statutUi = facturation.statut_paiement_ui || getPaymentUiValueLocal(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
 
-      // Exclude fully paid
-      if (statutUi === 'paye' || statutUi === 'integral' || statutUi === 'effectue') return false;
-
-      const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || facturation.facturation_annulee;
-      if (isAnnule) {
-        const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(facturation.profil_sera_paye);
-        if (profilSeraPaye) {
-          let allProfilesPaid = false;
-          const parts = d.parts_repartition || facturation.parts_repartition || d.formulaire_data?.parts_repartition || [];
-          if (Array.isArray(parts) && parts.length > 0) {
-            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
-          } else {
-            allProfilesPaid = Boolean(facturation.part_profil_versee);
-          }
-          if (!allProfilesPaid) return true;
-        }
-        return false;
-      }
-
-      return d.statut === 'en_cours';
+      // Une mission est en cours si le statut de paiement n'est pas "payé" (c-à-d 'paye', 'integral' ou 'effectue')
+      const isPaye = statutUi === 'paye';
+      return !isPaye;
     });
 
     const missions = missionsEnCours.length;

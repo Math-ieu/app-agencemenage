@@ -361,19 +361,13 @@ export default function Dashboard() {
           return false;
         }
 
-        if (statutUi === 'paye' || statutUi === 'integral' || statutUi === 'effectue') return false;
+        if (statutUi === 'paye') return false;
         
         return true;
       });
       setDemandes(results);
 
-      const enCours = results.filter(d => {
-        if (d.statut === 'en_cours') return true;
-        const facturation = d.formulaire_data?.facturation || {};
-        const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
-        const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || facturation.facturation_annulee;
-        return isAnnule; // since we already filtered results, any isAnnule here means it needs to be paid
-      });
+      const enCours = results.filter(d => !!d);
       const enCoursParticulier = enCours.filter(d => d.segment === 'particulier').length;
       const enCoursEntreprise = enCours.filter(d => d.segment === 'entreprise').length;
       const enCoursNouveau = enCours.filter(d => !d.cao).length;
