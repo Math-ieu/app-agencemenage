@@ -51,7 +51,19 @@ export default function ClientEditModal({ onClose, onSuccess, initialClient }: P
 
     setLoading(true);
     try {
-      await updateClient(initialClient.id, formData);
+      const payload = { ...formData };
+      if (formData.segment === 'entreprise') {
+        payload.entity_name = formData.display_name.trim();
+        payload.first_name = '';
+        payload.last_name = '';
+      } else {
+        const nameParts = formData.display_name.trim().split(/\s+/);
+        payload.first_name = nameParts[0] || '';
+        payload.last_name = nameParts.slice(1).join(' ') || '';
+        payload.entity_name = '';
+      }
+
+      await updateClient(initialClient.id, payload);
       addToast('Client mis à jour avec succès !', 'success');
       onSuccess();
     } catch (err) {

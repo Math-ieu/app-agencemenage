@@ -51,7 +51,7 @@ export const getStatusInfo = (statut: string, cao?: boolean): StatusInfo => {
 
     case 'annule':
       return { 
-        label: 'Annulé', 
+        label: 'Annulée', 
         badgeClass: 'badge-red' 
       };
 

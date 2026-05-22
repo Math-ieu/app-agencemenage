@@ -765,28 +765,7 @@ export default function ClientDetails() {
           ) : <EmptyState text="Aucune donnée de fréquence" />}
         </Accordion>
 
-        {/* ── 5. Détails Besoin Actuel ── */}
-        <Accordion title="Détails Besoin Actuel" icon={<FileText size={18} />} isOpen={openSections.besoin} onToggle={() => toggle('besoin')} color={C.teal}>
-          {latest ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px 32px' }}>
-              <InfoField label="RÉF COMMANDE" value={`#${latest.id}`} />
-              <InfoField label="TYPE DE SERVICE" value={latest.service} />
-              <InfoField label="TYPE D'HABITATION" value={latest.formulaire_data?.type_habitation} />
-              <InfoField label="NOMBRE D'HEURES" value={latest.nb_heures ? `${latest.nb_heures}h` : latest.formulaire_data?.duree ? `${latest.formulaire_data.duree}h` : undefined} />
-              <InfoField label="TARIF" value={latest.prix ? `${latest.prix} MAD` : undefined} />
-              <InfoField label="DATE INTERVENTION" value={latest.date_intervention || undefined} />
-              <InfoField label="HEURE INTERVENTION" value={latest.heure_intervention || undefined} />
-              <InfoField label="ADRESSE" value={latest.client_detail?.address || client.address} />
-              <InfoField label="VILLE" value={client.city || 'Casablanca'} />
-              <InfoField label="REPÈRE / QUARTIER" value={client.neighborhood} />
-              <InfoField label="DATE CRÉATION" value={new Date(latest.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} />
-              <InfoField label="DERNIÈRE MODIFICATION" value={new Date(latest.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} />
-              <InfoField label="AVEC PRODUIT" value={latest.avec_produit ? 'Oui' : 'Non'} />
-              <InfoField label="MODE PAIEMENT" value={latest.mode_paiement_label || latest.mode_paiement} />
-              <InfoField label="NBRE INTERVENANTS" value={latest.formulaire_data?.nb_intervenants || 1} />
-            </div>
-          ) : <EmptyState text="Aucune donnée disponible" />}
-        </Accordion>
+
 
         {/* ── 6. Historique Documents ── */}
         <Accordion title="Historique Documents" icon={<FileText size={18} />} isOpen={openSections.documents} onToggle={() => toggle('documents')} color={C.orange}>
@@ -802,8 +781,6 @@ export default function ClientDetails() {
               </tr></thead>
               <tbody>
                 {demandes.flatMap(d => (d.documents || []).map(doc => {
-                  const statusLabel = d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) : d.statut === 'termine' ? 'Prestation effectuée' : 'En attente';
-                  const statusBg = d.statut === 'termine' ? C.orange : (d.statut === 'en_cours' ? '#3B82F6' : '#94A3B8');
                   const fileName = doc.nom || (doc.type_document === 'devis' ? 'Devis PDF' : 'Récapitulatif PNG');
 
                   return (
@@ -811,15 +788,13 @@ export default function ClientDetails() {
                       <Td>{new Date(doc.created_at).toLocaleDateString('fr-FR')}</Td>
                       <Td color="#94a3b8">{d.commercial_name || '—'}</Td>
                       <Td>
-                        <Badge bg={d.segment === 'entreprise' ? '#10b981' : C.teal} color="white">
-                          {d.segment === 'particulier' ? 'Particulier' : 'Entreprise'}
+                        <Badge bg={d.segment === 'entreprise' ? C.lime : C.teal} color="white">
+                          {d.segment === 'entreprise' ? 'Entreprise' : 'Particulier'}
                         </Badge>
                       </Td>
                       <Td bold color="#1e293b">{d.service}</Td>
                       <Td>
-                        <Badge bg={statusBg} color="white">
-                          {statusLabel}
-                        </Badge>
+                        {renderStatusBadge(d.statut, d.cao)}
                       </Td>
                       <Td center>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
