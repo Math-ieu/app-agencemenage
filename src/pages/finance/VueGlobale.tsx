@@ -583,7 +583,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 
   const partProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
     ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
-    : Number(facturationData.part_profil ?? facturationData.montant_agence_doit_profil ?? (montant - partAgence));
+    : Number(facturationData.part_profil ?? (facturationData.montant_agence_doit_profil || (montant - partAgence)));
 
   return {
     missionId: item.id,
@@ -645,7 +645,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
 
   const partProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
     ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
-    : Number(facturationData.part_profil ?? facturationData.montant_agence_doit_profil ?? (montant - partAgence));
+    : Number(facturationData.part_profil ?? (facturationData.montant_agence_doit_profil || (montant - partAgence)));
 
   // Source de vérité : formulaire_data.facturation.statut_paiement_ui (défini par le Dashboard)
   // Puis champ calculé par le backend (statut_paiement_ui du serializer historique)
@@ -2922,7 +2922,7 @@ export default function VueGlobale() {
                     <th>Segment</th>
                     <th>Montant encaissé (profil)</th>
                     <th>Doit à l'agence (réel)</th>
-                    <th>Part du profil</th>
+                    <th>part du(des) profil(s)</th>
                     <th>Statut du paiement</th>
                   </tr>
                 </thead>
