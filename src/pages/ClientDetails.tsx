@@ -9,7 +9,7 @@ import {
   ChevronDown, User, Calendar, FileText,
   MessageSquare, History, ArrowLeft, RefreshCw, Slash,
   Eye, Star, Clock, Heart, AlertCircle, FileDown,
-  XCircle, Send, Download, CheckCircle
+  XCircle, Send, Download, CheckCircle, X
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { Client, Demande } from '../types';
@@ -196,6 +196,7 @@ export default function ClientDetails() {
   const [saving, setSaving] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string; type: string; name: string } | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDemandDetails, setShowDemandDetails] = useState<Demande | null>(null);
   const addToast = useToastStore(state => state.addToast);
 
   const renderPaymentStatus = (demande: any) => {
@@ -583,16 +584,9 @@ export default function ClientDetails() {
                               return (
                                 <>
                                   <button 
-                                    onClick={() => {
-                                      if (firstDoc && firstDoc.download_url) {
-                                        const fileName = firstDoc.nom || (firstDoc.type_document === 'devis' ? 'Devis PDF' : 'Récapitulatif PNG');
-                                        handlePreview(firstDoc.download_url, firstDoc.type_document, fileName);
-                                      } else {
-                                        addToast("Aucun document disponible pour cette demande", "info");
-                                      }
-                                    }}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: firstDoc ? '#64748b' : '#cbd5e1', opacity: firstDoc ? 1 : 0.4 }}
-                                    title={firstDoc ? "Aperçu du document" : "Aucun document disponible"}
+                                    onClick={() => setShowDemandDetails(d)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                                    title="Détails du besoin actuel"
                                   >
                                     <Eye size={17} />
                                   </button>
@@ -1029,6 +1023,130 @@ export default function ClientDetails() {
           }}
           initialClient={client}
         />
+      )}
+
+      {/* Demand Details Modal */}
+      {showDemandDetails && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: 16,
+        }}>
+          <style>{`
+            @keyframes fadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes slideUp {
+              from { transform: translateY(20px); opacity: 0; }
+              to { transform: translateY(0); opacity: 1; }
+            }
+          `}</style>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 800,
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+            overflow: 'hidden',
+            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '16px 24px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#f8fafc'
+            }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>
+                  Détails de la Demande #{showDemandDetails.id}
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>
+                  Historique de Fidélité
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDemandDetails(null)}
+                style={{
+                  background: '#e2e8f0',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: 32,
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#475569',
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#cbd5e1'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '24px', maxHeight: '70vh', overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px 32px' }}>
+                <InfoField label="RÉF COMMANDE" value={`#${showDemandDetails.id}`} />
+                <InfoField label="TYPE DE SERVICE" value={showDemandDetails.service} />
+                <InfoField label="TYPE D'HABITATION" value={showDemandDetails.formulaire_data?.type_habitation} />
+                <InfoField label="NOMBRE D'HEURES" value={showDemandDetails.nb_heures ? `${showDemandDetails.nb_heures}h` : showDemandDetails.formulaire_data?.duree ? `${showDemandDetails.formulaire_data.duree}h` : undefined} />
+                <InfoField label="TARIF" value={showDemandDetails.prix ? `${showDemandDetails.prix} MAD` : undefined} />
+                <InfoField label="DATE INTERVENTION" value={showDemandDetails.date_intervention || undefined} />
+                <InfoField label="HEURE INTERVENTION" value={showDemandDetails.heure_intervention || undefined} />
+                <InfoField label="ADRESSE" value={showDemandDetails.client_detail?.address || client?.address} />
+                <InfoField label="VILLE" value={client?.city || 'Casablanca'} />
+                <InfoField label="REPÈRE / QUARTIER" value={client?.neighborhood} />
+                <InfoField label="DATE CRÉATION" value={new Date(showDemandDetails.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} />
+                <InfoField label="DERNIÈRE MODIFICATION" value={new Date(showDemandDetails.created_at).toLocaleString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} />
+                <InfoField label="AVEC PRODUIT" value={showDemandDetails.avec_produit ? 'Oui' : 'Non'} />
+                <InfoField label="MODE PAIEMENT" value={showDemandDetails.mode_paiement_label || showDemandDetails.mode_paiement} />
+                <InfoField label="NBRE INTERVENANTS" value={showDemandDetails.formulaire_data?.nb_intervenants || 1} />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '12px 24px',
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              backgroundColor: '#f8fafc'
+            }}>
+              <button
+                onClick={() => setShowDemandDetails(null)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#0f172a',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e293b'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0f172a'}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
