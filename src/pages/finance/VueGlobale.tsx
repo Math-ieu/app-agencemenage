@@ -1966,12 +1966,25 @@ export default function VueGlobale() {
 
     const isProfilPayeClient = target.statutPaiementUi === 'profil_paye_client';
     const isAgencePayeeClient = target.statutPaiementUi === 'agence_payee_client';
-    const initialPartProfilVersee = (isProfilPayeClient || target.partProfilVersee) ? 'Oui' : 'Non';
-    // Pour "Profil payé / Client", la date de versement au profil = date_paiement (quand le statut a été mis)
-    const initialDateVersementProfil = formatDateISO(isProfilPayeClient ? (target.dateVersementProfil || target.datePaiement) : target.dateVersementProfil);
-    // Pour "Agence payée / Client", l'agence a déjà reçu sa part automatiquement
-    const initialPartAgenceReversee = (isAgencePayeeClient || target.partAgenceReversee) ? 'Oui' : 'Non';
-    const initialDateRemiseAgence = formatDateISO(isAgencePayeeClient ? (target.dateRemiseAgence || target.datePaiement) : target.dateRemiseAgence);
+    const isPayeAndProfilEncaisse = ['paye', 'integral', 'effectue'].includes(target.statutPaiementUi || '') && target.encaissePar === 'Profil';
+    const isPayeAndAgenceEncaisse = ['paye', 'integral', 'effectue'].includes(target.statutPaiementUi || '') && target.encaissePar === 'Agence';
+    const isPayeStatus = ['paye', 'integral', 'effectue', 'Payé'].includes(target.statutPaiementUi || '') || target.paiement === 'paye';
+
+    const isProfilPaidTarget = isProfilPayeClient || isPayeAndProfilEncaisse || isPayeStatus || target.partProfilVersee;
+    const isAgencePaidTarget = isAgencePayeeClient || isPayeAndAgenceEncaisse || isPayeStatus || target.partAgenceReversee;
+
+    const initialPartProfilVersee = isProfilPaidTarget ? 'Oui' : 'Non';
+    const initialPartAgenceReversee = isAgencePaidTarget ? 'Oui' : 'Non';
+
+    // Get a common date from whatever is filled
+    const sharedDateVal = target.dateVersementProfil || target.dateRemiseAgence || target.datePaiement || getISODateLocal(new Date());
+
+    const initialDateVersementProfil = formatDateISO(
+      isProfilPaidTarget ? sharedDateVal : target.dateVersementProfil
+    );
+    const initialDateRemiseAgence = formatDateISO(
+      isAgencePaidTarget ? sharedDateVal : target.dateRemiseAgence
+    );
 
     let initialParts = target.parts_repartition;
     if ((!initialParts || initialParts.length === 0) && target.originalDemande?.profils_envoyes && target.originalDemande.profils_envoyes.length > 0) {
@@ -1992,22 +2005,21 @@ export default function VueGlobale() {
           p.profile_name = agent.full_name || `${agent.first_name} ${agent.last_name}`;
         }
       }
-      if (isProfilPayeClient) {
-        p.part_profil_versee = true;
-        if (!p.date_versement_profil) {
-          p.date_versement_profil = target.dateVersementProfil || target.datePaiement || getISODateLocal(new Date());
-        }
-      }
       const isDel = p.is_delegate || ((!initialParts!.some((x: any) => x.is_delegate)) && idx === 0);
+      const partSharedDate = p.date_versement_profil || p.date_remise_agence || target.dateVersementProfil || target.dateRemiseAgence || target.datePaiement || getISODateLocal(new Date());
+
+      if (isProfilPayeClient || isPayeAndProfilEncaisse || isPayeStatus) {
+        p.part_profil_versee = true;
+        p.date_versement_profil = partSharedDate;
+      }
+      
       if (isDel) {
-        if (p.part_agence_amount === undefined || p.part_agence_amount === null || isAgencePayeeClient) {
+        if (p.part_agence_amount === undefined || p.part_agence_amount === null || isAgencePayeeClient || isPayeAndAgenceEncaisse || isPayeStatus) {
           p.part_agence_amount = target.partAgence;
         }
-        if (isAgencePayeeClient) {
+        if (isAgencePayeeClient || isPayeAndAgenceEncaisse || isPayeStatus) {
           p.part_agence_reversee = true;
-          if (!p.date_remise_agence) {
-            p.date_remise_agence = target.dateRemiseAgence || target.datePaiement || getISODateLocal(new Date());
-          }
+          p.date_remise_agence = partSharedDate;
         }
       }
       return p;
@@ -2268,39 +2280,65 @@ export default function VueGlobale() {
       }
     }
 
-    if (targetPartsRepartition && targetPartsRepartition.length > 0) {
-      // Multi-profiles
-      isProfilPaid = targetPartsRepartition.every((p: any) => p.part_profil_versee);
-      if (isProfilPaid) {
-        const dates = targetPartsRepartition
-          .map((p: any) => p.date_versement_profil)
-          .filter(Boolean);
-        profilPaidDate = dates.length > 0 ? dates[dates.length - 1] : getISODateLocal(new Date());
-      }
+    const isPaidStatus = ['Payé', 'Profil payé / Client', 'Agence payée / Client'].includes(missionEditForm.statutPaiement);
 
-      const delegatePart = targetPartsRepartition.find((p: any) => p.is_delegate) || targetPartsRepartition[0];
-      isAgencePaid = Boolean(delegatePart?.part_agence_reversee);
-      agencePaidDate = isAgencePaid ? (delegatePart?.date_remise_agence || getISODateLocal(new Date())) : null;
+    if (isPaidStatus) {
+      isProfilPaid = true;
+      isAgencePaid = true;
+      const sharedPaiementDate = missionEditForm.dateVersementProfil || missionEditForm.dateRemiseAgence || missionEditForm.datePaiement || getISODateLocal(new Date());
+      profilPaidDate = sharedPaiementDate;
+      agencePaidDate = sharedPaiementDate;
+
+      if (targetPartsRepartition && targetPartsRepartition.length > 0) {
+        targetPartsRepartition = targetPartsRepartition.map((p: any, idx: number) => {
+          const isDel = p.is_delegate || (targetPartsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
+          return {
+            ...p,
+            part_profil_versee: true,
+            date_versement_profil: sharedPaiementDate,
+            ...(isDel ? {
+              part_agence_reversee: true,
+              date_remise_agence: sharedPaiementDate,
+              part_agence_amount: p.part_agence_amount || Number(missionEditForm.partAgence || selectedMission?.partAgence || 0),
+            } : {}),
+          };
+        });
+      }
     } else {
-      // Single profile
-      if (missionEditForm.encaissePar === 'Profil' || missionEditForm.statutPaiement === 'Profil payé / Client') {
-        // Profil payé / Client : le profil a déjà encaissé, reste à reverser la part agence
-        isProfilPaid = true;
-        profilPaidDate = missionEditForm.dateVersementProfil || missionEditForm.datePaiement || getISODateLocal(new Date());
-        isAgencePaid = missionEditForm.partAgenceReversee === 'Oui';
-        agencePaidDate = isAgencePaid ? (missionEditForm.dateRemiseAgence || getISODateLocal(new Date())) : null;
-      } else if (missionEditForm.statutPaiement === 'Agence payée / Client') {
-        // Agence payée / Client : l'agence a déjà encaissé, reste à verser la part profil
-        isAgencePaid = true;
-        agencePaidDate = missionEditForm.dateRemiseAgence || missionEditForm.datePaiement || getISODateLocal(new Date());
-        isProfilPaid = missionEditForm.partProfilVersee === 'Oui';
-        profilPaidDate = isProfilPaid ? (missionEditForm.dateVersementProfil || getISODateLocal(new Date())) : null;
+      if (targetPartsRepartition && targetPartsRepartition.length > 0) {
+        // Multi-profiles
+        isProfilPaid = targetPartsRepartition.every((p: any) => p.part_profil_versee);
+        if (isProfilPaid) {
+          const dates = targetPartsRepartition
+            .map((p: any) => p.date_versement_profil)
+            .filter(Boolean);
+          profilPaidDate = dates.length > 0 ? dates[dates.length - 1] : getISODateLocal(new Date());
+        }
+
+        const delegatePart = targetPartsRepartition.find((p: any) => p.is_delegate) || targetPartsRepartition[0];
+        isAgencePaid = Boolean(delegatePart?.part_agence_reversee);
+        agencePaidDate = isAgencePaid ? (delegatePart?.date_remise_agence || getISODateLocal(new Date())) : null;
       } else {
-        // encaissePar === 'Agence' (standard)
-        isProfilPaid = missionEditForm.partProfilVersee === 'Oui';
-        profilPaidDate = isProfilPaid ? (missionEditForm.dateVersementProfil || getISODateLocal(new Date())) : null;
-        isAgencePaid = true; // Agency gets its share automatically
-        agencePaidDate = missionEditForm.datePaiement || getISODateLocal(new Date());
+        // Single profile
+        if (missionEditForm.encaissePar === 'Profil' || missionEditForm.statutPaiement === 'Profil payé / Client') {
+          // Profil payé / Client : le profil a déjà encaissé, reste à reverser la part agence
+          isProfilPaid = true;
+          profilPaidDate = missionEditForm.dateVersementProfil || missionEditForm.datePaiement || getISODateLocal(new Date());
+          isAgencePaid = missionEditForm.partAgenceReversee === 'Oui';
+          agencePaidDate = isAgencePaid ? (missionEditForm.dateRemiseAgence || getISODateLocal(new Date())) : null;
+        } else if (missionEditForm.statutPaiement === 'Agence payée / Client') {
+          // Agence payée / Client : l'agence a déjà encaissé, reste à verser la part profil
+          isAgencePaid = true;
+          agencePaidDate = missionEditForm.dateRemiseAgence || missionEditForm.datePaiement || getISODateLocal(new Date());
+          isProfilPaid = missionEditForm.partProfilVersee === 'Oui';
+          profilPaidDate = isProfilPaid ? (missionEditForm.dateVersementProfil || getISODateLocal(new Date())) : null;
+        } else {
+          // encaissePar === 'Agence' (standard)
+          isProfilPaid = missionEditForm.partProfilVersee === 'Oui';
+          profilPaidDate = isProfilPaid ? (missionEditForm.dateVersementProfil || getISODateLocal(new Date())) : null;
+          isAgencePaid = true; // Agency gets its share automatically
+          agencePaidDate = missionEditForm.datePaiement || getISODateLocal(new Date());
+        }
       }
     }
 
@@ -2309,57 +2347,6 @@ export default function VueGlobale() {
     // Automatically upgrade status to 'paye' if both parts are paid
     if (isProfilPaid && isAgencePaid) {
       paiementClientStatut = 'paye';
-    }
-
-    // If payment status is 'paye', force both parts to be paid
-    if (paiementClientStatut === 'paye') {
-      isProfilPaid = true;
-      if (!profilPaidDate) {
-        profilPaidDate = missionEditForm.dateVersementProfil || missionEditForm.datePaiement || getISODateLocal(new Date());
-      }
-      isAgencePaid = true;
-      if (!agencePaidDate) {
-        agencePaidDate = missionEditForm.dateRemiseAgence || missionEditForm.datePaiement || getISODateLocal(new Date());
-      }
-
-      if (targetPartsRepartition && targetPartsRepartition.length > 0) {
-        targetPartsRepartition = targetPartsRepartition.map((p: any, idx: number) => {
-          const isDel = p.is_delegate || (targetPartsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
-          return {
-            ...p,
-            part_profil_versee: true,
-            date_versement_profil: p.date_versement_profil || profilPaidDate || getISODateLocal(new Date()),
-            ...(isDel ? {
-              part_agence_reversee: true,
-              date_remise_agence: p.date_remise_agence || agencePaidDate || getISODateLocal(new Date()),
-              part_agence_amount: p.part_agence_amount || Number(missionEditForm.partAgence || selectedMission?.partAgence || 0),
-            } : {}),
-          };
-        });
-      }
-    } else {
-      if (targetPartsRepartition && targetPartsRepartition.length > 0) {
-        if (missionEditForm.statutPaiement === 'Agence payée / Client') {
-          targetPartsRepartition = targetPartsRepartition.map((p: any, idx: number) => {
-            const isDel = p.is_delegate || (targetPartsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
-            if (isDel) {
-              return {
-                ...p,
-                part_agence_reversee: true,
-                date_remise_agence: p.date_remise_agence || missionEditForm.dateRemiseAgence || getISODateLocal(new Date()),
-                part_agence_amount: p.part_agence_amount || Number(missionEditForm.partAgence || selectedMission?.partAgence || 0),
-              };
-            }
-            return p;
-          });
-        } else if (missionEditForm.statutPaiement === 'Profil payé / Client') {
-          targetPartsRepartition = targetPartsRepartition.map((p: any) => ({
-            ...p,
-            part_profil_versee: true,
-            date_versement_profil: p.date_versement_profil || missionEditForm.dateVersementProfil || getISODateLocal(new Date()),
-          }));
-        }
-      }
     }
 
     const payload: Record<string, unknown> = {
@@ -4218,57 +4205,63 @@ export default function VueGlobale() {
                           if (newStatus === 'Profil payé / Client') {
                             updated.encaissePar = 'Profil';
                             updated.partProfilVersee = 'Oui';
-                            // Date du versement au profil = date du paiement (quand le statut a été mis)
-                            if (!updated.dateVersementProfil) {
-                              updated.dateVersementProfil = prev.datePaiement || getISODateLocal(new Date());
-                            }
-                            if (updated.partsRepartition) {
-                              updated.partsRepartition = updated.partsRepartition.map((p) => ({
-                                ...p,
-                                part_profil_versee: true,
-                                date_versement_profil: p.date_versement_profil || prev.datePaiement || getISODateLocal(new Date()),
-                              }));
-                            }
-                          } else if (newStatus === 'Agence payée / Client') {
-                            updated.encaissePar = 'Agence';
                             updated.partAgenceReversee = 'Oui';
-                            // Date de la remise à l'agence = date du paiement (quand le statut a été mis)
-                            if (!updated.dateRemiseAgence) {
-                              updated.dateRemiseAgence = prev.datePaiement || getISODateLocal(new Date());
-                            }
-                            if (updated.partsRepartition) {
-                              updated.partsRepartition = updated.partsRepartition.map((p, idx) => {
-                                const isDel = p.is_delegate || (updated.partsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
-                                if (isDel) {
-                                  return {
-                                    ...p,
-                                    part_agence_reversee: true,
-                                    date_remise_agence: p.date_remise_agence || prev.datePaiement || getISODateLocal(new Date()),
-                                    part_agence_amount: p.part_agence_amount || Number(prev.partAgence || selectedMission?.partAgence || 0),
-                                  };
-                                }
-                                return p;
-                              });
-                            }
-                          } else if (newStatus === 'Payé') {
-                            updated.partProfilVersee = 'Oui';
-                            updated.partAgenceReversee = 'Oui';
-                            if (!updated.dateVersementProfil) {
-                              updated.dateVersementProfil = prev.datePaiement || getISODateLocal(new Date());
-                            }
-                            if (!updated.dateRemiseAgence) {
-                              updated.dateRemiseAgence = prev.datePaiement || getISODateLocal(new Date());
-                            }
+                            const sharedDate = prev.datePaiement || getISODateLocal(new Date());
+                            updated.dateVersementProfil = sharedDate;
+                            updated.dateRemiseAgence = sharedDate;
                             if (updated.partsRepartition) {
                               updated.partsRepartition = updated.partsRepartition.map((p, idx) => {
                                 const isDel = p.is_delegate || (updated.partsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
                                 return {
                                   ...p,
                                   part_profil_versee: true,
-                                  date_versement_profil: p.date_versement_profil || prev.datePaiement || getISODateLocal(new Date()),
+                                  date_versement_profil: sharedDate,
                                   ...(isDel ? {
                                     part_agence_reversee: true,
-                                    date_remise_agence: p.date_remise_agence || prev.datePaiement || getISODateLocal(new Date()),
+                                    date_remise_agence: sharedDate,
+                                    part_agence_amount: p.part_agence_amount || Number(prev.partAgence || selectedMission?.partAgence || 0),
+                                  } : {}),
+                                };
+                              });
+                            }
+                          } else if (newStatus === 'Agence payée / Client') {
+                            updated.encaissePar = 'Agence';
+                            updated.partProfilVersee = 'Oui';
+                            updated.partAgenceReversee = 'Oui';
+                            const sharedDate = prev.datePaiement || getISODateLocal(new Date());
+                            updated.dateVersementProfil = sharedDate;
+                            updated.dateRemiseAgence = sharedDate;
+                            if (updated.partsRepartition) {
+                              updated.partsRepartition = updated.partsRepartition.map((p, idx) => {
+                                const isDel = p.is_delegate || (updated.partsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
+                                return {
+                                  ...p,
+                                  part_profil_versee: true,
+                                  date_versement_profil: sharedDate,
+                                  ...(isDel ? {
+                                    part_agence_reversee: true,
+                                    date_remise_agence: sharedDate,
+                                    part_agence_amount: p.part_agence_amount || Number(prev.partAgence || selectedMission?.partAgence || 0),
+                                  } : {}),
+                                };
+                              });
+                            }
+                          } else if (newStatus === 'Payé') {
+                            updated.partProfilVersee = 'Oui';
+                            updated.partAgenceReversee = 'Oui';
+                            const sharedDate = prev.datePaiement || getISODateLocal(new Date());
+                            updated.dateVersementProfil = sharedDate;
+                            updated.dateRemiseAgence = sharedDate;
+                            if (updated.partsRepartition) {
+                              updated.partsRepartition = updated.partsRepartition.map((p, idx) => {
+                                const isDel = p.is_delegate || (updated.partsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
+                                return {
+                                  ...p,
+                                  part_profil_versee: true,
+                                  date_versement_profil: sharedDate,
+                                  ...(isDel ? {
+                                    part_agence_reversee: true,
+                                    date_remise_agence: sharedDate,
                                     part_agence_amount: p.part_agence_amount || Number(prev.partAgence || selectedMission?.partAgence || 0),
                                   } : {}),
                                 };
@@ -4307,16 +4300,6 @@ export default function VueGlobale() {
               {missionEditForm.partsRepartition && missionEditForm.partsRepartition.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '1rem' }}>
                   {missionEditForm.partsRepartition.map((part, index) => {
-                    const originalPart = selectedMission?.parts_repartition?.find(
-                      (op: any) => Number(op.profile_id) === Number(part.profile_id)
-                    );
-                    const isPartProfilPaidFrozen = Boolean(originalPart?.part_profil_versee) || missionEditForm.statutPaiement === 'Profil payé / Client';
-                    const isAgencePayeeClientStatus = selectedMission?.statutPaiementUi === 'agence_payee_client' || selectedMission?.statutPaiementUi === 'Agence payée / Client';
-                    const isPartAgencePaidFrozen = Boolean(originalPart?.part_agence_reversee) ||
-                      isAgencePayeeClientStatus ||
-                      missionEditForm.statutPaiement === 'Agence payée / Client' ||
-                      missionEditForm.statutPaiement === 'Agence payé / Client' ||
-                      (missionEditForm.statutPaiement === 'Profil payé / Client' && part.part_agence_reversee);
                     const isDelegate = part.is_delegate || (missionEditForm.partsRepartition!.every((p: any) => !p.is_delegate) && index === 0);
 
                     return (
@@ -4346,7 +4329,7 @@ export default function VueGlobale() {
                             <label className="fg-select-wrap">
                               <select
                                 value={part.part_profil_versee ? 'Oui' : 'Non'}
-                                disabled={isPartProfilPaidFrozen}
+                                disabled={true}
                                 onChange={(e) => {
                                   const newParts = [...missionEditForm.partsRepartition!];
                                   newParts[index].part_profil_versee = e.target.value === 'Oui';
@@ -4368,7 +4351,7 @@ export default function VueGlobale() {
                               <input
                                 type="date"
                                 value={part.date_versement_profil || ''}
-                                disabled={isPartProfilPaidFrozen}
+                                disabled={true}
                                 onChange={(e) => {
                                   const newParts = [...missionEditForm.partsRepartition!];
                                   newParts[index].date_versement_profil = e.target.value;
@@ -4388,7 +4371,7 @@ export default function VueGlobale() {
                                 <label className="fg-select-wrap">
                                   <select
                                     value={part.part_agence_reversee ? 'Oui' : 'Non'}
-                                    disabled={isPartAgencePaidFrozen}
+                                    disabled={true}
                                     onChange={(e) => {
                                       const newParts = [...missionEditForm.partsRepartition!];
                                       const isYes = e.target.value === 'Oui';
@@ -4429,7 +4412,7 @@ export default function VueGlobale() {
                                   <input
                                     type="date"
                                     value={part.date_remise_agence || ''}
-                                    disabled={isPartAgencePaidFrozen}
+                                    disabled={true}
                                     onChange={(e) => {
                                       const newParts = [...missionEditForm.partsRepartition!];
                                       newParts[index].date_remise_agence = e.target.value;
@@ -4447,12 +4430,6 @@ export default function VueGlobale() {
                   })}
                 </div>
               ) : (() => {
-                const isProfileShareFrozen = Boolean(selectedMission?.partProfilVersee) || missionEditForm.statutPaiement === 'Profil payé / Client';
-                const isAgencyShareFrozen = Boolean(selectedMission?.partAgenceReversee) ||
-                  selectedMission?.statutPaiementUi === 'agence_payee_client' ||
-                  missionEditForm.statutPaiement === 'Agence payée / Client' ||
-                  (missionEditForm.statutPaiement === 'Profil payé / Client' && missionEditForm.partAgenceReversee === 'Oui');
-
                 return (
                   <>
                     <div className="fg-two-col-fields">
@@ -4461,6 +4438,7 @@ export default function VueGlobale() {
                         <label className="fg-select-wrap">
                           <select
                             value={missionEditForm.encaissePar}
+                            disabled={true}
                             onChange={(e) => {
                               const newEnc = e.target.value as 'Agence' | 'Profil';
                               setMissionEditForm((prev) => {
@@ -4487,6 +4465,7 @@ export default function VueGlobale() {
                           <label>Montant encaissé par le profil</label>
                           <input
                             value={missionEditForm.montantEncaisseProfil}
+                            disabled={true}
                             onChange={(e) => setMissionEditForm((prev) => ({ ...prev, montantEncaisseProfil: e.target.value }))}
                           />
                         </div>
@@ -4525,7 +4504,7 @@ export default function VueGlobale() {
                             <label className="fg-select-wrap">
                               <select
                                 value={missionEditForm.partAgenceReversee}
-                                disabled={isAgencyShareFrozen}
+                                disabled={true}
                                 onChange={(e) => {
                                   const val = e.target.value as 'Oui' | 'Non';
                                   setMissionEditForm((prev) => ({
@@ -4547,7 +4526,7 @@ export default function VueGlobale() {
                               <input
                                 type="date"
                                 value={missionEditForm.dateRemiseAgence}
-                                disabled={isAgencyShareFrozen}
+                                disabled={true}
                                 onChange={(e) => setMissionEditForm((prev) => ({ ...prev, dateRemiseAgence: e.target.value }))}
                               />
                               <Calendar size={14} />
@@ -4587,7 +4566,7 @@ export default function VueGlobale() {
                             <label className="fg-select-wrap">
                               <select
                                 value={missionEditForm.partProfilVersee}
-                                disabled={isProfileShareFrozen}
+                                disabled={true}
                                 onChange={(e) => {
                                   const val = e.target.value as 'Oui' | 'Non';
                                   setMissionEditForm((prev) => ({
@@ -4609,7 +4588,7 @@ export default function VueGlobale() {
                               <input
                                 type="date"
                                 value={missionEditForm.dateVersementProfil}
-                                disabled={isProfileShareFrozen}
+                                disabled={true}
                                 onChange={(e) => setMissionEditForm((prev) => ({ ...prev, dateVersementProfil: e.target.value }))}
                               />
                               <Calendar size={14} />
@@ -4624,7 +4603,7 @@ export default function VueGlobale() {
                           <label className="fg-select-wrap">
                             <select
                               value={missionEditForm.partProfilVersee}
-                              disabled={isProfileShareFrozen}
+                              disabled={true}
                               onChange={(e) => {
                                 const val = e.target.value as 'Oui' | 'Non';
                                 setMissionEditForm((prev) => ({
@@ -4646,7 +4625,7 @@ export default function VueGlobale() {
                             <input
                               type="date"
                               value={missionEditForm.dateVersementProfil}
-                              disabled={isProfileShareFrozen}
+                              disabled={true}
                               onChange={(e) => setMissionEditForm((prev) => ({ ...prev, dateVersementProfil: e.target.value }))}
                             />
                             <Calendar size={14} />
