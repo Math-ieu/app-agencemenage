@@ -343,13 +343,10 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
   return row.partAgence;
 };
 
-const getCommissionAgenceEncaissee = (row: FacturationRow, forKpi = false): number => {
+const getCommissionAgenceEncaissee = (row: FacturationRow, _forKpi = false): number => {
   if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée') {
     return row.profilSeraPaye ? -(Number(row.montantProfilAnnulation) || 0) : 0;
   }
-
-  // Si le client n'a pas payé, on ne compte pas de commission
-  if (row.paiement !== 'paye') return 0;
 
   // Agence payée / Client : l'agence a déjà l'argent → commission = partAgence (immédiat)
   if (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client') {
@@ -358,11 +355,11 @@ const getCommissionAgenceEncaissee = (row: FacturationRow, forKpi = false): numb
 
   // Profil payé / Client : le profil a l'argent → commission = partAgence (due par le profil)
   if (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client') {
-    if (forKpi && row.reglementInterne !== 'Réglé') {
-      return 0;
-    }
     return Number(row.montantProfilDoitAgence || row.partAgence || 0);
   }
+
+  // Si le client n'a pas payé, on ne compte pas de commission
+  if (row.paiement !== 'paye') return 0;
 
   if (row.encaissePar === 'Agence') {
     const partProfilDue = getPartProfilDueFromAgence(row);
@@ -2084,6 +2081,10 @@ export default function VueGlobale() {
       await updateMission(row.missionId, {
         part_agence_reversee: isPaid,
         date_remise_agence: isPaid ? todayIso : null,
+        ...(row.encaissePar === 'Profil' ? {
+          part_profil_versee: true,
+          date_versement_profil: row.dateVersementProfil && row.dateVersementProfil !== '—' ? row.dateVersementProfil : todayIso
+        } : {})
       });
     }
 
@@ -2097,7 +2098,14 @@ export default function VueGlobale() {
       if (Array.isArray(facturation.parts_repartition) && facturation.parts_repartition.length > 0 && row.profilId) {
         newParts = facturation.parts_repartition.map((p: any) => {
           if (Number(p.profile_id) === row.profilId) {
-            return { ...p, part_agence_reversee: isPaid, date_remise_agence: isPaid ? todayIso : null };
+            const updated: any = { ...p, part_agence_reversee: isPaid, date_remise_agence: isPaid ? todayIso : null };
+            if (row.encaissePar === 'Profil') {
+              updated.part_profil_versee = true;
+              if (!updated.date_versement_profil) {
+                updated.date_versement_profil = todayIso;
+              }
+            }
+            return updated;
           }
           return p;
         });
@@ -2113,6 +2121,10 @@ export default function VueGlobale() {
             // Sync règlement interne if all are paid or single
             part_agence_reversee: allPaid,
             date_remise_agence: allPaid ? todayIso : null,
+            ...(row.encaissePar === 'Profil' ? {
+              part_profil_versee: true,
+              date_versement_profil: facturation.date_versement_profil || todayIso
+            } : {}),
             // Sync statut Dashboard : Payé ou retour à Profil payé / Client
             statut_paiement_ui: allPaid ? 'paye' : 'profil_paye_client',
           }
