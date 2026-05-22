@@ -1344,13 +1344,13 @@ export default function Dashboard() {
                             </button>
 
                             <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                              setShowNoteModal({ demandeId: d.id, type: 'commercial', note: d.note_commercial || '' });
+                              setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
                               setActiveMoreMenu(null);
                             }}>
                               <MessageSquare size={16} /> Note commerciale
                             </button>
                             <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                              setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: d.note_operationnel || '' });
+                              setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
                               setActiveMoreMenu(null);
                             }}>
                               <MessageSquare size={16} /> Note opérationnelle
@@ -1498,13 +1498,13 @@ export default function Dashboard() {
                             </button>
 
                             <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                              setShowNoteModal({ demandeId: d.id, type: 'commercial', note: d.note_commercial || '' });
+                              setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
                               setActiveMoreMenu(null);
                             }}>
                               <MessageSquare size={16} /> Note commerciale
                             </button>
                             <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                              setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: d.note_operationnel || '' });
+                              setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
                               setActiveMoreMenu(null);
                             }}>
                               <MessageSquare size={16} /> Note opérationnelle
@@ -1720,15 +1720,32 @@ export default function Dashboard() {
 
             {/* Body */}
             <div style={{ padding: '24px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Détails de la note</label>
+              {/* Note History */}
+              {(() => {
+                const demandObj = demandes.find(x => x.id === showNoteModal.demandeId);
+                const currentNotes = showNoteModal.type === 'commercial' 
+                  ? demandObj?.note_commercial 
+                  : demandObj?.note_operationnel;
+                if (!currentNotes) return null;
+                return (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#64748b', marginBottom: '6px' }}>Historique des notes</label>
+                    <div style={{ maxHeight: '120px', overflowY: 'auto', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#475569', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+                      {currentNotes}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Nouvelle note</label>
               <textarea
-                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '16px', fontSize: '14px', color: '#0f172a', minHeight: '140px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)', transition: 'all 0.2s', boxSizing: 'border-box' }}
+                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '16px', fontSize: '14px', color: '#0f172a', minHeight: '100px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
                 placeholder={`Veuillez rédiger la note ${showNoteModal.type === 'commercial' ? 'commerciale' : 'opérationnelle'}...`}
                 value={showNoteModal.note}
                 onChange={(e) => setShowNoteModal({ ...showNoteModal, note: e.target.value })}
                 onKeyDown={(e) => e.stopPropagation()}
                 onFocus={(e) => { e.currentTarget.style.borderColor = '#0d9488'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.15)'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'none'; }}
               />
             </div>
 
@@ -1745,9 +1762,33 @@ export default function Dashboard() {
               <button
                 onClick={async () => {
                   try {
+                    const demandObj = demandes.find(d => d.id === showNoteModal.demandeId);
+                    const existingNotes = showNoteModal.type === 'commercial'
+                      ? (demandObj?.note_commercial || '')
+                      : (demandObj?.note_operationnel || '');
+                    
+                    const newNote = showNoteModal.note.trim();
+                    if (!newNote) {
+                      addToast('Veuillez saisir une note', 'info');
+                      return;
+                    }
+                    
+                    const formattedDate = new Date().toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    });
+                    const noteWithHeader = `[${formattedDate}] : ${newNote}`;
+                    const updatedNotes = existingNotes 
+                      ? `${existingNotes}\n\n${noteWithHeader}` 
+                      : noteWithHeader;
+
                     const payload = showNoteModal.type === 'commercial'
-                      ? { note_commercial: showNoteModal.note }
-                      : { note_operationnel: showNoteModal.note };
+                      ? { note_commercial: updatedNotes }
+                      : { note_operationnel: updatedNotes };
+                      
                     await updateDemande(showNoteModal.demandeId, payload);
                     addToast('Note enregistrée avec succès', 'success');
                     setShowNoteModal(null);

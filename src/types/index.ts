@@ -24,6 +24,8 @@ export interface Client {
   address: string;
   created_at: string;
   demandes_count?: number;
+  avis_commercial?: string;
+  avis_operationnel?: string;
 }
 
 export interface Agent {
@@ -90,6 +92,7 @@ export interface Demande {
   commercial_name?: string;
   nrp_count?: number;
   service: string;
+  service_label?: string;
   type_prestation?: string;
   segment: 'particulier' | 'entreprise';
   statut: string;

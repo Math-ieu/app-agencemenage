@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   getClient, getDemandes, getFeedbacks, getClientActionLogs,
-  updateDemande, fetchSecureDocBlob
+  updateDemande, fetchSecureDocBlob, updateClient
 } from '../api/client';
 import { decodeId, encodeId } from '../utils/obfuscation';
 import {
@@ -14,6 +14,7 @@ import {
 import { useToastStore } from '../store/toast';
 import { Client, Demande } from '../types';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
+import ClientEditModal from './ClientEditModal';
 
 export interface ActionLog {
   id: number;
@@ -194,6 +195,7 @@ export default function ClientDetails() {
   const [avisOp, setAvisOp] = useState('');
   const [saving, setSaving] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string; type: string; name: string } | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
   const addToast = useToastStore(state => state.addToast);
 
   const renderPaymentStatus = (demande: any) => {
@@ -225,20 +227,8 @@ export default function ClientDetails() {
       
       setDemandes(list);
 
-      // "le nouveau écrase l'ancien" : Find the most recently updated/created note across all demands
-      const getLatestNote = (field: 'note_commercial' | 'note_operationnel') => {
-        const demandsWithNote = list.filter((d: any) => d[field]);
-        if (demandsWithNote.length === 0) return '';
-        demandsWithNote.sort((a: any, b: any) => {
-          const dateA = new Date(a.updated_at || a.created_at).getTime();
-          const dateB = new Date(b.updated_at || b.created_at).getTime();
-          return dateB - dateA;
-        });
-        return demandsWithNote[0][field];
-      };
-
-      setAvisComm(getLatestNote('note_commercial'));
-      setAvisOp(getLatestNote('note_operationnel'));
+      setAvisComm('');
+      setAvisOp('');
 
       setFeedbacks(Array.isArray(feedbacksRes.data?.results) ? feedbacksRes.data.results : (Array.isArray(feedbacksRes.data) ? feedbacksRes.data : []));
       setActionLogs(Array.isArray(actionLogsRes.data?.results) ? actionLogsRes.data.results : (Array.isArray(actionLogsRes.data) ? actionLogsRes.data : []));
@@ -246,15 +236,95 @@ export default function ClientDetails() {
     finally { setLoading(false); }
   };
 
+  const getNotesHistory = (type: 'commercial' | 'operationnel') => {
+    const history: { label: string; text: string; date: number }[] = [];
+    
+    // Client notes
+    const clientVal = type === 'commercial' ? client?.avis_commercial : client?.avis_operationnel;
+    if (clientVal?.trim()) {
+      history.push({
+        label: 'Notes Fiche Client',
+        text: clientVal.trim(),
+        date: 0
+      });
+    }
+
+    // Demands notes
+    demandes.forEach(d => {
+      const demandVal = type === 'commercial' ? d.note_commercial : d.note_operationnel;
+      if (demandVal?.trim()) {
+        history.push({
+          label: `Demande #${d.id} (${d.service_label || d.service || 'Service'})`,
+          text: demandVal.trim(),
+          date: new Date(d.created_at).getTime()
+        });
+      }
+    });
+
+    // Sort by date oldest first
+    history.sort((a, b) => a.date - b.date);
+    return history;
+  };
+
   useEffect(() => { fetchData(); }, [id]);
   const toggle = (s: string) => setOpenSections(p => ({ ...p, [s]: !p[s] }));
 
   const handleSaveAvis = async () => {
-    if (!demandes[0]) return;
+    const newComm = avisComm.trim();
+    const newOp = avisOp.trim();
+    if (!newComm && !newOp) {
+      addToast('Veuillez saisir au moins une note', 'info');
+      return;
+    }
+
     setSaving(true);
-    try { await updateDemande(demandes[0].id, { note_commercial: avisComm, note_operationnel: avisOp }); }
-    catch (err) { console.error(err); }
-    finally { setSaving(false); }
+    try {
+      const formattedDate = new Date().toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      // Save commercial note
+      if (newComm) {
+        const formattedNote = `[${formattedDate}] : ${newComm}`;
+        if (demandes[0]) {
+          const existing = demandes[0].note_commercial || '';
+          const updated = existing ? `${existing}\n\n${formattedNote}` : formattedNote;
+          await updateDemande(demandes[0].id, { note_commercial: updated });
+        } else if (client) {
+          const existing = client.avis_commercial || '';
+          const updated = existing ? `${existing}\n\n${formattedNote}` : formattedNote;
+          await updateClient(client.id, { avis_commercial: updated });
+        }
+      }
+
+      // Save operational note
+      if (newOp) {
+        const formattedNote = `[${formattedDate}] : ${newOp}`;
+        if (demandes[0]) {
+          const existing = demandes[0].note_operationnel || '';
+          const updated = existing ? `${existing}\n\n${formattedNote}` : formattedNote;
+          await updateDemande(demandes[0].id, { note_operationnel: updated });
+        } else if (client) {
+          const existing = client.avis_operationnel || '';
+          const updated = existing ? `${existing}\n\n${formattedNote}` : formattedNote;
+          await updateClient(client.id, { avis_operationnel: updated });
+        }
+      }
+
+      addToast('Notes enregistrées avec succès', 'success');
+      setAvisComm('');
+      setAvisOp('');
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast("Erreur lors de l'enregistrement", 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handlePreview = async (url: string, type: string, name: string) => {
@@ -375,6 +445,17 @@ export default function ClientDetails() {
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 10 }} className="flex-wrap">
+            <button
+              onClick={() => setShowEditModal(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 18px', border: '1px solid #e2e8f0',
+                borderRadius: 8, background: 'white', color: '#475569',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              <FileText size={16} color={C.teal} /> Éditer
+            </button>
             <button style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 18px', border: '1px solid #FEB2B2',
@@ -519,9 +600,9 @@ export default function ClientDetails() {
           )}
         </Accordion>
 
-        {/* ── 3. Avis Panels (side by side) ── */}
+        {/* ── 3. Notes Panels (side by side) ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16, alignItems: 'start' }}>
-          {/* Avis Commercial */}
+          {/* Notes Commerciales */}
           <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #e2e8f0', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div
               onClick={() => toggle('avisComm')}
@@ -529,21 +610,37 @@ export default function ClientDetails() {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ padding: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 6, display: 'flex' }}><MessageSquare size={16} /></div>
-                Avis Service Commercial
+                Notes Service Commercial
               </div>
               <ChevronDown size={17} style={{ opacity: 0.6, transition: 'transform 0.3s', transform: openSections.avisComm ? 'rotate(180deg)' : 'rotate(0deg)' }} />
             </div>
             {openSections.avisComm && (
               <div style={{ padding: 16 }}>
+                {getNotesHistory('commercial').length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Historique des notes</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 180, overflowY: 'auto', padding: 10, backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                      {getNotesHistory('commercial').map((h, i) => (
+                        <div key={i} style={{ borderBottom: i < getNotesHistory('commercial').length - 1 ? '1px solid #f1f5f9' : 'none', paddingBottom: i < getNotesHistory('commercial').length - 1 ? 8 : 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: C.orange }}>{h.label}</span>
+                          </div>
+                          <div style={{ fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>{h.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Saisir une nouvelle note</div>
                 <textarea
-                  style={{ width: '100%', height: 96, padding: 12, border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, color: '#334155', resize: 'none', fontWeight: 500, fontFamily: 'inherit', outline: 'none' }}
-                  placeholder="Saisir un avis commercial..."
+                  style={{ width: '100%', height: 70, padding: 10, border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: '#334155', resize: 'none', fontWeight: 500, fontFamily: 'inherit', outline: 'none' }}
+                  placeholder="Saisir une nouvelle note commerciale..."
                   value={avisComm} onChange={e => setAvisComm(e.target.value)}
                 />
               </div>
             )}
           </div>
-          {/* Avis Opérationnel */}
+          {/* Notes Opérationnelles */}
           <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #e2e8f0', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div
               onClick={() => toggle('avisOp')}
@@ -551,15 +648,31 @@ export default function ClientDetails() {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ padding: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 6, display: 'flex' }}><MessageSquare size={16} /></div>
-                Avis Service Opérationnel
+                Notes Service Opérationnel
               </div>
               <ChevronDown size={17} style={{ opacity: 0.6, transition: 'transform 0.3s', transform: openSections.avisOp ? 'rotate(180deg)' : 'rotate(0deg)' }} />
             </div>
             {openSections.avisOp && (
               <div style={{ padding: 16 }}>
+                {getNotesHistory('operationnel').length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Historique des notes</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 180, overflowY: 'auto', padding: 10, backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                      {getNotesHistory('operationnel').map((h, i) => (
+                        <div key={i} style={{ borderBottom: i < getNotesHistory('operationnel').length - 1 ? '1px solid #f1f5f9' : 'none', paddingBottom: i < getNotesHistory('operationnel').length - 1 ? 8 : 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: C.tan }}>{h.label}</span>
+                          </div>
+                          <div style={{ fontSize: 13, color: '#334155', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>{h.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Saisir une nouvelle note</div>
                 <textarea
-                  style={{ width: '100%', height: 96, padding: 12, border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, color: '#334155', resize: 'none', fontWeight: 500, fontFamily: 'inherit', outline: 'none' }}
-                  placeholder="Saisir un avis opérationnel..."
+                  style={{ width: '100%', height: 70, padding: 10, border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: '#334155', resize: 'none', fontWeight: 500, fontFamily: 'inherit', outline: 'none' }}
+                  placeholder="Saisir une nouvelle note opérationnelle..."
                   value={avisOp} onChange={e => setAvisOp(e.target.value)}
                 />
               </div>
@@ -567,7 +680,7 @@ export default function ClientDetails() {
           </div>
         </div>
 
-        {/* Save avis button */}
+        {/* Save notes button */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
           <button
             onClick={handleSaveAvis} disabled={saving}
@@ -580,7 +693,7 @@ export default function ClientDetails() {
             }}
           >
             <FileText size={17} />
-            {saving ? 'Enregistrement...' : 'Enregistrer les avis'}
+            {saving ? 'Enregistrement...' : 'Enregistrer les notes'}
           </button>
         </div>
 
@@ -880,6 +993,18 @@ export default function ClientDetails() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Client Edit Modal */}
+      {showEditModal && (
+        <ClientEditModal
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            setShowEditModal(false);
+            fetchData();
+          }}
+          initialClient={client}
+        />
       )}
     </div>
   );

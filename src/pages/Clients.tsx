@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { encodeId } from '../utils/obfuscation';
 import { getClients, getUsers, affecterDemande, updateClient, deleteClient } from '../api/client';
 import { renderStatusBadge } from '../utils/statusUtils';
@@ -9,7 +9,7 @@ import { User } from '../types';
 import {
   Search, Settings, MoreVertical,
   RotateCw, Calendar, ChevronDown,
-  User as UserIcon, Pencil, MessageSquare, UserPlus, Slash, Trash2, XCircle, Save
+  User as UserIcon, MessageSquare, UserPlus, Slash, Trash2, XCircle, Save
 } from 'lucide-react';
 
 interface LatestDemande {
@@ -184,7 +184,7 @@ const dividerStyle: React.CSSProperties = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Clients() {
-  const navigate = useNavigate();
+
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -251,16 +251,40 @@ export default function Clients() {
   const handleSaveAvis = async () => {
     if (!showAvisModal) return;
     try {
+      const clientObj = clients.find(c => c.id === showAvisModal.clientId);
+      const existingNotes = showAvisModal.type === 'commercial'
+        ? (clientObj?.avis_commercial || '')
+        : (clientObj?.avis_operationnel || '');
+      
+      const newNote = showAvisModal.avis.trim();
+      if (!newNote) {
+        addToast('Veuillez saisir une note', 'info');
+        return;
+      }
+      
+      const formattedDate = new Date().toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const noteWithHeader = `[${formattedDate}] : ${newNote}`;
+      const updatedNotes = existingNotes 
+        ? `${existingNotes}\n\n${noteWithHeader}` 
+        : noteWithHeader;
+
       const payload = showAvisModal.type === 'commercial'
-        ? { avis_commercial: showAvisModal.avis }
-        : { avis_operationnel: showAvisModal.avis };
+        ? { avis_commercial: updatedNotes }
+        : { avis_operationnel: updatedNotes };
+        
       await updateClient(showAvisModal.clientId, payload);
-      addToast('Avis mis à jour avec succès', 'success');
+      addToast('Note enregistrée avec succès', 'success');
       fetchData();
       setShowAvisModal(null);
     } catch (err) {
-      console.error('Error updating avis:', err);
-      addToast('Erreur lors de la mise à jour', 'error');
+      console.error('Error updating note:', err);
+      addToast('Erreur lors de la sauvegarde', 'error');
     }
   };
 
@@ -536,30 +560,21 @@ export default function Clients() {
                             <UserIcon size={16} className="dropdown-item-icon" />
                             <span>Compte client</span>
                           </Link>
-                          <div className="dropdown-item" onClick={() => {
-                            if (c.latest_demande) {
-                              navigate('/demandes', { state: { editDemandeId: c.latest_demande.id } });
-                            } else {
-                              addToast("Ce client n'a pas de demande à éditer.", 'info');
-                            }
-                          }}>
-                            <Pencil size={16} className="dropdown-item-icon" />
-                            <span>Éditer le besoin</span>
-                          </div>
+
                           <div className="dropdown-divider"></div>
                           <div className="dropdown-item" onClick={() => {
-                            setShowAvisModal({ clientId: c.id, type: 'commercial', avis: c.avis_commercial || '' });
+                            setShowAvisModal({ clientId: c.id, type: 'commercial', avis: '' });
                             setActiveDropdown(null);
                           }}>
                             <MessageSquare size={16} className="dropdown-item-icon" />
-                            <span>Avis commercial</span>
+                            <span>Note commerciale</span>
                           </div>
                           <div className="dropdown-item" onClick={() => {
-                            setShowAvisModal({ clientId: c.id, type: 'operationnel', avis: c.avis_operationnel || '' });
+                            setShowAvisModal({ clientId: c.id, type: 'operationnel', avis: '' });
                             setActiveDropdown(null);
                           }}>
                             <MessageSquare size={16} className="dropdown-item-icon" />
-                            <span>Avis opérationnel</span>
+                            <span>Note opérationnelle</span>
                           </div>
                           <div className="dropdown-divider"></div>
                           {(user?.role === 'admin' || user?.role === 'responsable_commercial') && c.latest_demande && (
@@ -628,16 +643,7 @@ export default function Clients() {
                               <UserIcon size={16} className="dropdown-item-icon" />
                               <span>Voir le compte</span>
                             </Link>
-                            <div className="dropdown-item" onClick={() => {
-                              if (c.latest_demande) {
-                                navigate('/demandes', { state: { editDemandeId: c.latest_demande.id } });
-                              } else {
-                                addToast("Ce client n'a pas de demande à éditer.", 'info');
-                              }
-                            }}>
-                              <Pencil size={16} className="dropdown-item-icon" />
-                              <span>Éditer</span>
-                            </div>
+
                           </div>
                         )}
                       </div>
@@ -679,9 +685,9 @@ export default function Clients() {
                 </div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
-                    {showAvisModal.type === 'commercial' ? 'Avis Commercial' : 'Avis Opérationnel'}
+                    {showAvisModal.type === 'commercial' ? 'Note Commerciale' : 'Note Opérationnelle'}
                   </h3>
-                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b', marginTop: '2px' }}>Saisie des retours pour ce client</p>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b', marginTop: '2px' }}>Saisie des notes pour ce client</p>
                 </div>
               </div>
               <button
@@ -694,10 +700,27 @@ export default function Clients() {
               </button>
             </div>
             <div style={{ padding: '24px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Détails de l'avis</label>
+              {/* Note History */}
+              {(() => {
+                const clientObj = clients.find(x => x.id === showAvisModal.clientId);
+                const currentNotes = showAvisModal.type === 'commercial' 
+                  ? clientObj?.avis_commercial 
+                  : clientObj?.avis_operationnel;
+                if (!currentNotes) return null;
+                return (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#64748b', marginBottom: '6px' }}>Historique des notes</label>
+                    <div style={{ maxHeight: '120px', overflowY: 'auto', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: '#475569', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+                      {currentNotes}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Nouvelle note</label>
               <textarea
-                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '16px', fontSize: '14px', color: '#0f172a', minHeight: '140px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
-                placeholder={`Veuillez rédiger l'avis ${showAvisModal.type === 'commercial' ? 'commercial' : 'opérationnel'} complet...`}
+                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '16px', fontSize: '14px', color: '#0f172a', minHeight: '100px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
+                placeholder={`Veuillez rédiger la note ${showAvisModal.type === 'commercial' ? 'commerciale' : 'opérationnelle'}...`}
                 value={showAvisModal.avis}
                 onChange={(e) => setShowAvisModal({ ...showAvisModal, avis: e.target.value })}
                 onKeyDown={(e) => e.stopPropagation()}
