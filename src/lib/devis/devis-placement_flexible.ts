@@ -36,7 +36,7 @@ interface DevisPlacementFlexibleData {
 }
 
 
-export async function genererDevisPlacementFlexible(data: DevisPlacementFlexibleData, logoBase64?: string): Promise<Blob> {
+export async function genererDevisPlacementFlexible(data: DevisPlacementFlexibleData, logoBase64?: string, signatureBase64?: string): Promise<Blob> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
   const BLUE   = [29,  78,  216] as const;
@@ -213,7 +213,11 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   doc.setFont('helvetica', 'bold');
   doc.text('Pour Agence Ménage :', margin, y);
   doc.text('Pour le client :', margin + 100, y);
-  y += 15;
+  y += 4;
+  if (signatureBase64) {
+    try { doc.addImage(signatureBase64, 'PNG', margin, y, 55, 25); } catch { /* ignore */ }
+  }
+  y += 28;
   doc.setDrawColor(156, 163, 175);
   doc.line(margin, y, margin + 65, y);
   doc.line(margin + 100, y, margin + 165, y);

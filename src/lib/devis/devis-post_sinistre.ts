@@ -58,7 +58,7 @@ const devisPostSinistreData: DevisPostSinistreData = {
   }
 };
 
-async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?: string): Promise<Blob> {
+async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?: string, signatureBase64?: string): Promise<Blob> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
@@ -316,7 +316,11 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   doc.setFont('helvetica', 'bold');
   doc.text('Pour Agence Ménage :', margin, y);
   doc.text('Pour le client :', margin + 95, y);
-  y += 12;
+  y += 4;
+  if (signatureBase64) {
+    try { doc.addImage(signatureBase64, 'PNG', margin, y, 55, 25); } catch { /* ignore */ }
+  }
+  y += 28;
   doc.setDrawColor(156, 163, 175);
   doc.line(margin, y, margin + 60, y);
   doc.line(margin + 95, y, margin + 155, y);

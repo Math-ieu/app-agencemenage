@@ -23,7 +23,7 @@ interface DevisAuxiliaireData {
   message?: string;
 }
 
-async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: string): Promise<Blob> {
+async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: string, signatureBase64?: string): Promise<Blob> {
   const pdf = new jsPDF('p', 'mm', 'a4');
   
   // Colors
@@ -298,23 +298,26 @@ L'équipe Agence Ménage — 06 64 22 67 90`;
   pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
   pdf.text("Pour Agence Ménage :", margin, sigY);
-  pdf.line(margin, sigY + 5, margin + 80, sigY + 5);
+  if (signatureBase64) {
+    try { pdf.addImage(signatureBase64, 'PNG', margin, sigY + 3, 55, 25); } catch { /* ignore */ }
+  }
+  pdf.line(margin, sigY + 31, margin + 80, sigY + 31);
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
-  pdf.text("Nom et cachet", margin, sigY + 9);
+  pdf.text("Nom et cachet", margin, sigY + 35);
   
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
   pdf.text("Pour le client :", margin + 110, sigY);
-  pdf.line(margin + 110, sigY + 5, margin + 190, sigY + 5);
+  pdf.line(margin + 110, sigY + 31, margin + 190, sigY + 31);
   pdf.setFontSize(8);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
-  pdf.text('Nom, date et signature précédée de "Bon pour accord"', margin + 110, sigY + 9);
+  pdf.text('Nom, date et signature précédée de "Bon pour accord"', margin + 110, sigY + 35);
 
-  y = sigY + 25;
+  y = sigY + 45;
 
   // ==================== FOOTER (all pages) ====================
   const pageCount = pdf.getNumberOfPages();

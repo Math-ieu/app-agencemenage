@@ -1,5 +1,6 @@
 import { Demande } from '../../types';
 import logoUrl from '../../assets/LOGO-AGENCE-MENAGE.png';
+import signatureUrl from '../../assets/signature.png';
 import { genererDevisAirbnb, type DevisAirbnbData } from './devis-airbnb';
 import { genererDevisAuxiliaire, type DevisAuxiliaireData } from './devis-auxiliaredevis';
 import { genererDevisGestion360, type DevisGestion360Data } from './devis-gestion360';
@@ -87,6 +88,22 @@ const getTotalPrice = (demande: Demande, form?: Record<string, any>): number => 
 const getLogoBase64 = async (): Promise<string | undefined> => {
   try {
     const response = await fetch(logoUrl);
+    const blob = await response.blob();
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    return base64;
+  } catch {
+    return undefined;
+  }
+};
+
+const getSignatureBase64 = async (): Promise<string | undefined> => {
+  try {
+    const response = await fetch(signatureUrl);
     const blob = await response.blob();
     const base64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -479,40 +496,41 @@ const getServiceKey = (service: string): string => service.toLowerCase().trim();
 export const generateDevisPdf = async (demande: Demande): Promise<{ blob: Blob; name: string }> => {
   const serviceKey = getServiceKey(demande.service || '');
   const logoBase64 = await getLogoBase64();
+  const signatureBase64 = await getSignatureBase64();
   const name = `${buildDevisNumber(demande)}.pdf`;
 
   let blob: Blob;
 
   if (serviceKey.includes('air bnb') || serviceKey.includes('airbnb')) {
     const data = buildAirbnbData(demande);
-    blob = await genererDevisAirbnb(data, logoBase64);
+    blob = await genererDevisAirbnb(data, logoBase64, signatureBase64);
   } else if (serviceKey.includes('auxiliaire')) {
     const data = buildAuxiliaireData(demande);
-    blob = await genererDevisAuxiliaire(data, logoBase64);
+    blob = await genererDevisAuxiliaire(data, logoBase64, signatureBase64);
   } else if (serviceKey.includes('post-sinistre') || serviceKey.includes('post sinistre')) {
     const data = buildPostSinistreData(demande);
-    blob = await genererDevisPostSinistre(data, logoBase64);
+    blob = await genererDevisPostSinistre(data, logoBase64, signatureBase64);
   } else if (serviceKey.includes('fin de chantier') || serviceKey.includes('fin chantier')) {
     const data = buildFinChantierData(demande);
-    blob = await genererDevisFinChantier(data, logoBase64);
+    blob = await genererDevisFinChantier(data, logoBase64, signatureBase64);
   } else if (serviceKey.includes('bureaux')) {
     const data = buildMenageBureauxData(demande);
-    blob = await genererDevisMenageBureaux(data, logoBase64);
+    blob = await genererDevisMenageBureaux(data, logoBase64, signatureBase64);
   } else if (serviceKey.includes('gestion 360') || serviceKey.includes('gestion360')) {
     const data = buildGestion360Data(demande);
-    blob = await genererDevisGestion360(data, logoBase64);
+    blob = await genererDevisGestion360(data, logoBase64, signatureBase64);
   } else if (serviceKey.includes('placement') || serviceKey.includes('gestion')) {
     const serviceType = demande.formulaire_data?.service_type;
     if (serviceType === 'premium' || serviceType === 'gestion360') {
       const data = buildGestion360Data(demande);
-      blob = await genererDevisGestion360(data, logoBase64);
+      blob = await genererDevisGestion360(data, logoBase64, signatureBase64);
     } else {
       const data = buildPlacementFlexibleData(demande);
-      blob = await genererDevisPlacementFlexible(data, logoBase64);
+      blob = await genererDevisPlacementFlexible(data, logoBase64, signatureBase64);
     }
   } else {
     const data = buildAirbnbData(demande);
-    blob = await genererDevisAirbnb(data, logoBase64);
+    blob = await genererDevisAirbnb(data, logoBase64, signatureBase64);
   }
 
   if (!blob.type) {

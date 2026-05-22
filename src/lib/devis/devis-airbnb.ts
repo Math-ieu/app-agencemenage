@@ -28,7 +28,7 @@ interface DevisAirbnbData {
   note?: string;
 }
 
-export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
+export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, signatureBase64?: string) {
   const doc = new jsPDF('p', 'mm', 'a4');
   const BLUE = [29, 78, 216];
   const MUTED = [107, 114, 128];
@@ -286,7 +286,11 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string) {
   doc.setFont('helvetica', 'bold');
   doc.text('Pour Agence Ménage :', MARGIN, y);
   doc.text('Pour le client :', MARGIN + 95, y);
-  y += 12;
+  y += 4;
+  if (signatureBase64) {
+    try { doc.addImage(signatureBase64, 'PNG', MARGIN, y, 55, 25); } catch { /* ignore */ }
+  }
+  y += 28;
   doc.setDrawColor(156, 163, 175);
   doc.line(MARGIN, y, MARGIN + 60, y);
   doc.line(MARGIN + 95, y, MARGIN + 155, y);
