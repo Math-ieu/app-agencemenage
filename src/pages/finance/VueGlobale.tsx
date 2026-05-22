@@ -1840,8 +1840,8 @@ export default function VueGlobale() {
         const isPaid = isDebit
           ? (row.partAgenceReversee || row.reglementInterne === 'Réglé')
           : isCredit
-          ? (row.partProfilVersee || row.reglementInterne === 'Réglé')
-          : true; // neither debit nor credit outstanding by definition
+            ? (row.partProfilVersee || row.reglementInterne === 'Réglé')
+            : true; // neither debit nor credit outstanding by definition
 
         if (!isPaid) {
           result.push({
@@ -3877,7 +3877,7 @@ export default function VueGlobale() {
                           const partProfilStatusText = isProfilPayeClient ? 'Déjà encaissée' : (isPartProfilPaid ? 'Versée' : 'Non versée');
                           const partProfilStatusColor = isPartProfilPaid ? '#10b981' : '#f43f5e';
                           const isPartAgencePaid = p.part_agence_reversee ?? selectedMission.partAgenceReversee;
-                          
+
                           return (
                             <div key={idx} style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -3950,6 +3950,19 @@ export default function VueGlobale() {
 
             <footer className="fg-mission-footer">
               <button type="button" className="btn btn-secondary" onClick={() => openMissionEditModal()}>Modifier</button>
+              {selectedMission?.demandeId && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  onClick={() => {
+                    closeMissionDetails();
+                    navigate(`/?edit=${selectedMission.demandeId}`);
+                  }}
+                >
+                  <Pencil size={14} /> Éditer le besoin
+                </button>
+              )}
               <button type="button" className="btn btn-secondary" onClick={handleGenerateInvoicePreview} disabled={isGeneratingInvoice}>
                 {isGeneratingInvoice ? 'Génération...' : 'Générer la facture'}
               </button>
@@ -4229,9 +4242,9 @@ export default function VueGlobale() {
                     );
                     const isPartProfilPaidFrozen = Boolean(originalPart?.part_profil_versee) || missionEditForm.statutPaiement === 'Profil payé / Client';
                     const isAgencePayeeClientStatus = selectedMission?.statutPaiementUi === 'agence_payee_client' || selectedMission?.statutPaiementUi === 'Agence payée / Client';
-                    const isPartAgencePaidFrozen = Boolean(originalPart?.part_agence_reversee) || 
-                      isAgencePayeeClientStatus || 
-                      missionEditForm.statutPaiement === 'Agence payée / Client' || 
+                    const isPartAgencePaidFrozen = Boolean(originalPart?.part_agence_reversee) ||
+                      isAgencePayeeClientStatus ||
+                      missionEditForm.statutPaiement === 'Agence payée / Client' ||
                       missionEditForm.statutPaiement === 'Agence payé / Client' ||
                       (missionEditForm.statutPaiement === 'Profil payé / Client' && part.part_agence_reversee);
                     const isDelegate = part.is_delegate || (missionEditForm.partsRepartition!.every((p: any) => !p.is_delegate) && index === 0);
@@ -4365,8 +4378,8 @@ export default function VueGlobale() {
                 </div>
               ) : (() => {
                 const isProfileShareFrozen = Boolean(selectedMission?.partProfilVersee) || missionEditForm.statutPaiement === 'Profil payé / Client';
-                const isAgencyShareFrozen = Boolean(selectedMission?.partAgenceReversee) || 
-                  selectedMission?.statutPaiementUi === 'agence_payee_client' || 
+                const isAgencyShareFrozen = Boolean(selectedMission?.partAgenceReversee) ||
+                  selectedMission?.statutPaiementUi === 'agence_payee_client' ||
                   missionEditForm.statutPaiement === 'Agence payée / Client' ||
                   (missionEditForm.statutPaiement === 'Profil payé / Client' && missionEditForm.partAgenceReversee === 'Oui');
 

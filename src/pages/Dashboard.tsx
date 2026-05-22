@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
   CheckCircle, UserCheck, MessageSquare, AlertTriangle,
@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, removeProfilFromDemande, uploadDocument } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, removeProfilFromDemande, uploadDocument, getDemande } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
@@ -213,6 +213,7 @@ export default function Dashboard() {
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [blinkNouveau, setBlinkNouveau] = useState(false);
 
   const { addToast } = useToastStore();
@@ -892,6 +893,35 @@ export default function Dashboard() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  // Auto-open edit modal when navigating with ?edit=<demandeId>
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (!editId || loading) return;
+    const id = Number(editId);
+    if (isNaN(id)) return;
+
+    // Try to find it in the current dashboard list first
+    const found = demandes.find(d => d.id === id);
+    if (found) {
+      openDetail(found);
+      setSearchParams({}, { replace: true });
+    } else {
+      // Demande has left the dashboard — fetch it directly
+      getDemande(id).then(res => {
+        if (res.data) {
+          openDetail(res.data as Demande);
+        } else {
+          addToast('Demande introuvable', 'error');
+        }
+        setSearchParams({}, { replace: true });
+      }).catch(() => {
+        addToast('Erreur lors du chargement de la demande', 'error');
+        setSearchParams({}, { replace: true });
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, searchParams]);
 
   // Ferme les menus d'action lorsqu'on clique ailleurs
   useEffect(() => {
