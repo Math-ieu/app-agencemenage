@@ -50,6 +50,8 @@ interface MissionEditForm {
   encaissePar: 'Agence' | 'Profil';
   partProfilVersee: 'Oui' | 'Non';
   dateVersementProfil: string;
+  partAgenceReversee: 'Oui' | 'Non';
+  dateRemiseAgence: string;
   partAgence: string;
   montantAgenceDoitProfil: string;
   commercialName: string;
@@ -248,7 +250,7 @@ const getPaymentUiLabel = (uiCode: string | undefined): string => {
   if (!uiCode) return 'Non payé';
   const labels: Record<string, string> = {
     paye: 'Payé',
-    agence_payee_client: 'Agence payé / Client',
+    agence_payee_client: 'Agence payée / Client',
     profil_paye_client: 'Profil payé / Client',
     paiement_partiel: 'Paiement partiel',
     paiement_en_attente: 'Paiement en attente',
@@ -322,6 +324,12 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
   }
 
   if (row.encaissePar !== 'Profil') return 0;
+
+  // Si la part agence a été entièrement réglée (statut upgradé de profil_paye_client vers 'paye'),
+  // la commission est la totalité de la part agence.
+  if (row.reglementInterne === 'Réglé' || row.partAgenceReversee) {
+    return Number(row.montantProfilDoitAgence || row.partAgence || 0);
+  }
 
   if (row.montantProfilDoitAgence !== undefined && row.montantProfilDoitAgence > 0) {
     return row.montantProfilDoitAgence;
@@ -502,10 +510,26 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     }
   }
 
+  // Check if all profiles have received their share
+  const parts = facturationData.parts_repartition || (demande as any)?.parts_repartition || [];
+  let allProfilesPaid = false;
+  if (Array.isArray(parts) && parts.length > 0) {
+    allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+  } else {
+    if (encaissePar === 'Profil') {
+      allProfilesPaid = true;
+    } else {
+      allProfilesPaid = Boolean(item.part_profil_versee || facturationData.part_profil_versee);
+    }
+  }
+
+  const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client'].includes(rawStatutPaiementUi);
+  const isPartiallyPaidStatus = ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi);
+
   const paiement: FacturationRow['paiement'] =
-    ['paye', 'integral', 'effectue', 'agence_payee_client', 'profil_paye_client', 'Agence payée / Client', 'Profil payé / Client'].includes(rawStatutPaiementUi)
+    (isPaidStatus && allProfilesPaid)
       ? 'paye'
-      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi)
+      : (isPartiallyPaidStatus || isPaidStatus)
         ? 'partiellement_paye'
         : 'non_paye';
 
@@ -646,10 +670,26 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     }
   }
 
+  // Check if all profiles have received their share
+  const parts = facturationData.parts_repartition || demande?.parts_repartition || [];
+  let allProfilesPaid = false;
+  if (Array.isArray(parts) && parts.length > 0) {
+    allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+  } else {
+    if (encaissePar === 'Profil') {
+      allProfilesPaid = true;
+    } else {
+      allProfilesPaid = Boolean(facturationData.part_profil_versee);
+    }
+  }
+
+  const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client'].includes(rawStatutPaiementUi);
+  const isPartiallyPaidStatus = ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi);
+
   const paiement: FacturationRow['paiement'] =
-    ['paye', 'integral', 'effectue', 'agence_payee_client', 'profil_paye_client', 'Agence payée / Client', 'Profil payé / Client'].includes(rawStatutPaiementUi)
+    (isPaidStatus && allProfilesPaid)
       ? 'paye'
-      : ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi)
+      : (isPartiallyPaidStatus || isPaidStatus)
         ? 'partiellement_paye'
         : 'non_paye';
 
@@ -746,6 +786,8 @@ export default function VueGlobale() {
     encaissePar: 'Agence',
     partProfilVersee: 'Oui',
     dateVersementProfil: '',
+    partAgenceReversee: 'Non',
+    dateRemiseAgence: '',
     partAgence: '0',
     montantAgenceDoitProfil: '0',
     commercialName: '',
@@ -1256,7 +1298,7 @@ export default function VueGlobale() {
         const rowUi = row.statutPaiementUi;
         if (suiviPaiementFilter === 'Non payé' && rowUi !== 'non_paye' && rowUi !== 'non_confirme') return false;
         if (suiviPaiementFilter === 'Paiement en attente' && rowUi !== 'paiement_en_attente') return false;
-        if (suiviPaiementFilter === 'Agence payé / Client' && rowUi !== 'agence_payee_client') return false;
+        if (suiviPaiementFilter === 'Agence payée / Client' && rowUi !== 'agence_payee_client') return false;
         if (suiviPaiementFilter === 'Profil payé / Client' && rowUi !== 'profil_paye_client') return false;
         if (suiviPaiementFilter === 'Paiement partiel' && rowUi !== 'paiement_partiel') return false;
         if (suiviPaiementFilter === 'Payé' && rowUi !== 'paye') return false;
@@ -1285,7 +1327,10 @@ export default function VueGlobale() {
   const agenceNonPayeAmount = useMemo(() => {
     let total = 0;
     for (const row of facturationData) {
-      const isDebit = row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
+      const isDebit = row.statutPaiementUi === 'profil_paye_client' ||
+        row.statutPaiementUi === 'Profil payé / Client' ||
+        (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
+        (!row.statutPaiementUi && row.encaissePar === 'Profil');
       if (!isDebit) continue;
 
       const totalDue = getPartAgenceDueFromProfil(row);
@@ -1306,6 +1351,7 @@ export default function VueGlobale() {
     for (const row of facturationData) {
       const isCredit = row.statutPaiementUi === 'agence_payee_client' ||
         row.statutPaiementUi === 'Agence payée / Client' ||
+        (row.statutPaiementUi === 'paye' && row.encaissePar === 'Agence') ||
         (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
         (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) ||
         (row.statut === 'Facturation annulée' && row.profilSeraPaye) ||
@@ -1396,9 +1442,7 @@ export default function VueGlobale() {
     const pertes = cancelledRows.reduce((sum, row) => sum + (row.profilSeraPaye ? Number(row.montantProfilAnnulation || 0) : 0), 0);
     const commissionAgence = commissionBrute - pertes;
 
-    const paiementsEnAttente = filteredSuiviRows.filter((row) => row.paiement === 'partiellement_paye').length;
-
-    return { totalFacture, chiffreAffaires, commissionAgence, paiementsEnAttente };
+    return { totalFacture, chiffreAffaires, commissionAgence };
   }, [filteredSuiviRows]);
 
   const globalSegmentStats = useMemo(() => {
@@ -1652,7 +1696,10 @@ export default function VueGlobale() {
   const agenceNonPayeByProfile = useMemo(() => {
     const map = new Map<string, number>();
     for (const row of facturationData) {
-      const isDebit = row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client' || (!row.statutPaiementUi && row.encaissePar === 'Profil');
+      const isDebit = row.statutPaiementUi === 'profil_paye_client' ||
+        row.statutPaiementUi === 'Profil payé / Client' ||
+        (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
+        (!row.statutPaiementUi && row.encaissePar === 'Profil');
       if (!isDebit) continue;
 
       const totalDue = getPartAgenceDueFromProfil(row);
@@ -1683,6 +1730,7 @@ export default function VueGlobale() {
     for (const row of facturationData) {
       const isCredit = row.statutPaiementUi === 'agence_payee_client' ||
         row.statutPaiementUi === 'Agence payée / Client' ||
+        (row.statutPaiementUi === 'paye' && row.encaissePar === 'Agence') ||
         (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
         (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) ||
         (row.statut === 'Facturation annulée' && row.profilSeraPaye) ||
@@ -1867,8 +1915,9 @@ export default function VueGlobale() {
 
     if (mission) setSelectedMission(mission);
 
-    const mappedStatutPaiement =
-      target.paiement === 'paye'
+    const mappedStatutPaiement = target.statutPaiementUi
+      ? getPaymentUiLabel(target.statutPaiementUi)
+      : target.paiement === 'paye'
         ? 'Payé'
         : target.paiement === 'partiellement_paye'
           ? 'Paiement partiel'
@@ -1878,6 +1927,55 @@ export default function VueGlobale() {
     const autoCommission = target.statut === 'Facturation annulée' || target.montant === 0
       ? '0'
       : String(Math.round((target.partAgence / target.montant) * 100));
+
+    const isProfilPayeClient = target.statutPaiementUi === 'profil_paye_client';
+    const isAgencePayeeClient = target.statutPaiementUi === 'agence_payee_client';
+    const initialPartProfilVersee = (isProfilPayeClient || target.partProfilVersee) ? 'Oui' : 'Non';
+    // Pour "Profil payé / Client", la date de versement au profil = date_paiement (quand le statut a été mis)
+    const initialDateVersementProfil = formatDateISO(isProfilPayeClient ? (target.dateVersementProfil || target.datePaiement) : target.dateVersementProfil);
+    // Pour "Agence payée / Client", l'agence a déjà reçu sa part automatiquement
+    const initialPartAgenceReversee = (isAgencePayeeClient || target.partAgenceReversee) ? 'Oui' : 'Non';
+    const initialDateRemiseAgence = formatDateISO(isAgencePayeeClient ? (target.dateRemiseAgence || target.datePaiement) : target.dateRemiseAgence);
+
+    let initialParts = target.parts_repartition;
+    if ((!initialParts || initialParts.length === 0) && target.originalDemande?.profils_envoyes && target.originalDemande.profils_envoyes.length > 0) {
+      const count = target.originalDemande.profils_envoyes.length;
+      const defaultAmount = (target.montant - target.partAgence) / count;
+      initialParts = target.originalDemande.profils_envoyes.map((p: any, idx: number) => ({
+        profile_id: p.id,
+        profile_name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+        amount: defaultAmount,
+        is_delegate: idx === 0,
+      }));
+    }
+
+    const mappedParts = (initialParts ? JSON.parse(JSON.stringify(initialParts)) : []).map((p: any, idx: number) => {
+      if (!p.profile_name && p.profile_id) {
+        const agent = agents.find(a => a.id === Number(p.profile_id));
+        if (agent) {
+          p.profile_name = agent.full_name || `${agent.first_name} ${agent.last_name}`;
+        }
+      }
+      if (isProfilPayeClient) {
+        p.part_profil_versee = true;
+        if (!p.date_versement_profil) {
+          p.date_versement_profil = target.dateVersementProfil || target.datePaiement || getISODateLocal(new Date());
+        }
+      }
+      const isDel = p.is_delegate || ((!initialParts!.some((x: any) => x.is_delegate)) && idx === 0);
+      if (isDel) {
+        if (p.part_agence_amount === undefined || p.part_agence_amount === null || isAgencePayeeClient) {
+          p.part_agence_amount = target.partAgence;
+        }
+        if (isAgencePayeeClient) {
+          p.part_agence_reversee = true;
+          if (!p.date_remise_agence) {
+            p.date_remise_agence = target.dateRemiseAgence || target.datePaiement || getISODateLocal(new Date());
+          }
+        }
+      }
+      return p;
+    });
 
     setMissionEditForm({
       statutMission: target.statut as any,
@@ -1891,8 +1989,10 @@ export default function VueGlobale() {
       statutPaiement: mappedStatutPaiement,
       justificatifName: 'Aucun fichier choisi',
       encaissePar: target.encaissePar,
-      partProfilVersee: target.partProfilVersee ? 'Oui' : 'Non',
-      dateVersementProfil: formatDateISO(target.dateVersementProfil),
+      partProfilVersee: initialPartProfilVersee,
+      dateVersementProfil: initialDateVersementProfil,
+      partAgenceReversee: initialPartAgenceReversee,
+      dateRemiseAgence: initialDateRemiseAgence,
       partAgence: String(target.partAgence ?? 0),
       montantAgenceDoitProfil: String(target.montantAgenceDoitProfil ?? 0),
       commercialName: target.commercialName || '',
@@ -1901,17 +2001,7 @@ export default function VueGlobale() {
       montantHt: target.tvaActive
         ? String(Number((target.montant / 1.2).toFixed(2)))
         : String(target.montant),
-      partsRepartition: target.parts_repartition
-        ? JSON.parse(JSON.stringify(target.parts_repartition)).map((p: any) => {
-          if (!p.profile_name && p.profile_id) {
-            const agent = agents.find(a => a.id === Number(p.profile_id));
-            if (agent) {
-              p.profile_name = agent.full_name || `${agent.first_name} ${agent.last_name}`;
-            }
-          }
-          return p;
-        })
-        : [],
+      partsRepartition: mappedParts,
     });
 
     setShowMissionEditModal(true);
@@ -2091,18 +2181,128 @@ export default function VueGlobale() {
       return;
     }
 
+    let isProfilPaid = false;
+    let profilPaidDate: string | null = null;
+    let isAgencePaid = false;
+    let agencePaidDate: string | null = null;
+
+    let targetPartsRepartition = missionEditForm.partsRepartition;
+
+    let finalPartAgence = Number(missionEditForm.partAgence || 0);
+    if (targetPartsRepartition && targetPartsRepartition.length > 0) {
+      const delegatePart = targetPartsRepartition.find((p: any) => p.is_delegate) || targetPartsRepartition[0];
+      if (delegatePart && delegatePart.part_agence_amount !== undefined) {
+        finalPartAgence = Number(delegatePart.part_agence_amount);
+      }
+    }
+
+    if (targetPartsRepartition && targetPartsRepartition.length > 0) {
+      // Multi-profiles
+      isProfilPaid = targetPartsRepartition.every((p: any) => p.part_profil_versee);
+      if (isProfilPaid) {
+        const dates = targetPartsRepartition
+          .map((p: any) => p.date_versement_profil)
+          .filter(Boolean);
+        profilPaidDate = dates.length > 0 ? dates[dates.length - 1] : getISODateLocal(new Date());
+      }
+
+      const delegatePart = targetPartsRepartition.find((p: any) => p.is_delegate) || targetPartsRepartition[0];
+      isAgencePaid = Boolean(delegatePart?.part_agence_reversee);
+      agencePaidDate = isAgencePaid ? (delegatePart?.date_remise_agence || getISODateLocal(new Date())) : null;
+    } else {
+      // Single profile
+      if (missionEditForm.encaissePar === 'Profil' || missionEditForm.statutPaiement === 'Profil payé / Client') {
+        // Profil payé / Client : le profil a déjà encaissé, reste à reverser la part agence
+        isProfilPaid = true;
+        profilPaidDate = missionEditForm.dateVersementProfil || missionEditForm.datePaiement || getISODateLocal(new Date());
+        isAgencePaid = missionEditForm.partAgenceReversee === 'Oui';
+        agencePaidDate = isAgencePaid ? (missionEditForm.dateRemiseAgence || getISODateLocal(new Date())) : null;
+      } else if (missionEditForm.statutPaiement === 'Agence payée / Client') {
+        // Agence payée / Client : l'agence a déjà encaissé, reste à verser la part profil
+        isAgencePaid = true;
+        agencePaidDate = missionEditForm.dateRemiseAgence || missionEditForm.datePaiement || getISODateLocal(new Date());
+        isProfilPaid = missionEditForm.partProfilVersee === 'Oui';
+        profilPaidDate = isProfilPaid ? (missionEditForm.dateVersementProfil || getISODateLocal(new Date())) : null;
+      } else {
+        // encaissePar === 'Agence' (standard)
+        isProfilPaid = missionEditForm.partProfilVersee === 'Oui';
+        profilPaidDate = isProfilPaid ? (missionEditForm.dateVersementProfil || getISODateLocal(new Date())) : null;
+        isAgencePaid = true; // Agency gets its share automatically
+        agencePaidDate = missionEditForm.datePaiement || getISODateLocal(new Date());
+      }
+    }
+
+    let paiementClientStatut = paiementStatusCodeFromLabel(missionEditForm.statutPaiement);
+
+    // Automatically upgrade status to 'paye' if both parts are paid
+    if (isProfilPaid && isAgencePaid) {
+      paiementClientStatut = 'paye';
+    }
+
+    // If payment status is 'paye', force both parts to be paid
+    if (paiementClientStatut === 'paye') {
+      isProfilPaid = true;
+      if (!profilPaidDate) {
+        profilPaidDate = missionEditForm.dateVersementProfil || missionEditForm.datePaiement || getISODateLocal(new Date());
+      }
+      isAgencePaid = true;
+      if (!agencePaidDate) {
+        agencePaidDate = missionEditForm.dateRemiseAgence || missionEditForm.datePaiement || getISODateLocal(new Date());
+      }
+
+      if (targetPartsRepartition && targetPartsRepartition.length > 0) {
+        targetPartsRepartition = targetPartsRepartition.map((p: any, idx: number) => {
+          const isDel = p.is_delegate || (targetPartsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
+          return {
+            ...p,
+            part_profil_versee: true,
+            date_versement_profil: p.date_versement_profil || profilPaidDate || getISODateLocal(new Date()),
+            ...(isDel ? {
+              part_agence_reversee: true,
+              date_remise_agence: p.date_remise_agence || agencePaidDate || getISODateLocal(new Date()),
+              part_agence_amount: p.part_agence_amount || Number(missionEditForm.partAgence || selectedMission?.partAgence || 0),
+            } : {}),
+          };
+        });
+      }
+    } else {
+      if (targetPartsRepartition && targetPartsRepartition.length > 0) {
+        if (missionEditForm.statutPaiement === 'Agence payée / Client') {
+          targetPartsRepartition = targetPartsRepartition.map((p: any, idx: number) => {
+            const isDel = p.is_delegate || (targetPartsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
+            if (isDel) {
+              return {
+                ...p,
+                part_agence_reversee: true,
+                date_remise_agence: p.date_remise_agence || missionEditForm.dateRemiseAgence || getISODateLocal(new Date()),
+                part_agence_amount: p.part_agence_amount || Number(missionEditForm.partAgence || selectedMission?.partAgence || 0),
+              };
+            }
+            return p;
+          });
+        } else if (missionEditForm.statutPaiement === 'Profil payé / Client') {
+          targetPartsRepartition = targetPartsRepartition.map((p: any) => ({
+            ...p,
+            part_profil_versee: true,
+            date_versement_profil: p.date_versement_profil || missionEditForm.dateVersementProfil || getISODateLocal(new Date()),
+          }));
+        }
+      }
+    }
+
     const payload: Record<string, unknown> = {
       statut: statutMissionCodeFromLabel(missionEditForm.statutMission),
       encaisse_par: missionEditForm.encaissePar === 'Profil' ? 'profil' : 'agence',
       montant_paye: Number(missionEditForm.montantPaye || 0),
       mode_paiement_reel: modeCodeFromLabel(missionEditForm.modePaiementReel),
       date_paiement: missionEditForm.datePaiement || null,
-      paiement_client_statut: paiementStatusCodeFromLabel(missionEditForm.statutPaiement),
-      part_profil_versee: missionEditForm.encaissePar === 'Agence' ? missionEditForm.partProfilVersee === 'Oui' : false,
-      date_versement_profil: missionEditForm.encaissePar === 'Agence' ? (missionEditForm.dateVersementProfil || null) : null,
+      paiement_client_statut: paiementClientStatut,
+      part_profil_versee: isProfilPaid,
+      date_versement_profil: profilPaidDate,
       montant_encaisse_profil: missionEditForm.encaissePar === 'Profil' ? Number(missionEditForm.montantEncaisseProfil || 0) : 0,
-      part_agence_reversee: missionEditForm.encaissePar === 'Profil' ? missionEditForm.partProfilVersee === 'Oui' : false,
-      date_remise_agence: missionEditForm.encaissePar === 'Profil' ? (missionEditForm.dateVersementProfil || null) : null,
+      part_agence_reversee: isAgencePaid,
+      date_remise_agence: agencePaidDate,
+      montant_profil_doit_agence: missionEditForm.encaissePar === 'Profil' ? finalPartAgence : 0,
     };
 
     // Forcer le statut à annulé si le paiement est marqué comme tel
@@ -2144,13 +2344,14 @@ export default function VueGlobale() {
               tva_active: newTvaRate > 0,
               statut_paiement_ui: (payload.paiement_client_statut as string) || facturation.statut_paiement_ui,
               facturation_annulee: payload.paiement_client_statut === 'facturation_annulee',
-              part_agence: Number(missionEditForm.partAgence || facturation.part_agence || 0),
+              part_agence: finalPartAgence,
               montant_agence_doit_profil: Number(missionEditForm.montantAgenceDoitProfil || facturation.montant_agence_doit_profil || 0),
+              montant_profil_doit_agence: missionEditForm.encaissePar === 'Profil' ? finalPartAgence : 0,
               part_profil_versee: payload.part_profil_versee,
               date_versement_profil: payload.date_versement_profil,
               part_agence_reversee: payload.part_agence_reversee,
               date_remise_agence: payload.date_remise_agence,
-              parts_repartition: missionEditForm.partsRepartition?.length ? missionEditForm.partsRepartition : facturation.parts_repartition,
+              parts_repartition: targetPartsRepartition?.length ? targetPartsRepartition : facturation.parts_repartition,
               montant_verse: Number(missionEditForm.montantPaye || 0),
               montant_encaisse_profil: missionEditForm.encaissePar === 'Profil' ? Number(missionEditForm.montantEncaisseProfil || 0) : 0,
               date_paiement: missionEditForm.datePaiement || null,
@@ -2159,8 +2360,9 @@ export default function VueGlobale() {
           },
           prix: newTtc,
           statut_paiement: mappedDemandeStatut,
-          part_agence: missionEditForm.partAgence ? Number(missionEditForm.partAgence) : undefined,
-          parts_repartition: missionEditForm.partsRepartition?.length ? missionEditForm.partsRepartition : undefined,
+          part_agence: finalPartAgence || undefined,
+          montant_profil_doit_agence: missionEditForm.encaissePar === 'Profil' ? finalPartAgence : undefined,
+          parts_repartition: targetPartsRepartition?.length ? targetPartsRepartition : undefined,
         };
 
         const matchingCommercial = commerciaux.find(c => (c.full_name || `${c.first_name} ${c.last_name}`) === missionEditForm.commercialName);
@@ -2327,6 +2529,7 @@ export default function VueGlobale() {
   const modalEcart = Number((modalTtc - modalPaye).toFixed(2));
 
   const isProfilPayeClient = selectedMission ? (selectedMission.statutPaiementUi === 'profil_paye_client' || selectedMission.statutPaiementUi === 'Profil payé / Client') : false;
+  const isAgencePayeeClient = selectedMission ? (selectedMission.statutPaiementUi === 'agence_payee_client' || selectedMission.statutPaiementUi === 'Agence payée / Client') : false;
 
   const modalPartProfil = selectedMission ? (
     (selectedMission.parts_repartition && selectedMission.parts_repartition.length > 0)
@@ -2347,13 +2550,13 @@ export default function VueGlobale() {
         modalStatusPillClass = 'fg-pill-pale-red';
         modalStatusContent = 'Facturation annulée';
       }
-    } else if (selectedMission.statutPaiementUi === 'paye' || selectedMission.statutPaiementUi === 'integral' || selectedMission.statutPaiementUi === 'effectue') {
+    } else if (selectedMission.paiement === 'paye') {
       modalStatusPillClass = 'fg-pill-pale-green';
       modalStatusContent = 'Payé';
-    } else if (selectedMission.statutPaiementUi === 'agence_payee_client') {
+    } else if (selectedMission.statutPaiementUi === 'agence_payee_client' || (selectedMission.statutPaiementUi === 'paye' && selectedMission.encaissePar === 'Agence')) {
       modalStatusPillClass = 'fg-pill-pale-orange';
-      modalStatusContent = 'Agence payé / Client';
-    } else if (selectedMission.statutPaiementUi === 'profil_paye_client') {
+      modalStatusContent = 'Agence payée / Client';
+    } else if (selectedMission.statutPaiementUi === 'profil_paye_client' || (selectedMission.statutPaiementUi === 'paye' && selectedMission.encaissePar === 'Profil')) {
       modalStatusPillClass = 'fg-pill-pale-orange';
       modalStatusContent = 'Profil payé / Client';
     } else if (selectedMission.paiement === 'non_paye') {
@@ -2863,7 +3066,7 @@ export default function VueGlobale() {
             <article><FileText size={20} /><div><strong>{suiviRecap.totalFacture}</strong><span>Total factures</span></div></article>
             <article><BarChart3 size={20} /><div><strong>{money(suiviRecap.chiffreAffaires)}</strong><span>CHIFFRE D'AFFAIRES</span></div></article>
             <article><Clock3 size={20} /><div><strong>{money(suiviRecap.commissionAgence)}</strong><span>COMMISSION AGENCE</span></div></article>
-            <article><Users size={20} /><div><strong>{suiviRecap.paiementsEnAttente}</strong><span>Paiements en attente</span></div></article>
+
           </div>
 
           <div className="fg-facturation-filters">
@@ -2886,8 +3089,8 @@ export default function VueGlobale() {
                   <option>Tous les paiements</option>
                   <option>Non payé</option>
                   <option>Paiement en attente</option>
-                  <option>Agence payé/client</option>
-                  <option>Profil payé/client</option>
+                  <option>Agence payée / Client</option>
+                  <option>Profil payé / Client</option>
                   <option>Paiement partiel</option>
                   <option>Payé</option>
                   <option>Confirmé</option>
@@ -2956,13 +3159,13 @@ export default function VueGlobale() {
                       statusPillClass = 'fg-pill-pale-red';
                       statusContent = 'Facturation annulée';
                     }
-                  } else if (row.statutPaiementUi === 'paye' || row.statutPaiementUi === 'integral' || row.statutPaiementUi === 'effectue') {
+                  } else if (row.paiement === 'paye') {
                     statusPillClass = 'fg-pill-pale-green';
                     statusContent = 'Payé';
-                  } else if (row.statutPaiementUi === 'agence_payee_client') {
+                  } else if (row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'paye' && row.encaissePar === 'Agence')) {
                     statusPillClass = 'fg-pill-pale-orange';
                     statusContent = <>Agence<br />payé /<br />Client</>;
-                  } else if (row.statutPaiementUi === 'profil_paye_client') {
+                  } else if (row.statutPaiementUi === 'profil_paye_client' || (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil')) {
                     statusPillClass = 'fg-pill-pale-orange';
                     statusContent = <>Profil<br />payé /<br />Client</>;
                   } else if (row.paiement === 'non_paye') {
@@ -3646,6 +3849,14 @@ export default function VueGlobale() {
                       </strong>
                     </div>
                   )}
+                  {isAgencePayeeClient && (
+                    <div className="fg-mission-info-card" style={{ gridColumn: 'span 2', borderLeft: '3px solid #6366f1', background: 'rgba(99, 102, 241, 0.05)' }}>
+                      <span>Reste à verser au profil par l'agence</span>
+                      <strong style={{ color: selectedMission.partProfilVersee ? '#10b981' : '#f43f5e' }}>
+                        {selectedMission.partProfilVersee ? `${money(modalPartProfil)} (Déjà versé)` : `${money(modalPartProfil)} (Non versé)`}
+                      </strong>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -3691,13 +3902,21 @@ export default function VueGlobale() {
                                   </span>
                                 </div>
                               )}
+                              {isAgencePayeeClient && (
+                                <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '0.85em', color: '#94a3b8' }}>Part profil à verser par l'agence : <strong>{money(p.amount)}</strong></span>
+                                  <span style={{ fontSize: '0.85em', color: isPartProfilPaid ? '#10b981' : '#f43f5e', fontWeight: 'bold' }}>
+                                    {isPartProfilPaid ? 'Versée' : 'Non versée'}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
                       </div>
                     ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: isProfilPayeClient ? '1fr 1fr 1.2fr' : '1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-                        <div><p style={{ margin: 0, color: '#94a3b8' }}>Paiement encaissé par</p><strong style={{ color: '#fff' }}>{isProfilPayeClient ? 'Le profil (Délégué)' : (selectedMission.encaissePar === 'Agence' ? "L'agence" : 'Le profil')}</strong></div>
+                      <div style={{ display: 'grid', gridTemplateColumns: (isProfilPayeClient || isAgencePayeeClient) ? '1fr 1fr 1.2fr' : '1fr 1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                        <div><p style={{ margin: 0, color: '#94a3b8' }}>Paiement encaissé par</p><strong style={{ color: '#fff' }}>{isProfilPayeClient ? 'Le profil (Délégué)' : isAgencePayeeClient ? "L'agence" : (selectedMission.encaissePar === 'Agence' ? "L'agence" : 'Le profil')}</strong></div>
                         <div>
                           <p style={{ margin: 0, color: '#94a3b8' }}>Part profil versée</p>
                           <strong style={{ color: isProfilPayeClient || selectedMission.partProfilVersee ? '#10b981' : '#fff' }}>
@@ -3709,6 +3928,13 @@ export default function VueGlobale() {
                             <p style={{ margin: 0, color: '#94a3b8' }}>Part agence reversée ({money(selectedMission.partAgence)})</p>
                             <strong style={{ color: selectedMission.partAgenceReversee ? '#10b981' : '#f43f5e' }}>
                               {selectedMission.partAgenceReversee ? 'Reversée' : 'Non reversée'}
+                            </strong>
+                          </div>
+                        ) : isAgencePayeeClient ? (
+                          <div>
+                            <p style={{ margin: 0, color: '#94a3b8' }}>Part profil versée ({money(modalPartProfil)})</p>
+                            <strong style={{ color: selectedMission.partProfilVersee ? '#10b981' : '#f43f5e' }}>
+                              {selectedMission.partProfilVersee ? 'Versée' : 'Non versée'}
                             </strong>
                           </div>
                         ) : (
@@ -3902,7 +4128,73 @@ export default function VueGlobale() {
                   <label className="fg-select-wrap">
                     <select
                       value={missionEditForm.statutPaiement}
-                      onChange={(e) => setMissionEditForm((prev) => ({ ...prev, statutPaiement: e.target.value }))}
+                      onChange={(e) => {
+                        const newStatus = e.target.value;
+                        setMissionEditForm((prev) => {
+                          const updated = { ...prev, statutPaiement: newStatus };
+                          if (newStatus === 'Profil payé / Client') {
+                            updated.encaissePar = 'Profil';
+                            updated.partProfilVersee = 'Oui';
+                            // Date du versement au profil = date du paiement (quand le statut a été mis)
+                            if (!updated.dateVersementProfil) {
+                              updated.dateVersementProfil = prev.datePaiement || getISODateLocal(new Date());
+                            }
+                            if (updated.partsRepartition) {
+                              updated.partsRepartition = updated.partsRepartition.map((p) => ({
+                                ...p,
+                                part_profil_versee: true,
+                                date_versement_profil: p.date_versement_profil || prev.datePaiement || getISODateLocal(new Date()),
+                              }));
+                            }
+                          } else if (newStatus === 'Agence payée / Client') {
+                            updated.encaissePar = 'Agence';
+                            updated.partAgenceReversee = 'Oui';
+                            // Date de la remise à l'agence = date du paiement (quand le statut a été mis)
+                            if (!updated.dateRemiseAgence) {
+                              updated.dateRemiseAgence = prev.datePaiement || getISODateLocal(new Date());
+                            }
+                            if (updated.partsRepartition) {
+                              updated.partsRepartition = updated.partsRepartition.map((p, idx) => {
+                                const isDel = p.is_delegate || (updated.partsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
+                                if (isDel) {
+                                  return {
+                                    ...p,
+                                    part_agence_reversee: true,
+                                    date_remise_agence: p.date_remise_agence || prev.datePaiement || getISODateLocal(new Date()),
+                                    part_agence_amount: p.part_agence_amount || Number(prev.partAgence || selectedMission?.partAgence || 0),
+                                  };
+                                }
+                                return p;
+                              });
+                            }
+                          } else if (newStatus === 'Payé') {
+                            updated.partProfilVersee = 'Oui';
+                            updated.partAgenceReversee = 'Oui';
+                            if (!updated.dateVersementProfil) {
+                              updated.dateVersementProfil = prev.datePaiement || getISODateLocal(new Date());
+                            }
+                            if (!updated.dateRemiseAgence) {
+                              updated.dateRemiseAgence = prev.datePaiement || getISODateLocal(new Date());
+                            }
+                            if (updated.partsRepartition) {
+                              updated.partsRepartition = updated.partsRepartition.map((p, idx) => {
+                                const isDel = p.is_delegate || (updated.partsRepartition!.every((x: any) => !x.is_delegate) && idx === 0);
+                                return {
+                                  ...p,
+                                  part_profil_versee: true,
+                                  date_versement_profil: p.date_versement_profil || prev.datePaiement || getISODateLocal(new Date()),
+                                  ...(isDel ? {
+                                    part_agence_reversee: true,
+                                    date_remise_agence: p.date_remise_agence || prev.datePaiement || getISODateLocal(new Date()),
+                                    part_agence_amount: p.part_agence_amount || Number(prev.partAgence || selectedMission?.partAgence || 0),
+                                  } : {}),
+                                };
+                              });
+                            }
+                          }
+                          return updated;
+                        });
+                      }}
                     >
                       {paymentStatusOptions.map((status) => (
                         <option key={status} value={status}>{status}</option>
@@ -3931,126 +4223,357 @@ export default function VueGlobale() {
               <div className="fg-edit-section-title">🔁 Répartition interne</div>
               {missionEditForm.partsRepartition && missionEditForm.partsRepartition.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '1rem' }}>
-                  {missionEditForm.partsRepartition.map((part, index) => (
-                    <div key={index} style={{ border: '1px solid #e2e8f0', padding: '1rem', borderRadius: '4px' }}>
-                      <div className="fg-two-col-fields">
-                        <div className="fg-modal-field">
-                          <label>Profil</label>
-                          <input value={part.profile_name || `Profil ${part.profile_id}`} disabled />
+                  {missionEditForm.partsRepartition.map((part, index) => {
+                    const originalPart = selectedMission?.parts_repartition?.find(
+                      (op: any) => Number(op.profile_id) === Number(part.profile_id)
+                    );
+                    const isPartProfilPaidFrozen = Boolean(originalPart?.part_profil_versee) || missionEditForm.statutPaiement === 'Profil payé / Client';
+                    const isAgencePayeeClientStatus = selectedMission?.statutPaiementUi === 'agence_payee_client' || selectedMission?.statutPaiementUi === 'Agence payée / Client';
+                    const isPartAgencePaidFrozen = Boolean(originalPart?.part_agence_reversee) || 
+                      isAgencePayeeClientStatus || 
+                      missionEditForm.statutPaiement === 'Agence payée / Client' || 
+                      missionEditForm.statutPaiement === 'Agence payé / Client' ||
+                      (missionEditForm.statutPaiement === 'Profil payé / Client' && part.part_agence_reversee);
+                    const isDelegate = part.is_delegate || (missionEditForm.partsRepartition!.every((p: any) => !p.is_delegate) && index === 0);
+
+                    return (
+                      <div key={index} style={{ border: '1px solid #e2e8f0', padding: '1rem', borderRadius: '4px' }}>
+                        <div className="fg-two-col-fields">
+                          <div className="fg-modal-field">
+                            <label>Profil</label>
+                            <input value={part.profile_name || `Profil ${part.profile_id}`} disabled />
+                          </div>
+                          <div className="fg-modal-field">
+                            <label>Montant</label>
+                            <input
+                              type="number"
+                              value={part.amount || 0}
+                              disabled
+                              onChange={(e) => {
+                                const newParts = [...missionEditForm.partsRepartition!];
+                                newParts[index].amount = Number(e.target.value);
+                                setMissionEditForm(prev => ({ ...prev, partsRepartition: newParts }));
+                              }}
+                            />
+                          </div>
                         </div>
-                        <div className="fg-modal-field">
-                          <label>Montant</label>
-                          <input
-                            type="number"
-                            value={part.amount || 0}
+                        <div className="fg-two-col-fields">
+                          <div className="fg-modal-field">
+                            <label>Part profil versée ?</label>
+                            <label className="fg-select-wrap">
+                              <select
+                                value={part.part_profil_versee ? 'Oui' : 'Non'}
+                                disabled={isPartProfilPaidFrozen}
+                                onChange={(e) => {
+                                  const newParts = [...missionEditForm.partsRepartition!];
+                                  newParts[index].part_profil_versee = e.target.value === 'Oui';
+                                  if (e.target.value === 'Oui' && !newParts[index].date_versement_profil) {
+                                    newParts[index].date_versement_profil = getISODateLocal(new Date());
+                                  }
+                                  setMissionEditForm(prev => ({ ...prev, partsRepartition: newParts }));
+                                }}
+                              >
+                                <option value="Oui">Oui</option>
+                                <option value="Non">Non</option>
+                              </select>
+                              <ChevronDown size={14} />
+                            </label>
+                          </div>
+                          <div className="fg-modal-field">
+                            <label>Date versement</label>
+                            <div className="fg-input-with-icon">
+                              <input
+                                type="date"
+                                value={part.date_versement_profil || ''}
+                                disabled={isPartProfilPaidFrozen}
+                                onChange={(e) => {
+                                  const newParts = [...missionEditForm.partsRepartition!];
+                                  newParts[index].date_versement_profil = e.target.value;
+                                  setMissionEditForm(prev => ({ ...prev, partsRepartition: newParts }));
+                                }}
+                              />
+                              <Calendar size={14} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {isDelegate && (
+                          <div style={{ marginTop: '0.5rem', borderTop: '1px dashed #e2e8f0', paddingTop: '0.5rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                              <div className="fg-modal-field">
+                                <label>Part agence reversée ?</label>
+                                <label className="fg-select-wrap">
+                                  <select
+                                    value={part.part_agence_reversee ? 'Oui' : 'Non'}
+                                    disabled={isPartAgencePaidFrozen}
+                                    onChange={(e) => {
+                                      const newParts = [...missionEditForm.partsRepartition!];
+                                      const isYes = e.target.value === 'Oui';
+                                      newParts[index].part_agence_reversee = isYes;
+                                      if (isYes) {
+                                        if (!newParts[index].date_remise_agence) {
+                                          newParts[index].date_remise_agence = getISODateLocal(new Date());
+                                        }
+                                        if (!newParts[index].part_agence_amount) {
+                                          newParts[index].part_agence_amount = Number(missionEditForm.partAgence || selectedMission?.partAgence || 0);
+                                        }
+                                      }
+                                      setMissionEditForm(prev => ({ ...prev, partsRepartition: newParts }));
+                                    }}
+                                  >
+                                    <option value="Oui">Oui</option>
+                                    <option value="Non">Non</option>
+                                  </select>
+                                  <ChevronDown size={14} />
+                                </label>
+                              </div>
+                              <div className="fg-modal-field">
+                                <label>Montant part agence</label>
+                                <input
+                                  type="number"
+                                  value={part.part_agence_amount || 0}
+                                  disabled
+                                  onChange={(e) => {
+                                    const newParts = [...missionEditForm.partsRepartition!];
+                                    newParts[index].part_agence_amount = Number(e.target.value);
+                                    setMissionEditForm(prev => ({ ...prev, partsRepartition: newParts }));
+                                  }}
+                                />
+                              </div>
+                              <div className="fg-modal-field">
+                                <label>Date remise à l'agence</label>
+                                <div className="fg-input-with-icon">
+                                  <input
+                                    type="date"
+                                    value={part.date_remise_agence || ''}
+                                    disabled={isPartAgencePaidFrozen}
+                                    onChange={(e) => {
+                                      const newParts = [...missionEditForm.partsRepartition!];
+                                      newParts[index].date_remise_agence = e.target.value;
+                                      setMissionEditForm(prev => ({ ...prev, partsRepartition: newParts }));
+                                    }}
+                                  />
+                                  <Calendar size={14} />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (() => {
+                const isProfileShareFrozen = Boolean(selectedMission?.partProfilVersee) || missionEditForm.statutPaiement === 'Profil payé / Client';
+                const isAgencyShareFrozen = Boolean(selectedMission?.partAgenceReversee) || 
+                  selectedMission?.statutPaiementUi === 'agence_payee_client' || 
+                  missionEditForm.statutPaiement === 'Agence payée / Client' ||
+                  (missionEditForm.statutPaiement === 'Profil payé / Client' && missionEditForm.partAgenceReversee === 'Oui');
+
+                return (
+                  <>
+                    <div className="fg-two-col-fields">
+                      <div className="fg-modal-field">
+                        <label>Encaissé par</label>
+                        <label className="fg-select-wrap">
+                          <select
+                            value={missionEditForm.encaissePar}
                             onChange={(e) => {
-                              const newParts = [...missionEditForm.partsRepartition!];
-                              newParts[index].amount = Number(e.target.value);
-                              setMissionEditForm(prev => ({ ...prev, partsRepartition: newParts }));
+                              const newEnc = e.target.value as 'Agence' | 'Profil';
+                              setMissionEditForm((prev) => {
+                                const updated = { ...prev, encaissePar: newEnc };
+                                if (newEnc === 'Profil') {
+                                  updated.partProfilVersee = 'Oui';
+                                  if (!updated.dateVersementProfil) {
+                                    updated.dateVersementProfil = prev.datePaiement || getISODateLocal(new Date());
+                                  }
+                                }
+                                return updated;
+                              });
                             }}
+                          >
+                            <option value="Agence">Agence</option>
+                            <option value="Profil">Profil</option>
+                          </select>
+                          <ChevronDown size={14} />
+                        </label>
+                      </div>
+
+                      {missionEditForm.encaissePar === 'Profil' && (
+                        <div className="fg-modal-field">
+                          <label>Montant encaissé par le profil</label>
+                          <input
+                            value={missionEditForm.montantEncaisseProfil}
+                            onChange={(e) => setMissionEditForm((prev) => ({ ...prev, montantEncaisseProfil: e.target.value }))}
                           />
                         </div>
-                      </div>
+                      )}
+                    </div>
+
+                    {(missionEditForm.encaissePar === 'Profil' || missionEditForm.statutPaiement === 'Profil payé / Client') ? (
+                      <>
+                        {/* Profil payé / Client : profil gelé (déjà encaissé), agence éditable */}
+                        <div className="fg-two-col-fields" style={{ opacity: 0.7 }}>
+                          <div className="fg-modal-field">
+                            <label>Part profil versée ?</label>
+                            <label className="fg-select-wrap">
+                              <select value="Oui" disabled>
+                                <option>Oui</option>
+                              </select>
+                              <ChevronDown size={14} />
+                            </label>
+                          </div>
+                          <div className="fg-modal-field">
+                            <label>Date versement au profil</label>
+                            <div className="fg-input-with-icon">
+                              <input
+                                type="date"
+                                value={missionEditForm.dateVersementProfil || missionEditForm.datePaiement}
+                                disabled
+                              />
+                              <Calendar size={14} />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="fg-two-col-fields">
+                          <div className="fg-modal-field">
+                            <label>Part agence reversée ?</label>
+                            <label className="fg-select-wrap">
+                              <select
+                                value={missionEditForm.partAgenceReversee}
+                                disabled={isAgencyShareFrozen}
+                                onChange={(e) => {
+                                  const val = e.target.value as 'Oui' | 'Non';
+                                  setMissionEditForm((prev) => ({
+                                    ...prev,
+                                    partAgenceReversee: val,
+                                    dateRemiseAgence: val === 'Oui' ? (prev.dateRemiseAgence || getISODateLocal(new Date())) : '',
+                                  }));
+                                }}
+                              >
+                                <option value="Oui">Oui</option>
+                                <option value="Non">Non</option>
+                              </select>
+                              <ChevronDown size={14} />
+                            </label>
+                          </div>
+                          <div className="fg-modal-field">
+                            <label>Date remise à l'agence</label>
+                            <div className="fg-input-with-icon">
+                              <input
+                                type="date"
+                                value={missionEditForm.dateRemiseAgence}
+                                disabled={isAgencyShareFrozen}
+                                onChange={(e) => setMissionEditForm((prev) => ({ ...prev, dateRemiseAgence: e.target.value }))}
+                              />
+                              <Calendar size={14} />
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : missionEditForm.statutPaiement === 'Agence payée / Client' ? (
+                      <>
+                        {/* Agence payée / Client : agence gelée (déjà encaissé), profil éditable */}
+                        <div className="fg-two-col-fields" style={{ opacity: 0.7 }}>
+                          <div className="fg-modal-field">
+                            <label>Part agence reversée ?</label>
+                            <label className="fg-select-wrap">
+                              <select value="Oui" disabled>
+                                <option>Oui</option>
+                              </select>
+                              <ChevronDown size={14} />
+                            </label>
+                          </div>
+                          <div className="fg-modal-field">
+                            <label>Date remise à l'agence</label>
+                            <div className="fg-input-with-icon">
+                              <input
+                                type="date"
+                                value={missionEditForm.dateRemiseAgence || missionEditForm.datePaiement}
+                                disabled
+                              />
+                              <Calendar size={14} />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="fg-two-col-fields">
+                          <div className="fg-modal-field">
+                            <label>Part profil versée ?</label>
+                            <label className="fg-select-wrap">
+                              <select
+                                value={missionEditForm.partProfilVersee}
+                                disabled={isProfileShareFrozen}
+                                onChange={(e) => {
+                                  const val = e.target.value as 'Oui' | 'Non';
+                                  setMissionEditForm((prev) => ({
+                                    ...prev,
+                                    partProfilVersee: val,
+                                    dateVersementProfil: val === 'Oui' ? (prev.dateVersementProfil || getISODateLocal(new Date())) : '',
+                                  }));
+                                }}
+                              >
+                                <option value="Oui">Oui</option>
+                                <option value="Non">Non</option>
+                              </select>
+                              <ChevronDown size={14} />
+                            </label>
+                          </div>
+                          <div className="fg-modal-field">
+                            <label>Date versement au profil</label>
+                            <div className="fg-input-with-icon">
+                              <input
+                                type="date"
+                                value={missionEditForm.dateVersementProfil}
+                                disabled={isProfileShareFrozen}
+                                onChange={(e) => setMissionEditForm((prev) => ({ ...prev, dateVersementProfil: e.target.value }))}
+                              />
+                              <Calendar size={14} />
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
                       <div className="fg-two-col-fields">
                         <div className="fg-modal-field">
                           <label>Part profil versée ?</label>
                           <label className="fg-select-wrap">
                             <select
-                              value={part.part_profil_versee ? 'Oui' : 'Non'}
+                              value={missionEditForm.partProfilVersee}
+                              disabled={isProfileShareFrozen}
                               onChange={(e) => {
-                                const newParts = [...missionEditForm.partsRepartition!];
-                                newParts[index].part_profil_versee = e.target.value === 'Oui';
-                                setMissionEditForm(prev => ({ ...prev, partsRepartition: newParts }));
+                                const val = e.target.value as 'Oui' | 'Non';
+                                setMissionEditForm((prev) => ({
+                                  ...prev,
+                                  partProfilVersee: val,
+                                  dateVersementProfil: val === 'Oui' ? (prev.dateVersementProfil || getISODateLocal(new Date())) : '',
+                                }));
                               }}
                             >
-                              <option>Oui</option>
-                              <option>Non</option>
+                              <option value="Oui">Oui</option>
+                              <option value="Non">Non</option>
                             </select>
                             <ChevronDown size={14} />
                           </label>
                         </div>
                         <div className="fg-modal-field">
-                          <label>Date versement</label>
+                          <label>Date versement au profil</label>
                           <div className="fg-input-with-icon">
                             <input
                               type="date"
-                              value={part.date_versement_profil || ''}
-                              onChange={(e) => {
-                                const newParts = [...missionEditForm.partsRepartition!];
-                                newParts[index].date_versement_profil = e.target.value;
-                                setMissionEditForm(prev => ({ ...prev, partsRepartition: newParts }));
-                              }}
+                              value={missionEditForm.dateVersementProfil}
+                              disabled={isProfileShareFrozen}
+                              onChange={(e) => setMissionEditForm((prev) => ({ ...prev, dateVersementProfil: e.target.value }))}
                             />
                             <Calendar size={14} />
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <>
-                  <div className="fg-two-col-fields">
-                    <div className="fg-modal-field">
-                      <label>Encaissé par</label>
-                      <label className="fg-select-wrap">
-                        <select
-                          value={missionEditForm.encaissePar}
-                          onChange={(e) => setMissionEditForm((prev) => ({
-                            ...prev,
-                            encaissePar: e.target.value as 'Agence' | 'Profil',
-                          }))}
-                        >
-                          <option value="Agence">Agence</option>
-                          <option value="Profil">Profil</option>
-                        </select>
-                        <ChevronDown size={14} />
-                      </label>
-                    </div>
-
-                    {missionEditForm.encaissePar === 'Profil' && (
-                      <div className="fg-modal-field">
-                        <label>Montant encaissé par le profil</label>
-                        <input
-                          value={missionEditForm.montantEncaisseProfil}
-                          onChange={(e) => setMissionEditForm((prev) => ({ ...prev, montantEncaisseProfil: e.target.value }))}
-                        />
-                      </div>
                     )}
-                  </div>
-
-                  <div className="fg-two-col-fields">
-                    <div className="fg-modal-field">
-                      <label>{missionEditForm.encaissePar === 'Profil' ? 'Part agence reversée ?' : 'Part profil versée ?'}</label>
-                      <label className="fg-select-wrap">
-                        <select
-                          value={missionEditForm.partProfilVersee}
-                          onChange={(e) => setMissionEditForm((prev) => ({
-                            ...prev,
-                            partProfilVersee: e.target.value as 'Oui' | 'Non',
-                          }))}
-                        >
-                          <option>Oui</option>
-                          <option>Non</option>
-                        </select>
-                        <ChevronDown size={14} />
-                      </label>
-                    </div>
-
-                    <div className="fg-modal-field">
-                      <label>{missionEditForm.encaissePar === 'Profil' ? "Date remise à l'agence" : 'Date versement au profil'}</label>
-                      <div className="fg-input-with-icon">
-                        <input
-                          type="date"
-                          value={missionEditForm.dateVersementProfil}
-                          onChange={(e) => setMissionEditForm((prev) => ({ ...prev, dateVersementProfil: e.target.value }))}
-                        />
-                        <Calendar size={14} />
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
+                  </>
+                );
+              })()}
             </div>
 
             <footer className="fg-edit-footer">

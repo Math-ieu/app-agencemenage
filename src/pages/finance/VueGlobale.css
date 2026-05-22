@@ -630,7 +630,7 @@
 
 .fg-hero-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
   gap: 0;
   border-radius: 10px;
   overflow: hidden;
@@ -643,6 +643,7 @@
   padding: 0.78rem;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.7rem;
   border-right: 1px solid #334a7a;
 }
