@@ -363,14 +363,6 @@ export default function Dashboard() {
         }
 
         if (statutUi === 'paye') {
-          let allProfilesPaid = false;
-          const parts = (d as any).parts_repartition || facturation.parts_repartition || d.formulaire_data?.parts_repartition || [];
-          if (Array.isArray(parts) && parts.length > 0) {
-            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
-          } else {
-            allProfilesPaid = Boolean(facturation.part_profil_versee);
-          }
-          if (!allProfilesPaid) return true; // Conserver sur le dashboard
           return false;
         }
         
@@ -984,14 +976,6 @@ export default function Dashboard() {
       const facturation = d.formulaire_data?.facturation || {};
       const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
       if (statutUi === 'paye') {
-        let allProfilesPaid = false;
-        const parts = (d as any).parts_repartition || facturation.parts_repartition || d.formulaire_data?.parts_repartition || [];
-        if (Array.isArray(parts) && parts.length > 0) {
-          allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
-        } else {
-          allProfilesPaid = Boolean(facturation.part_profil_versee);
-        }
-        if (!allProfilesPaid) return true; // Conserver sur le dashboard
         return false;
       }
 

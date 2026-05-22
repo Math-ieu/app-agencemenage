@@ -1338,8 +1338,11 @@ export default function VueGlobale() {
       const totalDue = getPartAgenceDueFromProfil(row);
       if (row.parts_repartition && row.parts_repartition.length > 0) {
         const delegatePart = row.parts_repartition.find((p: any) => p.is_delegate) || row.parts_repartition[0];
-        if (!delegatePart.part_agence_reversee) {
-          total += totalDue;
+        if (delegatePart) {
+          const isPaid = delegatePart.part_agence_reversee ?? row.partAgenceReversee;
+          if (!isPaid) {
+            total += totalDue;
+          }
         }
       } else if (row.reglementInterne !== 'Réglé') {
         total += totalDue;
@@ -2046,19 +2049,13 @@ export default function VueGlobale() {
     const isPaid = nextStatus === 'Payé';
     const todayIso = getISODateLocal(new Date());
 
-    if (row.missionId) {
-      await updateMission(row.missionId, {
-        part_profil_versee: isPaid,
-        date_versement_profil: isPaid ? todayIso : null,
-      });
-    }
+    let allPaid = isPaid; // By default if single profile
+    let newParts = row.originalDemande?.formulaire_data?.facturation?.parts_repartition;
 
     if (row.demandeId && row.originalDemande) {
       const originalFormData = row.originalDemande.formulaire_data || {};
       const facturation = originalFormData.facturation || {};
-
-      let allPaid = isPaid; // By default if single profile
-      let newParts = facturation.parts_repartition;
+      newParts = facturation.parts_repartition;
 
       const profilsEnvoyes = row.originalDemande.profils_envoyes;
       if ((!newParts || newParts.length === 0) && profilsEnvoyes && profilsEnvoyes.length > 0) {
@@ -2083,6 +2080,23 @@ export default function VueGlobale() {
         });
         allPaid = newParts.every((p: any) => p.part_profil_versee);
       }
+    }
+
+    if (row.missionId) {
+      const originalFormData = row.originalDemande?.formulaire_data || {};
+      const facturation = originalFormData.facturation || {};
+      const isCancelled = facturation.statut_paiement_ui === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee';
+
+      await updateMission(row.missionId, {
+        part_profil_versee: allPaid,
+        date_versement_profil: allPaid ? todayIso : null,
+        paiement_client_statut: isCancelled ? 'facturation_annulee' : (allPaid ? 'paye' : 'agence_payee_client')
+      });
+    }
+
+    if (row.demandeId && row.originalDemande) {
+      const originalFormData = row.originalDemande.formulaire_data || {};
+      const facturation = originalFormData.facturation || {};
 
       await updateDemande(row.demandeId, {
         formulaire_data: {
@@ -2111,23 +2125,12 @@ export default function VueGlobale() {
     const isPaid = nextStatus === 'Payé';
     const todayIso = getISODateLocal(new Date());
 
-    if (row.missionId) {
-      await updateMission(row.missionId, {
-        part_agence_reversee: isPaid,
-        date_remise_agence: isPaid ? todayIso : null,
-        ...(row.encaissePar === 'Profil' ? {
-          part_profil_versee: true,
-          date_versement_profil: row.dateVersementProfil && row.dateVersementProfil !== '—' ? row.dateVersementProfil : todayIso
-        } : {})
-      });
-    }
+    let allPaid = isPaid; // By default if single profile
+    let newParts = row.originalDemande?.formulaire_data?.facturation?.parts_repartition;
 
     if (row.demandeId && row.originalDemande) {
       const originalFormData = row.originalDemande.formulaire_data || {};
       const facturation = originalFormData.facturation || {};
-
-      let allPaid = isPaid; // By default if single profile
-      let newParts = facturation.parts_repartition;
 
       if (Array.isArray(facturation.parts_repartition) && facturation.parts_repartition.length > 0 && row.profilId) {
         newParts = facturation.parts_repartition.map((p: any) => {
@@ -2145,6 +2148,27 @@ export default function VueGlobale() {
         });
         allPaid = newParts.every((p: any) => p.part_agence_reversee);
       }
+    }
+
+    if (row.missionId) {
+      const originalFormData = row.originalDemande?.formulaire_data || {};
+      const facturation = originalFormData.facturation || {};
+      const isCancelled = facturation.statut_paiement_ui === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee';
+
+      await updateMission(row.missionId, {
+        part_agence_reversee: allPaid,
+        date_remise_agence: allPaid ? todayIso : null,
+        paiement_client_statut: isCancelled ? 'facturation_annulee' : (allPaid ? 'paye' : 'profil_paye_client'),
+        ...(row.encaissePar === 'Profil' ? {
+          part_profil_versee: true,
+          date_versement_profil: row.dateVersementProfil && row.dateVersementProfil !== '—' ? row.dateVersementProfil : todayIso
+        } : {})
+      });
+    }
+
+    if (row.demandeId && row.originalDemande) {
+      const originalFormData = row.originalDemande.formulaire_data || {};
+      const facturation = originalFormData.facturation || {};
 
       await updateDemande(row.demandeId, {
         formulaire_data: {
@@ -2596,13 +2620,13 @@ export default function VueGlobale() {
         modalStatusPillClass = 'fg-pill-pale-red';
         modalStatusContent = 'Facturation annulée';
       }
-    } else if (selectedMission.paiement === 'paye') {
+    } else if (selectedMission.statutPaiementUi === 'paye' || selectedMission.paiement === 'paye') {
       modalStatusPillClass = 'fg-pill-pale-green';
       modalStatusContent = 'Payé';
-    } else if (selectedMission.statutPaiementUi === 'agence_payee_client' || (selectedMission.statutPaiementUi === 'paye' && selectedMission.encaissePar === 'Agence')) {
+    } else if (selectedMission.statutPaiementUi === 'agence_payee_client') {
       modalStatusPillClass = 'fg-pill-pale-orange';
       modalStatusContent = 'Agence payée / Client';
-    } else if (selectedMission.statutPaiementUi === 'profil_paye_client' || (selectedMission.statutPaiementUi === 'paye' && selectedMission.encaissePar === 'Profil')) {
+    } else if (selectedMission.statutPaiementUi === 'profil_paye_client') {
       modalStatusPillClass = 'fg-pill-pale-orange';
       modalStatusContent = 'Profil payé / Client';
     } else if (selectedMission.paiement === 'non_paye') {
@@ -2920,7 +2944,6 @@ export default function VueGlobale() {
                     <th>Nom du profil</th>
                     <th>Service</th>
                     <th>Segment</th>
-                    <th>Montant encaissé (profil)</th>
                     <th>Doit à l'agence (réel)</th>
                     <th>part du(des) profil(s)</th>
                     <th>Statut du paiement</th>
@@ -2943,7 +2966,6 @@ export default function VueGlobale() {
                       </td>
                       <td>{row.service}</td>
                       <td><span className="fg-pill fg-pill-blue">{row.segment}</span></td>
-                      <td className="fw-semibold">{money(getMontantEncaisseProfil(row))}</td>
                       <td className="fg-text-red fw-bold">{money(row._partAgenceDue)}</td>
                       <td>{money(row.partProfil)}</td>
                       <td>
@@ -3205,13 +3227,13 @@ export default function VueGlobale() {
                       statusPillClass = 'fg-pill-pale-red';
                       statusContent = 'Facturation annulée';
                     }
-                  } else if (row.paiement === 'paye') {
+                  } else if (row.statutPaiementUi === 'paye' || row.paiement === 'paye') {
                     statusPillClass = 'fg-pill-pale-green';
                     statusContent = 'Payé';
-                  } else if (row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'paye' && row.encaissePar === 'Agence')) {
+                  } else if (row.statutPaiementUi === 'agence_payee_client') {
                     statusPillClass = 'fg-pill-pale-orange';
                     statusContent = <>Agence<br />payé /<br />Client</>;
-                  } else if (row.statutPaiementUi === 'profil_paye_client' || (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil')) {
+                  } else if (row.statutPaiementUi === 'profil_paye_client') {
                     statusPillClass = 'fg-pill-pale-orange';
                     statusContent = <>Profil<br />payé /<br />Client</>;
                   } else if (row.paiement === 'non_paye') {
