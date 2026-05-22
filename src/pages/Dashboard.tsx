@@ -362,7 +362,17 @@ export default function Dashboard() {
           return false;
         }
 
-        if (statutUi === 'paye') return false;
+        if (statutUi === 'paye') {
+          let allProfilesPaid = false;
+          const parts = (d as any).parts_repartition || facturation.parts_repartition || d.formulaire_data?.parts_repartition || [];
+          if (Array.isArray(parts) && parts.length > 0) {
+            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+          } else {
+            allProfilesPaid = Boolean(facturation.part_profil_versee);
+          }
+          if (!allProfilesPaid) return true; // Conserver sur le dashboard
+          return false;
+        }
         
         return true;
       });
@@ -790,14 +800,35 @@ export default function Dashboard() {
       facturationData.statut_paiement_ui
     );
 
-    // Pre-populate parts_repartition from profils_envoyes when no saved repartition exists
+    // Synchroniser automatiquement parts_repartition avec les profils actuellement assignés (profils_envoyes)
     let savedParts = asArray<PartRepartitionItem>(facturationData.parts_repartition || formData.parts_repartition, []);
-    if (savedParts.length === 0 && d.profils_envoyes && d.profils_envoyes.length > 0) {
-      savedParts = d.profils_envoyes.map((p: any, idx: number) => ({
-        profile_id: p.id,
-        amount: 0,
-        is_delegate: idx === 0,
-      }));
+    
+    if (d.profils_envoyes && d.profils_envoyes.length > 0) {
+      const activeProfileIds = new Set(d.profils_envoyes.map((p: any) => Number(p.id)).filter(id => !isNaN(id)));
+      
+      // 1. Conserver uniquement les parts des profils encore assignés à la demande
+      savedParts = savedParts.filter(p => {
+        const pId = Number(p.profile_id);
+        return !pId || activeProfileIds.has(pId);
+      });
+      
+      const existingProfileIds = new Set(savedParts.map(p => Number(p.profile_id)).filter(id => !isNaN(id)));
+      
+      // 2. Ajouter automatiquement les profils actuellement assignés mais absents de la répartition
+      d.profils_envoyes.forEach((p: any, idx: number) => {
+        const pId = Number(p.id);
+        if (pId && !existingProfileIds.has(pId)) {
+          savedParts.push({
+            profile_id: pId,
+            amount: 0,
+            is_delegate: savedParts.length === 0 && idx === 0,
+          });
+          existingProfileIds.add(pId);
+        }
+      });
+    } else {
+      // Si aucun profil n'est assigné, la répartition doit être vide
+      savedParts = [];
     }
 
     setSelectedDemande(d);
@@ -952,7 +983,17 @@ export default function Dashboard() {
       // Exclure les missions payées du tableau de bord
       const facturation = d.formulaire_data?.facturation || {};
       const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
-      if (statutUi === 'paye') return false;
+      if (statutUi === 'paye') {
+        let allProfilesPaid = false;
+        const parts = (d as any).parts_repartition || facturation.parts_repartition || d.formulaire_data?.parts_repartition || [];
+        if (Array.isArray(parts) && parts.length > 0) {
+          allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+        } else {
+          allProfilesPaid = Boolean(facturation.part_profil_versee);
+        }
+        if (!allProfilesPaid) return true; // Conserver sur le dashboard
+        return false;
+      }
 
       // Recherche
       if (search) {
@@ -2169,11 +2210,25 @@ export default function Dashboard() {
                           </div>
                         )}
 
-                        {editFormData.statut_paiement_ui === 'paye' && (
-                          <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '10px', border: '1px solid #A7F3D0', background: '#ECFDF5' }}>
-                            <p style={{ fontSize: '13px', fontWeight: 600, color: '#047857', margin: 0 }}>✓ Paiement complet — la demande sera retirée du tableau de bord</p>
-                          </div>
-                        )}
+                        {editFormData.statut_paiement_ui === 'paye' && (() => {
+                          let allProfilesPaid = false;
+                          const parts = editFormData.parts_repartition || [];
+                          if (Array.isArray(parts) && parts.length > 0) {
+                            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+                          } else {
+                            allProfilesPaid = Boolean(editFormData.part_profil_versee);
+                          }
+
+                          return (
+                            <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '10px', border: `1px solid ${allProfilesPaid ? '#A7F3D0' : '#FDE047'}`, background: allProfilesPaid ? '#ECFDF5' : '#FEFCE8' }}>
+                              <p style={{ fontSize: '13px', fontWeight: 600, color: allProfilesPaid ? '#047857' : '#A16207', margin: 0 }}>
+                                {allProfilesPaid 
+                                  ? '✓ Paiement complet — la demande sera retirée du tableau de bord' 
+                                  : '✓ Paiement complet (Client) — la demande restera sur le tableau de bord car certains profils ne sont pas encore payés.'}
+                              </p>
+                            </div>
+                          );
+                        })()}
 
                         {editFormData.statut_paiement_ui !== 'facturation_annulee' && (
                           <div style={{ marginTop: '16px' }}>

@@ -358,6 +358,11 @@ const getCommissionAgenceEncaissee = (row: FacturationRow, _forKpi = false): num
     return Number(row.montantProfilDoitAgence || row.partAgence || 0);
   }
 
+  // Payé : le client a payé entièrement (et l'agence ou le profil a encaissé)
+  if (row.statutPaiementUi === 'paye' || row.statutPaiementUi === 'Payé') {
+    return row.partAgence;
+  }
+
   // Si le client n'a pas payé, on ne compte pas de commission
   if (row.paiement !== 'paye') return 0;
 
@@ -578,7 +583,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 
   const partProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
     ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
-    : Number(facturationData.montant_agence_doit_profil ?? facturationData.part_profil ?? (montant - partAgence));
+    : Number(facturationData.part_profil ?? facturationData.montant_agence_doit_profil ?? (montant - partAgence));
 
   return {
     missionId: item.id,
@@ -640,7 +645,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
 
   const partProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
     ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
-    : Number(facturationData.montant_agence_doit_profil ?? facturationData.part_profil ?? (montant - partAgence));
+    : Number(facturationData.part_profil ?? facturationData.montant_agence_doit_profil ?? (montant - partAgence));
 
   // Source de vérité : formulaire_data.facturation.statut_paiement_ui (défini par le Dashboard)
   // Puis champ calculé par le backend (statut_paiement_ui du serializer historique)
@@ -1778,9 +1783,23 @@ export default function VueGlobale() {
 
   const expandedGlobalTableRows = useMemo(() => {
     const result: any[] = [];
+    const addedCommissionMissions = new Set<string>();
+
     for (const row of globalTableRows) {
-      const isDebit = row.statutPaiementUi === 'profil_paye_client' || (!row.statutPaiementUi && row.encaissePar === 'Profil') || (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil');
-      const isCredit = row.statutPaiementUi === 'agence_payee_client' || (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) || (!row.statutPaiementUi && row.encaissePar === 'Agence');
+      const isDebit =
+        row.statutPaiementUi === 'profil_paye_client' ||
+        row.statutPaiementUi === 'Profil payé / Client' ||
+        (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
+        (!row.statutPaiementUi && row.encaissePar === 'Profil');
+
+      const isCredit =
+        row.statutPaiementUi === 'agence_payee_client' ||
+        row.statutPaiementUi === 'Agence payée / Client' ||
+        (row.statutPaiementUi === 'paye' && row.encaissePar === 'Agence') ||
+        (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
+        (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) ||
+        (row.statut === 'Facturation annulée' && row.profilSeraPaye) ||
+        (!row.statutPaiementUi && row.encaissePar === 'Agence');
 
       if (row.parts_repartition && row.parts_repartition.length > 0) {
         if (isDebit) {
@@ -1797,13 +1816,18 @@ export default function VueGlobale() {
             const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
             const portion = totalDue;
 
+            const showCommission = !addedCommissionMissions.has(row.missionNo);
+            if (showCommission) {
+              addedCommissionMissions.add(row.missionNo);
+            }
+
             result.push({
               ...row,
               profilId: pId,
               profil: pName,
               _partAgenceDue: portion,
               _partProfilDue: null,
-              _commission: i === 0 ? getCommissionAgenceEncaissee(row) : null,
+              _commission: showCommission ? getCommissionAgenceEncaissee(row) : null,
               _uniqueKey: `${row.missionNo}-${pId}-debit`,
               _isDebit: isDebit,
               _isCredit: isCredit
@@ -1820,13 +1844,19 @@ export default function VueGlobale() {
             const pId = Number(part.profile_id);
             const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
             const portion = totalPartsAmount > 0 ? Number(part.amount || 0) : (totalDue / row.parts_repartition.length);
+
+            const showCommission = !addedCommissionMissions.has(row.missionNo);
+            if (showCommission) {
+              addedCommissionMissions.add(row.missionNo);
+            }
+
             result.push({
               ...row,
               profilId: pId,
               profil: pName,
               _partAgenceDue: null,
               _partProfilDue: portion,
-              _commission: i === 0 ? getCommissionAgenceEncaissee(row) : null,
+              _commission: showCommission ? getCommissionAgenceEncaissee(row) : null,
               _uniqueKey: `${row.missionNo}-${pId}-credit`,
               _isDebit: isDebit,
               _isCredit: isCredit
@@ -1838,14 +1868,18 @@ export default function VueGlobale() {
           ? (row.partAgenceReversee || row.reglementInterne === 'Réglé')
           : isCredit
             ? (row.partProfilVersee || row.reglementInterne === 'Réglé')
-            : true; // neither debit nor credit outstanding by definition
+            : true;
 
         if (!isPaid) {
+          const showCommission = !addedCommissionMissions.has(row.missionNo);
+          if (showCommission) {
+            addedCommissionMissions.add(row.missionNo);
+          }
           result.push({
             ...row,
             _partAgenceDue: getPartAgenceDueFromProfil(row),
             _partProfilDue: getPartProfilDueFromAgence(row),
-            _commission: getCommissionAgenceEncaissee(row),
+            _commission: showCommission ? getCommissionAgenceEncaissee(row) : null,
             _uniqueKey: row.missionNo,
             _isDebit: isDebit,
             _isCredit: isCredit
