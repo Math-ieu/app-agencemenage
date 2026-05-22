@@ -1450,19 +1450,7 @@ export default function VueGlobale() {
     return { totalFacture, chiffreAffaires, commissionAgence };
   }, [filteredSuiviRows]);
 
-  const globalSegmentStats = useMemo(() => {
-    const particulier = facturationData.filter((row) => row.segment === 'Particulier').length;
-    const entreprise = facturationData.filter((row) => row.segment === 'Entreprise').length;
-    const total = particulier + entreprise;
-    const particulierRatio = total > 0 ? (particulier / total) * 100 : 0;
-    const entrepriseRatio = total > 0 ? (entreprise / total) * 100 : 0;
-    return { particulier, entreprise, total, particulierRatio, entrepriseRatio };
-  }, [facturationData]);
-
-  const globalKpis = useMemo(() => {
-    const activeRows = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
-    const cancelledRows = periodFilteredRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
-
+  const missionsEnCours = useMemo(() => {
     const getPaymentUiValueLocal = (statutPaiement: string, facturationAnnulee: boolean, fallback?: string): string => {
       const options = [
         { value: 'non_confirme', apiValue: 'non_confirme', label: 'Non confirmé' },
@@ -1481,7 +1469,7 @@ export default function VueGlobale() {
       return 'non_confirme';
     };
 
-    const missionsEnCours = periodFilteredRows.filter(row => {
+    return periodFilteredRows.filter(row => {
       if (!row.originalDemande) return false;
       const d = row.originalDemande;
       if (d.statut === 'en_attente') return false;
@@ -1493,6 +1481,20 @@ export default function VueGlobale() {
       const isPaye = statutUi === 'paye';
       return !isPaye;
     });
+  }, [periodFilteredRows]);
+
+  const globalSegmentStats = useMemo(() => {
+    const particulier = missionsEnCours.filter((row) => row.segment === 'Particulier').length;
+    const entreprise = missionsEnCours.filter((row) => row.segment === 'Entreprise').length;
+    const total = particulier + entreprise;
+    const particulierRatio = total > 0 ? (particulier / total) * 100 : 0;
+    const entrepriseRatio = total > 0 ? (entreprise / total) * 100 : 0;
+    return { particulier, entreprise, total, particulierRatio, entrepriseRatio };
+  }, [missionsEnCours]);
+
+  const globalKpis = useMemo(() => {
+    const activeRows = periodFilteredRows.filter((row) => row.statut !== 'Facturation annulée' && row.statutPaiementUi !== 'facturation_annulee');
+    const cancelledRows = periodFilteredRows.filter((row) => row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
 
     const missions = missionsEnCours.length;
     const chiffreAffaires = activeRows
@@ -1510,7 +1512,7 @@ export default function VueGlobale() {
     const commissionAgence = commissionBrute - facturationAnnulee;
 
     return { missions, chiffreAffaires, commissionAgence, facturationAnnulee };
-  }, [periodFilteredRows]);
+  }, [periodFilteredRows, missionsEnCours]);
 
   const debitRows = useMemo(
     () => facturationData.filter((row) =>

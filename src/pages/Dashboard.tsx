@@ -706,6 +706,7 @@ export default function Dashboard() {
           montant_profil_annulation: toNumber(editFormData.montant_profil_annulation),
           montant_agence_doit_profil: toNumber(editFormData.montant_agence_doit_profil),
           montant_profil_doit_agence: toNumber(editFormData.montant_profil_doit_agence),
+          ca_initial: toNumber(editFormData.ca_initial),
         },
         part_agence: partAgence,
         parts_repartition: partsRepartition,
@@ -785,6 +786,10 @@ export default function Dashboard() {
     const prixValue = toNumber(d.prix);
     const tvaActive = Boolean(facturationData.tva_active);
     const montantHT = toNumber(facturationData.montant_ht) || (tvaActive ? roundMoney(prixValue / 1.2) : prixValue);
+    const caInitial = toNumber(facturationData.ca_initial) || 
+      (facturationData.facturation_annulee 
+        ? (tvaActive ? roundMoney(prixValue / 1.2) : prixValue)
+        : (montantHT > 0 ? montantHT : (tvaActive ? roundMoney(prixValue / 1.2) : prixValue)));
 
     const paymentUiValue = getPaymentUiValue(
       d.statut_paiement,
@@ -828,6 +833,7 @@ export default function Dashboard() {
     setEditFormData({
       prix: prixValue,
       montant_ht: montantHT,
+      ca_initial: caInitial,
       tva_active: tvaActive,
       montant_verse: toNumber(facturationData.montant_verse),
       montant_profil_doit: toNumber(facturationData.montant_profil_doit),
@@ -2114,6 +2120,11 @@ export default function Dashboard() {
                           <div className="form-group">
                             <label>Montant HT (MAD)</label>
                             <input type="number" value={editFormData.montant_ht} onChange={e => setEditFormData({ ...editFormData, montant_ht: e.target.value })} className="edit-input" />
+                            {editFormData.statut_paiement_ui === 'facturation_annulee' && (
+                              <p style={{ fontSize: '12px', color: '#DC2626', fontWeight: 600, marginTop: '6px' }}>
+                                « CA de cette demande : {toNumber(editFormData.ca_initial)} DH »
+                              </p>
+                            )}
                           </div>
                           <div className="form-group">
                             <label>TVA (20%)</label>
@@ -2140,6 +2151,21 @@ export default function Dashboard() {
                               // Auto-set encaisse_par based on payment status
                               if (v === 'agence_payee_client' || v === 'paye') updates.encaisse_par = 'agence';
                               else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
+                              
+                              if (v === 'facturation_annulee') {
+                                const totalProfilPart = editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0;
+                                updates.montant_ht = totalProfilPart > 0 ? -totalProfilPart : 0;
+                                // Auto-split parts
+                                const count = partsRepartition.length || 1;
+                                const amountPerProfile = roundMoney(totalProfilPart / count);
+                                updates.parts_repartition = partsRepartition.map((p, i) => ({
+                                  ...p,
+                                  amount: i === count - 1 ? roundMoney(totalProfilPart - (amountPerProfile * (count - 1))) : amountPerProfile
+                                }));
+                              } else {
+                                updates.montant_ht = editFormData.ca_initial;
+                              }
+                              
                               setEditFormData(updates);
                             }} className="edit-input">
                               {PAYMENT_STATUS_OPTIONS.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
@@ -2216,7 +2242,22 @@ export default function Dashboard() {
 
                         {editFormData.statut_paiement_ui !== 'facturation_annulee' && (
                           <div style={{ marginTop: '16px' }}>
-                            <button type="button" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', border: '1px solid #FDA4AF', color: '#BE123C', background: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => setEditFormData({ ...editFormData, facturation_annulee: true, statut_paiement_ui: 'facturation_annulee' })}>
+                            <button type="button" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', border: '1px solid #FDA4AF', color: '#BE123C', background: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => {
+                              const totalProfilPart = editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0;
+                              const count = partsRepartition.length || 1;
+                              const amountPerProfile = roundMoney(totalProfilPart / count);
+                              const newParts = partsRepartition.map((p, i) => ({
+                                ...p,
+                                amount: i === count - 1 ? roundMoney(totalProfilPart - (amountPerProfile * (count - 1))) : amountPerProfile
+                              }));
+                              setEditFormData({
+                                ...editFormData,
+                                facturation_annulee: true,
+                                statut_paiement_ui: 'facturation_annulee',
+                                montant_ht: totalProfilPart > 0 ? -totalProfilPart : 0,
+                                parts_repartition: newParts
+                              });
+                            }}>
                               <XCircle size={14} /> Facturation annulée
                             </button>
                           </div>
@@ -2232,14 +2273,50 @@ export default function Dashboard() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '12px' }}>
                               <label style={{ color: '#BE123C', fontWeight: 600, fontSize: '13px' }}>Le profil sera payé ?</label>
                               <div style={{ display: 'flex', gap: '8px' }}>
-                                <button type="button" onClick={() => setEditFormData({ ...editFormData, profil_sera_paye: true })} style={{ padding: '4px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: editFormData.profil_sera_paye ? '#059669' : '#E2E8F0', color: editFormData.profil_sera_paye ? 'white' : '#64748B' }}>Oui</button>
-                                <button type="button" onClick={() => setEditFormData({ ...editFormData, profil_sera_paye: false })} style={{ padding: '4px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: !editFormData.profil_sera_paye ? '#BE123C' : '#E2E8F0', color: !editFormData.profil_sera_paye ? 'white' : '#64748B' }}>Non</button>
+                                <button type="button" onClick={() => {
+                                  const totalAmount = toNumber(editFormData.montant_profil_annulation);
+                                  const count = partsRepartition.length || 1;
+                                  const amountPerProfile = roundMoney(totalAmount / count);
+                                  const nextParts = partsRepartition.map((p, i) => ({
+                                    ...p,
+                                    amount: i === count - 1 ? roundMoney(totalAmount - (amountPerProfile * (count - 1))) : amountPerProfile
+                                  }));
+                                  setEditFormData({
+                                    ...editFormData,
+                                    profil_sera_paye: true,
+                                    montant_ht: totalAmount > 0 ? -totalAmount : 0,
+                                    parts_repartition: nextParts
+                                  });
+                                }} style={{ padding: '4px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: editFormData.profil_sera_paye ? '#059669' : '#E2E8F0', color: editFormData.profil_sera_paye ? 'white' : '#64748B' }}>Oui</button>
+                                <button type="button" onClick={() => {
+                                  const nextParts = partsRepartition.map(p => ({ ...p, amount: 0 }));
+                                  setEditFormData({
+                                    ...editFormData,
+                                    profil_sera_paye: false,
+                                    montant_ht: 0,
+                                    parts_repartition: nextParts
+                                  });
+                                }} style={{ padding: '4px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: !editFormData.profil_sera_paye ? '#BE123C' : '#E2E8F0', color: !editFormData.profil_sera_paye ? 'white' : '#64748B' }}>Non</button>
                               </div>
                             </div>
                             {editFormData.profil_sera_paye && (
                               <div className="form-group" style={{ marginTop: '12px', maxWidth: '280px' }}>
                                 <label style={{ color: '#BE123C' }}>Montant à payer au profil (MAD)</label>
-                                <input type="number" value={editFormData.montant_profil_annulation || ''} onChange={e => setEditFormData({ ...editFormData, montant_profil_annulation: e.target.value })} className="edit-input" placeholder="0" style={{ borderColor: '#FECDD3' }} />
+                                <input type="number" value={editFormData.montant_profil_annulation || ''} onChange={e => {
+                                  const val = toNumber(e.target.value);
+                                  const count = partsRepartition.length || 1;
+                                  const amountPerProfile = roundMoney(val / count);
+                                  const nextParts = partsRepartition.map((p, i) => ({
+                                    ...p,
+                                    amount: i === count - 1 ? roundMoney(val - (amountPerProfile * (count - 1))) : amountPerProfile
+                                  }));
+                                  setEditFormData({
+                                    ...editFormData,
+                                    montant_profil_annulation: e.target.value,
+                                    montant_ht: val > 0 ? -val : 0,
+                                    parts_repartition: nextParts
+                                  });
+                                }} className="edit-input" placeholder="0" style={{ borderColor: '#FECDD3' }} />
                               </div>
                             )}
                           </div>
@@ -3208,9 +3285,19 @@ export default function Dashboard() {
                     const prevFacturation = d.formulaire_data?.facturation || {};
                     const partsRepartition = prevFacturation.parts_repartition || [];
                     const amountToDistribute = facturationAnnuleeProfilPaye ? Number(facturationAnnuleeAmount) || 0 : 0;
-                    const newParts = facturationAnnuleeProfilPaye && partsRepartition.length > 0
-                      ? partsRepartition.map((p: any) => ({ ...p, amount: roundMoney(amountToDistribute / partsRepartition.length) }))
-                      : partsRepartition;
+                    
+                    const count = partsRepartition.length || 1;
+                    const amountPerProfile = roundMoney(amountToDistribute / count);
+                    const newParts = partsRepartition.length > 0 ? partsRepartition.map((p: any, i: number) => ({
+                      ...p,
+                      amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
+                    })) : partsRepartition;
+
+                    const prixValue = toNumber(d.prix);
+                    const tvaActive = Boolean(prevFacturation.tva_active);
+                    const currentHT = toNumber(prevFacturation.montant_ht) || (tvaActive ? roundMoney(prixValue / 1.2) : prixValue);
+                    const caInitial = toNumber(prevFacturation.ca_initial) || (currentHT > 0 ? currentHT : (tvaActive ? roundMoney(prixValue / 1.2) : prixValue));
+                    const nextHT = amountToDistribute > 0 ? -amountToDistribute : 0;
 
                     const updateData = {
                       statut: 'annule',
@@ -3223,7 +3310,9 @@ export default function Dashboard() {
                           annulation_raison: facturationAnnuleeReason.trim(),
                           profil_sera_paye: facturationAnnuleeProfilPaye,
                           montant_profil_annulation: amountToDistribute,
-                          parts_repartition: newParts
+                          parts_repartition: newParts,
+                          montant_ht: nextHT,
+                          ca_initial: caInitial
                         }
                       }
                     };
