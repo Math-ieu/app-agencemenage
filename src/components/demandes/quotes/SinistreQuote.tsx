@@ -18,7 +18,12 @@ interface SinistreQuoteProps {
 export default function SinistreQuote({ demande, onPrestationsChange }: SinistreQuoteProps) {
   const data = demande.formulaire_data || {};
   
-  const [type, setType] = useState(data.interventionNature === 'incendie' ? 'incendie' : (data.interventionNature === 'inondation' ? 'inondation' : (data.interventionNature || 'deau')));
+  const [type, setType] = useState(() => {
+    const raw = data.interventionNature || data.intervention_nature || '';
+    if (raw === 'incendie') return 'incendie';
+    if (raw === 'inondation') return 'inondation';
+    return 'deau'; // default — also covers 'sinistre' and any unknown value
+  });
   const [surface, setSurface] = useState(data.surface || data.surfaceArea || 60);
   const [niveau, setNiveau] = useState(data.niveau || "moyen");
   const [urgence, setUrgence] = useState(data.urgence?.toString() || data.coefficient_majoration?.toString() || "1.00");
@@ -30,7 +35,7 @@ export default function SinistreQuote({ demande, onPrestationsChange }: Sinistre
   const tog = (k: keyof typeof opts) => setOpts(o => ({ ...o, [k]: !o[k] }));
 
   const MIN = 1200;
-  const taux = TX[type][niveau];
+  const taux = (TX[type] || TX.deau)[niveau] || TX.deau.moyen;
   const baseRaw = surface * taux;
   const base = Math.max(baseRaw, MIN);
   const u = parseFloat(urgence);
