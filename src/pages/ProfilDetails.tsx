@@ -326,6 +326,22 @@ export default function ProfilDetails() {
 
   const toggle = (s: string) => setOpenSections(p => ({ ...p, [s]: !p[s] }));
 
+  const handleToggleBlacklist = async () => {
+    if (!agent) return;
+    const actionText = agent.is_blacklisted ? 'retirer de la blacklist' : 'blacklister';
+    if (!window.confirm(`Voulez-vous vraiment ${actionText} ce profil ?`)) return;
+
+    try {
+      const nextStatus = !agent.is_blacklisted;
+      await updateAgent(agent.id, { is_blacklisted: nextStatus });
+      addToast(`Profil ${nextStatus ? 'blacklisté' : 'retiré de la blacklist'} avec succès`, 'success');
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast(`Erreur lors du changement de statut de la blacklist`, 'error');
+    }
+  };
+
   // Fetch all demandes when Postuler modal opens
   useEffect(() => {
     if (!showPostulerModal) return;
@@ -875,13 +891,20 @@ export default function ProfilDetails() {
               {isAgentBusy ? <AlertTriangle size={16} /> : <PlusCircle size={16} />}
               {isAgentBusy ? 'Déjà affecté' : 'Postuler'}
             </button>
-            <button style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 18px', border: '1px solid #FEB2B2',
-              borderRadius: 8, background: '#FFF5F5', color: '#C53030',
-              fontSize: 14, fontWeight: 600, cursor: 'pointer',
-            }}>
-              <ShieldAlert size={16} /> Blacklister
+            <button
+              onClick={handleToggleBlacklist}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 18px',
+                border: agent?.is_blacklisted ? '1px solid #cbd5e1' : '1px solid #FEB2B2',
+                borderRadius: 8,
+                background: agent?.is_blacklisted ? '#f1f5f9' : '#FFF5F5',
+                color: agent?.is_blacklisted ? '#475569' : '#C53030',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              {agent?.is_blacklisted ? <CheckCircle size={16} color="#10b981" /> : <ShieldAlert size={16} />}
+              {agent?.is_blacklisted ? 'Déblacklister' : 'Blacklister'}
             </button>
           </div>
         </div>

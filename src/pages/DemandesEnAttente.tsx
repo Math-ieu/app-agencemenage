@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient, uploadDocument } from '../api/client';
+import { decodeId } from '../utils/obfuscation';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -38,6 +39,21 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
   { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Facturation annulée' },
 ];
+
+const strip212 = (p: string) => {
+  if (!p) return '';
+  let cleaned = p.trim().replace(/\s+/g, '');
+  if (cleaned.startsWith('+212')) {
+    cleaned = cleaned.substring(4);
+  } else if (cleaned.startsWith('212') && cleaned.length > 9) {
+    cleaned = cleaned.substring(3);
+  }
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.substring(1);
+  }
+  return cleaned;
+};
+
 export default function DemandesEnAttente() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -59,6 +75,7 @@ export default function DemandesEnAttente() {
   const [syncWhatsApp, setSyncWhatsApp] = useState(true);
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [editingDemande, setEditingDemande] = useState<Demande | null>(null);
+  const [isRenewal, setIsRenewal] = useState(false);
   const [showAnnulationModal, setShowAnnulationModal] = useState<{ demandeId: number } | null>(null);
   const [annulationReason, setAnnulationReason] = useState('');
 
@@ -206,6 +223,26 @@ export default function DemandesEnAttente() {
       }
     }
   }, [location.state, demandes, editingDemande, navigate, location.pathname]);
+
+  // Handle external renew/duplication request (from ClientDetails)
+  useEffect(() => {
+    const state = location.state as { renewDemandeId?: number; returnToClient?: string } | null;
+    if (state?.renewDemandeId) {
+      const target = demandes.find(d => d.id === state.renewDemandeId);
+      if (target) {
+        openRenewModal(target);
+        navigate(location.pathname, { replace: true, state: { returnToClient: state.returnToClient } });
+      } else {
+        getDemande(state.renewDemandeId).then(res => {
+          openRenewModal(res.data);
+          navigate(location.pathname, { replace: true, state: { returnToClient: state.returnToClient } });
+        }).catch(() => {
+          addToast("La demande d'origine est introuvable.", 'error');
+          navigate(location.pathname, { replace: true, state: {} });
+        });
+      }
+    }
+  }, [location.state, demandes, navigate, location.pathname]);
 
   const getRowClass = (d: Demande) => {
     if (d.statut_paiement === 'integral') return 'row-status-paye';
@@ -455,6 +492,7 @@ export default function DemandesEnAttente() {
   };
 
   const openCreateModal = (service: string) => {
+    setIsRenewal(false);
     setSelectedService(service);
     setEditingDemande(null);
     setDirectPhone('');
@@ -478,12 +516,85 @@ export default function DemandesEnAttente() {
   };
 
   const openEditModal = (d: Demande) => {
+    setIsRenewal(false);
     setEditingDemande(d);
     setSelectedService(d.service);
     setActiveSegment(d.segment);
-    setDirectPhone(d.client_phone);
-    setWhatsappPhone(d.formulaire_data?.whatsapp_phone || d.client_phone);
-    setSyncWhatsApp(!d.formulaire_data?.whatsapp_phone || d.formulaire_data?.whatsapp_phone === d.client_phone);
+
+    const rawPhone = d.client_phone || d.client_detail?.phone || d.formulaire_data?.phone || d.formulaire_data?.telephone || d.formulaire_data?.whatsapp_phone || '';
+    const rawWhatsApp = d.client_whatsapp || d.formulaire_data?.whatsapp_phone || d.client_detail?.whatsapp || d.formulaire_data?.whatsapp || rawPhone;
+
+    const cleanPhone = strip212(rawPhone);
+    const cleanWhatsApp = strip212(rawWhatsApp);
+
+    setDirectPhone(cleanPhone);
+    setWhatsappPhone(cleanWhatsApp);
+    setSyncWhatsApp(!rawWhatsApp || cleanWhatsApp === cleanPhone);
+
+    setFormData({
+      nom: d.client_name || d.formulaire_data?.nom || d.formulaire_data?.fullName || '',
+      email: d.formulaire_data?.email || d.client_detail?.email || '',
+      entity_name: d.formulaire_data?.entityName || d.formulaire_data?.entity_name || '',
+      contact_person: d.formulaire_data?.contactPerson || d.formulaire_data?.contact_person || '',
+      ville: d.formulaire_data?.ville || d.client_city || 'Casablanca',
+      quartier: normalizeQuartier(d.formulaire_data?.quartier || d.client_neighborhood || ''),
+      adresse: d.formulaire_data?.adresse || '',
+      date: d.date_intervention || d.formulaire_data?.date || d.formulaire_data?.scheduledDate || '',
+      heure: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime || '',
+      scheduling_type: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime ? 'fixed' : 'flexible',
+      preference_horaire: normalizeTimePref(d.preference_horaire || d.formulaire_data?.preference_horaire || (d.formulaire_data?.schedulingTime === 'morning' ? 'matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? 'apres_midi' : '')),
+      type_habitation: normalizeStructure(d.formulaire_data?.type_habitation || ''),
+      frequence: normalizeFrequence(d.frequency_label || d.formulaire_data?.frequence || (d.frequency === 'oneshot' ? 'une fois' : 'mensuel')),
+      intervention_nature: d.formulaire_data?.interventionNature || d.formulaire_data?.intervention_nature || 'sinistre',
+      accommodation_state: d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '',
+      cleanliness_type: d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '',
+      nb_intervenants: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || 1,
+      surface: d.formulaire_data?.surface || 50,
+      details_pieces: d.formulaire_data?.details_pieces || '',
+      duree: d.formulaire_data?.duree || d.formulaire_data?.nb_heures || 4,
+      produits: d.formulaire_data?.produits || d.formulaire_data?.produitsEtOutils || false,
+      torchons: d.formulaire_data?.torchons || d.formulaire_data?.torchonsEtSerpierres || false,
+      montant: d.prix?.toString() || d.formulaire_data?.montant || '',
+      mode_paiement: normalizePayment(d.mode_paiement || d.formulaire_data?.mode_paiement || ''),
+      statut_paiement_ui: d.formulaire_data?.facturation?.statut_paiement_ui || d.formulaire_data?.statut_paiement_ui || d.statut_paiement_ui || (d.statut_paiement === 'integral' ? 'paye' : d.statut_paiement === 'acompte' ? 'paiement_en_attente' : d.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_confirme'),
+      heard_about_us: d.formulaire_data?.heard_about_us || d.formulaire_data?.comment_connu || d.formulaire_data?.lead_source || '',
+      notes: d.formulaire_data?.notes || '',
+      service_type: d.formulaire_data?.service_type || 'flexible',
+      structure_type: normalizeStructure(d.formulaire_data?.structure_type || ''),
+      nb_personnel: d.formulaire_data?.nb_personnel || 1,
+      lieu_garde: d.formulaire_data?.lieu_garde || 'domicile',
+      age_personne: d.formulaire_data?.age_personne || '',
+      sexe_personne: normalizeSexe(d.formulaire_data?.sexe_personne || ''),
+      mobilite: normalizeMobilite(d.formulaire_data?.mobilite || ''),
+      situation_medicale: d.formulaire_data?.situation_medicale || '',
+      nb_jours: d.formulaire_data?.nb_jours || 1,
+      rooms: d.formulaire_data?.rooms || {
+        cuisine: 0, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 0, chambre: 0,
+        salonMarocain: 0, salonEuropeen: 0, toilettesLavabo: 0, rooftop: 0, escalier: 0
+      },
+      formula: d.formulaire_data?.formula || 'A',
+      size_tier: d.formulaire_data?.size_tier || d.formulaire_data?.sizeTier || '1chambre',
+      conso: d.formulaire_data?.conso || false,
+      linen_sets: d.formulaire_data?.linen_sets || d.formulaire_data?.linenSets || 0
+    });
+    setShowCreateModal(true);
+  };
+
+  const openRenewModal = (d: Demande) => {
+    setIsRenewal(true);
+    setEditingDemande(null);
+    setSelectedService(d.service);
+    setActiveSegment(d.segment);
+
+    const rawPhone = d.client_phone || d.client_detail?.phone || d.formulaire_data?.phone || d.formulaire_data?.telephone || d.formulaire_data?.whatsapp_phone || '';
+    const rawWhatsApp = d.client_whatsapp || d.formulaire_data?.whatsapp_phone || d.client_detail?.whatsapp || d.formulaire_data?.whatsapp || rawPhone;
+
+    const cleanPhone = strip212(rawPhone);
+    const cleanWhatsApp = strip212(rawWhatsApp);
+
+    setDirectPhone(cleanPhone);
+    setWhatsappPhone(cleanWhatsApp);
+    setSyncWhatsApp(!rawWhatsApp || cleanWhatsApp === cleanPhone);
 
     setFormData({
       nom: d.client_name || d.formulaire_data?.nom || d.formulaire_data?.fullName || '',
@@ -573,6 +684,14 @@ export default function DemandesEnAttente() {
 
       const paymentOption = PAYMENT_STATUS_OPTIONS.find(o => o.value === formData.statut_paiement_ui);
 
+      let decodedClientId: number | null = null;
+      if (isRenewal && (location.state as any)?.returnToClient) {
+        const decoded = decodeId((location.state as any).returnToClient);
+        if (decoded) {
+          decodedClientId = decoded;
+        }
+      }
+
       const payload = {
         client_name: clientDisplayName,
         client_phone: finalPhone,
@@ -586,6 +705,8 @@ export default function DemandesEnAttente() {
         statut_paiement: paymentOption?.apiValue || 'non_paye',
         frequency: frequencyValue,
         frequency_label: formData.frequence,
+        ...(isRenewal ? { statut: 'en_cours', cao: false, profils_envoyes: [], documents: [] } : {}),
+        ...(decodedClientId ? { client: decodedClientId } : {}),
         formulaire_data: {
           facturation: {
             ...(editingDemande?.formulaire_data?.facturation || {}),
@@ -665,8 +786,27 @@ export default function DemandesEnAttente() {
         await updateDemande(editingDemande.id, payload);
         addToast('Demande mise à jour !', 'success');
       } else {
-        await createDemande(payload);
-        addToast('Demande créée avec succès !', 'success');
+        const res = await createDemande(payload);
+        const newDemandeId = res.data?.id;
+
+        if (isRenewal && newDemandeId) {
+          try {
+            await confirmerClient(newDemandeId);
+          } catch (confirmErr) {
+            console.error('Error confirming client association automatically:', confirmErr);
+          }
+        }
+
+        if (isRenewal && (location.state as any)?.returnToClient) {
+          addToast('Demande renouvelée avec succès !', 'success');
+          setShowCreateModal(false);
+          setFormSubmitted(false);
+          const returnToClient = (location.state as any).returnToClient;
+          navigate(`/clients/${returnToClient}`);
+          return;
+        } else {
+          addToast('Demande créée avec succès !', 'success');
+        }
       }
 
       setShowCreateModal(false);
@@ -1187,7 +1327,7 @@ export default function DemandesEnAttente() {
         <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="text-xl fw-bold">{editingDemande ? 'Modifier' : 'Nouvelle'} demande : {selectedService}</h2>
+              <h2 className="text-xl fw-bold">{isRenewal ? 'Renouveler' : editingDemande ? 'Modifier' : 'Nouvelle'} demande : {selectedService}</h2>
               <button className="btn-close" onClick={() => setShowCreateModal(false)}><XCircle size={24} /></button>
             </div>
             <div className="modal-body">

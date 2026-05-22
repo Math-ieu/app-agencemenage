@@ -337,7 +337,13 @@ export default function Profils() {
             </thead>
             <tbody>
               {agents.map((agent) => (
-                <tr key={agent.id}>
+                <tr
+                  key={agent.id}
+                  style={{
+                    opacity: agent.is_blacklisted ? 0.5 : 1,
+                    transition: 'opacity 0.2s ease',
+                  }}
+                >
                   <td>
                     {agent.photo ? (
                       <img src={agent.photo} alt="" className="table-avatar-img" />
@@ -383,15 +389,17 @@ export default function Profils() {
                         <User size={14} className="mr-2" />
                         Compte Profil
                       </button>
-                      <button
-                        type="button"
-                        className="table-delete-icon-btn"
-                        title="Supprimer le profil"
-                        aria-label="Supprimer le profil"
-                        onClick={() => handleDeleteAgent(agent)}
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      {!agent.is_blacklisted && (
+                        <button
+                          type="button"
+                          className="table-delete-icon-btn"
+                          title="Supprimer le profil"
+                          aria-label="Supprimer le profil"
+                          onClick={() => handleDeleteAgent(agent)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

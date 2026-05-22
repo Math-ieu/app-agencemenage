@@ -26,6 +26,7 @@ export interface Client {
   demandes_count?: number;
   avis_commercial?: string;
   avis_operationnel?: string;
+  is_blacklisted?: boolean;
 }
 
 export interface Agent {
@@ -75,6 +76,7 @@ export interface Agent {
   created_at: string;
   updated_at: string;
   is_assigned_active?: boolean;
+  is_blacklisted?: boolean;
 }
 
 export interface Demande {

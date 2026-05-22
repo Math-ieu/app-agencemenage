@@ -40,6 +40,7 @@ interface Client {
   latest_demande: LatestDemande | null;
   avis_commercial?: string;
   avis_operationnel?: string;
+  is_blacklisted?: boolean;
 }
 
 const PAYMENT_STATUS_OPTIONS = [
@@ -547,58 +548,76 @@ export default function Clients() {
             </thead>
             <tbody>
               {clients.map((c, index) => (
-                <tr key={c.id} className={getRowClass(c)}>
+                <tr
+                  key={c.id}
+                  className={getRowClass(c)}
+                  style={{
+                    opacity: c.is_blacklisted ? 0.5 : 1,
+                    transition: 'opacity 0.2s ease',
+                  }}
+                >
                   <td>
-                    <div className="dropdown-container">
-                      <button className="actions-cell-btn" onClick={() => toggleDropdown('actions', c.id)}>
-                        <Settings size={14} />
-                        Actions
-                      </button>
-                      {activeDropdown?.type === 'actions' && activeDropdown.id === c.id && (
-                        <div className="dropdown-menu" ref={dropdownRef} style={{ left: 0, right: 'auto', ...(clients.length >= 8 && index >= clients.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
-                          <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
-                            <UserIcon size={16} className="dropdown-item-icon" />
-                            <span>Compte client</span>
-                          </Link>
+                    {c.is_blacklisted ? (
+                      <Link
+                        to={`/clients/${encodeId(c.id)}`}
+                        className="actions-cell-btn py-1.5 px-3 flex items-center justify-center text-xs font-semibold rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+                        style={{ width: 'fit-content' }}
+                      >
+                        <UserIcon size={14} className="mr-1.5" style={{ minWidth: '14px' }} />
+                        <span>Compte client</span>
+                      </Link>
+                    ) : (
+                      <div className="dropdown-container">
+                        <button className="actions-cell-btn" onClick={() => toggleDropdown('actions', c.id)}>
+                          <Settings size={14} />
+                          Actions
+                        </button>
+                        {activeDropdown?.type === 'actions' && activeDropdown.id === c.id && (
+                          <div className="dropdown-menu" ref={dropdownRef} style={{ left: 0, right: 'auto', ...(clients.length >= 8 && index >= clients.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
+                            <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
+                              <UserIcon size={16} className="dropdown-item-icon" />
+                              <span>Compte client</span>
+                            </Link>
 
-                          <div className="dropdown-divider"></div>
-                          <div className="dropdown-item" onClick={() => {
-                            setShowAvisModal({ clientId: c.id, type: 'commercial', avis: '' });
-                            setActiveDropdown(null);
-                          }}>
-                            <MessageSquare size={16} className="dropdown-item-icon" />
-                            <span>Note commerciale</span>
-                          </div>
-                          <div className="dropdown-item" onClick={() => {
-                            setShowAvisModal({ clientId: c.id, type: 'operationnel', avis: '' });
-                            setActiveDropdown(null);
-                          }}>
-                            <MessageSquare size={16} className="dropdown-item-icon" />
-                            <span>Note opérationnelle</span>
-                          </div>
-                          <div className="dropdown-divider"></div>
-                          {(user?.role === 'admin' || user?.role === 'responsable_commercial') && c.latest_demande && (
-                            <div className="dropdown-item" onClick={(e) => {
-                              e.stopPropagation();
-                              setShowAssignmentModal(c.latest_demande!.id);
+                            <div className="dropdown-divider"></div>
+                            <div className="dropdown-item" onClick={() => {
+                              setShowAvisModal({ clientId: c.id, type: 'commercial', avis: '' });
                               setActiveDropdown(null);
                             }}>
-                              <UserPlus size={16} className="dropdown-item-icon" />
-                              <span>Affectation</span>
+                              <MessageSquare size={16} className="dropdown-item-icon" />
+                              <span>Note commerciale</span>
                             </div>
-                          )}
-                          <div className="dropdown-item">
-                            <Slash size={16} className="dropdown-item-icon" />
-                            <span>Geste commercial</span>
+                            <div className="dropdown-item" onClick={() => {
+                              setShowAvisModal({ clientId: c.id, type: 'operationnel', avis: '' });
+                              setActiveDropdown(null);
+                            }}>
+                              <MessageSquare size={16} className="dropdown-item-icon" />
+                              <span>Note opérationnelle</span>
+                            </div>
+                            <div className="dropdown-divider"></div>
+                            {(user?.role === 'admin' || user?.role === 'responsable_commercial') && c.latest_demande && (
+                              <div className="dropdown-item" onClick={(e) => {
+                                e.stopPropagation();
+                                setShowAssignmentModal(c.latest_demande!.id);
+                                setActiveDropdown(null);
+                              }}>
+                                <UserPlus size={16} className="dropdown-item-icon" />
+                                <span>Affectation</span>
+                              </div>
+                            )}
+                            <div className="dropdown-item">
+                              <Slash size={16} className="dropdown-item-icon" />
+                              <span>Geste commercial</span>
+                            </div>
+                            <div className="dropdown-divider"></div>
+                            <div className="dropdown-item dropdown-item-danger" onClick={() => handleDeleteClient(c)}>
+                              <Trash2 size={16} className="dropdown-item-icon" />
+                              <span>Supprimer</span>
+                            </div>
                           </div>
-                          <div className="dropdown-divider"></div>
-                          <div className="dropdown-item dropdown-item-danger" onClick={() => handleDeleteClient(c)}>
-                            <Trash2 size={16} className="dropdown-item-icon" />
-                            <span>Supprimer</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td>{getStatusBadge(c)}</td>
                   <td>{getPaymentStatusBadge(c)}</td>
@@ -632,31 +651,33 @@ export default function Clients() {
                     )}
                   </td>
                   <td>
-                    <div className="table-inline-actions table-inline-actions-right">
-                      <div className="dropdown-container">
-                        <button className="btn-more" onClick={() => toggleDropdown('more', c.id)}>
-                          <MoreVertical size={18} />
-                        </button>
-                        {activeDropdown?.type === 'more' && activeDropdown.id === c.id && (
-                          <div className="dropdown-menu" ref={dropdownRef} style={{ minWidth: '160px', ...(clients.length >= 8 && index >= clients.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
-                            <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
-                              <UserIcon size={16} className="dropdown-item-icon" />
-                              <span>Voir le compte</span>
-                            </Link>
+                    {!c.is_blacklisted && (
+                      <div className="table-inline-actions table-inline-actions-right">
+                        <div className="dropdown-container">
+                          <button className="btn-more" onClick={() => toggleDropdown('more', c.id)}>
+                            <MoreVertical size={18} />
+                          </button>
+                          {activeDropdown?.type === 'more' && activeDropdown.id === c.id && (
+                            <div className="dropdown-menu" ref={dropdownRef} style={{ minWidth: '160px', ...(clients.length >= 8 && index >= clients.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
+                              <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
+                                <UserIcon size={16} className="dropdown-item-icon" />
+                                <span>Voir le compte</span>
+                              </Link>
 
-                          </div>
-                        )}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="table-delete-icon-btn"
+                          title="Supprimer le client"
+                          aria-label="Supprimer le client"
+                          onClick={() => handleDeleteClient(c)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        className="table-delete-icon-btn"
-                        title="Supprimer le client"
-                        aria-label="Supprimer le client"
-                        onClick={() => handleDeleteClient(c)}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
+                    )}
                   </td>
                 </tr>
               ))}

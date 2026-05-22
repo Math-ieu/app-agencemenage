@@ -9,7 +9,7 @@ import {
   ChevronDown, User, Calendar, FileText,
   MessageSquare, History, ArrowLeft, RefreshCw, Slash,
   Eye, Star, Clock, Heart, AlertCircle, FileDown,
-  XCircle, Send, Download
+  XCircle, Send, Download, CheckCircle
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { Client, Demande } from '../types';
@@ -269,6 +269,22 @@ export default function ClientDetails() {
   useEffect(() => { fetchData(); }, [id]);
   const toggle = (s: string) => setOpenSections(p => ({ ...p, [s]: !p[s] }));
 
+  const handleToggleBlacklist = async () => {
+    if (!client) return;
+    const actionText = client.is_blacklisted ? 'retirer de la blacklist' : 'blacklister';
+    if (!window.confirm(`Voulez-vous vraiment ${actionText} ce client ?`)) return;
+
+    try {
+      const nextStatus = !client.is_blacklisted;
+      await updateClient(client.id, { is_blacklisted: nextStatus });
+      addToast(`Client ${nextStatus ? 'blacklisté' : 'retiré de la blacklist'} avec succès`, 'success');
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast(`Erreur lors du changement de statut de la blacklist`, 'error');
+    }
+  };
+
   const handleSaveAvis = async () => {
     const newComm = avisComm.trim();
     const newOp = avisOp.trim();
@@ -456,13 +472,20 @@ export default function ClientDetails() {
             >
               <FileText size={16} color={C.teal} /> Éditer
             </button>
-            <button style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 18px', border: '1px solid #FEB2B2',
-              borderRadius: 8, background: 'white', color: '#E53E3E',
-              fontSize: 14, fontWeight: 600, cursor: 'pointer',
-            }}>
-              <Slash size={16} /> Black lister
+            <button
+              onClick={handleToggleBlacklist}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 18px',
+                border: client?.is_blacklisted ? '1px solid #cbd5e1' : '1px solid #FEB2B2',
+                borderRadius: 8,
+                background: client?.is_blacklisted ? '#f1f5f9' : 'white',
+                color: client?.is_blacklisted ? '#475569' : '#E53E3E',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              {client?.is_blacklisted ? <CheckCircle size={16} color="#10b981" /> : <Slash size={16} />}
+              {client?.is_blacklisted ? 'Déblacklister' : 'Black lister'}
             </button>
           </div>
         </div>
@@ -496,7 +519,7 @@ export default function ClientDetails() {
                 <tbody>
                   {demandes.map(d => (
                     <React.Fragment key={d.id}>
-                      <tr style={{ borderBottom: (d.note_commercial || d.note_operationnel) ? 'none' : '1px solid #f8fafc' }}>
+                      <tr style={{ borderBottom: '1px solid #f8fafc' }}>
                         <Td>{new Date(d.created_at).toLocaleDateString('fr-FR')}</Td>
                         <Td bold color="#1e293b">{d.service}</Td>
                         <Td>
@@ -542,56 +565,57 @@ export default function ClientDetails() {
                         <Td center>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
                             <button 
-                              onClick={async () => {
-                                try {
-                                  addToast('Relance de la demande...', 'info');
-                                  await updateDemande(d.id, { statut: 'en_cours', cao: false });
-                                  addToast('Demande relancée avec succès', 'success');
-                                  fetchData();
-                                } catch (err) {
-                                  addToast('Erreur lors de la relance', 'error');
-                                }
-                              }}
+                              onClick={() => navigate('/demandes', { state: { renewDemandeId: d.id, returnToClient: id } })}
                               style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}
                             >
                               <RefreshCw size={15} color={C.teal} /> Renouveler
                             </button>
                             {d.frequency === 'abonnement' && (
                               <button 
-                                onClick={async () => {
-                                  try {
-                                    addToast('Relance de l\'abonnement...', 'info');
-                                    await updateDemande(d.id, { statut: 'en_cours', cao: false });
-                                    addToast('Abonnement relancé avec succès', 'success');
-                                    fetchData();
-                                  } catch (err) {
-                                    addToast('Erreur lors de la relance', 'error');
-                                  }
-                                }}
+                                onClick={() => navigate('/demandes', { state: { renewDemandeId: d.id, returnToClient: id } })}
                                 style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}
                               >
                                 <RefreshCw size={15} color={C.teal} /> Abonnement
                               </button>
                             )}
-                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><Eye size={17} /></button>
-                            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><FileText size={17} /></button>
+                            {(() => {
+                              const firstDoc = d.documents && d.documents.length > 0 ? d.documents[0] : null;
+                              return (
+                                <>
+                                  <button 
+                                    onClick={() => {
+                                      if (firstDoc && firstDoc.download_url) {
+                                        const fileName = firstDoc.nom || (firstDoc.type_document === 'devis' ? 'Devis PDF' : 'Récapitulatif PNG');
+                                        handlePreview(firstDoc.download_url, firstDoc.type_document, fileName);
+                                      } else {
+                                        addToast("Aucun document disponible pour cette demande", "info");
+                                      }
+                                    }}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: firstDoc ? '#64748b' : '#cbd5e1', opacity: firstDoc ? 1 : 0.4 }}
+                                    title={firstDoc ? "Aperçu du document" : "Aucun document disponible"}
+                                  >
+                                    <Eye size={17} />
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      if (firstDoc && firstDoc.download_url) {
+                                        const fileName = firstDoc.nom || (firstDoc.type_document === 'devis' ? 'Devis PDF' : 'Récapitulatif PNG');
+                                        handleDownload(firstDoc.download_url, fileName);
+                                      } else {
+                                        addToast("Aucun document disponible pour cette demande", "info");
+                                      }
+                                    }}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: firstDoc ? '#64748b' : '#cbd5e1', opacity: firstDoc ? 1 : 0.4 }}
+                                    title={firstDoc ? "Télécharger le document" : "Aucun document disponible"}
+                                  >
+                                    <FileText size={17} />
+                                  </button>
+                                </>
+                              );
+                            })()}
                           </div>
                         </Td>
                       </tr>
-                      {(d.note_commercial || d.note_operationnel) && (
-                        <tr style={{ borderBottom: '1px solid #f8fafc', backgroundColor: '#fdfdfd' }}>
-                          <td colSpan={6} style={{ padding: '8px 24px 16px', fontSize: 13, color: '#475569' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#f1f5f9', padding: 12, borderRadius: 8 }}>
-                              {d.note_commercial && (
-                                <div><strong style={{ color: C.orange, marginRight: 6 }}>[Comm.]</strong> {d.note_commercial}</div>
-                              )}
-                              {d.note_operationnel && (
-                                <div><strong style={{ color: C.tan, marginRight: 6 }}>[Op.]</strong> {d.note_operationnel}</div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </React.Fragment>
                   ))}
                 </tbody>
@@ -1006,6 +1030,7 @@ export default function ClientDetails() {
           initialClient={client}
         />
       )}
+
     </div>
   );
 }
