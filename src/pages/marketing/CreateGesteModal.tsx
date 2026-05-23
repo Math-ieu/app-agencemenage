@@ -3,7 +3,7 @@
  * Modal de création d'un geste commercial conforme au modèle maquette.
  */
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { X, Check, Search, Calendar } from 'lucide-react';
+import { X, Check, Search } from 'lucide-react';
 import { STATUTS_GESTE, CANAUX_DIFFUSION } from '@/lib/marketing-constants';
 import type { Demande } from '@/types';
 
