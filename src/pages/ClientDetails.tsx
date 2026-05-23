@@ -37,6 +37,35 @@ const C = {
   lime: '#BADF00',
 };
 
+const SATISFACTION_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+  'Très satisfait': { label: 'Très satisfait', bg: '#dcfce7', text: '#15803d', dot: '#22c55e' },
+  'Satisfait':      { label: 'Satisfait',      bg: '#dbeafe', text: '#1d4ed8', dot: '#3b82f6' },
+  'Moyen':          { label: 'Moyen',           bg: '#fef9c3', text: '#a16207', dot: '#eab308' },
+  'Pas satisfait':  { label: 'Pas satisfait',   bg: '#fee2e2', text: '#b91c1c', dot: '#ef4444' },
+};
+
+const getSatisfactionLabel = (noteAgence: number | null) => {
+  const nA = noteAgence || 0;
+  if (nA >= 4.5) return 'Très satisfait';
+  if (nA >= 3.5) return 'Satisfait';
+  if (nA >= 2.5) return 'Moyen';
+  return 'Pas satisfait';
+};
+
+const renderStars = (rating: number) => (
+  <div style={{ display: 'flex', gap: 2 }}>
+    {[...Array(5)].map((_, i) => (
+      <Star
+        key={i}
+        size={14}
+        fill={i < rating ? '#ECC94B' : 'none'}
+        stroke={i < rating ? '#ECC94B' : '#d1d5db'}
+        strokeWidth={1.5}
+      />
+    ))}
+  </div>
+);
+
 /* ─── Accordion Section ─── */
 interface AccordionProps {
   title: string;
@@ -197,6 +226,7 @@ export default function ClientDetails() {
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string; type: string; name: string } | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDemandDetails, setShowDemandDetails] = useState<Demande | null>(null);
+  const [selectedFeedback, setSelectedFeedback] = useState<any | null>(null);
   const addToast = useToastStore(state => state.addToast);
 
   const renderPaymentStatus = (demande: any) => {
@@ -866,23 +896,52 @@ export default function ClientDetails() {
                 <Th>Service</Th><Th>Profil</Th><Th>Date</Th><Th>Satisfaction</Th><Th>Note agence</Th><Th>Statut</Th><Th center>Action</Th>
               </tr></thead>
               <tbody>
-                {feedbacks.map(f => (
-                  <tr key={f.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <Td bold color="#1e293b">{f.mission?.demande?.service || '—'}</Td>
-                    <Td bold color={C.teal}>{f.agent_name || f.mission?.agent?.full_name || '—'}</Td>
-                    <Td>{new Date(f.date).toLocaleDateString('fr-FR')}</Td>
-                    <Td><Badge bg="#F0FFF4" color="#2F855A">Très satisfait</Badge></Td>
-                    <Td>
-                      <div style={{ display: 'flex', gap: 2, color: '#ECC94B' }}>
-                        {[1, 2, 3, 4, 5].map(s => <Star key={s} size={14} fill={s <= (f.note || 4) ? 'currentColor' : 'none'} />)}
-                      </div>
-                    </Td>
-                    <Td><Badge bg="#F0FFF4" color="#2F855A">Positif</Badge></Td>
-                    <Td center>
-                      <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><Eye size={17} /></button>
-                    </Td>
-                  </tr>
-                ))}
+                {feedbacks.map(f => {
+                  const satisfactionLabel = getSatisfactionLabel(f.note_agence);
+                  const isPositive = (f.note_agence || 0) >= 3.5;
+                  
+                  return (
+                    <tr key={f.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                      <Td bold color="#1e293b">{f.service || f.mission?.demande?.service || '—'}</Td>
+                      <Td bold color={C.teal}>{f.agent_name || f.mission?.agent?.full_name || '—'}</Td>
+                      <Td>{new Date(f.date).toLocaleDateString('fr-FR')}</Td>
+                      <Td>
+                        <Badge 
+                          bg={SATISFACTION_CONFIG[satisfactionLabel]?.bg} 
+                          color={SATISFACTION_CONFIG[satisfactionLabel]?.text}
+                        >
+                          {satisfactionLabel}
+                        </Badge>
+                      </Td>
+                      <Td>
+                        <div style={{ display: 'flex', gap: 2, color: '#ECC94B' }}>
+                          {[1, 2, 3, 4, 5].map(s => (
+                            <Star 
+                              key={s} 
+                              size={14} 
+                              fill={s <= (f.note_agence || f.note || 4) ? '#ECC94B' : 'none'} 
+                              stroke={s <= (f.note_agence || f.note || 4) ? '#ECC94B' : '#d1d5db'}
+                              strokeWidth={1.5}
+                            />
+                          ))}
+                        </div>
+                      </Td>
+                      <Td>
+                        <Badge bg={isPositive ? '#F0FFF4' : '#FFF5F5'} color={isPositive ? '#2F855A' : '#C53030'}>
+                          {isPositive ? 'Positif' : 'Négatif'}
+                        </Badge>
+                      </Td>
+                      <Td center>
+                        <button 
+                          onClick={() => setSelectedFeedback(f)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                        >
+                          <Eye size={17} />
+                        </button>
+                      </Td>
+                    </tr>
+                  );
+                })}
                 {feedbacks.length === 0 && <EmptyState text="Aucun feedback trouvé" colSpan={7} />}
               </tbody>
             </table>
@@ -1119,6 +1178,57 @@ export default function ClientDetails() {
               >
                 Fermer
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Detail Modal */}
+      {selectedFeedback && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }} onClick={() => setSelectedFeedback(null)}>
+          <div style={{
+            background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 500, position: 'relative',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setSelectedFeedback(null)} style={{
+              position: 'absolute', top: 20, right: 20,
+              background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
+              width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: '#64748b', transition: 'all 0.15s'
+            }}>
+              <X size={18} />
+            </button>
+            
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 24px 0', paddingRight: 40 }}>
+              Détail feedback — {selectedFeedback.client_name || client?.display_name || client?.full_name || 'dainne'}
+            </h2>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px', marginBottom: 24, fontSize: 14 }}>
+              <div><span style={{ color: '#64748b' }}>Satisfaction :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{getSatisfactionLabel(selectedFeedback.note_agence)}</span></div>
+              <div><span style={{ color: '#64748b' }}>Qualité ménage :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{getSatisfactionLabel(selectedFeedback.note_intervenant)}</span></div>
+              
+              <div><span style={{ color: '#64748b' }}>Professionnel :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedFeedback.note_intervenant >= 4 ? 'Bien' : selectedFeedback.note_intervenant === 3 ? 'Moyen' : 'Mauvais'}</span></div>
+              <div><span style={{ color: '#64748b' }}>Recommande profil :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedFeedback.note_intervenant >= 4 ? 'Oui' : 'Non'}</span></div>
+              
+              <div><span style={{ color: '#64748b' }}>Recommande agence :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedFeedback.note_agence >= 4 ? 'Oui' : 'Non'}</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ color: '#64748b' }}>Note agence :</span> {renderStars(selectedFeedback.note_agence)}</div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ color: '#64748b' }}>Note profil :</span> {renderStars(selectedFeedback.note_intervenant)}</div>
+            </div>
+
+            <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+              <div style={{ color: '#64748b', fontSize: 13, marginBottom: 8 }}>Commentaire</div>
+              <div style={{ color: '#0f172a', fontSize: 14, lineHeight: 1.5, wordBreak: 'break-word' }}>
+                {selectedFeedback.commentaire || 'Aucun commentaire fourni.'}
+              </div>
+            </div>
+
+            <div style={{ color: '#64748b', fontSize: 13 }}>
+              Soumis le {selectedFeedback.date ? new Date(selectedFeedback.date).toLocaleDateString('fr-FR') : '—'}
             </div>
           </div>
         </div>
