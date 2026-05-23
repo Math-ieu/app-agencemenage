@@ -3,6 +3,7 @@ import { Megaphone, Ticket, TrendingUp, Plus, Trash2, Pencil, Send, Copy, Archiv
 import { TYPES_GESTE, SEGMENTS_CLIENT } from '@/lib/marketing-constants';
 import { getDemandes, getPromoCodes, createPromoCode, deletePromoCode, updatePromoCode, getCommercialGestures, createCommercialGesture, deleteCommercialGesture, updateCommercialGesture, getCampaigns, createCampaign, deleteCampaign, updateCampaign } from '@/api/client';
 import { useAuthStore } from '../store/auth';
+import { useToastStore } from '../store/toast';
 import type { Demande } from '@/types';
 import { CreateOffreModal, type PromoFormState } from './marketing/CreateOffreModal';
 import { CreateGesteModal, type GesteFormState } from './marketing/CreateGesteModal';
@@ -113,6 +114,7 @@ const statusLabel = (status: string): string => {
 
 
 export default function Marketing() {
+  const { addToast } = useToastStore();
   const [activeTab, setActiveTab] = useState<MarketingTab>('codes');
 
   const [promoCodes, setPromoCodes] = useState<PromoCodeItem[]>([]);
@@ -349,9 +351,21 @@ export default function Marketing() {
       canal_diffusion: gestureForm.canal_diffusion,
     };
 
+    const redStr = gestureForm.reduction_type === 'pourcentage'
+      ? `-${gestureForm.reduction_valeur}%`
+      : `-${gestureForm.reduction_valeur} dh`;
+    const successMsg = gestureForm.type_geste === 'intervention_gratuite'
+      ? `«Intervention gratuite appliquée sur cette demande.» source geste commercial`
+      : `«${redStr} appliqué sur cette demande.» source geste commercial`;
+
     if (editingGesteId) {
       updateCommercialGesture(editingGesteId, payload).then((res) => {
         setGestures((prev) => prev.map((x) => x.id === editingGesteId ? res.data : x));
+        addToast("Geste commercial modifié avec succès", "success");
+        getDemandes().then(dRes => {
+          setDemandes(dRes.data.results || dRes.data);
+        }).catch(console.error);
+
         setGestureForm({
           demande_id: '', client_nom: '', client_telephone: '', ville: '', quartier: '',
           fidelite: 'Nouveau client', frequence: 'Une seule fois',
@@ -367,6 +381,11 @@ export default function Marketing() {
     } else {
       createCommercialGesture(payload).then((res) => {
         setGestures((prev) => [res.data, ...prev]);
+        addToast(successMsg, 'success');
+        getDemandes().then(dRes => {
+          setDemandes(dRes.data.results || dRes.data);
+        }).catch(console.error);
+
         setGestureForm({
           demande_id: '', client_nom: '', client_telephone: '', ville: '', quartier: '',
           fidelite: 'Nouveau client', frequence: 'Une seule fois',

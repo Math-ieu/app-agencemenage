@@ -256,6 +256,7 @@ const getPaymentUiLabel = (uiCode: string | undefined): string => {
     paiement_en_attente: 'Paiement en attente',
     non_confirme: 'Non confirmé',
     facturation_annulee: 'Facturation annulée',
+    intervention_gratuite: 'Intervention gratuite',
   };
   return labels[uiCode] || uiCode.replace(/_/g, ' ');
 };
@@ -539,7 +540,8 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   const isAnnule = missionStatus === 'annulee' ||
     (demande as any)?.statut === 'annule' ||
     facturationData.facturation_annulee === true ||
-    rawStatutPaiementUi === 'facturation_annulee';
+    rawStatutPaiementUi === 'facturation_annulee' ||
+    rawStatutPaiementUi === 'intervention_gratuite';
 
   const statut: FacturationRow['statut'] =
     isAnnule
@@ -697,7 +699,8 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
 
   const isAnnule = demande.statut === 'annule' ||
     facturationData.facturation_annulee === true ||
-    rawStatutPaiementUi === 'facturation_annulee';
+    rawStatutPaiementUi === 'facturation_annulee' ||
+    rawStatutPaiementUi === 'intervention_gratuite';
 
   const statut: FacturationRow['statut'] =
     isAnnule ? 'Facturation annulée' :
