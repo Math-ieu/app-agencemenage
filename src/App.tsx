@@ -16,7 +16,8 @@ import VueGlobale from './pages/finance/VueGlobale';
 import LaCaisse from './pages/finance/LaCaisse';
 import Qualite from './pages/Qualite';
 import Marketing from './pages/Marketing';
-import Parametres from './pages/Parametres';
+import ParametresProfil from './pages/parametres/Profil';
+import ParametresUtilisateurs from './pages/parametres/Utilisateurs';
 import ClientDetails from './pages/ClientDetails.tsx';
 import ProfilDetails from './pages/ProfilDetails.tsx';
 import Blog from './pages/seo/Blog';
@@ -61,7 +62,10 @@ export default function App() {
           <Route path="qualite" element={<Qualite />} />
           <Route path="marketing" element={<Marketing />} />
           <Route path="devis" element={<MoteurDevis />} />
-          <Route path="parametres" element={<Parametres />} />
+          <Route path="parametres">
+            <Route path="profil" element={<ParametresProfil />} />
+            <Route path="utilisateurs" element={<ParametresUtilisateurs />} />
+          </Route>
 
           {/* SEO / Blog Routes */}
           <Route path="seo">

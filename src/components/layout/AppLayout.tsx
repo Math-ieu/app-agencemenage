@@ -33,7 +33,15 @@ const navItems = [
       { to: '/seo/blog', label: 'Blog' }
     ]
   },
-  { to: '/parametres', icon: Settings, label: 'Paramètres' },
+  {
+    id: 'parametres',
+    icon: Settings,
+    label: 'Paramètres',
+    children: [
+      { to: '/parametres/profil', label: 'Mon Profil' },
+      { to: '/parametres/utilisateurs', label: 'Utilisateurs & Rôles' }
+    ]
+  },
 ];
 
 export default function AppLayout() {
@@ -43,7 +51,7 @@ export default function AppLayout() {
   const { pendingCount } = useNotificationStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const [expandedItems, setExpandedItems] = useState<string[]>(['seo', 'finance']);
+  const [expandedItems, setExpandedItems] = useState<string[]>(['seo', 'finance', 'parametres']);
 
   const toggleExpand = (id: string) => {
     setExpandedItems(prev => 
