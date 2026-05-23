@@ -334,7 +334,10 @@ export function CreateGesteModal({ demandes, form, setForm, onClose, onSubmit }:
           </label>
 
           {/* 5. Tarification */}
-          <fieldset className="mk-fieldset">
+          <fieldset
+            className="mk-fieldset"
+            style={isAnnulation ? { opacity: 0.5, pointerEvents: 'none', transition: 'all 0.2s' } : { transition: 'all 0.2s' }}
+          >
             <legend>Tarification</legend>
             
             <label className="mk-field">
