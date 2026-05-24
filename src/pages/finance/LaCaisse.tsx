@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X, Slash } from 'lucide-react';
 import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement, getMissions, getDemandesHistorique } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
+import { checkPermission } from '../../utils/permissions';
 import './LaCaisse.css';
 
 interface CashRow {
@@ -206,7 +207,7 @@ export default function LaCaisse() {
 
         const paiement = ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatutPaiementUi) ? 'paye' : ['paiement_partiel', 'paiement_en_attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi) ? 'partiellement_paye' : 'non_paye';
 
-        if (statut === 'Facturation annulée' || rawStatutPaiementUi === 'facturation_annulee') {
+        if (statut === 'Facturation annulée' || rawStatutPaiementUi === 'facturation_annulee' || statut === 'Intervention gratuite' || rawStatutPaiementUi === 'intervention_gratuite') {
           if (profilSeraPaye) totalCommission -= montantProfilAnnulation;
           return;
         }
@@ -243,13 +244,13 @@ export default function LaCaisse() {
         const montantPaye = baseMontantPaye * ratio;
 
         const montantProfilDoitAgence = Number(fact.montant_profil_doit_agence || 0) * ratio;
-        const montantProfilAnnulation = Number(dem?.montant_profil_annulation || m.montant_profil_annulation || fact.montant_profil_annulation || 0) * ratio;
+        const montantProfilAnnulation = (Number(dem?.montant_profil_annulation || m.montant_profil_annulation || fact.montant_profil_annulation || 0) * ratio);
 
         const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
         const partProfilVersee = encaissePar === 'Agence' ? Boolean(m.part_profil_versee) : Boolean(m.part_agence_reversee);
         const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
         const dateStr = dem?.date_intervention ? toDisplayDate(dem.date_intervention) : '';
-        const statut = m.statut === 'annulee' ? 'Facturation annulée' : 'Confirmée';
+        const statut = rawStatus === 'intervention_gratuite' ? 'Intervention gratuite' : (m.statut === 'annulee' ? 'Facturation annulée' : 'Confirmée');
         const profilSeraPaye = dem?.profil_sera_paye !== undefined ? Boolean(dem.profil_sera_paye) : Boolean(m.profil_sera_paye !== undefined ? m.profil_sera_paye : fact.profil_sera_paye);
 
         processRow(rawStatus, partAgence, montantPaye, montantProfilDoitAgence, reglementInterne, dateStr, statut, profilSeraPaye, montantProfilAnnulation);
@@ -272,7 +273,7 @@ export default function LaCaisse() {
         const partProfilVersee = encaissePar === 'Agence' ? Boolean(fact.part_profil_versee) : Boolean(fact.part_agence_reversee);
         const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
         const dateStr = d?.date_intervention ? toDisplayDate(d.date_intervention) : '';
-        const statut = d.statut === 'annule' ? 'Facturation annulée' : 'Confirmée';
+        const statut = rawStatus === 'intervention_gratuite' ? 'Intervention gratuite' : (d.statut === 'annule' ? 'Facturation annulée' : 'Confirmée');
         const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(fact.profil_sera_paye);
         const montantProfilAnnulation = Number(d.montant_profil_annulation || fact.montant_profil_annulation || 0);
         processRow(rawStatus, partAgence, montantPaye, montantProfilDoitAgence, reglementInterne, dateStr, statut, profilSeraPaye, montantProfilAnnulation);
@@ -386,6 +387,16 @@ export default function LaCaisse() {
       setExportingCsv(false);
     }
   };
+
+  const perm = checkPermission(user, 'financier');
+  if (!perm.allowed) {
+    return (
+      <div style={{ padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: '#ef4444', fontWeight: 600, fontSize: 16 }}>
+        <Slash size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
+        {perm.message || "Vous n'avez pas l'autorisation d'accéder à la gestion financière."}
+      </div>
+    );
+  }
 
   return (
     <div className="page lc-page">

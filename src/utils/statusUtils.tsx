@@ -109,6 +109,9 @@ export const getPaymentStatusInfo = (statutUi: string | undefined, legacyStatut?
   if (s === 'facturation_annulee') {
     return { label: 'Facturation annulée', badgeClass: 'badge-red' };
   }
+  if (s === 'intervention_gratuite') {
+    return { label: 'Intervention gratuite', badgeClass: 'badge-green' };
+  }
   if (s === 'non_confirme' || s === 'non_paye' || s === 'non payé') {
     return { label: 'Non confirmé', badgeClass: 'badge-gray' };
   }

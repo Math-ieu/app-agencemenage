@@ -4,6 +4,7 @@ import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, cr
 import { decodeId } from '../utils/obfuscation';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
+import { checkPermission } from '../utils/permissions';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
 import {
   RefreshCw, Search, XCircle,
@@ -37,7 +38,8 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
-  { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Facturation annulée' },
+  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Facturation annulée' },
+  { value: 'intervention_gratuite', apiValue: 'intervention_gratuite', label: 'Intervention gratuite' },
 ];
 
 const strip212 = (p: string) => {
@@ -253,6 +255,11 @@ export default function DemandesEnAttente() {
   };
 
   const handleAffecter = async (demandeId: number, commercialId: number) => {
+    const perm = checkPermission(user, 'affecter_commercial');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     try {
       await affecterDemande(demandeId, commercialId);
       addToast('Demande affectée avec succès', 'success');
@@ -446,6 +453,19 @@ export default function DemandesEnAttente() {
   };
 
   const handleAction = async (id: number, action: 'valider' | 'nrp' | 'annuler') => {
+    if (action === 'valider') {
+      const perm = checkPermission(user, 'valider_demande');
+      if (!perm.allowed) {
+        addToast(perm.message || 'Action non autorisée', 'error');
+        return;
+      }
+    } else if (action === 'annuler') {
+      const perm = checkPermission(user, 'annuler_demande');
+      if (!perm.allowed) {
+        addToast(perm.message || 'Action non autorisée', 'error');
+        return;
+      }
+    }
     try {
       if (action === 'valider') {
         const d = demandes.find(x => x.id === id);
@@ -646,6 +666,15 @@ export default function DemandesEnAttente() {
   };
 
   const handleCreateDemande = async () => {
+    const perm = checkPermission(
+      user, 
+      editingDemande ? 'edit_demande' : 'create_demande',
+      editingDemande ? { targetOwnerId: editingDemande.assigned_to_id } : undefined
+    );
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     setFormSubmitted(true);
     const form = document.getElementById('create-request-form') as HTMLFormElement;
     if (!form?.checkValidity()) {
@@ -1662,11 +1691,33 @@ export default function DemandesEnAttente() {
                     </div>
                     <div className="form-group">
                       <label className="label-teal">Statut de paiement</label>
-                      <select className="ws-select" value={formData.statut_paiement_ui} onChange={e => setFormData({ ...formData, statut_paiement_ui: e.target.value })}>
-                        {PAYMENT_STATUS_OPTIONS.map(o => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+                      {(() => {
+                        const currentVal = formData.statut_paiement_ui || 'non_confirme';
+                        const isFree = currentVal === 'intervention_gratuite';
+                        const options = PAYMENT_STATUS_OPTIONS.filter(o => {
+                          if (o.value === 'intervention_gratuite') return isFree;
+                          return true;
+                        });
+                        return (
+                          <select 
+                            className="ws-select" 
+                            value={currentVal} 
+                            disabled={isFree} 
+                            onChange={e => {
+                              const v = e.target.value;
+                              const updates: any = { ...formData, statut_paiement_ui: v };
+                              if (v === 'facturation_annulee' || v === 'intervention_gratuite') {
+                                updates.part_agence = 0;
+                              }
+                              setFormData(updates);
+                            }}
+                          >
+                            {options.map(o => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

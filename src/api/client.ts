@@ -250,6 +250,15 @@ export const deleteFeedback = (id: number) =>
 export const getUsers = (params?: Record<string, string | number>) =>
   apiClient.get('/api/users/', { params });
 
+export const createUser = (data: any) =>
+  apiClient.post('/api/users/', data);
+
+export const updateUser = (id: string | number, data: any) =>
+  apiClient.patch(`/api/users/${id}/`, data);
+
+export const deleteUser = (id: string | number) =>
+  apiClient.delete(`/api/users/${id}/`);
+
 // ─── Documents ───────────────────────────────────────────────────────────────
 export const uploadDocument = (demandeId: number, file: File | Blob, type: string, name: string) => {
   const formData = new FormData();

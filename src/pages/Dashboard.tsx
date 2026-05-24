@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
-  CheckCircle, UserCheck, MessageSquare, AlertTriangle,
+  CheckCircle, UserCheck, MessageSquare, AlertTriangle, Gift,
   Check, ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle, Calendar, Trash2, Plus, Pencil
 } from 'lucide-react';
 
@@ -54,11 +54,14 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
-  { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Facturation annulée' },
+  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Facturation annulée' },
+  { value: 'intervention_gratuite', apiValue: 'intervention_gratuite', label: 'Intervention gratuite' },
 ];
 
 const getPaymentUiValue = (statutPaiement: string, facturationAnnulee: boolean, fallback?: string): string => {
   if (fallback && PAYMENT_STATUS_OPTIONS.some((option) => option.value === fallback)) return fallback;
+  if (statutPaiement === 'intervention_gratuite') return 'intervention_gratuite';
+  if (statutPaiement === 'facturation_annulee') return 'facturation_annulee';
   if (facturationAnnulee) return 'facturation_annulee';
   if (statutPaiement === 'integral') return 'paye';
   if (statutPaiement === 'acompte') return 'paiement_en_attente';
@@ -185,7 +188,7 @@ export default function Dashboard() {
   const [showCAOModal, setShowCAOModal] = useState<Demande | null>(null);
   const [showAnnulationModal, setShowAnnulationModal] = useState<{ demandeId: number } | null>(null);
   const [annulationReason, setAnnulationReason] = useState('');
-  const [showFacturationAnnuleeModal, setShowFacturationAnnuleeModal] = useState<{ demandeId: number } | null>(null);
+  const [showFacturationAnnuleeModal, setShowFacturationAnnuleeModal] = useState<{ demandeId: number; type: 'facturation_annulee' | 'intervention_gratuite' } | null>(null);
   const [facturationAnnuleeReason, setFacturationAnnuleeReason] = useState('');
   const [facturationAnnuleeProfilPaye, setFacturationAnnuleeProfilPaye] = useState(false);
   const [facturationAnnuleeAmount, setFacturationAnnuleeAmount] = useState<number | ''>('');
@@ -427,7 +430,7 @@ export default function Dashboard() {
     const label = option ? option.label : (d.statut_paiement_label || d.statut_paiement || 'Non payé');
     
     let badgeClass = 'badge-red';
-    if (statutUi === 'paye' || statutUi === 'integral') badgeClass = 'badge-green';
+    if (statutUi === 'paye' || statutUi === 'integral' || statutUi === 'intervention_gratuite') badgeClass = 'badge-green';
     else if (['agence_payee_client', 'profil_paye_client', 'paiement_partiel', 'paiement_en_attente'].includes(statutUi)) badgeClass = 'badge-orange';
     else if (statutUi === 'facturation_annulee') badgeClass = 'badge-red';
     
@@ -588,24 +591,35 @@ export default function Dashboard() {
     }
     
     try {
-      const montantHT = toNumber(editFormData.montant_ht ?? editFormData.prix);
-      const tvaActive = Boolean(editFormData.tva_active);
-      const montantTTC = roundMoney(tvaActive ? montantHT * 1.2 : montantHT);
-      const montantVerse = toNumber(editFormData.montant_verse);
-      const partAgence = toNumber(editFormData.part_agence);
+      const isFreeOrCancelled = editFormData.statut_paiement_ui === 'intervention_gratuite' || editFormData.statut_paiement_ui === 'facturation_annulee' || Boolean(editFormData.facturation_annulee);
+      const montantHT = isFreeOrCancelled ? 0 : toNumber(editFormData.montant_ht ?? editFormData.prix);
+      const tvaActive = isFreeOrCancelled ? false : Boolean(editFormData.tva_active);
+      const montantTTC = isFreeOrCancelled ? 0 : roundMoney(tvaActive ? montantHT * 1.2 : montantHT);
+      const montantVerse = isFreeOrCancelled ? 0 : toNumber(editFormData.montant_verse);
+      const partAgence = isFreeOrCancelled ? 0 : toNumber(editFormData.part_agence);
 
       const normalizedFrequence = (editFormData.frequence || '').toString().toLowerCase();
       const frequency = normalizedFrequence
         ? (normalizedFrequence === 'une fois' ? 'oneshot' : 'abonnement')
         : selectedDemande.frequency;
 
-      const partsRepartition = asArray<PartRepartitionItem>(editFormData.parts_repartition, [])
+      let partsRepartition = asArray<PartRepartitionItem>(editFormData.parts_repartition, [])
         .map((item) => ({
           profile_id: item.profile_id,
           amount: toNumber(item.amount),
           is_delegate: Boolean(item.is_delegate),
         }))
         .filter((item) => item.profile_id !== '');
+
+      if (isFreeOrCancelled) {
+        const amountToDistribute = editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0;
+        const count = partsRepartition.length || 1;
+        const amountPerProfile = roundMoney(amountToDistribute / count);
+        partsRepartition = partsRepartition.map((p, i) => ({
+          ...p,
+          amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
+        }));
+      }
 
       const updateData: any = {
         service: editFormData.service,
@@ -695,7 +709,7 @@ export default function Dashboard() {
           montant_ttc: montantTTC,
           montant_verse: montantVerse,
           montant_profil_doit: toNumber(editFormData.montant_profil_doit),
-          facturation_annulee: finalStatutPaiementUi === 'facturation_annulee',
+          facturation_annulee: finalStatutPaiementUi === 'facturation_annulee' || finalStatutPaiementUi === 'intervention_gratuite',
           statut_paiement_ui: finalStatutPaiementUi,
           mode_paiement: editFormData.mode_paiement || '',
           encaisse_par: editFormData.encaisse_par || '',
@@ -703,9 +717,9 @@ export default function Dashboard() {
           parts_repartition: partsRepartition,
           annulation_raison: editFormData.annulation_raison || '',
           profil_sera_paye: Boolean(editFormData.profil_sera_paye),
-          montant_profil_annulation: toNumber(editFormData.montant_profil_annulation),
-          montant_agence_doit_profil: toNumber(editFormData.montant_agence_doit_profil),
-          montant_profil_doit_agence: toNumber(editFormData.montant_profil_doit_agence),
+          montant_profil_annulation: editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0,
+          montant_agence_doit_profil: editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0,
+          montant_profil_doit_agence: isFreeOrCancelled ? 0 : toNumber(editFormData.montant_profil_doit_agence),
           ca_initial: toNumber(editFormData.ca_initial),
         },
         part_agence: partAgence,
@@ -838,7 +852,9 @@ export default function Dashboard() {
       montant_verse: toNumber(facturationData.montant_verse),
       montant_profil_doit: toNumber(facturationData.montant_profil_doit),
       facturation_annulee: Boolean(facturationData.facturation_annulee),
-      part_agence: toNumber(facturationData.part_agence || formData.part_agence),
+      part_agence: (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
+        ? 0
+        : toNumber(facturationData.part_agence || formData.part_agence),
       parts_repartition: savedParts,
       mode_paiement: facturationData.mode_paiement || d.mode_paiement || '',
       statut_paiement: d.statut_paiement,
@@ -1410,10 +1426,19 @@ export default function Dashboard() {
                             <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
                               setFacturationAnnuleeReason('');
                               setFacturationAnnuleeProfilPaye(false);
-                              setShowFacturationAnnuleeModal({ demandeId: d.id });
+                              setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
                               setActiveMoreMenu(null);
                             }}>
                               <XCircle size={16} /> Facturation annulée
+                            </button>
+
+                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                              setFacturationAnnuleeReason('');
+                              setFacturationAnnuleeProfilPaye(false);
+                              setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'intervention_gratuite' });
+                              setActiveMoreMenu(null);
+                            }}>
+                              <Gift size={16} /> Intervention gratuite
                             </button>
 
                             <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
@@ -1564,10 +1589,19 @@ export default function Dashboard() {
                             <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
                               setFacturationAnnuleeReason('');
                               setFacturationAnnuleeProfilPaye(false);
-                              setShowFacturationAnnuleeModal({ demandeId: d.id });
+                              setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
                               setActiveMoreMenu(null);
                             }}>
                               <XCircle size={16} /> Facturation annulée
+                            </button>
+
+                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                              setFacturationAnnuleeReason('');
+                              setFacturationAnnuleeProfilPaye(false);
+                              setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'intervention_gratuite' });
+                              setActiveMoreMenu(null);
+                            }}>
+                              <Gift size={16} /> Intervention gratuite
                             </button>
 
                             <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
@@ -2186,31 +2220,43 @@ export default function Dashboard() {
                           </div>
                           <div className="form-group">
                             <label>Statut de paiement</label>
-                            <select value={editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee))} onChange={e => {
-                              const v = e.target.value;
-                              const updates: any = { ...editFormData, statut_paiement_ui: v, facturation_annulee: v === 'facturation_annulee' };
-                              // Auto-set encaisse_par based on payment status
-                              if (v === 'agence_payee_client' || v === 'paye') updates.encaisse_par = 'agence';
-                              else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
-                              
-                              if (v === 'facturation_annulee') {
-                                const totalProfilPart = editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0;
-                                updates.montant_ht = totalProfilPart > 0 ? -totalProfilPart : 0;
-                                // Auto-split parts
-                                const count = partsRepartition.length || 1;
-                                const amountPerProfile = roundMoney(totalProfilPart / count);
-                                updates.parts_repartition = partsRepartition.map((p, i) => ({
-                                  ...p,
-                                  amount: i === count - 1 ? roundMoney(totalProfilPart - (amountPerProfile * (count - 1))) : amountPerProfile
-                                }));
-                              } else {
-                                updates.montant_ht = editFormData.ca_initial;
-                              }
-                              
-                              setEditFormData(updates);
-                            }} className="edit-input">
-                              {PAYMENT_STATUS_OPTIONS.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
-                            </select>
+                            {(() => {
+                              const currentPaymentStatutUi = editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee));
+                              const isInterventionGratuiteActive = currentPaymentStatutUi === 'intervention_gratuite';
+                              const optionsToRender = PAYMENT_STATUS_OPTIONS.filter(o => {
+                                if (o.value === 'intervention_gratuite') {
+                                  return isInterventionGratuiteActive;
+                                }
+                                return true;
+                              });
+                              return (
+                                <select 
+                                  value={currentPaymentStatutUi} 
+                                  disabled={isInterventionGratuiteActive}
+                                  onChange={e => {
+                                    const v = e.target.value;
+                                    const updates: any = { ...editFormData, statut_paiement_ui: v, facturation_annulee: v === 'facturation_annulee' || v === 'intervention_gratuite' };
+                                    // Auto-set encaisse_par based on payment status
+                                    if (v === 'agence_payee_client' || v === 'paye') updates.encaisse_par = 'agence';
+                                    else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
+                                    
+                                    if (v === 'facturation_annulee' || v === 'intervention_gratuite') {
+                                      updates.montant_ht = 0;
+                                      updates.tva_active = false;
+                                      updates.profil_sera_paye = true;
+                                      updates.part_agence = 0;
+                                    } else {
+                                      updates.montant_ht = editFormData.ca_initial;
+                                    }
+                                    
+                                    setEditFormData(updates);
+                                  }} 
+                                  className="edit-input"
+                                >
+                                  {optionsToRender.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
+                                </select>
+                              );
+                            })()}
                           </div>
                           <div className="form-group">
                             <label>Montant versé (MAD)</label>
@@ -2281,22 +2327,18 @@ export default function Dashboard() {
                           );
                         })()}
 
-                        {editFormData.statut_paiement_ui !== 'facturation_annulee' && (
-                          <div style={{ marginTop: '16px' }}>
+                        {editFormData.statut_paiement_ui !== 'facturation_annulee' && editFormData.statut_paiement_ui !== 'intervention_gratuite' && (
+                          <div style={{ marginTop: '16px', display: 'flex', gap: '12px' }}>
                             <button type="button" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', border: '1px solid #FDA4AF', color: '#BE123C', background: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => {
-                              const totalProfilPart = editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0;
-                              const count = partsRepartition.length || 1;
-                              const amountPerProfile = roundMoney(totalProfilPart / count);
-                              const newParts = partsRepartition.map((p, i) => ({
-                                ...p,
-                                amount: i === count - 1 ? roundMoney(totalProfilPart - (amountPerProfile * (count - 1))) : amountPerProfile
-                              }));
                               setEditFormData({
                                 ...editFormData,
                                 facturation_annulee: true,
                                 statut_paiement_ui: 'facturation_annulee',
-                                montant_ht: totalProfilPart > 0 ? -totalProfilPart : 0,
-                                parts_repartition: newParts
+                                montant_ht: 0,
+                                tva_active: false,
+                                profil_sera_paye: false,
+                                montant_profil_annulation: '',
+                                annulation_raison: ''
                               });
                             }}>
                               <XCircle size={14} /> Facturation annulée
@@ -2304,64 +2346,115 @@ export default function Dashboard() {
                           </div>
                         )}
 
-                        {editFormData.statut_paiement_ui === 'facturation_annulee' && (
-                          <div style={{ marginTop: '16px', padding: '16px', borderRadius: '10px', border: '1px solid #FECDD3', background: '#FFF1F2' }}>
-                            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#BE123C', display: 'flex', alignItems: 'center', gap: '6px', margin: '0 0 12px' }}><XCircle size={14} /> Facturation annulée</h4>
-                            <div className="form-group">
-                              <label style={{ color: '#BE123C' }}>Raison de l'annulation</label>
-                              <textarea value={editFormData.annulation_raison || ''} onChange={e => setEditFormData({ ...editFormData, annulation_raison: e.target.value })} className="edit-input w-full" placeholder="Indiquer la raison de l'annulation..." style={{ borderColor: '#FECDD3' }} />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '12px' }}>
-                              <label style={{ color: '#BE123C', fontWeight: 600, fontSize: '13px' }}>Le profil sera payé ?</label>
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <button type="button" onClick={() => {
-                                  const totalAmount = toNumber(editFormData.montant_profil_annulation);
-                                  const count = partsRepartition.length || 1;
-                                  const amountPerProfile = roundMoney(totalAmount / count);
-                                  const nextParts = partsRepartition.map((p, i) => ({
-                                    ...p,
-                                    amount: i === count - 1 ? roundMoney(totalAmount - (amountPerProfile * (count - 1))) : amountPerProfile
-                                  }));
-                                  setEditFormData({
-                                    ...editFormData,
-                                    profil_sera_paye: true,
-                                    montant_ht: totalAmount > 0 ? -totalAmount : 0,
-                                    parts_repartition: nextParts
-                                  });
-                                }} style={{ padding: '4px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: editFormData.profil_sera_paye ? '#059669' : '#E2E8F0', color: editFormData.profil_sera_paye ? 'white' : '#64748B' }}>Oui</button>
-                                <button type="button" onClick={() => {
-                                  const nextParts = partsRepartition.map(p => ({ ...p, amount: 0 }));
-                                  setEditFormData({
-                                    ...editFormData,
-                                    profil_sera_paye: false,
-                                    montant_ht: 0,
-                                    parts_repartition: nextParts
-                                  });
-                                }} style={{ padding: '4px 14px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: !editFormData.profil_sera_paye ? '#BE123C' : '#E2E8F0', color: !editFormData.profil_sera_paye ? 'white' : '#64748B' }}>Non</button>
+                        {(editFormData.statut_paiement_ui === 'facturation_annulee' || editFormData.statut_paiement_ui === 'intervention_gratuite') && (() => {
+                          const isGratuit = editFormData.statut_paiement_ui === 'intervention_gratuite';
+                          const themeColor = isGratuit ? '#0d9488' : '#BE123C';
+                          const bgColor = isGratuit ? '#F0FDFA' : '#FFF1F2';
+                          const borderColor = isGratuit ? '#CCFBF1' : '#FECDD3';
+                          return (
+                            <div style={{ marginTop: '16px', padding: '16px', borderRadius: '10px', border: `1px solid ${borderColor}`, background: bgColor }}>
+                              <h4 style={{ fontSize: '13px', fontWeight: 700, color: themeColor, display: 'flex', alignItems: 'center', gap: '6px', margin: '0 0 12px' }}>
+                                {isGratuit ? <Gift size={14} /> : <XCircle size={14} />} {isGratuit ? 'Intervention gratuite' : 'Facturation annulée'}
+                              </h4>
+                              
+                              <div className="form-group mb-4">
+                                <label style={{ color: themeColor }}>{isGratuit ? "Raison de l'intervention gratuite" : "Raison de l'annulation"}</label>
+                                <textarea 
+                                  value={editFormData.annulation_raison || ''} 
+                                  onChange={e => setEditFormData({ ...editFormData, annulation_raison: e.target.value })} 
+                                  className="edit-input w-full" 
+                                  placeholder={isGratuit ? "Indiquer la raison de l'intervention gratuite..." : "Indiquer la raison de l'annulation..."} 
+                                  style={{ borderColor: borderColor }} 
+                                />
                               </div>
-                            </div>
-                            {editFormData.profil_sera_paye && (
-                              <div className="form-group" style={{ marginTop: '12px', maxWidth: '280px' }}>
-                                <label style={{ color: '#BE123C' }}>Montant à payer au profil (MAD)</label>
-                                <input type="number" value={editFormData.montant_profil_annulation || ''} onChange={e => {
-                                  const val = toNumber(e.target.value);
-                                  const count = partsRepartition.length || 1;
-                                  const amountPerProfile = roundMoney(val / count);
-                                  const nextParts = partsRepartition.map((p, i) => ({
-                                    ...p,
-                                    amount: i === count - 1 ? roundMoney(val - (amountPerProfile * (count - 1))) : amountPerProfile
-                                  }));
-                                  setEditFormData({
-                                    ...editFormData,
-                                    montant_profil_annulation: e.target.value,
-                                    montant_ht: val > 0 ? -val : 0,
-                                    parts_repartition: nextParts
-                                  });
-                                }} className="edit-input" placeholder="0" style={{ borderColor: '#FECDD3' }} />
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                                <label style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>
+                                  Le profil sera payé ?
+                                </label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const val = toNumber(editFormData.montant_profil_annulation) || 0;
+                                      const parts = editFormData.parts_repartition || [];
+                                      const count = parts.length || 1;
+                                      const amountPerProfile = roundMoney(val / count);
+                                      const newParts = parts.map((p: any, i: number) => ({
+                                        ...p,
+                                        amount: i === count - 1 ? roundMoney(val - (amountPerProfile * (count - 1))) : amountPerProfile
+                                      }));
+                                      setEditFormData({
+                                        ...editFormData,
+                                        profil_sera_paye: true,
+                                        parts_repartition: newParts
+                                      });
+                                    }}
+                                    style={{
+                                      padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+                                      background: editFormData.profil_sera_paye ? themeColor : '#ffffff',
+                                      color: editFormData.profil_sera_paye ? 'white' : themeColor,
+                                      border: `1px solid ${editFormData.profil_sera_paye ? themeColor : '#e2e8f0'}`,
+                                      transition: 'all 0.2s'
+                                    }}
+                                  >
+                                    Oui
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const parts = editFormData.parts_repartition || [];
+                                      const newParts = parts.map((p: any) => ({ ...p, amount: 0 }));
+                                      setEditFormData({
+                                        ...editFormData,
+                                        profil_sera_paye: false,
+                                        montant_profil_annulation: 0,
+                                        parts_repartition: newParts
+                                      });
+                                    }}
+                                    style={{
+                                      padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+                                      background: !editFormData.profil_sera_paye ? themeColor : '#ffffff',
+                                      color: !editFormData.profil_sera_paye ? 'white' : themeColor,
+                                      border: `1px solid ${!editFormData.profil_sera_paye ? themeColor : '#e2e8f0'}`,
+                                      transition: 'all 0.2s'
+                                    }}
+                                  >
+                                    Non
+                                  </button>
+                                </div>
                               </div>
-                            )}
-                          </div>
-                        )}
+
+                              {editFormData.profil_sera_paye && (
+                                <div className="form-group mb-0">
+                                  <label style={{ color: themeColor }}>Montant à payer au profil (MAD)</label>
+                                  <input
+                                    type="number"
+                                    placeholder="0"
+                                    value={editFormData.montant_profil_annulation ?? ''}
+                                    onChange={e => {
+                                      const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                      const parts = editFormData.parts_repartition || [];
+                                      const count = parts.length || 1;
+                                      const amountPerProfile = roundMoney(val / count);
+                                      const newParts = parts.map((p: any, i: number) => ({
+                                        ...p,
+                                        amount: i === count - 1 ? roundMoney(val - (amountPerProfile * (count - 1))) : amountPerProfile
+                                      }));
+                                      setEditFormData({
+                                        ...editFormData,
+                                        montant_profil_annulation: e.target.value === '' ? '' : val,
+                                        parts_repartition: newParts
+                                      });
+                                    }}
+                                    className="edit-input w-full"
+                                    style={{ borderColor: borderColor }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* ── Gestion des parts ── */}
@@ -2373,7 +2466,16 @@ export default function Dashboard() {
                         {showPartsSection && (<div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                           <div className="form-grid-2 gap-4">
                             <div className="form-group"><label>Montant total TTC (MAD)</label><div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 600 }}>{montantTTC.toFixed(2)}</div></div>
-                            <div className="form-group"><label>Part de l'agence (MAD)</label><input type="number" value={editFormData.part_agence} onChange={e => setEditFormData({ ...editFormData, part_agence: e.target.value })} className="edit-input" /></div>
+                            <div className="form-group">
+                              <label>Part de l'agence (MAD)</label>
+                              <input 
+                                type="number" 
+                                value={(editFormData.statut_paiement_ui === 'intervention_gratuite' || editFormData.statut_paiement_ui === 'facturation_annulee' || Boolean(editFormData.facturation_annulee)) ? 0 : editFormData.part_agence} 
+                                onChange={e => setEditFormData({ ...editFormData, part_agence: e.target.value })} 
+                                className="edit-input" 
+                                disabled={editFormData.statut_paiement_ui === 'intervention_gratuite' || editFormData.statut_paiement_ui === 'facturation_annulee' || Boolean(editFormData.facturation_annulee)}
+                              />
+                            </div>
                           </div>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -2398,11 +2500,27 @@ export default function Dashboard() {
                               </div>
                             ))}
                           </div>
-                          {(() => { const tp = partsRepartition.reduce((a, p) => a + toNumber(p.amount), 0); const tr = tp + toNumber(editFormData.part_agence); const r = toNumber(montantTTC) - tr; const ok = Math.abs(r) < 0.01; return (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: '10px', border: `1px solid ${ok ? '#A7F3D0' : '#FECACA'}`, background: ok ? '#ECFDF5' : '#FEF2F2' }}>
-                              <div style={{ display: 'flex', gap: '24px', fontSize: '13px' }}><span>Total réparti : <strong>{tr.toFixed(2)} MAD</strong></span><span>Reste à répartir : <strong style={{ color: ok ? '#059669' : '#DC2626' }}>{r.toFixed(2)} MAD</strong></span></div>
-                              <span style={{ fontSize: '12px', fontWeight: 600, color: ok ? '#059669' : '#DC2626' }}>{ok ? '✓ Répartition correcte' : '⚠ Répartition incorrecte'}</span>
-                            </div>); })()}
+                          {(() => {
+                            const isFreeOrCancelled = editFormData.statut_paiement_ui === 'intervention_gratuite' || editFormData.statut_paiement_ui === 'facturation_annulee' || Boolean(editFormData.facturation_annulee);
+                            const tp = partsRepartition.reduce((a, p) => a + toNumber(p.amount), 0);
+                            const target = isFreeOrCancelled
+                              ? (editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0)
+                              : toNumber(montantTTC);
+                            const tr = tp + (isFreeOrCancelled ? 0 : toNumber(editFormData.part_agence));
+                            const r = target - tr;
+                            const ok = Math.abs(r) < 0.01;
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: '10px', border: `1px solid ${ok ? '#A7F3D0' : '#FECACA'}`, background: ok ? '#ECFDF5' : '#FEF2F2' }}>
+                                <div style={{ display: 'flex', gap: '24px', fontSize: '13px' }}>
+                                  <span>Total réparti : <strong>{tr.toFixed(2)} MAD</strong></span>
+                                  <span>Reste à répartir : <strong style={{ color: ok ? '#059669' : '#DC2626' }}>{r.toFixed(2)} MAD</strong></span>
+                                </div>
+                                <span style={{ fontSize: '12px', fontWeight: 600, color: ok ? '#059669' : '#DC2626' }}>
+                                  {ok ? '✓ Répartition correcte' : '⚠ Répartition incorrecte'}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>)}
                       </div>
 
@@ -3223,165 +3341,187 @@ export default function Dashboard() {
       )}
 
       {/* Facturation Annulee Modal */}
-      {showFacturationAnnuleeModal && (
-        <div className="modal-overlay z-[110]" onClick={() => setShowFacturationAnnuleeModal(null)}>
-          <div
-            className="modal-content max-w-[460px]"
-            onClick={e => e.stopPropagation()}
-            style={{ backgroundColor: '#f8fafc', borderRadius: '16px', padding: '24px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', border: 'none' }}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f766e' }}>
-                Facturation annulée — #{showFacturationAnnuleeModal.demandeId}
-              </h3>
-              <button
-                onClick={() => setShowFacturationAnnuleeModal(null)}
-                style={{ background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#0f766e', fontSize: '18px' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Body */}
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#0f766e', marginBottom: '4px' }}>
-                Raison de l'annulation
-              </label>
-              <textarea
-                autoFocus
-                style={{ width: '100%', border: '1.5px solid #0d9488', borderRadius: '8px', padding: '12px', fontSize: '14px', color: '#334155', minHeight: '100px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
-                value={facturationAnnuleeReason}
-                onChange={e => setFacturationAnnuleeReason(e.target.value)}
-                onKeyDown={e => e.stopPropagation()}
-              />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-              <label style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>
-                Le profil sera payé ?
-              </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
+      {showFacturationAnnuleeModal && (() => {
+        const isGratuit = showFacturationAnnuleeModal.type === 'intervention_gratuite';
+        const titleText = isGratuit
+          ? `Intervention gratuite — #${showFacturationAnnuleeModal.demandeId}`
+          : `Facturation annulée — #${showFacturationAnnuleeModal.demandeId}`;
+        const labelText = isGratuit
+          ? "Raison de l'intervention gratuite"
+          : "Raison de l'annulation";
+        const placeholderText = isGratuit
+          ? "Indiquer la raison de l'intervention gratuite..."
+          : "Indiquer la raison de l'annulation...";
+        const confirmBtnText = isGratuit
+          ? "Confirmer l'intervention gratuite"
+          : "Confirmer l'annulation";
+        
+        return (
+          <div className="modal-overlay z-[110]" onClick={() => setShowFacturationAnnuleeModal(null)}>
+            <div
+              className="modal-content max-w-[460px]"
+              onClick={e => e.stopPropagation()}
+              style={{ backgroundColor: '#f8fafc', borderRadius: '16px', padding: '24px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', border: 'none' }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f766e' }}>
+                  {titleText}
+                </h3>
                 <button
-                  type="button"
-                  onClick={() => setFacturationAnnuleeProfilPaye(true)}
-                  style={{
-                    padding: '6px 16px', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
-                    background: facturationAnnuleeProfilPaye ? '#0d9488' : '#ffffff',
-                    color: facturationAnnuleeProfilPaye ? 'white' : '#0f766e',
-                    border: facturationAnnuleeProfilPaye ? '1px solid #0d9488' : '1px solid #e2e8f0',
-                    transition: 'all 0.2s'
-                  }}
+                  onClick={() => setShowFacturationAnnuleeModal(null)}
+                  style={{ background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#0f766e', fontSize: '18px' }}
                 >
-                  Oui
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFacturationAnnuleeProfilPaye(false)}
-                  style={{
-                    padding: '6px 16px', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
-                    background: !facturationAnnuleeProfilPaye ? '#0d9488' : '#ffffff',
-                    color: !facturationAnnuleeProfilPaye ? 'white' : '#0f766e',
-                    border: !facturationAnnuleeProfilPaye ? '1px solid #0d9488' : '1px solid #e2e8f0',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  Non
+                  ✕
                 </button>
               </div>
-            </div>
 
-            {facturationAnnuleeProfilPaye && (
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#0f766e', marginBottom: '8px' }}>
-                  Montant à payer au profil (MAD)
+              {/* Body */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#0f766e', marginBottom: '4px' }}>
+                  {labelText}
                 </label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={facturationAnnuleeAmount}
-                  onChange={e => setFacturationAnnuleeAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                <textarea
+                  autoFocus
+                  placeholder={placeholderText}
+                  style={{ width: '100%', border: '1.5px solid #0d9488', borderRadius: '8px', padding: '12px', fontSize: '14px', color: '#334155', minHeight: '100px', resize: 'vertical', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
+                  value={facturationAnnuleeReason}
+                  onChange={e => setFacturationAnnuleeReason(e.target.value)}
                   onKeyDown={e => e.stopPropagation()}
-                  style={{ width: '100%', border: '1.5px solid #0d9488', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#334155', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
                 />
               </div>
-            )}
 
-            <hr style={{ borderTop: '1px solid #e2e8f0', borderBottom: 'none', margin: '0 0 20px 0' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                <label style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>
+                  Le profil sera payé ?
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setFacturationAnnuleeProfilPaye(true)}
+                    style={{
+                      padding: '6px 16px', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+                      background: facturationAnnuleeProfilPaye ? '#0d9488' : '#ffffff',
+                      color: facturationAnnuleeProfilPaye ? 'white' : '#0f766e',
+                      border: facturationAnnuleeProfilPaye ? '1px solid #0d9488' : '1px solid #e2e8f0',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Oui
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFacturationAnnuleeProfilPaye(false)}
+                    style={{
+                      padding: '6px 16px', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+                      background: !facturationAnnuleeProfilPaye ? '#0d9488' : '#ffffff',
+                      color: !facturationAnnuleeProfilPaye ? 'white' : '#0f766e',
+                      border: !facturationAnnuleeProfilPaye ? '1px solid #0d9488' : '1px solid #e2e8f0',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Non
+                  </button>
+                </div>
+              </div>
 
-            {/* Footer */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
-              <button
-                onClick={() => setShowFacturationAnnuleeModal(null)}
-                style={{ padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#0f766e', backgroundColor: 'white', border: '1px solid #e2e8f0', cursor: 'pointer' }}
-              >
-                Annuler
-              </button>
-              <button
-                onClick={async () => {
-                  if (!facturationAnnuleeReason.trim()) return;
-                  try {
-                    const d = demandes.find(x => x.id === showFacturationAnnuleeModal.demandeId);
-                    if (!d) return;
-                    const prevFacturation = d.formulaire_data?.facturation || {};
-                    const partsRepartition = prevFacturation.parts_repartition || [];
-                    const amountToDistribute = facturationAnnuleeProfilPaye ? Number(facturationAnnuleeAmount) || 0 : 0;
-                    
-                    const count = partsRepartition.length || 1;
-                    const amountPerProfile = roundMoney(amountToDistribute / count);
-                    const newParts = partsRepartition.length > 0 ? partsRepartition.map((p: any, i: number) => ({
-                      ...p,
-                      amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
-                    })) : partsRepartition;
+              {facturationAnnuleeProfilPaye && (
+                <div style={{ marginBottom: '24px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#0f766e', marginBottom: '8px' }}>
+                    Montant à payer au profil (MAD)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={facturationAnnuleeAmount}
+                    onChange={e => setFacturationAnnuleeAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                    onKeyDown={e => e.stopPropagation()}
+                    style={{ width: '100%', border: '1.5px solid #0d9488', borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: '#334155', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
+                  />
+                </div>
+              )}
 
-                    const prixValue = toNumber(d.prix);
-                    const tvaActive = Boolean(prevFacturation.tva_active);
-                    const currentHT = toNumber(prevFacturation.montant_ht) || (tvaActive ? roundMoney(prixValue / 1.2) : prixValue);
-                    const caInitial = toNumber(prevFacturation.ca_initial) || (currentHT > 0 ? currentHT : (tvaActive ? roundMoney(prixValue / 1.2) : prixValue));
-                    const nextHT = amountToDistribute > 0 ? -amountToDistribute : 0;
+              <hr style={{ borderTop: '1px solid #e2e8f0', borderBottom: 'none', margin: '0 0 20px 0' }} />
 
-                    const updateData = {
-                      statut: 'annule',
-                      formulaire_data: {
-                        ...(d.formulaire_data || {}),
-                        facturation: {
-                          ...prevFacturation,
-                          facturation_annulee: true,
-                          statut_paiement_ui: 'facturation_annulee',
-                          annulation_raison: facturationAnnuleeReason.trim(),
-                          profil_sera_paye: facturationAnnuleeProfilPaye,
-                          montant_profil_annulation: amountToDistribute,
-                          parts_repartition: newParts,
-                          montant_ht: nextHT,
-                          ca_initial: caInitial
+              {/* Footer */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+                <button
+                  onClick={() => setShowFacturationAnnuleeModal(null)}
+                  style={{ padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: '#0f766e', backgroundColor: 'white', border: '1px solid #e2e8f0', cursor: 'pointer' }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!facturationAnnuleeReason.trim()) return;
+                    try {
+                      const d = demandes.find(x => x.id === showFacturationAnnuleeModal.demandeId);
+                      if (!d) return;
+                      const prevFacturation = d.formulaire_data?.facturation || {};
+                      const partsRepartition = prevFacturation.parts_repartition || [];
+                      const amountToDistribute = facturationAnnuleeProfilPaye ? Number(facturationAnnuleeAmount) || 0 : 0;
+                      
+                      const count = partsRepartition.length || 1;
+                      const amountPerProfile = roundMoney(amountToDistribute / count);
+                      const newParts = partsRepartition.length > 0 ? partsRepartition.map((p: any, i: number) => ({
+                        ...p,
+                        amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
+                      })) : partsRepartition;
+
+                      const prixValue = toNumber(d.prix);
+                      const tvaActive = Boolean(prevFacturation.tva_active);
+                      const currentHT = toNumber(prevFacturation.montant_ht) || (tvaActive ? roundMoney(prixValue / 1.2) : prixValue);
+                      const caInitial = toNumber(prevFacturation.ca_initial) || (currentHT > 0 ? currentHT : (tvaActive ? roundMoney(prixValue / 1.2) : prixValue));
+                      const nextHT = amountToDistribute > 0 ? -amountToDistribute : 0;
+
+                      const updateData: any = {
+                        formulaire_data: {
+                          ...(d.formulaire_data || {}),
+                          facturation: {
+                            ...prevFacturation,
+                            facturation_annulee: true,
+                            statut_paiement_ui: showFacturationAnnuleeModal.type,
+                            annulation_raison: facturationAnnuleeReason.trim(),
+                            profil_sera_paye: facturationAnnuleeProfilPaye,
+                            montant_profil_annulation: amountToDistribute,
+                            parts_repartition: newParts,
+                            montant_ht: nextHT,
+                            ca_initial: caInitial
+                          }
                         }
+                      };
+                      if (showFacturationAnnuleeModal.type === 'facturation_annulee') {
+                        updateData.statut = 'annule';
+                      } else {
+                        updateData.statut = d.statut; // Keep original demand status
                       }
-                    };
-                    await updateDemande(d.id, updateData);
-                    addToast('Facturation annulée', 'success');
-                    setShowFacturationAnnuleeModal(null);
-                    setFacturationAnnuleeReason('');
-                    setFacturationAnnuleeProfilPaye(false);
-                    setFacturationAnnuleeAmount('');
-                    fetchData();
-                  } catch (err) {
-                    addToast("Erreur lors de l'annulation de la facturation", 'error');
-                  }
-                }}
-                disabled={!facturationAnnuleeReason.trim()}
-                style={{
-                  padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white',
-                  backgroundColor: facturationAnnuleeReason.trim() ? '#0d9488' : '#99f6e4',
-                  border: 'none', cursor: facturationAnnuleeReason.trim() ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s'
-                }}
-              >
-                Confirmer l'annulation
-              </button>
+                      
+                      await updateDemande(d.id, updateData);
+                      addToast(isGratuit ? 'Intervention gratuite appliquée' : 'Facturation annulée', 'success');
+                      setShowFacturationAnnuleeModal(null);
+                      setFacturationAnnuleeReason('');
+                      setFacturationAnnuleeProfilPaye(false);
+                      setFacturationAnnuleeAmount('');
+                      fetchData();
+                    } catch (err) {
+                      addToast("Erreur lors de la mise à jour de la demande", 'error');
+                    }
+                  }}
+                  disabled={!facturationAnnuleeReason.trim()}
+                  style={{
+                    padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white',
+                    backgroundColor: facturationAnnuleeReason.trim() ? '#0d9488' : '#99f6e4',
+                    border: 'none', cursor: facturationAnnuleeReason.trim() ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {confirmBtnText}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );

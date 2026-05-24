@@ -172,9 +172,13 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   doc.setTextColor(...BLUE).text(`${formatNumber(totalHT)} DH`, right - 4, y + 2, { align: 'right' });
   y += 15;
 
-  // ==================== MESSAGE D'ACCOMPAGNEMENT (Page 2) ====================
-  doc.addPage();
-  y = margin + 10;
+  // ==================== MESSAGE D'ACCOMPAGNEMENT ====================
+  if (y > pageHeight - 110) {
+    doc.addPage();
+    y = 24;
+  } else {
+    y += 12;
+  }
   
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
@@ -228,19 +232,21 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   doc.text('Nom et cachet', margin, y);
   doc.text('Nom, date et signature précédée de "Bon pour accord"', margin + 100, y);
 
-  // Footer sur toutes les pages
+  // Footer sur la dernière page uniquement
   const totalPages = (doc.internal as any).getNumberOfPages?.() ?? doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p);
-    const footY = pageHeight - 25;
-    doc.setDrawColor(229, 231, 235);
-    doc.setLineWidth(0.2);
-    doc.line(margin, footY, right, footY);
-    doc.setFontSize(7.5);
-    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-    const footerText = "Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | agencemenage.ma";
-    doc.text(footerText, pageWidth/2, footY + 5, { align: 'center' });
-    doc.text("Ce devis est valable 30 jours. Toute acceptation vaut engagement contractuel.", pageWidth/2, footY + 10, { align: 'center' });
+    if (p === totalPages) {
+      doc.setPage(p);
+      const footY = pageHeight - 25;
+      doc.setDrawColor(229, 231, 235);
+      doc.setLineWidth(0.2);
+      doc.line(margin, footY, right, footY);
+      doc.setFontSize(7.5);
+      doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+      const footerText = "Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | agencemenage.ma";
+      doc.text(footerText, pageWidth/2, footY + 5, { align: 'center' });
+      doc.text("Ce devis est valable 30 jours. Toute acceptation vaut engagement contractuel.", pageWidth/2, footY + 10, { align: 'center' });
+    }
   }
 
   return doc.output('blob');

@@ -7,6 +7,8 @@ import { encodeId } from '../utils/obfuscation';
 import AddProfileModal from './ProfilEditModal';
 import { useToastStore } from '../store/toast';
 import { PROFIL_FILTER_TABS } from '../lib/profil-form-constants';
+import { useAuthStore } from '../store/auth';
+import { checkPermission } from '../utils/permissions';
 
 const TABS = PROFIL_FILTER_TABS.map(tab => ({ id: tab.value, label: tab.label }));
 
@@ -86,6 +88,7 @@ const dividerStyle: React.CSSProperties = {
 
 export default function Profils() {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const { addToast } = useToastStore();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,6 +186,11 @@ export default function Profils() {
   useEffect(() => { fetchData(); }, [search, activeTab, dateDebut, dateFin]);
 
   const handleDeleteAgent = async (agent: Agent) => {
+    const perm = checkPermission(user, 'delete_profile');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     const label = `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || `#${agent.id}`;
     if (!window.confirm(`Archiver le profil ${label} ?`)) return;
 
@@ -214,7 +222,14 @@ export default function Profils() {
             <RotateCw size={18} />
             Actualiser
           </button>
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button className="btn btn-primary" onClick={() => {
+            const perm = checkPermission(user, 'edit_candidat');
+            if (!perm.allowed) {
+              addToast(perm.message || 'Action non autorisée', 'error');
+              return;
+            }
+            setShowAddModal(true);
+          }}>
             <Plus size={18} />
             Ajouter Profil
           </button>

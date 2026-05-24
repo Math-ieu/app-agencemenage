@@ -33,13 +33,14 @@ export interface GesteFormState {
 
 interface Props {
   demandes: Demande[];
+  commerciaux: any[];
   form: GesteFormState;
   setForm: React.Dispatch<React.SetStateAction<GesteFormState>>;
   onClose: () => void;
   onSubmit: () => void;
 }
 
-export function CreateGesteModal({ demandes, form, setForm, onClose, onSubmit }: Props) {
+export function CreateGesteModal({ demandes, commerciaux, form, setForm, onClose, onSubmit }: Props) {
   // Extraction unique des clients
   const clients = useMemo(() => {
     const map = new Map<string, {
@@ -521,11 +522,17 @@ export function CreateGesteModal({ demandes, form, setForm, onClose, onSubmit }:
           {/* 9. Créé par */}
           <label className="mk-field">
             <span>Créé par</span>
-            <input
-              placeholder="Nom du commercial"
+            <select
               value={form.cree_par}
               onChange={(e) => setForm({ ...form, cree_par: e.target.value })}
-            />
+            >
+              <option value="">Sélectionner le commercial</option>
+              {commerciaux.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.full_name || `${c.first_name} ${c.last_name}`}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 

@@ -16,6 +16,8 @@ import { Link } from 'react-router-dom';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
 import { Agent } from '../types';
 import { useToastStore } from '../store/toast';
+import { useAuthStore } from '../store/auth';
+import { checkPermission } from '../utils/permissions';
 import AddProfileModal from './ProfilEditModal';
 
 /* ═══════════════════════════════════════════════════════════
@@ -167,6 +169,7 @@ function EmptyState({ text, colSpan }: { text: string; colSpan?: number }) {
 export default function ProfilDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const { addToast } = useToastStore();
 
   const [agent, setAgent] = useState<Agent | null>(null);
@@ -328,6 +331,11 @@ export default function ProfilDetails() {
 
   const handleToggleBlacklist = async () => {
     if (!agent) return;
+    const perm = checkPermission(user, 'blacklist_profile');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     const actionText = agent.is_blacklisted ? 'retirer de la blacklist' : 'blacklister';
     if (!window.confirm(`Voulez-vous vraiment ${actionText} ce profil ?`)) return;
 
@@ -522,6 +530,11 @@ export default function ProfilDetails() {
 
   const handleSaveNotes = async () => {
     if (!agent) return;
+    const perm = checkPermission(user, 'edit_candidat');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     setSaving(true);
     try {
       await updateAgent(agent.id, { operator_notes: operatorNotes } as any);
@@ -860,7 +873,14 @@ export default function ProfilDetails() {
 
           <div style={{ display: 'flex', gap: 10 }} className="flex-wrap">
             <button
-              onClick={() => setShowEditModal(true)}
+              onClick={() => {
+                const perm = checkPermission(user, 'edit_candidat');
+                if (!perm.allowed) {
+                  addToast(perm.message || 'Action non autorisée', 'error');
+                  return;
+                }
+                setShowEditModal(true);
+              }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '8px 18px', border: '1px solid #e2e8f0',
@@ -873,6 +893,11 @@ export default function ProfilDetails() {
             <button
               disabled={isAgentBusy}
               onClick={() => {
+                const perm = checkPermission(user, 'edit_candidat');
+                if (!perm.allowed) {
+                  addToast(perm.message || 'Action non autorisée', 'error');
+                  return;
+                }
                 setShowPostulerModal(true);
                 setSelectedDemande(null);
                 setDemandesSearch('');

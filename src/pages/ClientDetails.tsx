@@ -12,6 +12,8 @@ import {
   XCircle, Send, Download, CheckCircle, X
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
+import { checkPermission } from '../utils/permissions';
+import { useAuthStore } from '../store/auth';
 import { Client, Demande } from '../types';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
 import ClientEditModal from './ClientEditModal';
@@ -204,6 +206,7 @@ function EmptyState({ text, colSpan }: { text: string; colSpan?: number }) {
 export default function ClientDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [client, setClient] = useState<Client | null>(null);
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
@@ -302,6 +305,11 @@ export default function ClientDetails() {
 
   const handleToggleBlacklist = async () => {
     if (!client) return;
+    const perm = checkPermission(user, 'blacklist_client');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     const actionText = client.is_blacklisted ? 'retirer de la blacklist' : 'blacklister';
     if (!window.confirm(`Voulez-vous vraiment ${actionText} ce client ?`)) return;
 

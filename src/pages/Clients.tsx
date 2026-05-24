@@ -4,6 +4,7 @@ import { encodeId } from '../utils/obfuscation';
 import { getClients, getUsers, affecterDemande, updateClient, deleteClient } from '../api/client';
 import { renderStatusBadge } from '../utils/statusUtils';
 import { useAuthStore } from '../store/auth';
+import { checkPermission } from '../utils/permissions';
 import { useToastStore } from '../store/toast';
 import { User } from '../types';
 import {
@@ -50,7 +51,8 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
-  { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Facturation annulée' },
+  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Facturation annulée' },
+  { value: 'intervention_gratuite', apiValue: 'intervention_gratuite', label: 'Intervention gratuite' },
 ];
 
 const TABS = [
@@ -237,6 +239,11 @@ export default function Clients() {
   }, [user]);
 
   const handleAffecter = async (demandeId: number, commercialId: number) => {
+    const perm = checkPermission(user, 'affecter_commercial');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     try {
       await affecterDemande(demandeId, commercialId);
       addToast('Client affecté avec succès', 'success');
@@ -290,6 +297,11 @@ export default function Clients() {
   };
 
   const handleDeleteClient = async (client: Client) => {
+    const perm = checkPermission(user, 'delete_client');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     const label = client.display_name || `${client.first_name} ${client.last_name}`.trim() || `#${client.id}`;
     if (!window.confirm(`Supprimer le client ${label} ?`)) return;
 

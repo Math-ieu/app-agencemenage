@@ -259,8 +259,12 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   y += 8;
 
   // ==================== MESSAGE D'ACCOMPAGNEMENT ====================
-  pdf.addPage();
-  y = margin + 10;
+  if (y > pageHeight - 110) {
+    pdf.addPage();
+    y = 24;
+  } else {
+    y += 12;
+  }
   
   pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
@@ -319,25 +323,27 @@ L'équipe Agence Ménage — 06 64 22 67 90`;
 
   y = sigY + 45;
 
-  // ==================== FOOTER (all pages) ====================
+  // ==================== FOOTER (last page only) ====================
   const pageCount = pdf.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
-    pdf.setPage(i);
-    const footerY = pageHeight - 30;
-    
-    pdf.setDrawColor(BORDER_GREY[0], BORDER_GREY[1], BORDER_GREY[2]);
-    pdf.setLineWidth(0.3);
-    pdf.line(margin, footerY, pageWidth - margin, footerY);
-    
-    pdf.setFontSize(7.5);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
-    
-    const footerText1 = "Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | contact@agencemenage.ma | agencemenage.ma";
-    pdf.text(footerText1, pageWidth / 2, footerY + 4, { align: 'center', maxWidth: contentWidth });
-    
-    const footerText2 = "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.";
-    pdf.text(footerText2, pageWidth / 2, footerY + 11, { align: 'center', maxWidth: contentWidth });
+    if (i === pageCount) {
+      pdf.setPage(i);
+      const footerY = pageHeight - 30;
+      
+      pdf.setDrawColor(BORDER_GREY[0], BORDER_GREY[1], BORDER_GREY[2]);
+      pdf.setLineWidth(0.3);
+      pdf.line(margin, footerY, pageWidth - margin, footerY);
+      
+      pdf.setFontSize(7.5);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
+      
+      const footerText1 = "Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | contact@agencemenage.ma | agencemenage.ma";
+      pdf.text(footerText1, pageWidth / 2, footerY + 4, { align: 'center', maxWidth: contentWidth });
+      
+      const footerText2 = "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.";
+      pdf.text(footerText2, pageWidth / 2, footerY + 11, { align: 'center', maxWidth: contentWidth });
+    }
   }
 
   return pdf.output('blob');

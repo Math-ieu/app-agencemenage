@@ -3,6 +3,9 @@
  * Page Paramètres > Collaborateurs & Privilèges — Design Pro
  */
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useAuthStore } from "../../store/auth";
+import { checkPermission } from "../../utils/permissions";
+import { getUsers, createUser, updateUser, deleteUser } from "../../api/client";
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 type Status = "actif" | "desactive";
@@ -26,6 +29,7 @@ interface UserFormValues {
   position: string;
   city: string;
   status: Status;
+  password?: string;
 }
 
 /* ─── Données & Config ─────────────────────────────────────────────────────── */
@@ -63,12 +67,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   "Chargée des Opérations":     ["consulter_clients","consulter_demandes","consulter_agents"],
 };
 
-const INITIAL_USERS: User[] = [
-  { id: "u1", fullName: "Sofia El Amrani",   username: "selamrani",  email: "sofia.elamrani@example.ma",   phone: "+212 661 22 33 44", position: "Responsable commercial",     city: "Casablanca", status: "actif" },
-  { id: "u2", fullName: "Youssef Benali",    username: "ybenali",    email: "youssef.benali@example.ma",   phone: "+212 662 11 22 33", position: "commercial",                 city: "Rabat",      status: "actif" },
-  { id: "u3", fullName: "Imane Tazi",        username: "itazi",      email: "imane.tazi@example.ma",       phone: "+212 663 44 55 66", position: "Chargée des Opérations",     city: "Marrakech",  status: "desactive" },
-  { id: "u4", fullName: "Mehdi Cherkaoui",   username: "mcherkaoui", email: "mehdi.cherkaoui@example.ma",  phone: "+212 664 77 88 99", position: "Responsable des Opérations", city: "Casablanca", status: "actif" },
-];
+
 
 const CITIES = ["Casablanca","Rabat","Marrakech","Fès","Tanger","Agadir","Meknès","Oujda","Kénitra","Tétouan"];
 
@@ -240,6 +239,42 @@ function IconButton({ onClick, danger, title, children }: {
   );
 }
 
+/* ─── Role Mapping Utilities ────────────────────────────────────────────────── */
+const mapPositionToRole = (position: string): string => {
+  const p = position.toLowerCase();
+  if (p === 'admin') return 'admin';
+  if (p === 'moderateur' || p === 'modérateur') return 'moderateur';
+  if (p === 'responsable commercial' || p === 'responsable_commercial') return 'responsable_commercial';
+  if (p === 'commercial') return 'commercial';
+  if (p === 'responsable des opérations' || p === 'responsable_operations') return 'responsable_operations';
+  if (p === 'chargée des opérations' || p === 'charge_operations') return 'charge_operations';
+  return 'commercial';
+};
+
+const mapRoleToPosition = (role: string): string => {
+  const r = role.toLowerCase();
+  if (r === 'admin') return 'Admin';
+  if (r === 'moderateur') return 'Moderateur';
+  if (r === 'responsable_commercial') return 'Responsable commercial';
+  if (r === 'commercial') return 'commercial';
+  if (r === 'responsable_operations') return 'Responsable des Opérations';
+  if (r === 'charge_operations') return 'Chargée des Opérations';
+  return 'commercial';
+};
+
+const mapApiToLocalUser = (apiUser: any): User => {
+  return {
+    id: String(apiUser.id),
+    fullName: apiUser.full_name || `${apiUser.first_name || ''} ${apiUser.last_name || ''}`.trim(),
+    username: apiUser.email.split('@')[0],
+    email: apiUser.email,
+    phone: apiUser.phone || '',
+    position: mapRoleToPosition(apiUser.role),
+    city: apiUser.city || 'Casablanca',
+    status: apiUser.is_active ? 'actif' : 'desactive',
+  };
+};
+
 /* ─── User Form Dialog ──────────────────────────────────────────────────────── */
 function UserFormDialog({ open, onClose, initial, onSubmit }: {
   open: boolean;
@@ -248,13 +283,13 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
   onSubmit: (values: UserFormValues) => void;
 }) {
   const isEdit = !!initial;
-  const blank: UserFormValues = { fullName: "", username: "", email: "", phone: "", position: ROLES[0].key, city: CITIES[0], status: "actif" };
+  const blank: UserFormValues = { fullName: "", username: "", email: "", phone: "", position: ROLES[0].key, city: CITIES[0], status: "actif", password: "" };
   const [values, setValues] = useState<UserFormValues>(blank);
   const [errors, setErrors] = useState<Partial<UserFormValues>>({});
 
   useEffect(() => {
     if (open) {
-      setValues(initial ? { fullName: initial.fullName, username: initial.username, email: initial.email, phone: initial.phone, position: initial.position, city: initial.city, status: initial.status } : blank);
+      setValues(initial ? { fullName: initial.fullName, username: initial.username, email: initial.email, phone: initial.phone, position: initial.position, city: initial.city, status: initial.status, password: "" } : blank);
       setErrors({});
     }
   }, [open, initial]);
@@ -270,6 +305,9 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
     if (!values.username.trim()) e.username = "Requis";
     if (!values.email.trim() || !values.email.includes("@")) e.email = "Email invalide";
     if (!values.phone.trim()) e.phone = "Requis";
+    if (!isEdit && (!values.password || values.password.length < 8)) {
+      e.password = "Le mot de passe doit contenir au moins 8 caractères";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -353,6 +391,19 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
                 {CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+            {!isEdit && (
+              <div>
+                <label style={labelStyle}>Mot de passe <span style={{ color: "#E24B4A" }}>*</span></label>
+                <input
+                  type="password"
+                  style={inputStyle(errors.password)}
+                  value={values.password || ""}
+                  onChange={set("password")}
+                  placeholder="Min. 8 caractères"
+                />
+                {errors.password && <p style={errStyle}>{errors.password}</p>}
+              </div>
+            )}
           </div>
 
           {/* Status toggle */}
@@ -437,6 +488,7 @@ function Pagination({ page, totalPages, total, start, end, onChange }: {
 
 /* ─── Main Component ────────────────────────────────────────────────────────── */
 export default function Utilisateurs() {
+  const { user } = useAuthStore();
   const [users, setUsers]         = useState<User[]>([]);
   const [privileges, setPrivileges] = useState<Record<string, string[]>>({});
   const [search, setSearch]       = useState("");
@@ -447,46 +499,98 @@ export default function Utilisateurs() {
   const [toDelete, setToDelete]   = useState<User | null>(null);
   const [toast, setToast]         = useState<string | null>(null);
 
+  const showToast = (msg: string) => setToast(msg);
+
+  const fetchUsers = async () => {
+    try {
+      const response = await getUsers();
+      const apiUsersList = response.data.results || response.data || [];
+      const mapped = apiUsersList.map((apiUser: any) => mapApiToLocalUser(apiUser));
+      setUsers(mapped);
+    } catch (err) {
+      console.error("Error fetching backend users:", err);
+      showToast("Erreur lors de la récupération des collaborateurs.");
+    }
+  };
+
   useEffect(() => {
-    const savedUsers = localStorage.getItem("backoffice_users");
-    setUsers(savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS);
-    if (!savedUsers) localStorage.setItem("backoffice_users", JSON.stringify(INITIAL_USERS));
+    fetchUsers();
 
     const savedPriv = localStorage.getItem("roles_permissions");
     setPrivileges(savedPriv ? JSON.parse(savedPriv) : DEFAULT_PERMISSIONS);
     if (!savedPriv) localStorage.setItem("roles_permissions", JSON.stringify(DEFAULT_PERMISSIONS));
   }, []);
 
-  const showToast = (msg: string) => setToast(msg);
-
-  const saveUsers = (updated: User[]) => {
-    setUsers(updated);
-    localStorage.setItem("backoffice_users", JSON.stringify(updated));
+  const handleAdd = async (values: UserFormValues) => {
+    try {
+      const parts = values.fullName.trim().split(' ');
+      const first_name = parts[0] || '';
+      const last_name = parts.slice(1).join(' ') || '.';
+      const apiPayload = {
+        email: values.email,
+        first_name,
+        last_name,
+        role: mapPositionToRole(values.position),
+        password: values.password || '12345678',
+      };
+      
+      await createUser(apiPayload);
+      showToast("Collaborateur créé avec succès");
+      setFormOpen(false);
+      fetchUsers();
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.response?.data?.email?.[0] || err.response?.data?.detail || "Erreur lors de la création du compte";
+      showToast(errMsg);
+    }
   };
 
-  const handleAdd = (values: UserFormValues) => {
-    const newUser: User = { id: crypto.randomUUID(), ...values };
-    saveUsers([newUser, ...users]);
-    showToast("Collaborateur créé avec succès");
-    setFormOpen(false);
-  };
-
-  const handleUpdate = (values: UserFormValues) => {
+  const handleUpdate = async (values: UserFormValues) => {
     if (!editing) return;
-    saveUsers(users.map((u) => u.id === editing.id ? { ...u, ...values } : u));
-    showToast("Collaborateur mis à jour avec succès");
-    setFormOpen(false);
-    setEditing(null);
+    try {
+      const parts = values.fullName.trim().split(' ');
+      const first_name = parts[0] || '';
+      const last_name = parts.slice(1).join(' ') || '.';
+      const apiPayload = {
+        email: values.email,
+        first_name,
+        last_name,
+        role: mapPositionToRole(values.position),
+        is_active: values.status === 'actif',
+      };
+      
+      await updateUser(editing.id, apiPayload);
+      showToast("Collaborateur mis à jour avec succès");
+      setFormOpen(false);
+      setEditing(null);
+      fetchUsers();
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.response?.data?.detail || "Erreur lors de la mise à jour";
+      showToast(errMsg);
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!toDelete) return;
-    saveUsers(users.filter((u) => u.id !== toDelete.id));
-    showToast("Collaborateur supprimé");
-    setToDelete(null);
+    try {
+      await deleteUser(toDelete.id);
+      showToast("Collaborateur supprimé");
+      setToDelete(null);
+      fetchUsers();
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.response?.data?.detail || "Erreur lors de la suppression";
+      showToast(errMsg);
+    }
   };
 
   const togglePermission = useCallback((roleKey: string, permKey: string) => {
+    const isUserAdmin = user?.role?.toLowerCase() === 'admin';
+    if (!isUserAdmin) {
+      showToast("Action non autorisée. Seul le compte Admin est autorisé à modifier les privilèges.");
+      return;
+    }
     const perms = privileges[roleKey] || [];
     const updated = {
       ...privileges,
@@ -495,7 +599,7 @@ export default function Utilisateurs() {
     setPrivileges(updated);
     localStorage.setItem("roles_permissions", JSON.stringify(updated));
     showToast("Privilèges mis à jour");
-  }, [privileges]);
+  }, [privileges, user]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -554,7 +658,15 @@ export default function Utilisateurs() {
             {[5, 10, 20].map((n) => <option key={n} value={n}>{n} / page</option>)}
           </select>
           <button
-            onClick={() => { setEditing(null); setFormOpen(true); }}
+            onClick={() => {
+              const perm = checkPermission(user, 'manage_users');
+              if (!perm.allowed) {
+                showToast(perm.message || 'Action non autorisée');
+                return;
+              }
+              setEditing(null);
+              setFormOpen(true);
+            }}
             style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 22px", fontSize: 15, fontWeight: 500, background: "#0F6E56", color: "#9FE1CB", border: "none", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -591,10 +703,27 @@ export default function Utilisateurs() {
                   <td style={{ padding: "15px 18px" }}><StatusBadge status={u.status} /></td>
                   <td style={{ padding: "15px 18px" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                      <IconButton title="Modifier" onClick={() => { setEditing(u); setFormOpen(true); }}>
+                      <IconButton title="Modifier" onClick={() => {
+                        const perm = checkPermission(user, 'manage_users');
+                        const isUserAdmin = user?.role?.toLowerCase() === 'admin';
+                        if (!perm.allowed || !isUserAdmin) {
+                          showToast("Action non autorisée. Seul le compte Admin est autorisé à modifier les comptes utilisateurs.");
+                          return;
+                        }
+                        setEditing(u);
+                        setFormOpen(true);
+                      }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </IconButton>
-                      <IconButton title="Supprimer" danger onClick={() => setToDelete(u)}>
+                      <IconButton title="Supprimer" danger onClick={() => {
+                        const perm = checkPermission(user, 'manage_users');
+                        const isUserAdmin = user?.role?.toLowerCase() === 'admin';
+                        if (!perm.allowed || !isUserAdmin) {
+                          showToast("Action non autorisée. Seul le compte Admin est autorisé à supprimer les comptes utilisateurs.");
+                          return;
+                        }
+                        setToDelete(u);
+                      }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                       </IconButton>
                     </div>

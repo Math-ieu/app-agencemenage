@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Megaphone, Ticket, TrendingUp, Plus, Trash2, Pencil, Send, Copy, Archive, ArchiveRestore } from 'lucide-react';
 import { TYPES_GESTE, SEGMENTS_CLIENT } from '@/lib/marketing-constants';
-import { getDemandes, getPromoCodes, createPromoCode, deletePromoCode, updatePromoCode, getCommercialGestures, createCommercialGesture, deleteCommercialGesture, updateCommercialGesture, getCampaigns, createCampaign, deleteCampaign, updateCampaign } from '@/api/client';
+import { getDemandes, getPromoCodes, createPromoCode, deletePromoCode, updatePromoCode, getCommercialGestures, createCommercialGesture, deleteCommercialGesture, updateCommercialGesture, getCampaigns, createCampaign, deleteCampaign, updateCampaign, getUsers } from '@/api/client';
 import { useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import type { Demande } from '@/types';
@@ -125,6 +125,7 @@ export default function Marketing() {
   const [showCreateGesture, setShowCreateGesture] = useState(false);
   const [showCreateCampaign, setShowCreateCampaign] = useState(false);
   const [demandes, setDemandes] = useState<Demande[]>([]);
+  const [commerciaux, setCommerciaux] = useState<any[]>([]);
   const { user } = useAuthStore();
 
   const [editingPromoId, setEditingPromoId] = useState<number | null>(null);
@@ -134,6 +135,10 @@ export default function Marketing() {
   useEffect(() => {
     getDemandes().then(res => {
       setDemandes(res.data.results || res.data);
+    }).catch(console.error);
+
+    getUsers({ role: 'commercial' }).then(res => {
+      setCommerciaux(res.data?.results || res.data || []);
     }).catch(console.error);
   }, []);
 
@@ -174,7 +179,7 @@ export default function Marketing() {
     envoyer_message: false,
     message_client: '',
     canal_diffusion: [],
-    cree_par: '',
+    cree_par: user?.id ? String(user.id) : '',
   });
 
   const [campaignForm, setCampaignForm] = useState<CampagneFormState>({
@@ -349,6 +354,7 @@ export default function Marketing() {
       envoyer_message: gestureForm.envoyer_message,
       message_client: gestureForm.message_client,
       canal_diffusion: gestureForm.canal_diffusion,
+      cree_par: gestureForm.cree_par ? Number(gestureForm.cree_par) : null,
     };
 
     const redStr = gestureForm.reduction_type === 'pourcentage'
@@ -373,7 +379,7 @@ export default function Marketing() {
           type_geste: 'reduction_tarif', montant_ht: '', tva_active: false,
           reduction_type: 'montant', reduction_valeur: '',
           part_profil: '', part_agence: '', motif: '',
-          envoyer_message: false, message_client: '', canal_diffusion: [], cree_par: user?.first_name || '',
+          envoyer_message: false, message_client: '', canal_diffusion: [], cree_par: user?.id ? String(user.id) : '',
         });
         setEditingGesteId(null);
         setShowCreateGesture(false);
@@ -393,7 +399,7 @@ export default function Marketing() {
           type_geste: 'reduction_tarif', montant_ht: '', tva_active: false,
           reduction_type: 'montant', reduction_valeur: '',
           part_profil: '', part_agence: '', motif: '',
-          envoyer_message: false, message_client: '', canal_diffusion: [], cree_par: user?.first_name || '',
+          envoyer_message: false, message_client: '', canal_diffusion: [], cree_par: user?.id ? String(user.id) : '',
         });
         setShowCreateGesture(false);
       }).catch(console.error);
@@ -866,6 +872,7 @@ export default function Marketing() {
       {showCreateGesture && (
         <CreateGesteModal
           demandes={demandes}
+          commerciaux={commerciaux}
           form={gestureForm}
           setForm={setGestureForm}
           onClose={closeModals}
