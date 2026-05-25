@@ -552,13 +552,15 @@ export default function Utilisateurs() {
     try {
       const parts = values.fullName.trim().split(' ');
       const first_name = parts[0] || '';
-      const last_name = parts.slice(1).join(' ') || '.';
+      const last_name = parts.slice(1).join(' ') || '';
       const apiPayload = {
         email: values.email,
         first_name,
         last_name,
         role: mapPositionToRole(values.position),
         password: values.password || '12345678',
+        phone: values.phone || '',
+        city: values.city || 'Casablanca',
       };
       
       await createUser(apiPayload);
@@ -577,13 +579,15 @@ export default function Utilisateurs() {
     try {
       const parts = values.fullName.trim().split(' ');
       const first_name = parts[0] || '';
-      const last_name = parts.slice(1).join(' ') || '.';
+      const last_name = parts.slice(1).join(' ') || '';
       const apiPayload = {
         email: values.email,
         first_name,
         last_name,
         role: mapPositionToRole(values.position),
         is_active: values.status === 'actif',
+        phone: values.phone || '',
+        city: values.city || 'Casablanca',
       };
       
       await updateUser(editing.id, apiPayload);
