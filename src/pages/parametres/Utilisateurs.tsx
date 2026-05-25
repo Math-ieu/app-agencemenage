@@ -6,6 +6,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuthStore } from "../../store/auth";
 import { checkPermission } from "../../utils/permissions";
 import { getUsers, createUser, updateUser, deleteUser } from "../../api/client";
+import { Eye, EyeOff } from "lucide-react";
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 type Status = "actif" | "desactive";
@@ -286,11 +287,15 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
   const blank: UserFormValues = { fullName: "", username: "", email: "", phone: "", position: ROLES[0].key, city: CITIES[0], status: "actif", password: "" };
   const [values, setValues] = useState<UserFormValues>(blank);
   const [errors, setErrors] = useState<Partial<UserFormValues>>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [eyeHovered, setEyeHovered] = useState(false);
 
   useEffect(() => {
     if (open) {
       setValues(initial ? { fullName: initial.fullName, username: initial.username, email: initial.email, phone: initial.phone, position: initial.position, city: initial.city, status: initial.status, password: "" } : blank);
       setErrors({});
+      setShowPassword(false);
+      setEyeHovered(false);
     }
   }, [open, initial]);
 
@@ -394,13 +399,35 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
             {!isEdit && (
               <div>
                 <label style={labelStyle}>Mot de passe <span style={{ color: "#E24B4A" }}>*</span></label>
-                <input
-                  type="password"
-                  style={inputStyle(errors.password)}
-                  value={values.password || ""}
-                  onChange={set("password")}
-                  placeholder="Min. 8 caractères"
-                />
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    style={{ ...inputStyle(errors.password), paddingRight: 40 }}
+                    value={values.password || ""}
+                    onChange={set("password")}
+                    placeholder="Min. 8 caractères"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    onMouseEnter={() => setEyeHovered(true)}
+                    onMouseLeave={() => setEyeHovered(false)}
+                    style={{
+                      position: "absolute",
+                      right: 12,
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      color: eyeHovered ? "#18181b" : "#71717a",
+                      transition: "color 0.15s ease",
+                    }}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 {errors.password && <p style={errStyle}>{errors.password}</p>}
               </div>
             )}

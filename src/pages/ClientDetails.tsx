@@ -618,7 +618,7 @@ export default function ClientDetails() {
                               </button>
                             )}
                             {(() => {
-                              const firstDoc = d.documents && d.documents.length > 0 ? d.documents[0] : null;
+                              const devisDoc = d.documents?.find(doc => doc.type_document === 'devis') || null;
                               return (
                                 <>
                                   <button 
@@ -630,15 +630,15 @@ export default function ClientDetails() {
                                   </button>
                                   <button 
                                     onClick={() => {
-                                      if (firstDoc && firstDoc.download_url) {
-                                        const fileName = firstDoc.nom || (firstDoc.type_document === 'devis' ? 'Devis PDF' : 'Récapitulatif PNG');
-                                        handleDownload(firstDoc.download_url, fileName);
+                                      if (devisDoc && devisDoc.download_url) {
+                                        const fileName = devisDoc.nom || 'Devis PDF';
+                                        handleDownload(devisDoc.download_url, fileName);
                                       } else {
-                                        addToast("Aucun document disponible pour cette demande", "info");
+                                        addToast("Aucun devis disponible pour cette demande", "info");
                                       }
                                     }}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: firstDoc ? '#64748b' : '#cbd5e1', opacity: firstDoc ? 1 : 0.4 }}
-                                    title={firstDoc ? "Télécharger le document" : "Aucun document disponible"}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: devisDoc ? '#64748b' : '#cbd5e1', opacity: devisDoc ? 1 : 0.4 }}
+                                    title={devisDoc ? "Télécharger le devis" : "Aucun devis disponible"}
                                   >
                                     <FileText size={17} />
                                   </button>

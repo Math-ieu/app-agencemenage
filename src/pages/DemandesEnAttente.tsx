@@ -734,7 +734,7 @@ export default function DemandesEnAttente() {
         statut_paiement: paymentOption?.apiValue || 'non_paye',
         frequency: frequencyValue,
         frequency_label: formData.frequence,
-        ...(isRenewal ? { statut: 'en_cours', cao: false, profils_envoyes: [], documents: [] } : {}),
+        ...(isRenewal ? { statut: 'en_attente', cao: false, profils_envoyes: [], documents: [] } : {}),
         ...(decodedClientId ? { client: decodedClientId } : {}),
         formulaire_data: {
           facturation: {

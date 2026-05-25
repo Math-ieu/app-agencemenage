@@ -968,6 +968,8 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, searchParams]);
 
+
+
   // Ferme les menus d'action lorsqu'on clique ailleurs
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1432,15 +1434,6 @@ export default function Dashboard() {
                               <XCircle size={16} /> Facturation annulée
                             </button>
 
-                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                              setFacturationAnnuleeReason('');
-                              setFacturationAnnuleeProfilPaye(false);
-                              setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'intervention_gratuite' });
-                              setActiveMoreMenu(null);
-                            }}>
-                              <Gift size={16} /> Intervention gratuite
-                            </button>
-
                             <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
                               if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
                                 try {
@@ -1593,15 +1586,6 @@ export default function Dashboard() {
                               setActiveMoreMenu(null);
                             }}>
                               <XCircle size={16} /> Facturation annulée
-                            </button>
-
-                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                              setFacturationAnnuleeReason('');
-                              setFacturationAnnuleeProfilPaye(false);
-                              setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'intervention_gratuite' });
-                              setActiveMoreMenu(null);
-                            }}>
-                              <Gift size={16} /> Intervention gratuite
                             </button>
 
                             <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
