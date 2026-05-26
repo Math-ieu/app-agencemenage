@@ -845,55 +845,74 @@ export default function Utilisateurs() {
       </CardSection>
 
       {/* ── Section Privilèges ── */}
-      <CardSection
-        icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>}
-        title="Droits d'accès & Privilèges par rôle"
-        description="Configurez les autorisations pour chaque rôle de l'agence"
-      >
-        <div style={{ overflowX: "auto", border: "0.5px solid #f0f0f0", borderRadius: 10, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 15 }}>
-            <thead>
-              <tr style={{ background: "#fafafa", borderBottom: "0.5px solid #f0f0f0" }}>
-                <th style={{ padding: "14px 18px", textAlign: "left", fontSize: 13, fontWeight: 500, color: "#71717a", minWidth: 260 }}>Module & autorisation</th>
-                {ROLES.filter(r => r.key !== 'Admin').map((r) => (
-                  <th key={r.key} style={{ padding: "14px 16px", textAlign: "center", fontSize: 13, fontWeight: 500, color: "#18181b", minWidth: 120, whiteSpace: "nowrap" }}>
-                    {r.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {groupedPermissions.map(({ group, perms }) => (
-                <React.Fragment key={group}>
-                  <tr style={{ background: "#fafafa" }}>
-                    <td colSpan={ROLES.filter(r => r.key !== 'Admin').length + 1} style={{ padding: "11px 18px", fontSize: 13, fontWeight: 500, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "0.5px solid #f0f0f0", borderTop: "0.5px solid #f0f0f0" }}>
-                      {group}
-                    </td>
-                  </tr>
-                  {perms.map((p) => (
-                    <tr key={p.key} style={{ borderBottom: "0.5px solid #f5f5f5" }}>
-                      <td style={{ padding: "14px 18px", fontSize: 14, color: "#334155" }}>{p.label}</td>
-                      {ROLES.filter(r => r.key !== 'Admin').map((r) => (
-                        <td key={r.key} style={{ padding: "14px 16px", textAlign: "center" }}>
-                          <Toggle checked={(privileges[r.key] || []).includes(p.key)} onChange={() => togglePermission(r.key, p.key)} />
-                        </td>
-                      ))}
-                    </tr>
+      <div style={{
+        background: "#fff", border: "0.5px solid #e4e4e7",
+        borderRadius: 12, overflow: "visible",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 16,
+          padding: "22px 30px 20px", borderBottom: "0.5px solid #f0f0f0",
+        }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: "#f4f4f5", border: "0.5px solid #e4e4e7",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#71717a", flexShrink: 0,
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          </div>
+          <div>
+            <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#18181b" }}>Droits d'accès & Privilèges par rôle</p>
+            <p style={{ fontSize: 14, color: "#a1a1aa", margin: "2px 0 0" }}>Configurez les autorisations pour chaque rôle de l'agence</p>
+          </div>
+        </div>
+        <div style={{ padding: "26px 30px" }}>
+          <div style={{ border: "0.5px solid #f0f0f0", borderRadius: 10, overflow: "visible" }}>
+            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 15 }}>
+              <thead>
+                <tr style={{ background: "#fafafa", borderBottom: "0.5px solid #f0f0f0" }}>
+                  <th style={{ position: "sticky", top: "60px", zIndex: 10, background: "#fafafa", padding: "14px 18px", textAlign: "left", fontSize: 13, fontWeight: 500, color: "#71717a", minWidth: 260, borderBottom: "0.5px solid #f0f0f0" }}>Module & autorisation</th>
+                  {ROLES.filter(r => r.key !== 'Admin').map((r) => (
+                    <th key={r.key} style={{ position: "sticky", top: "60px", zIndex: 10, background: "#fafafa", padding: "14px 16px", textAlign: "center", fontSize: 13, fontWeight: 500, color: "#18181b", minWidth: 120, whiteSpace: "nowrap", borderBottom: "0.5px solid #f0f0f0" }}>
+                      {r.label}
+                    </th>
                   ))}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                </tr>
+              </thead>
+              <tbody>
+                {groupedPermissions.map(({ group, perms }) => (
+                  <React.Fragment key={group}>
+                    <tr style={{ background: "#fafafa" }}>
+                      <td colSpan={ROLES.filter(r => r.key !== 'Admin').length + 1} style={{ padding: "11px 18px", fontSize: 13, fontWeight: 500, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "0.5px solid #f0f0f0", borderTop: "0.5px solid #f0f0f0" }}>
+                        {group}
+                      </td>
+                    </tr>
+                    {perms.map((p) => (
+                      <tr key={p.key} style={{ borderBottom: "0.5px solid #f5f5f5" }}>
+                        <td style={{ padding: "14px 18px", fontSize: 14, color: "#334155" }}>{p.label}</td>
+                        {ROLES.filter(r => r.key !== 'Admin').map((r) => (
+                          <td key={r.key} style={{ padding: "14px 16px", textAlign: "center" }}>
+                            <Toggle checked={(privileges[r.key] || []).includes(p.key)} onChange={() => togglePermission(r.key, p.key)} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        {/* Info banner */}
-        <div style={{ marginTop: 20, padding: "14px 18px", background: "#E1F5EE", borderLeft: "3px solid #0F6E56", borderRadius: "0 8px 8px 0", display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, color: "#085041" }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          <span><strong>Sécurité :</strong> Les modifications sont enregistrées immédiatement et de manière persistante. Les administrateurs disposent de l'ensemble des privilèges par défaut.</span>
+          {/* Info banner */}
+          <div style={{ marginTop: 20, padding: "14px 18px", background: "#E1F5EE", borderLeft: "3px solid #0F6E56", borderRadius: "0 8px 8px 0", display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, color: "#085041" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span><strong>Sécurité :</strong> Les modifications sont enregistrées immédiatement et de manière persistante. Les administrateurs disposent de l'ensemble des privilèges par défaut.</span>
+          </div>
         </div>
-      </CardSection>
+      </div>
 
       </div>
 
