@@ -135,7 +135,16 @@ export interface Demande {
   potential_duplicate_client?: number;
   potential_duplicate_detail?: Client;
   documents?: Document[];
+  geste_commercial?: CommercialGestureShort | null;
   created_at: string;
+}
+
+export interface CommercialGestureShort {
+  id: number;
+  gesture_type: 'reduction_tarif' | 'facturation_annulee' | 'intervention_gratuite';
+  status: 'en_attente' | 'en_cours' | 'cloture';
+  reduction_type: 'montant' | 'pourcentage';
+  reduction_value: number;
 }
 
 export interface Document {

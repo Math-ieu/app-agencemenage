@@ -176,6 +176,24 @@ const SERVICES_LIST = {
   ]
 };
 
+const getGesteMessage = (geste: any) => {
+  if (!geste) return null;
+  if (geste.gesture_type === 'intervention_gratuite') {
+    return `« -100% appliqué sur cette demande. » source geste commercial`;
+  }
+  if (geste.gesture_type === 'facturation_annulee') {
+    return `« Facturation annulée sur cette demande. » source geste commercial`;
+  }
+  if (geste.gesture_type === 'reduction_tarif') {
+    if (geste.reduction_type === 'pourcentage') {
+      return `« -${geste.reduction_value}% appliqué sur cette demande. » source geste commercial`;
+    } else {
+      return `« -${geste.reduction_value} dh appliqué sur cette demande. » source geste commercial`;
+    }
+  }
+  return null;
+};
+
 export default function Dashboard() {
 
   const [demandes, setDemandes] = useState<Demande[]>([]);
@@ -849,6 +867,7 @@ export default function Dashboard() {
       montant_ht: montantHT,
       ca_initial: caInitial,
       tva_active: tvaActive,
+      geste_commercial: d.geste_commercial || null,
       montant_verse: toNumber(facturationData.montant_verse),
       montant_profil_doit: toNumber(facturationData.montant_profil_doit),
       facturation_annulee: Boolean(facturationData.facturation_annulee),
@@ -2184,6 +2203,15 @@ export default function Dashboard() {
                                 « CA de cette demande : {toNumber(editFormData.ca_initial)} DH »
                               </p>
                             )}
+                            {editFormData.geste_commercial && (() => {
+                              const msg = getGesteMessage(editFormData.geste_commercial);
+                              if (!msg) return null;
+                              return (
+                                <p style={{ fontSize: '12px', color: '#16A34A', fontWeight: 600, marginTop: '6px' }}>
+                                  {msg}
+                                </p>
+                              );
+                            })()}
                           </div>
                           <div className="form-group">
                             <label>TVA (20%)</label>

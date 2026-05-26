@@ -175,88 +175,6 @@ export function CreateGesteModal({ demandes, commerciaux, form, setForm, onClose
     });
   }, [clients, form.client_nom]);
 
-  // Générer automatiquement le message client au format brut exact
-  useEffect(() => {
-    if (!form.client_nom) return;
-    
-    // Récupérer le service de la demande sélectionnée
-    const dem = clientDemandes.find(d => d.id === Number(form.demande_id));
-    const serviceName = dem ? (dem.service_label || dem.service) : 'votre prestation';
-    
-    // Calculs de tarification
-    const montantHT = Number(form.montant_ht) || 0;
-    const tvaMontant = form.tva_active ? montantHT * 0.2 : 0;
-    const montantTTC = montantHT + tvaMontant;
-    
-    const isAnnulation = form.type_geste === 'facturation_annulee' || form.type_geste === 'intervention_gratuite';
-    
-    let reductionVal = Number(form.reduction_valeur) || 0;
-    let reductionPercent = 0;
-    let reductionDh = 0;
-    
-    if (isAnnulation) {
-      reductionPercent = 100;
-      reductionDh = montantTTC;
-    } else {
-      if (form.reduction_type === 'pourcentage') {
-        reductionPercent = reductionVal;
-        reductionDh = (montantTTC * reductionVal) / 100;
-      } else {
-        reductionDh = reductionVal;
-        reductionPercent = montantTTC > 0 ? (reductionVal / montantTTC) * 100 : 0;
-      }
-    }
-    
-    const finalAmount = isAnnulation ? 0 : Math.max(0, montantTTC - reductionDh);
-    const comm = commerciaux.find(c => String(c.id) === String(form.cree_par));
-    const commercialName = comm ? (comm.full_name || `${comm.first_name} ${comm.last_name}`) : 'Moussa';
-
-    const generatedMessage = `Bonjour ${form.client_nom},
-
-Suite à votre demande de ${serviceName.toLowerCase()}, nous souhaitons vous faire bénéficier d’un geste commercial en vous offrant une réduction de ${reductionPercent.toFixed(0)}%.
-
-Résumé de votre réservation :
-
-Type de prestation : ${serviceName}
-
-Montant initial : ${montantTTC.toFixed(0)} DH
-
-Réduction appliquée : -${reductionDh.toFixed(0)} DH (${reductionPercent.toFixed(0)}%)
-
-Nouveau montant : ${finalAmount.toFixed(0)} DH
-
-Votre facture a été mise à jour avec cette réduction.
-
-Nous vous remercions pour votre confiance et restons à votre disposition pour toute question.
-
-Cordialement,
-${commercialName}
-Agence Ménage`;
-
-    // Mettre à jour uniquement si le message n'a pas été modifié manuellement ou s'il est vide
-    setForm(prev => {
-      // Si le message est vide ou contient l'ancien format généré automatiquement
-      if (!prev.message_client || prev.message_client.includes("Suite à votre demande de")) {
-        return {
-          ...prev,
-          message_client: generatedMessage
-        };
-      }
-      return prev;
-    });
-  }, [
-    form.client_nom,
-    form.demande_id,
-    form.type_geste,
-    form.montant_ht,
-    form.reduction_valeur,
-    form.reduction_type,
-    form.tva_active,
-    form.cree_par,
-    clientDemandes,
-    commerciaux
-  ]);
-
   // Types de gestes conformes à la liste spécifiée (Réduction sur tarif, intervention gratuite)
   const AVAILABLE_TYPES = [
     { value: 'reduction_tarif', label: 'Réduction sur le tarif' },
@@ -273,11 +191,7 @@ Agence Ménage`;
   const isAnnulation = form.type_geste === 'facturation_annulee' || form.type_geste === 'intervention_gratuite';
   const totalAPayer = isAnnulation ? 0 : Math.max(0, montantTTC - reductionAmount);
 
-  const repartitionValid = useMemo(() => {
-    if (isAnnulation) return true;
-    if (totalAPayer === 0) return true;
-    return (Number(form.part_profil || 0) + Number(form.part_agence || 0)) === totalAPayer;
-  }, [isAnnulation, totalAPayer, form.part_profil, form.part_agence]);
+
 
   const toggleCanal = (val: string) => {
     setForm((prev) => ({
@@ -484,37 +398,7 @@ Agence Ménage`;
             </p>
           </fieldset>
 
-          {/* 6. Répartition du montant (uniquement si total > 0) */}
-          {!isAnnulation && totalAPayer > 0 && (
-            <fieldset className="mk-fieldset">
-              <legend>Répartition du montant</legend>
-              <div className="mk-form-row-2">
-                <label className="mk-field">
-                  <span>Part du profil (MAD)</span>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={form.part_profil}
-                    onChange={(e) => setForm({ ...form, part_profil: e.target.value })}
-                  />
-                </label>
-                <label className="mk-field">
-                  <span>Part de l'agence (MAD)</span>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={form.part_agence}
-                    onChange={(e) => setForm({ ...form, part_agence: e.target.value })}
-                  />
-                </label>
-              </div>
-              {!repartitionValid && (
-                <p className="mk-field-error">
-                  Part profil ({form.part_profil || 0}) + Part agence ({form.part_agence || 0}) doit être = {totalAPayer.toFixed(2)} MAD
-                </p>
-              )}
-            </fieldset>
-          )}
+
 
           {isAnnulation && (
             <div className="mk-field-warn">
