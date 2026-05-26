@@ -54,6 +54,7 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (err) {
         processQueue(err);
+        localStorage.removeItem('auth-storage');
         window.location.href = '/login';
         return Promise.reject(err);
       } finally {
@@ -79,6 +80,12 @@ export const updateMe = (data: { first_name?: string; last_name?: string }) =>
 
 export const changePassword = (data: { old_password?: string; new_password?: string }) =>
   apiClient.post('/api/auth/change-password/', data);
+
+export const getRolesPermissions = () =>
+  apiClient.get('/api/auth/roles-permissions/');
+
+export const updateRolesPermissions = (data: Record<string, string[]>) =>
+  apiClient.post('/api/auth/roles-permissions/', data);
 
 // ─── Demandes ─────────────────────────────────────────────────────────────────
 export const getDemandes = (params?: Record<string, string | number>) =>

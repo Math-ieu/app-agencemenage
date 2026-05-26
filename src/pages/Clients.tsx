@@ -233,7 +233,7 @@ export default function Clients() {
   useEffect(() => { fetchData(); }, [search, activeTab, commercialFilter, segmentFilter, serviceFilter, dateDebut, dateFin]);
 
   useEffect(() => {
-    if (user?.role === 'admin' || user?.role === 'responsable_commercial') {
+    if (checkPermission(user, 'affecter_commercial').allowed) {
       getUsers({ role: 'commercial' }).then(res => setCommerciaux(res.data?.results || res.data)).catch(console.error);
     }
   }, [user]);
@@ -607,7 +607,7 @@ export default function Clients() {
                               <span>Note opérationnelle</span>
                             </div>
                             <div className="dropdown-divider"></div>
-                            {(user?.role === 'admin' || user?.role === 'responsable_commercial') && c.latest_demande && (
+                            {checkPermission(user, 'affecter_commercial').allowed && c.latest_demande && (
                               <div className="dropdown-item" onClick={(e) => {
                                 e.stopPropagation();
                                 setShowAssignmentModal(c.latest_demande!.id);

@@ -11,6 +11,7 @@ import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, aff
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
+import { checkPermission } from '../utils/permissions';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -243,7 +244,7 @@ export default function Dashboard() {
   const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
 
   useEffect(() => {
-    if (user?.role === 'admin' || user?.role === 'responsable_commercial') {
+    if (checkPermission(user, 'affecter_commercial').allowed) {
       getUsers({ role: 'commercial' }).then(res => setCommerciaux(res.data?.results || res.data)).catch(console.error);
     }
   }, [user]);

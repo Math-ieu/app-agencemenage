@@ -1,5 +1,8 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/auth';
+import { getRolesPermissions } from './api/client';
+import { hasPermission } from './utils/permissions';
 
 // Layout & Auth
 import AppLayout from './components/layout/AppLayout';
@@ -32,7 +35,32 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   return children;
 };
 
+// Route permission guard
+const PermissionRoute = ({ permission, children }: { permission: string; children: JSX.Element }) => {
+  const { user } = useAuthStore();
+  if (!hasPermission(user, permission)) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+};
+
 export default function App() {
+  const { isAuthenticated } = useAuthStore();
+
+  useEffect(() => {
+    if (isAuthenticated && window.location.pathname !== '/login') {
+      getRolesPermissions()
+        .then((res) => {
+          if (res.data) {
+            localStorage.setItem('roles_permissions', JSON.stringify(res.data));
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to sync roles permissions from API:', err);
+        });
+    }
+  }, [isAuthenticated]);
+
   return (
     <BrowserRouter>
       <ToastContainer />
@@ -49,29 +77,29 @@ export default function App() {
           }
         >
           <Route index element={<Dashboard />} />
-          <Route path="demandes" element={<DemandesEnAttente />} />
-          <Route path="clients/:id" element={<ClientDetails />} />
-          <Route path="clients" element={<Clients />} />
-          <Route path="profils/:id" element={<ProfilDetails />} />
-          <Route path="profils" element={<Profils />} />
+          <Route path="demandes" element={<PermissionRoute permission="consulter_demandes"><DemandesEnAttente /></PermissionRoute>} />
+          <Route path="clients/:id" element={<PermissionRoute permission="consulter_clients"><ClientDetails /></PermissionRoute>} />
+          <Route path="clients" element={<PermissionRoute permission="consulter_clients"><Clients /></PermissionRoute>} />
+          <Route path="profils/:id" element={<PermissionRoute permission="consulter_agents"><ProfilDetails /></PermissionRoute>} />
+          <Route path="profils" element={<PermissionRoute permission="consulter_agents"><Profils /></PermissionRoute>} />
           <Route path="historique" element={<Historique />} />
           <Route path="finance">
-            <Route path="vue-globale" element={<VueGlobale />} />
-            <Route path="la-caisse" element={<LaCaisse />} />
+            <Route path="vue-globale" element={<PermissionRoute permission="voir_la_caisse"><VueGlobale /></PermissionRoute>} />
+            <Route path="la-caisse" element={<PermissionRoute permission="voir_la_caisse"><LaCaisse /></PermissionRoute>} />
           </Route>
-          <Route path="qualite" element={<Qualite />} />
-          <Route path="marketing" element={<Marketing />} />
+          <Route path="qualite" element={<PermissionRoute permission="consulter_demandes"><Qualite /></PermissionRoute>} />
+          <Route path="marketing" element={<PermissionRoute permission="rediger_blog"><Marketing /></PermissionRoute>} />
           <Route path="devis" element={<MoteurDevis />} />
           <Route path="parametres">
             <Route path="profil" element={<ParametresProfil />} />
-            <Route path="utilisateurs" element={<ParametresUtilisateurs />} />
+            <Route path="utilisateurs" element={<PermissionRoute permission="parametres_globaux"><ParametresUtilisateurs /></PermissionRoute>} />
           </Route>
 
           {/* SEO / Blog Routes */}
           <Route path="seo">
-            <Route path="blog" element={<Blog />} />
-            <Route path="blog/new" element={<ArticleForm />} />
-            <Route path="blog/edit/:id" element={<ArticleForm />} />
+            <Route path="blog" element={<PermissionRoute permission="rediger_blog"><Blog /></PermissionRoute>} />
+            <Route path="blog/new" element={<PermissionRoute permission="rediger_blog"><ArticleForm /></PermissionRoute>} />
+            <Route path="blog/edit/:id" element={<PermissionRoute permission="rediger_blog"><ArticleForm /></PermissionRoute>} />
           </Route>
         </Route>
 

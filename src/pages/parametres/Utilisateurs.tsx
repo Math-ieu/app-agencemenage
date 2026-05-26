@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuthStore } from "../../store/auth";
 import { checkPermission } from "../../utils/permissions";
-import { getUsers, createUser, updateUser, deleteUser } from "../../api/client";
+import { getUsers, createUser, updateUser, deleteUser, getRolesPermissions, updateRolesPermissions } from "../../api/client";
 import { Eye, EyeOff } from "lucide-react";
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
@@ -57,6 +57,7 @@ const ROLES = [
   { key: "commercial",                 label: "Commercial" },
   { key: "Responsable des Opérations", label: "Resp. Opérations" },
   { key: "Chargée des Opérations",     label: "Chargée Opérations" },
+  { key: "Opérationnel",               label: "Opérationnel" },
 ];
 
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
@@ -66,6 +67,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   "commercial":                 ["consulter_clients","creer_clients","consulter_demandes"],
   "Responsable des Opérations": ["consulter_clients","consulter_demandes","valider_demandes","voir_la_caisse","consulter_agents","creer_agents","documents_agents"],
   "Chargée des Opérations":     ["consulter_clients","consulter_demandes","consulter_agents"],
+  "Opérationnel":               ["consulter_demandes"],
 };
 
 
@@ -249,6 +251,7 @@ const mapPositionToRole = (position: string): string => {
   if (p === 'commercial') return 'commercial';
   if (p === 'responsable des opérations' || p === 'responsable_operations') return 'responsable_operations';
   if (p === 'chargée des opérations' || p === 'charge_operations') return 'charge_operations';
+  if (p === 'opérationnel' || p === 'operationnel') return 'operationnel';
   return 'commercial';
 };
 
@@ -260,6 +263,7 @@ const mapRoleToPosition = (role: string): string => {
   if (r === 'commercial') return 'commercial';
   if (r === 'responsable_operations') return 'Responsable des Opérations';
   if (r === 'charge_operations') return 'Chargée des Opérations';
+  if (r === 'operationnel') return 'Opérationnel';
   return 'commercial';
 };
 
@@ -516,6 +520,7 @@ function Pagination({ page, totalPages, total, start, end, onChange }: {
 /* ─── Main Component ────────────────────────────────────────────────────────── */
 export default function Utilisateurs() {
   const { user } = useAuthStore();
+  const isSystemAdmin = user?.role?.toLowerCase() === 'admin';
   const [users, setUsers]         = useState<User[]>([]);
   const [privileges, setPrivileges] = useState<Record<string, string[]>>({});
   const [search, setSearch]       = useState("");
@@ -543,9 +548,22 @@ export default function Utilisateurs() {
   useEffect(() => {
     fetchUsers();
 
-    const savedPriv = localStorage.getItem("roles_permissions");
-    setPrivileges(savedPriv ? JSON.parse(savedPriv) : DEFAULT_PERMISSIONS);
-    if (!savedPriv) localStorage.setItem("roles_permissions", JSON.stringify(DEFAULT_PERMISSIONS));
+    getRolesPermissions()
+      .then((res) => {
+        const matrix = res.data;
+        if (matrix && Object.keys(matrix).length > 0) {
+          setPrivileges(matrix);
+          localStorage.setItem("roles_permissions", JSON.stringify(matrix));
+        } else {
+          const savedPriv = localStorage.getItem("roles_permissions");
+          setPrivileges(savedPriv ? JSON.parse(savedPriv) : DEFAULT_PERMISSIONS);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch roles permissions from API:", err);
+        const savedPriv = localStorage.getItem("roles_permissions");
+        setPrivileges(savedPriv ? JSON.parse(savedPriv) : DEFAULT_PERMISSIONS);
+      });
   }, []);
 
   const handleAdd = async (values: UserFormValues) => {
@@ -629,7 +647,15 @@ export default function Utilisateurs() {
     };
     setPrivileges(updated);
     localStorage.setItem("roles_permissions", JSON.stringify(updated));
-    showToast("Privilèges mis à jour");
+    
+    updateRolesPermissions(updated)
+      .then(() => {
+        showToast("Privilèges mis à jour et synchronisés avec le serveur.");
+      })
+      .catch((err) => {
+        console.error("Failed to sync updated privileges to API:", err);
+        showToast("Privilèges mis à jour localement (erreur de synchronisation serveur).");
+      });
   }, [privileges, user]);
 
   const filtered = useMemo(() => {
@@ -655,8 +681,58 @@ export default function Utilisateurs() {
   }, []);
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 32px 64px", display: "flex", flexDirection: "column", gap: 28, fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", color: "#18181b" }}>
+    <div style={{ position: "relative", maxWidth: 1200, margin: "0 auto", padding: "40px 32px 64px", display: "flex", flexDirection: "column", gap: 28, fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", color: "#18181b" }}>
       <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
+      {!isSystemAdmin && (
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 100,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "120px 24px",
+          background: "rgba(255, 255, 255, 0.45)",
+          backdropFilter: "blur(5px)",
+          borderRadius: 16,
+        }}>
+          <div style={{
+            background: "#fff",
+            border: "0.5px solid #e4e4e7",
+            borderRadius: 16,
+            padding: "36px 40px",
+            maxWidth: 480,
+            textAlign: "center",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
+            animation: "slideUp 0.3s ease-out",
+          }}>
+            <div style={{
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              background: "#FEE2E2",
+              border: "0.5px solid #FCA5A5",
+              color: "#EF4444",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 18px",
+            }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0110 0v4"/>
+              </svg>
+            </div>
+            <h2 style={{ fontSize: 19, fontWeight: 600, margin: "0 0 8px", color: "#18181b" }}>Accès Administrateur Requis</h2>
+            <p style={{ fontSize: 14.5, color: "#71717a", margin: 0, lineHeight: 1.6 }}>
+              Seul le compte Administrateur dispose des privilèges requis pour consulter et gérer les collaborateurs ou modifier les matrices de droits d'accès au backoffice.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div style={!isSystemAdmin ? { filter: "grayscale(100%)", opacity: 0.45, pointerEvents: "none" } : undefined}>
 
       {/* Page header */}
       <div>
@@ -779,7 +855,7 @@ export default function Utilisateurs() {
             <thead>
               <tr style={{ background: "#fafafa", borderBottom: "0.5px solid #f0f0f0" }}>
                 <th style={{ padding: "14px 18px", textAlign: "left", fontSize: 13, fontWeight: 500, color: "#71717a", minWidth: 260 }}>Module & autorisation</th>
-                {ROLES.map((r) => (
+                {ROLES.filter(r => r.key !== 'Admin').map((r) => (
                   <th key={r.key} style={{ padding: "14px 16px", textAlign: "center", fontSize: 13, fontWeight: 500, color: "#18181b", minWidth: 120, whiteSpace: "nowrap" }}>
                     {r.label}
                   </th>
@@ -790,14 +866,14 @@ export default function Utilisateurs() {
               {groupedPermissions.map(({ group, perms }) => (
                 <React.Fragment key={group}>
                   <tr style={{ background: "#fafafa" }}>
-                    <td colSpan={ROLES.length + 1} style={{ padding: "11px 18px", fontSize: 13, fontWeight: 500, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "0.5px solid #f0f0f0", borderTop: "0.5px solid #f0f0f0" }}>
+                    <td colSpan={ROLES.filter(r => r.key !== 'Admin').length + 1} style={{ padding: "11px 18px", fontSize: 13, fontWeight: 500, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "0.5px solid #f0f0f0", borderTop: "0.5px solid #f0f0f0" }}>
                       {group}
                     </td>
                   </tr>
                   {perms.map((p) => (
                     <tr key={p.key} style={{ borderBottom: "0.5px solid #f5f5f5" }}>
                       <td style={{ padding: "14px 18px", fontSize: 14, color: "#334155" }}>{p.label}</td>
-                      {ROLES.map((r) => (
+                      {ROLES.filter(r => r.key !== 'Admin').map((r) => (
                         <td key={r.key} style={{ padding: "14px 16px", textAlign: "center" }}>
                           <Toggle checked={(privileges[r.key] || []).includes(p.key)} onChange={() => togglePermission(r.key, p.key)} />
                         </td>
@@ -818,6 +894,8 @@ export default function Utilisateurs() {
           <span><strong>Sécurité :</strong> Les modifications sont enregistrées immédiatement et de manière persistante. Les administrateurs disposent de l'ensemble des privilèges par défaut.</span>
         </div>
       </CardSection>
+
+      </div>
 
       {/* Dialogs */}
       <UserFormDialog open={formOpen} onClose={() => { setFormOpen(false); setEditing(null); }} initial={editing} onSubmit={editing ? handleUpdate : handleAdd} />

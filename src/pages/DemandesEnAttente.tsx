@@ -196,7 +196,7 @@ export default function DemandesEnAttente() {
 
   // Fecth Commerciaux for Assignation
   useEffect(() => {
-    if (user?.role === 'admin' || user?.role === 'responsable_commercial') {
+    if (checkPermission(user, 'affecter_commercial').allowed) {
       getUsers({ role: 'commercial' }).then(res => {
         setCommerciaux(Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : []));
       }).catch(err => console.error('Erreur commerciaux:', err));
@@ -1220,7 +1220,7 @@ export default function DemandesEnAttente() {
                     Modifier
                   </button>
 
-                  {(user?.role === 'admin' || user?.role === 'responsable_commercial') && (
+                  {checkPermission(user, 'affecter_commercial').allowed && (
                     <button className="btn transition-all flex-1 text-[13px] leading-tight px-1 py-2 text-center flex items-center justify-center"
                       style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc' }}
                       onClick={() => setShowAssignmentModal(d.id)}>
@@ -1328,7 +1328,7 @@ export default function DemandesEnAttente() {
                       <Edit size={16} />
                     </button>
 
-                    {(user?.role === 'admin' || user?.role === 'responsable_commercial') && (
+                    {checkPermission(user, 'affecter_commercial').allowed && (
                       <button className="btn transition-all flex items-center justify-center p-2"
                         style={{ backgroundColor: '#fdf4ff', color: '#c026d3', border: '1px solid #f0abfc', borderRadius: '4px' }}
                         onClick={() => setShowAssignmentModal(d.id)}>

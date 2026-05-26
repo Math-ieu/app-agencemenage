@@ -5,6 +5,7 @@ import {
   DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X, Globe, ChevronDown
 } from 'lucide-react';
 import { useAuthStore, useNotificationStore } from '../../store/auth';
+import { hasPermission } from '../../utils/permissions';
 import logoUrl from '../../assets/LOGO-AGENCE-MENAGE.png';
 import { NotificationBell } from './NotificationBell';
 
@@ -51,6 +52,46 @@ export default function AppLayout() {
   const { pendingCount } = useNotificationStore();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const filteredNavItems = navItems.map(item => {
+    // If item has children, filter children
+    if ('children' in item && item.children) {
+      const filteredChildren = item.children.filter(child => {
+        if (child.to === '/finance/vue-globale' || child.to === '/finance/la-caisse') {
+          return hasPermission(user, 'voir_la_caisse');
+        }
+        if (child.to === '/seo/blog') {
+          return hasPermission(user, 'rediger_blog');
+        }
+        if (child.to === '/parametres/utilisateurs') {
+          return hasPermission(user, 'parametres_globaux');
+        }
+        return true;
+      });
+      
+      if (filteredChildren.length === 0) return null;
+      return { ...item, children: filteredChildren };
+    }
+    
+    // Top-level items
+    if (item.to === '/demandes') {
+      return hasPermission(user, 'consulter_demandes') ? item : null;
+    }
+    if (item.to === '/profils') {
+      return hasPermission(user, 'consulter_agents') ? item : null;
+    }
+    if (item.to === '/clients') {
+      return hasPermission(user, 'consulter_clients') ? item : null;
+    }
+    if (item.to === '/qualite') {
+      return hasPermission(user, 'consulter_demandes') ? item : null;
+    }
+    if (item.to === '/marketing') {
+      return hasPermission(user, 'rediger_blog') ? item : null;
+    }
+    
+    return item;
+  }).filter((item): item is typeof navItems[number] => item !== null);
   const [expandedItems, setExpandedItems] = useState<string[]>(['seo', 'finance', 'parametres']);
 
   const toggleExpand = (id: string) => {
@@ -99,7 +140,7 @@ export default function AppLayout() {
         </div>
 
         <nav className="sidebar-nav">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             const { icon: Icon, label, badge } = item;
             const hasChildren = 'children' in item;
             const isExpanded = hasChildren && expandedItems.includes(item.id!);
