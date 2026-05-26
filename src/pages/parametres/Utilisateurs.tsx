@@ -310,13 +310,41 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
 
   const validate = () => {
     const e: Partial<UserFormValues> = {};
-    if (!values.fullName.trim()) e.fullName = "Requis";
-    if (!values.username.trim()) e.username = "Requis";
-    if (!values.email.trim() || !values.email.includes("@")) e.email = "Email invalide";
-    if (!values.phone.trim()) e.phone = "Requis";
-    if (!isEdit && (!values.password || values.password.length < 8)) {
-      e.password = "Le mot de passe doit contenir au moins 8 caractères";
+    if (!values.fullName.trim()) {
+      e.fullName = "Le nom complet est requis";
     }
+
+    if (!values.username.trim()) {
+      e.username = "Le nom d'utilisateur est requis";
+    }
+
+    const emailTrimmed = values.email.trim();
+    if (!emailTrimmed) {
+      e.email = "L'adresse e-mail est requise";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      e.email = "L'adresse e-mail n'est pas valide (ex: nom@domaine.ma)";
+    }
+
+    const phoneTrimmed = values.phone.trim();
+    if (!phoneTrimmed) {
+      e.phone = "Le numéro de téléphone est requis";
+    } else if (!/^\+?[0-9\s\-()]{8,20}$/.test(phoneTrimmed)) {
+      e.phone = "Le numéro de téléphone n'est pas valide (ex: +212 6XXXXXXXX)";
+    }
+
+    if (!isEdit) {
+      const pwd = values.password || "";
+      const hasMinLength = pwd.length >= 8;
+      const hasNumber = /[0-9]/.test(pwd);
+      const hasUppercase = /[A-Z]/.test(pwd);
+
+      if (!pwd) {
+        e.password = "Le mot de passe est requis";
+      } else if (!hasMinLength || !hasNumber || !hasUppercase) {
+        e.password = "Le mot de passe doit contenir au moins 8 caractères, incluant au moins un chiffre et une lettre majuscule.";
+      }
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -341,11 +369,15 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
       background: "rgba(0,0,0,0.4)",
       display: "flex", alignItems: "center", justifyContent: "center", padding: 32,
     }} onClick={onClose}>
-      <div style={{
-        background: "#fff", borderRadius: 16,
-        border: "0.5px solid #e4e4e7", width: "100%", maxWidth: 620,
-        overflow: "hidden",
-      }} onClick={(e) => e.stopPropagation()}>
+      <form
+        onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
+        style={{
+          background: "#fff", borderRadius: 16,
+          border: "0.5px solid #e4e4e7", width: "100%", maxWidth: 620,
+          overflow: "hidden",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 28px 18px", borderBottom: "0.5px solid #f0f0f0" }}>
@@ -360,7 +392,7 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
               </p>
             </div>
           </div>
-          <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, border: "0.5px solid #e4e4e7", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#71717a" }}>
+          <button type="button" onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, border: "0.5px solid #e4e4e7", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#71717a" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -370,22 +402,48 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
               <label style={labelStyle}>Nom complet <span style={{ color: "#E24B4A" }}>*</span></label>
-              <input style={inputStyle(errors.fullName)} value={values.fullName} onChange={set("fullName")} placeholder="Ex: Sofia El Amrani" />
+              <input
+                autoComplete="name"
+                style={inputStyle(errors.fullName)}
+                value={values.fullName}
+                onChange={set("fullName")}
+                placeholder="Ex: Sofia El Amrani"
+              />
               {errors.fullName && <p style={errStyle}>{errors.fullName}</p>}
             </div>
             <div>
               <label style={labelStyle}>Nom d'utilisateur <span style={{ color: "#E24B4A" }}>*</span></label>
-              <input style={inputStyle(errors.username)} value={values.username} onChange={set("username")} placeholder="Ex: selamrani" />
+              <input
+                autoComplete="username"
+                style={inputStyle(errors.username)}
+                value={values.username}
+                onChange={set("username")}
+                placeholder="Ex: selamrani"
+              />
               {errors.username && <p style={errStyle}>{errors.username}</p>}
             </div>
             <div>
               <label style={labelStyle}>Adresse e-mail <span style={{ color: "#E24B4A" }}>*</span></label>
-              <input style={inputStyle(errors.email)} type="email" value={values.email} onChange={set("email")} placeholder="sofia@example.ma" />
+              <input
+                type="email"
+                autoComplete="email"
+                style={inputStyle(errors.email)}
+                value={values.email}
+                onChange={set("email")}
+                placeholder="sofia@example.ma"
+              />
               {errors.email && <p style={errStyle}>{errors.email}</p>}
             </div>
             <div>
               <label style={labelStyle}>Téléphone <span style={{ color: "#E24B4A" }}>*</span></label>
-              <input style={inputStyle(errors.phone)} value={values.phone} onChange={set("phone")} placeholder="+212 6XX XX XX XX" />
+              <input
+                type="tel"
+                autoComplete="tel"
+                style={inputStyle(errors.phone)}
+                value={values.phone}
+                onChange={set("phone")}
+                placeholder="+212 6XX XX XX XX"
+              />
               {errors.phone && <p style={errStyle}>{errors.phone}</p>}
             </div>
             <div>
@@ -406,6 +464,7 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
                 <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                   <input
                     type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
                     style={{ ...inputStyle(errors.password), paddingRight: 40 }}
                     value={values.password || ""}
                     onChange={set("password")}
@@ -449,14 +508,14 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
 
         {/* Footer */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "18px 28px", borderTop: "0.5px solid #f0f0f0" }}>
-          <button onClick={onClose} style={{ padding: "11px 22px", fontSize: 15, borderRadius: 10, border: "0.5px solid #e4e4e7", background: "transparent", color: "#71717a", cursor: "pointer" }}>
+          <button type="button" onClick={onClose} style={{ padding: "11px 22px", fontSize: 15, borderRadius: 10, border: "0.5px solid #e4e4e7", background: "transparent", color: "#71717a", cursor: "pointer" }}>
             Annuler
           </button>
-          <button onClick={handleSubmit} style={{ padding: "11px 24px", fontSize: 15, fontWeight: 500, borderRadius: 10, border: "none", background: "#0F6E56", color: "#9FE1CB", cursor: "pointer" }}>
+          <button type="submit" style={{ padding: "11px 24px", fontSize: 15, fontWeight: 500, borderRadius: 10, border: "none", background: "#0F6E56", color: "#9FE1CB", cursor: "pointer" }}>
             {isEdit ? "Enregistrer les modifications" : "Créer le compte"}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

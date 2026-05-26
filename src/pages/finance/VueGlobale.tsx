@@ -1660,6 +1660,8 @@ export default function VueGlobale() {
           const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
           const portion = totalDue;
 
+          if (portion < 0.01) continue;
+
           result.push({
             ...row,
             profilId: pId,
@@ -1670,11 +1672,14 @@ export default function VueGlobale() {
           });
         }
       } else {
-        result.push({
-          ...row,
-          _partAgenceDue: getPartAgenceDueFromProfil(row),
-          _uniqueKey: row.missionNo
-        });
+        const partAgenceDue = getPartAgenceDueFromProfil(row);
+        if (partAgenceDue >= 0.01) {
+          result.push({
+            ...row,
+            _partAgenceDue: partAgenceDue,
+            _uniqueKey: row.missionNo
+          });
+        }
       }
     }
     return result;
@@ -1725,6 +1730,8 @@ export default function VueGlobale() {
             portion = Number(row.montantProfilAnnulation || 0) * ratio;
           }
 
+          if (portion < 0.01) continue;
+
           result.push({
             ...row,
             profilId: pId,
@@ -1735,11 +1742,14 @@ export default function VueGlobale() {
           });
         }
       } else {
-        result.push({
-          ...row,
-          _partProfilDue: getPartProfilDueFromAgence(row),
-          _uniqueKey: row.missionNo
-        });
+        const partProfilDue = getPartProfilDueFromAgence(row);
+        if (partProfilDue >= 0.01) {
+          result.push({
+            ...row,
+            _partProfilDue: partProfilDue,
+            _uniqueKey: row.missionNo
+          });
+        }
       }
     }
     return result;
@@ -1777,7 +1787,8 @@ export default function VueGlobale() {
       }
     }
     return Array.from(map.entries())
-      .map(([name, amount]) => ({ name, amount }))
+      .map(([name, amount]) => ({ name: name || '—', amount }))
+      .filter((item) => item.amount >= 0.01)
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
   }, [facturationData, profileAccountsData]);
@@ -1832,7 +1843,8 @@ export default function VueGlobale() {
       }
     }
     return Array.from(map.entries())
-      .map(([name, amount]) => ({ name, amount }))
+      .map(([name, amount]) => ({ name: name || '—', amount }))
+      .filter((item) => item.amount >= 0.01)
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
   }, [facturationData, profileAccountsData]);
@@ -1876,6 +1888,8 @@ export default function VueGlobale() {
             const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
             const portion = totalDue;
 
+            if (portion < 0.01) continue;
+
             const showCommission = !addedCommissionMissions.has(row.missionNo);
             if (showCommission) {
               addedCommissionMissions.add(row.missionNo);
@@ -1905,6 +1919,8 @@ export default function VueGlobale() {
             const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
             const portion = totalPartsAmount > 0 ? Number(part.amount || 0) : (totalDue / row.parts_repartition.length);
 
+            if (portion < 0.01) continue;
+
             const showCommission = !addedCommissionMissions.has(row.missionNo);
             if (showCommission) {
               addedCommissionMissions.add(row.missionNo);
@@ -1931,14 +1947,21 @@ export default function VueGlobale() {
             : true;
 
         if (!isPaid) {
+          const partAgenceDue = isDebit ? getPartAgenceDueFromProfil(row) : null;
+          const partProfilDue = isCredit ? getPartProfilDueFromAgence(row) : null;
+
+          if ((isDebit && (partAgenceDue || 0) < 0.01) || (isCredit && (partProfilDue || 0) < 0.01)) {
+            continue;
+          }
+
           const showCommission = !addedCommissionMissions.has(row.missionNo);
           if (showCommission) {
             addedCommissionMissions.add(row.missionNo);
           }
           result.push({
             ...row,
-            _partAgenceDue: getPartAgenceDueFromProfil(row),
-            _partProfilDue: getPartProfilDueFromAgence(row),
+            _partAgenceDue: partAgenceDue,
+            _partProfilDue: partProfilDue,
             _commission: showCommission ? getCommissionAgenceEncaissee(row) : null,
             _uniqueKey: row.missionNo,
             _isDebit: isDebit,
