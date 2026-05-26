@@ -641,7 +641,7 @@ export default function DemandesEnAttente() {
       torchons: d.formulaire_data?.torchons || d.formulaire_data?.torchonsEtSerpierres || false,
       montant: d.prix?.toString() || d.formulaire_data?.montant || '',
       mode_paiement: normalizePayment(d.mode_paiement || d.formulaire_data?.mode_paiement || ''),
-      statut_paiement_ui: d.formulaire_data?.facturation?.statut_paiement_ui || d.formulaire_data?.statut_paiement_ui || d.statut_paiement_ui || (d.statut_paiement === 'integral' ? 'paye' : d.statut_paiement === 'acompte' ? 'paiement_en_attente' : d.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_confirme'),
+      statut_paiement_ui: 'non_confirme',
       heard_about_us: d.formulaire_data?.heard_about_us || d.formulaire_data?.comment_connu || d.formulaire_data?.lead_source || '',
       notes: d.formulaire_data?.notes || '',
       service_type: d.formulaire_data?.service_type || 'flexible',
