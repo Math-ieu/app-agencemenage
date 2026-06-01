@@ -421,7 +421,7 @@ export default function ProfilDetails() {
 
     // 1. L'agent est occupé si son ID figure dans les profils_envoyes ou parts_repartition de n'importe quelle demande active non payée du dashboard
     const isBusyOnDashboard = dashboardDemandes.some(d => {
-      if (d.statut === 'en_attente') return false;
+      if (d.statut === 'en_attente' || d.statut === 'pres_terminee' || d.statut === 'termine') return false;
 
       const factDataDef = d.formulaire_data?.facturation || {};
       const statutUi = factDataDef.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(factDataDef.facturation_annulee));
@@ -465,9 +465,9 @@ export default function ProfilDetails() {
 
     // 2. Fallback: vérifier aussi les missions (si une mission active non payée existe)
     return missions.some(m => {
-      if (m.statut === 'annulee') return false;
+      if (m.statut === 'annulee' || m.statut === 'terminee') return false;
       const demande = m.demande_detail || {};
-      if (demande.statut === 'annule') return false;
+      if (demande.statut === 'annule' || demande.statut === 'pres_terminee' || demande.statut === 'termine') return false;
 
       const facturation = demande.formulaire_data?.facturation || {};
       const rawStatutPaiementUi = facturation.statut_paiement_ui || m.paiement_client_statut || (demande.statut_paiement === 'integral' ? 'paye' : demande.statut_paiement === 'acompte' ? 'paiement_en_attente' : demande.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');

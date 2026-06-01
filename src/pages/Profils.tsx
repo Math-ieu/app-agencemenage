@@ -138,7 +138,7 @@ export default function Profils() {
   const busyAgentIds = useMemo(() => {
     const activeIds = new Set<number>();
     for (const d of dashboardDemandes) {
-      if (d.statut === 'en_attente') continue;
+      if (d.statut === 'en_attente' || d.statut === 'pres_terminee' || d.statut === 'termine') continue;
 
       const factDataDef = d.formulaire_data?.facturation || {};
       const statutUi = factDataDef.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(factDataDef.facturation_annulee));
