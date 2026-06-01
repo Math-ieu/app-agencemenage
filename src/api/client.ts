@@ -13,9 +13,31 @@ const apiClient = axios.create({
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (value?: unknown) => void; reject: (err: unknown) => void }> = [];
 
+const pendingRequests = new Set<string>();
+
+const getRequestKey = (config: any) => {
+  const method = config.method || '';
+  const url = config.url || '';
+  const data = typeof config.data === 'string' ? config.data : JSON.stringify(config.data || '');
+  const params = typeof config.params === 'string' ? config.params : JSON.stringify(config.params || '');
+  return `${method}:${url}:${data}:${params}`;
+};
+
 apiClient.interceptors.request.use((config) => {
   if (config.method === 'get') {
     config.params = { ...config.params, _t: Date.now() };
+  } else {
+    // Non-GET requests (POST, PUT, PATCH, DELETE):
+    const key = getRequestKey(config);
+    if (pendingRequests.has(key)) {
+      // Cancel duplicate concurrent requests
+      const source = axios.CancelToken.source();
+      config.cancelToken = source.token;
+      source.cancel('duplicate_request');
+    } else {
+      pendingRequests.add(key);
+      (config as any)._dedupKey = key;
+    }
   }
   return config;
 });
@@ -29,8 +51,24 @@ const processQueue = (error: unknown) => {
 };
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const key = (response.config as any)?._dedupKey;
+    if (key) {
+      pendingRequests.delete(key);
+    }
+    return response;
+  },
   async (error) => {
+    const key = (error.config as any)?._dedupKey;
+    if (key) {
+      pendingRequests.delete(key);
+    }
+
+    if (axios.isCancel(error) && error.message === 'duplicate_request') {
+      // Silently discard double click duplicate cancels to keep UI clean
+      return new Promise(() => {});
+    }
+
     const originalRequest = error.config;
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (originalRequest.url?.includes('/api/auth/login') || originalRequest.url?.includes('/api/auth/refresh')) {
