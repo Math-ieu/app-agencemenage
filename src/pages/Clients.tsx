@@ -57,12 +57,16 @@ const PAYMENT_STATUS_OPTIONS = [
 
 const TABS = [
   { id: 'tout', label: 'Tout' },
+  { id: 'en_attente', label: 'En attente' },
+  { id: 'nouveau_besoin', label: 'Nouveau besoin' },
   { id: 'confirme', label: 'Confirmé' },
+  { id: 'pres_en_cours', label: 'Pres. en cours' },
+  { id: 'pres_terminee', label: 'Pres. terminée' },
   { id: 'annule', label: 'Annulé' },
   { id: 'paye', label: 'Payé' },
   { id: 'facturation_encours', label: 'Facturation en cours' },
   { id: 'facturation_partielle', label: 'Facturation partielle' },
-  { id: 'facturation', label: 'Facturation' }
+  { id: 'facturation_annulee', label: 'Facturation annulée' }
 ];
 
 const SERVICES_LIST = {
@@ -378,9 +382,13 @@ export default function Clients() {
     if (!latest) return '';
     
     if (latest.statut === 'annule') return 'row-status-annulee';
-    if (latest.statut === 'termine') return 'row-status-paye';
-    if (latest.statut === 'pres_terminee') return 'row-status-partielle';
-    if (latest.statut === 'en_cours' || latest.statut === 'en_attente' || latest.statut === 'pres_en_cours') return 'row-status-encours';
+    if (latest.statut === 'termine') return 'row-status-termine';
+    if (latest.statut === 'pres_terminee') return 'row-status-pres-terminee';
+    if (latest.statut === 'pres_en_cours') return 'row-status-pres-en-cours';
+    if (latest.statut === 'en_attente') return 'row-status-attente';
+    if (latest.statut === 'en_cours') {
+      return latest.cao ? 'row-status-termine' : 'row-status-nouveau';
+    }
     return '';
   };
 
