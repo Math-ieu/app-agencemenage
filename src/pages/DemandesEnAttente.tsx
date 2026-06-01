@@ -691,7 +691,7 @@ export default function DemandesEnAttente() {
       const frequencyValue = formData.frequence === 'une fois' ? 'oneshot' : 'abonnement';
       const isFixedSchedule = formData.scheduling_type === 'fixed';
       const clientDisplayName = activeSegment === 'entreprise'
-        ? (formData.contact_person || formData.entity_name || formData.nom)
+        ? (formData.entity_name || formData.contact_person || formData.nom)
         : formData.nom;
 
       // Fix phone indicator: Add +212 if not present

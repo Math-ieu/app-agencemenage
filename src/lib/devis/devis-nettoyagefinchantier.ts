@@ -14,6 +14,7 @@ interface DevisData {
     whatsapp: string;
     email: string;
     adresse: string;
+    segment?: string;
   };
   prestations: Array<{ designation: string; montant: number | string }>;
   surface: number;
@@ -143,7 +144,7 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   y += 7;
 
   const infoRows = [
-    ['Nom / Prénom', data.client.nom],
+    [data.client.segment === 'entreprise' ? 'Raison sociale' : 'Nom / Prénom', data.client.nom],
     ['Téléphone', data.client.telephone],
     ['WhatsApp', data.client.whatsapp],
     ['Email', data.client.email],

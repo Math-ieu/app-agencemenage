@@ -54,11 +54,28 @@ const getClientName = (demande: Demande, form: Record<string, any>): string => {
 };
 
 const getEntrepriseName = (demande: Demande, form: Record<string, any>): string => {
-  return (form.raison_sociale || form.raisonSociale || form.entreprise || demande.client_name || 'Entreprise');
+  return (
+    demande.client_detail?.entity_name ||
+    form.entityName ||
+    form.entity_name ||
+    form.raison_sociale ||
+    form.raisonSociale ||
+    form.entreprise ||
+    (demande.client_detail?.segment === 'entreprise' ? demande.client_detail?.display_name : '') ||
+    demande.client_name ||
+    'Entreprise'
+  );
 };
 
 const getInterlocuteur = (demande: Demande, form: Record<string, any>): string => {
-  return (form.interlocuteur || form.contact_name || demande.client_name || '—');
+  return (
+    form.interlocuteur ||
+    form.contact_name ||
+    form.contact_person ||
+    form.contactPerson ||
+    (demande.client_detail ? `${demande.client_detail.first_name || ''} ${demande.client_detail.last_name || ''}`.trim() : '') ||
+    (demande.segment !== 'entreprise' ? demande.client_name : '—')
+  );
 };
 
 const parseMoney = (value: unknown): number => {
@@ -189,6 +206,7 @@ const buildFinChantierData = (demande: Demande): DevisFinChantierData => {
   const surface = toNumber(form.surface || form.superficie || form.m2 || form.surfaceArea || 0);
   const grattageRate = toNumber(form.grattage || form.grattage_rate || 15);
   const grattageLabel = grattageRate <= 12 ? 'Sans grattage' : grattageRate <= 15 ? 'Grattage léger' : 'Grattage profond';
+  const isEntreprise = demande.segment === 'entreprise' || form.segment === 'entreprise';
 
   // Build detailed prestation lines
   const prestations: Array<{ designation: string; montant: number | string }> = [];
@@ -242,11 +260,12 @@ const buildFinChantierData = (demande: Demande): DevisFinChantierData => {
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     client: {
-      nom: getClientName(demande, form),
+      nom: isEntreprise ? getEntrepriseName(demande, form) : getClientName(demande, form),
       telephone: getClientPhone(demande, form),
       whatsapp: form.whatsapp_phone || demande.client_whatsapp || getClientPhone(demande, form),
       email: form.email || form.mail || '—',
       adresse: getClientAddress(demande, form),
+      segment: demande.segment || form.segment,
     },
     prestations,
     surface: surface || 0,
@@ -267,6 +286,7 @@ const buildPostSinistreData = (demande: Demande): DevisPostSinistreData => {
   const niveau = form.niveau || form.gravite || 'moyen';
   const coeffUrgence = toNumber(form.coefficient_majoration || form.urgence || 1);
   const prixBase = toNumber(form.prix_base || total);
+  const isEntreprise = demande.segment === 'entreprise' || form.segment === 'entreprise';
 
   // Build detailed prestation lines
   const prestations: Array<{ designation: string; montant: number; isMajoration?: boolean }> = [];
@@ -309,11 +329,12 @@ const buildPostSinistreData = (demande: Demande): DevisPostSinistreData => {
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     client: {
-      nom: getClientName(demande, form),
+      nom: isEntreprise ? getEntrepriseName(demande, form) : getClientName(demande, form),
       telephone: getClientPhone(demande, form),
       whatsapp: form.whatsapp_phone || demande.client_whatsapp || getClientPhone(demande, form),
       email: form.email || form.mail || '—',
       adresse: getClientAddress(demande, form),
+      segment: demande.segment || form.segment,
     },
     prestations,
     details: {

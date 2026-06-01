@@ -15,6 +15,7 @@ interface DevisPostSinistreData {
     whatsapp: string;
     email: string;
     adresse: string;
+    segment?: string;
   };
   prestations: Array<{ designation: string; montant: number; isMajoration?: boolean }>;
   details: {
@@ -142,7 +143,7 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   y += 8;
 
   const clientInfo = [
-    { label: "Nom", value: data.client.nom },
+    { label: data.client.segment === 'entreprise' ? "Raison sociale" : "Nom", value: data.client.nom },
     { label: "Téléphone", value: data.client.telephone },
     { label: "WhatsApp", value: data.client.whatsapp },
     { label: "Email", value: data.client.email },
