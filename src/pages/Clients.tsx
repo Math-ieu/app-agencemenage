@@ -625,10 +625,10 @@ export default function Clients() {
                                 <span>Affectation</span>
                               </div>
                             )}
-                            <div className="dropdown-item">
+                            <Link to="/marketing" state={{ tab: 'gestes' }} className="dropdown-item">
                               <Slash size={16} className="dropdown-item-icon" />
                               <span>Geste commercial</span>
-                            </div>
+                            </Link>
                             <div className="dropdown-divider"></div>
                             <div className="dropdown-item dropdown-item-danger" onClick={() => handleDeleteClient(c)}>
                               <Trash2 size={16} className="dropdown-item-icon" />

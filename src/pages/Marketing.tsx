@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Megaphone, Ticket, TrendingUp, Plus, Trash2, Pencil, Send, Copy, Archive, ArchiveRestore } from 'lucide-react';
 import { TYPES_GESTE, SEGMENTS_CLIENT } from '@/lib/marketing-constants';
 import { getDemandes, getPromoCodes, createPromoCode, deletePromoCode, updatePromoCode, getCommercialGestures, createCommercialGesture, deleteCommercialGesture, updateCommercialGesture, getCampaigns, createCampaign, deleteCampaign, updateCampaign, getUsers } from '@/api/client';
@@ -115,7 +116,21 @@ const statusLabel = (status: string): string => {
 
 export default function Marketing() {
   const { addToast } = useToastStore();
-  const [activeTab, setActiveTab] = useState<MarketingTab>('codes');
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<MarketingTab>(() => {
+    const state = location.state as { tab?: MarketingTab } | null;
+    if (state && state.tab) {
+      return state.tab;
+    }
+    return 'codes';
+  });
+
+  useEffect(() => {
+    const state = location.state as { tab?: MarketingTab } | null;
+    if (state && state.tab) {
+      setActiveTab(state.tab);
+    }
+  }, [location.state]);
 
   const [promoCodes, setPromoCodes] = useState<PromoCodeItem[]>([]);
   const [gestures, setGestures] = useState<CommercialGestureItem[]>([]);
