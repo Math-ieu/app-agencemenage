@@ -17,6 +17,7 @@ import { useAuthStore } from '../store/auth';
 import { Client, Demande } from '../types';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
 import ClientEditModal from './ClientEditModal';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 
 export interface ActionLog {
   id: number;
@@ -230,6 +231,7 @@ export default function ClientDetails() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDemandDetails, setShowDemandDetails] = useState<Demande | null>(null);
   const [selectedFeedback, setSelectedFeedback] = useState<any | null>(null);
+  const [showBlacklistConfirm, setShowBlacklistConfirm] = useState(false);
   const addToast = useToastStore(state => state.addToast);
 
   const renderPaymentStatus = (demande: any) => {
@@ -303,16 +305,18 @@ export default function ClientDetails() {
   useEffect(() => { fetchData(); }, [id]);
   const toggle = (s: string) => setOpenSections(p => ({ ...p, [s]: !p[s] }));
 
-  const handleToggleBlacklist = async () => {
+  const handleToggleBlacklist = () => {
     if (!client) return;
     const perm = checkPermission(user, 'blacklist_client');
     if (!perm.allowed) {
       addToast(perm.message || 'Action non autorisée', 'error');
       return;
     }
-    const actionText = client.is_blacklisted ? 'retirer de la blacklist' : 'blacklister';
-    if (!window.confirm(`Voulez-vous vraiment ${actionText} ce client ?`)) return;
+    setShowBlacklistConfirm(true);
+  };
 
+  const executeToggleBlacklist = async () => {
+    if (!client) return;
     try {
       const nextStatus = !client.is_blacklisted;
       await updateClient(client.id, { is_blacklisted: nextStatus });
@@ -321,6 +325,8 @@ export default function ClientDetails() {
     } catch (err) {
       console.error(err);
       addToast(`Erreur lors du changement de statut de la blacklist`, 'error');
+    } finally {
+      setShowBlacklistConfirm(false);
     }
   };
 
@@ -1240,6 +1246,22 @@ export default function ClientDetails() {
             </div>
           </div>
         </div>
+      )}
+
+      {showBlacklistConfirm && client && (
+        <ConfirmDialog
+          isOpen={showBlacklistConfirm}
+          onOpenChange={setShowBlacklistConfirm}
+          title={client.is_blacklisted ? "Déblacklister le client ?" : "Blacklister le client ?"}
+          description={
+            client.is_blacklisted
+              ? `Voulez-vous vraiment retirer le client ${client.display_name || client.full_name || ''} de la blacklist ? Il pourra à nouveau effectuer des demandes.`
+              : `Voulez-vous vraiment ajouter le client ${client.display_name || client.full_name || ''} à la blacklist ? Cela restreindra ses actions futures.`
+          }
+          confirmLabel={client.is_blacklisted ? "Déblacklister" : "Blacklister"}
+          onConfirm={executeToggleBlacklist}
+          variant={client.is_blacklisted ? "success" : "danger"}
+        />
       )}
 
     </div>

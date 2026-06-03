@@ -19,6 +19,7 @@ import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { checkPermission } from '../utils/permissions';
 import AddProfileModal from './ProfilEditModal';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 
 /* ═══════════════════════════════════════════════════════════
    Color palette
@@ -193,6 +194,7 @@ export default function ProfilDetails() {
   // History state
   const [history, setHistory] = useState<any[]>([]);
   const [historySearch, setHistorySearch] = useState('');
+  const [showBlacklistConfirm, setShowBlacklistConfirm] = useState(false);
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     info: true,
@@ -329,16 +331,18 @@ export default function ProfilDetails() {
 
   const toggle = (s: string) => setOpenSections(p => ({ ...p, [s]: !p[s] }));
 
-  const handleToggleBlacklist = async () => {
+  const handleToggleBlacklist = () => {
     if (!agent) return;
     const perm = checkPermission(user, 'blacklist_profile');
     if (!perm.allowed) {
       addToast(perm.message || 'Action non autorisée', 'error');
       return;
     }
-    const actionText = agent.is_blacklisted ? 'retirer de la blacklist' : 'blacklister';
-    if (!window.confirm(`Voulez-vous vraiment ${actionText} ce profil ?`)) return;
+    setShowBlacklistConfirm(true);
+  };
 
+  const executeToggleBlacklist = async () => {
+    if (!agent) return;
     try {
       const nextStatus = !agent.is_blacklisted;
       await updateAgent(agent.id, { is_blacklisted: nextStatus });
@@ -347,6 +351,8 @@ export default function ProfilDetails() {
     } catch (err) {
       console.error(err);
       addToast(`Erreur lors du changement de statut de la blacklist`, 'error');
+    } finally {
+      setShowBlacklistConfirm(false);
     }
   };
 
@@ -1436,6 +1442,23 @@ export default function ProfilDetails() {
           </div>
         </div>
       )}
+
+      {showBlacklistConfirm && agent && (
+        <ConfirmDialog
+          isOpen={showBlacklistConfirm}
+          onOpenChange={setShowBlacklistConfirm}
+          title={agent.is_blacklisted ? "Déblacklister le profil ?" : "Blacklister le profil ?"}
+          description={
+            agent.is_blacklisted
+              ? `Voulez-vous vraiment retirer le profil ${agent.last_name || ''} ${agent.first_name || ''} de la blacklist ? Il pourra de nouveau être affecté à des missions.`
+              : `Voulez-vous vraiment ajouter le profil ${agent.last_name || ''} ${agent.first_name || ''} à la blacklist ? Cela l'exclura de futures affectations.`
+          }
+          confirmLabel={agent.is_blacklisted ? "Déblacklister" : "Blacklister"}
+          onConfirm={executeToggleBlacklist}
+          variant={agent.is_blacklisted ? "success" : "danger"}
+        />
+      )}
+
     </div>
   );
 }
