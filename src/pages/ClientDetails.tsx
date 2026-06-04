@@ -963,6 +963,7 @@ export default function ClientDetails() {
         </Accordion>
 
         {/* ── 9. Historique ── */}
+        {/*
         <Accordion title="Historique" icon={<History size={18} />} isOpen={openSections.historique} onToggle={() => toggle('historique')} color={C.tan}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -985,6 +986,7 @@ export default function ClientDetails() {
             </table>
           </div>
         </Accordion>
+        */}
 
       </div>
 
