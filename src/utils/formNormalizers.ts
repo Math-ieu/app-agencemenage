@@ -67,6 +67,8 @@ export const normalizePayment = (val?: string) => {
   if (s === 'non_paye' || s === 'acompte' || s === 'partiel' || s === 'integral') return s;
   if (s.includes('virement')) return 'virement';
   if (s.includes('chèque') || s.includes('cheque')) return 'cheque';
+  if (s.includes('espèces') || s.includes('especes') || s.includes('espece')) return 'especes';
+  if (s.includes('carte') || s.includes('bancaire') || s.includes('ligne')) return 'carte';
   if (s.includes('agence')) return 'agence';
   if (s.includes('sur place') || s.includes('sur_place')) return 'sur_place';
   return val;

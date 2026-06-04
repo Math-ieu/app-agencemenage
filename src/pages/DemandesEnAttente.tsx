@@ -1683,10 +1683,10 @@ export default function DemandesEnAttente() {
                       <label className="label-teal">Mode de paiement *</label>
                       <select className="ws-select" required value={formData.mode_paiement} onChange={e => setFormData({ ...formData, mode_paiement: e.target.value })}>
                         <option value="">Choisir...</option>
-                        <option value="virement">Virement</option>
+                        <option value="virement">Par virement</option>
                         <option value="cheque">Par chèque</option>
-                        <option value="agence">À l'agence</option>
-                        <option value="sur_place">Sur place</option>
+                        <option value="especes">En espèces</option>
+                        <option value="carte">Par carte bancaire (solution de paiement en ligne)</option>
                       </select>
                     </div>
                     <div className="form-group">

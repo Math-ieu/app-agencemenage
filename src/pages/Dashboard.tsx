@@ -2228,7 +2228,11 @@ export default function Dashboard() {
                           <div className="form-group">
                             <label>Mode de paiement</label>
                             <select value={editFormData.mode_paiement} onChange={e => setEditFormData({ ...editFormData, mode_paiement: e.target.value })} className="edit-input">
-                              <option value="">Choisir...</option><option value="virement">Virement</option><option value="cheque">Par chèque</option><option value="agence">À l'agence</option><option value="sur_place">Sur place</option>
+                              <option value="">Choisir...</option>
+                              <option value="virement">Par virement</option>
+                              <option value="cheque">Par chèque</option>
+                              <option value="especes">En espèces</option>
+                              <option value="carte">Par carte bancaire (solution de paiement en ligne)</option>
                             </select>
                           </div>
                           <div className="form-group">

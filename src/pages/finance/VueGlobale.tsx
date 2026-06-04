@@ -451,6 +451,8 @@ const csvCell = (value: string | number): string => {
 const modeLabelFromCode = (value?: string): string => {
   if (value === 'virement') return 'Virement';
   if (value === 'cheque') return 'Chèque';
+  if (value === 'especes') return 'Espèces';
+  if (value === 'carte') return 'Carte Bancaire';
   if (value === 'especes_agence') return "Espèces à l'agence";
   if (value === 'sur_place') return 'Sur place';
   return '—';
@@ -459,6 +461,8 @@ const modeLabelFromCode = (value?: string): string => {
 const modeCodeFromLabel = (value?: string): string => {
   if (value === 'Virement') return 'virement';
   if (value === 'Chèque') return 'cheque';
+  if (value === 'Espèces') return 'especes';
+  if (value === 'Carte Bancaire') return 'carte';
   if (value === "Espèces à l'agence") return 'especes_agence';
   if (value === 'Sur place') return 'sur_place';
   return '';
