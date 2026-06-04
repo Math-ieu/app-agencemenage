@@ -884,6 +884,7 @@ export default function ClientDetails() {
                   <Th>Date</Th>
                   <Th>Action</Th>
                   <Th>Détails</Th>
+                  <Th>Utilisateur</Th>
                 </tr>
               </thead>
               <tbody>
@@ -894,9 +895,10 @@ export default function ClientDetails() {
                     })}</Td>
                     <Td bold color="#1e293b">{log.action}</Td>
                     <Td color="#64748b">{log.details}</Td>
+                    <Td color="#64748b">{log.user_name || 'Système'}</Td>
                   </tr>
                 ))}
-                {actionLogs.length === 0 && <EmptyState text="Aucun historique d'action trouvé" colSpan={3} />}
+                {actionLogs.length === 0 && <EmptyState text="Aucun historique d'action trouvé" colSpan={4} />}
               </tbody>
             </table>
           </div>
