@@ -2587,7 +2587,11 @@ export default function Dashboard() {
                               <div key={log.id} className="history-item">
                                 <div>
                                   <p className="history-title">{auditActionLabel(log.action)}</p>
-                                  <p className="history-meta">{log.user_name || 'Système'}</p>
+                                  <div style={{ margin: '4px 0' }}>
+                                    <span className={`badge ${log.user_name ? 'badge-teal' : 'badge-gray'}`} style={{ fontSize: '11px' }}>
+                                      {log.user_name || 'Système'}
+                                    </span>
+                                  </div>
                                   {changedSummary && <p className="history-meta">Champs modifies : {changedSummary}</p>}
                                 </div>
                                 <span className="history-date">{new Date(log.timestamp).toLocaleString('fr-FR')}</span>
