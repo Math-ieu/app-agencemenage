@@ -1408,13 +1408,13 @@ export default function Utilisateurs() {
             <div style={{ background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, overflow: "visible", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
               <div style={{ overflow: "visible" }}>
                 <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 15 }}>
-                  <thead>
+                  <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                     <tr style={{ background: "#ffffff", borderBottom: "1px solid #f0f0f0" }}>
-                      <th style={{ padding: "16px 20px", textAlign: "left", fontSize: 13, fontWeight: 500, color: "#71717a", width: "40%", borderBottom: "1px solid #f0f0f0" }}>
+                      <th style={{ padding: "16px 20px", textAlign: "left", fontSize: 13, fontWeight: 500, color: "#71717a", width: "40%", borderBottom: "1px solid #f0f0f0", background: "#ffffff" }}>
                         Module & autorisation
                       </th>
                       {CONFIGURABLE_ROLES.map((role) => (
-                        <th key={role.key} className="role-popover-wrapper" style={{ position: "relative", padding: "16px 10px", width: "11%", textAlign: "center", borderBottom: "1px solid #f0f0f0", verticalAlign: "top", overflow: "visible" }}>
+                        <th key={role.key} className="role-popover-wrapper" style={{ position: "relative", padding: "16px 10px", width: "11%", textAlign: "center", borderBottom: "1px solid #f0f0f0", verticalAlign: "top", overflow: "visible", background: "#ffffff" }}>
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                             <span style={{ fontSize: 13.5, fontWeight: 650, color: "#18181b" }}>{role.label}</span>
                             <button
@@ -1454,7 +1454,7 @@ export default function Utilisateurs() {
                           )}
                         </th>
                       ))}
-                      <th style={{ width: "5%", borderBottom: "1px solid #f0f0f0" }}></th>
+                      <th style={{ width: "5%", borderBottom: "1px solid #f0f0f0", background: "#ffffff" }}></th>
                     </tr>
                   </thead>
                   
