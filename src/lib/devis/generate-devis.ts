@@ -134,6 +134,16 @@ const getSignatureBase64 = async (): Promise<string | undefined> => {
   }
 };
 
+const getAdvanceFields = (form: Record<string, any>) => {
+  return {
+    avanceActive: Boolean(form.avance_active),
+    avanceType: form.avance_type,
+    avancePourcentage: form.avance_pourcentage !== undefined ? Number(form.avance_pourcentage) : undefined,
+    avanceFixe: form.avance_fixe !== undefined ? Number(form.avance_fixe) : undefined,
+    avancePaiement: form.avance_paiement !== undefined ? Number(form.avance_paiement) : undefined,
+  };
+};
+
 const buildAirbnbData = (demande: Demande): DevisAirbnbData => {
   const form = demande.formulaire_data || {};
   const total = getTotalPrice(demande, form);
@@ -175,6 +185,7 @@ const buildAirbnbData = (demande: Demande): DevisAirbnbData => {
     lignes,
     totalHT,
     note: form.note_devis,
+    ...getAdvanceFields(form),
   };
 };
 
@@ -197,6 +208,7 @@ const buildAuxiliaireData = (demande: Demande): DevisAuxiliaireData => {
       : [{ desc: `Prestation ${demande.service}`, montant: total }],
     totalHT: total,
     message: form.message_devis,
+    ...getAdvanceFields(form),
   };
 };
 
@@ -275,6 +287,7 @@ const buildFinChantierData = (demande: Demande): DevisFinChantierData => {
       evacuationDechets: { poids: toNumber(form.poids_dechets || 0), prix: toNumber(form.prix_dechets || 0) },
       cristallisationMarbre: { surface: toNumber(form.surface_marbre || 0), prix: toNumber(form.prix_marbre || 0) },
     },
+    ...getAdvanceFields(form),
   };
 };
 
@@ -347,6 +360,7 @@ const buildPostSinistreData = (demande: Demande): DevisPostSinistreData => {
       desodorisation: toNumber(form.desodorisation || 0),
       rapportPhoto: toNumber(form.rapport_photo || 0),
     },
+    ...getAdvanceFields(form),
   };
 };
 
@@ -401,6 +415,7 @@ const buildMenageBureauxData = (demande: Demande): DevisMenageBureauxData => {
       prixBase,
       prixProduits,
     },
+    ...getAdvanceFields(form),
   };
 };
 
@@ -458,6 +473,7 @@ const buildPlacementFlexibleData = (demande: Demande): DevisPlacementFlexibleDat
       tenueTravail,
       prixApresReduction: Math.max(0, prixBase - reduction),
     },
+    ...getAdvanceFields(form),
   };
 };
 
@@ -509,6 +525,7 @@ const buildGestion360Data = (demande: Demande): DevisGestion360Data => {
       reduction,
       engagementMois: toNumber(form.engagement_mois || 0),
     },
+    ...getAdvanceFields(form),
   };
 };
 

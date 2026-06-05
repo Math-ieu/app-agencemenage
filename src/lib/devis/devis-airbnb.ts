@@ -26,6 +26,11 @@ interface DevisAirbnbData {
   lignes: DevisAirbnbLine[];
   totalHT: number;
   note?: string;
+  avanceActive?: boolean;
+  avanceType?: 'pourcentage' | 'fixe';
+  avancePourcentage?: number;
+  avanceFixe?: number;
+  avancePaiement?: number;
 }
 
 export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, signatureBase64?: string) {
@@ -186,6 +191,7 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
   doc.setLineWidth(0.4);
   doc.line(MARGIN, y - 4, RIGHT, y - 4);
+
   doc.setFillColor(239, 246, 255);
   doc.rect(MARGIN, y - 4, CONTENT_W, 10, 'F');
   doc.setFont('helvetica', 'bold');
@@ -195,6 +201,20 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
   doc.text(`${formatNumber(data.totalHT)} DH`, RIGHT - 4, y + 2, { align: 'right' });
   y += 12;
+
+  if (data.avanceActive) {
+    doc.setFillColor(239, 246, 255);
+    doc.rect(MARGIN, y - 4, CONTENT_W, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    const labelAvance = data.avanceType === 'pourcentage'
+      ? `Avance requise (${data.avancePourcentage}%)`
+      : 'Avance requise';
+    doc.text(labelAvance, RIGHT - 65, y + 1.5);
+    doc.text(`${formatNumber(data.avancePaiement || 0)} DH`, RIGHT - 4, y + 1.5, { align: 'right' });
+    y += 10;
+  }
 
   const pageHeight = doc.internal.pageSize.getHeight();
   const footerThreshold = pageHeight - 40;

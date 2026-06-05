@@ -149,29 +149,57 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
   }, [demande.id, onUpdateDemandeData, avanceActive, avanceType, avancePourcentage, avanceFixe]);
 
   const handlePreview = () => {
+    const totalDevis = totalRef.current || Number(demande.prix || 0);
+    let avanceMontant = 0;
+    if (avanceActive) {
+      if (avanceType === 'pourcentage') {
+        avanceMontant = Math.round((totalDevis * avancePourcentage) / 100);
+      } else {
+        avanceMontant = avanceFixe;
+      }
+    }
     // Inject the calculator prestations into the demande before preview
     const enrichedDemande = {
       ...demande,
-      prix: totalRef.current || demande.prix,
+      prix: totalDevis,
       formulaire_data: {
         ...(demande.formulaire_data || {}),
         ...extraDataRef.current,
         prestations: prestationsRef.current.length > 0 ? prestationsRef.current : undefined,
-        total: totalRef.current || undefined,
+        total: totalDevis || undefined,
+        avance_active: avanceActive,
+        avance_type: avanceType,
+        avance_pourcentage: avancePourcentage,
+        avance_fixe: avanceFixe,
+        avance_paiement: avanceMontant,
       },
     };
     onPreview(enrichedDemande, type);
   };
 
   const handleSend = () => {
+    const totalDevis = totalRef.current || Number(demande.prix || 0);
+    let avanceMontant = 0;
+    if (avanceActive) {
+      if (avanceType === 'pourcentage') {
+        avanceMontant = Math.round((totalDevis * avancePourcentage) / 100);
+      } else {
+        avanceMontant = avanceFixe;
+      }
+    }
     const enrichedDemande = {
       ...demande,
-      prix: totalRef.current || demande.prix,
+      prix: totalDevis,
       formulaire_data: {
         ...(demande.formulaire_data || {}),
         ...extraDataRef.current,
         prestations: prestationsRef.current.length > 0 ? prestationsRef.current : undefined,
-        total: totalRef.current || undefined,
+        total: totalDevis || undefined,
+        avance_active: avanceActive,
+        avance_type: avanceType,
+        avance_pourcentage: avancePourcentage,
+        avance_fixe: avanceFixe,
+        avance_paiement: avanceMontant,
       },
     };
     onSend(enrichedDemande, type);

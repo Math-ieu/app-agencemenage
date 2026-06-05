@@ -21,6 +21,11 @@ interface DevisAuxiliaireData {
   totalHT: number;
   validite?: string;
   message?: string;
+  avanceActive?: boolean;
+  avanceType?: 'pourcentage' | 'fixe';
+  avancePourcentage?: number;
+  avanceFixe?: number;
+  avancePaiement?: number;
 }
 
 async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: string, signatureBase64?: string): Promise<Blob> {
@@ -201,6 +206,20 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
   pdf.text(`${formatNumber(data.totalHT)} DH`, pageWidth - margin - 5, y + 7, { align: 'right' });
   y += 17;
+
+  if (data.avanceActive) {
+    pdf.setFillColor(LIGHT_BLUE[0], LIGHT_BLUE[1], LIGHT_BLUE[2]);
+    pdf.rect(margin, y - 4, contentWidth, 8, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+    const labelAvance = data.avanceType === 'pourcentage'
+      ? `Avance requise (${data.avancePourcentage}%)`
+      : 'Avance requise';
+    pdf.text(labelAvance, pageWidth - margin - 65, y + 1.5);
+    pdf.text(`${formatNumber(data.avancePaiement || 0)} DH`, pageWidth - margin - 5, y + 1.5, { align: 'right' });
+    y += 10;
+  }
 
   // ==================== NOTE MISSION LONGUE DURÉE ====================
   const noteText = "Pour les missions de plus d'un mois, un tarif préférentiel de -10% est appliqué automatiquement. Contactez-nous pour un devis mission longue durée.";

@@ -24,6 +24,11 @@ interface DevisData {
     evacuationDechets: { poids: number; prix: number };
     cristallisationMarbre: { surface: number; prix: number };
   };
+  avanceActive?: boolean;
+  avanceType?: 'pourcentage' | 'fixe';
+  avancePourcentage?: number;
+  avanceFixe?: number;
+  avancePaiement?: number;
 }
 
 // Données d'exemple (correspondant au devis original)
@@ -235,6 +240,20 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   doc.setFontSize(13);
   doc.text(`${formatNumber(totalHT)} DH`, right - 2, y + 3.5, { align: 'right' });
   y += 14;
+
+  if (data.avanceActive) {
+    doc.setFillColor(239, 246, 255);
+    doc.rect(margin, y - 4, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    const labelAvance = data.avanceType === 'pourcentage'
+      ? `Avance requise (${data.avancePourcentage}%)`
+      : 'Avance requise';
+    doc.text(labelAvance, right - 65, y + 1.5);
+    doc.text(`${formatNumber(data.avancePaiement || 0)} DH`, right - 2, y + 1.5, { align: 'right' });
+    y += 10;
+  }
 
   const pageHeight = doc.internal.pageSize.getHeight();
   const footerThreshold = pageHeight - 40;

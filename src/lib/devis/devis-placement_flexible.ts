@@ -33,6 +33,11 @@ interface DevisPlacementFlexibleData {
     tenueTravail: number;
     prixApresReduction: number;
   };
+  avanceActive?: boolean;
+  avanceType?: 'pourcentage' | 'fixe';
+  avancePourcentage?: number;
+  avanceFixe?: number;
+  avancePaiement?: number;
 }
 
 
@@ -171,6 +176,20 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   doc.setFont('helvetica', 'bold').setFontSize(12).text('TOTAL HT / MOIS', right - 60, y + 2, { align: 'right' });
   doc.setTextColor(...BLUE).text(`${formatNumber(totalHT)} DH`, right - 4, y + 2, { align: 'right' });
   y += 15;
+
+  if (data.avanceActive) {
+    doc.setFillColor(239, 246, 255);
+    doc.rect(margin, y - 4, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(...TEXT);
+    const labelAvance = data.avanceType === 'pourcentage'
+      ? `Avance requise (${data.avancePourcentage}%)`
+      : 'Avance requise';
+    doc.text(labelAvance, right - 65, y + 1.5);
+    doc.text(`${formatNumber(data.avancePaiement || 0)} DH`, right - 4, y + 1.5, { align: 'right' });
+    y += 10;
+  }
 
   // ==================== MESSAGE D'ACCOMPAGNEMENT ====================
   if (y > pageHeight - 110) {

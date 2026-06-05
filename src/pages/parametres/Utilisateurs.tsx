@@ -6,7 +6,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuthStore } from "../../store/auth";
 import { checkPermission } from "../../utils/permissions";
 import { getUsers, createUser, updateUser, deleteUser, getRolesPermissions, updateRolesPermissions } from "../../api/client";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Search, ChevronDown, ChevronRight, Check, Plus, Copy, Lock } from "lucide-react";
 
 /* ─── Types ────────────────────────────────────────────────────────────────── */
 type Status = "actif" | "desactive";
@@ -35,19 +35,103 @@ interface UserFormValues {
 
 /* ─── Données & Config ─────────────────────────────────────────────────────── */
 const PERMISSIONS = [
-  { key: "consulter_clients",   label: "Clients : Consulter le listing",              group: "Clients" },
-  { key: "creer_clients",       label: "Clients : Créer & éditer",                    group: "Clients" },
-  { key: "blacklister_clients", label: "Clients : Blacklister & archiver",            group: "Clients" },
-  { key: "consulter_demandes",  label: "Demandes : Consulter le listing",             group: "Demandes" },
-  { key: "valider_demandes",    label: "Demandes : Valider & planifier (CAO)",        group: "Demandes" },
-  { key: "annuler_demandes",    label: "Demandes : Annuler la facturation",           group: "Demandes" },
-  { key: "voir_la_caisse",      label: "Finances : Consulter le solde de caisse",    group: "Finances" },
-  { key: "mouvements_caisse",   label: "Finances : Saisir des entrées/sorties",      group: "Finances" },
-  { key: "consulter_agents",    label: "Agents : Consulter les fiches",              group: "Agents" },
-  { key: "creer_agents",        label: "Agents : Créer & éditer",                    group: "Agents" },
-  { key: "documents_agents",    label: "Agents : Télécharger les pièces jointes",    group: "Agents" },
-  { key: "rediger_blog",        label: "SEO & Blog : Rédiger & modifier les articles", group: "SEO & Blog" },
-  { key: "parametres_globaux",  label: "Config : Gérer la sécurité & les accès",    group: "Configuration" },
+  // Tableau de bord
+  { key: "consulter_dashboard",           label: "Accéder / consulter au tableau de bord", group: "Tableau de bord" },
+  { key: "consulter_compte_client_dashboard", label: "Consulter le compte client", group: "Tableau de bord" },
+  { key: "editer_besoin",                 label: "Éditer le besoin (formulaire de la demande, espace agence)", group: "Tableau de bord" },
+  { key: "confirmation_avant_operation",  label: "Confirmation avant opération", group: "Tableau de bord" },
+  { key: "supprimer_demande_dashboard",   label: "Supprimer une demande", group: "Tableau de bord" },
+  { key: "facturation_annulee",           label: "Facturation annulée", group: "Tableau de bord" },
+  { key: "annulation_demande",            label: "Annulation de la demande", group: "Tableau de bord" },
+  { key: "note_operationnelle_dashboard", label: "Note opérationnelle", group: "Tableau de bord" },
+  { key: "note_commerciale_dashboard",    label: "Note commercial", group: "Tableau de bord" },
+
+  // Demandes en attente
+  { key: "creer_demande",                 label: "Créer une nouvelle demande", group: "Demandes en attente" },
+  { key: "creer_devis",                   label: "Créer un devis", group: "Demandes en attente" },
+  { key: "modifier_demande",              label: "Modifier une demande", group: "Demandes en attente" },
+  { key: "consulter_demandes",            label: "Consulter les demandes en attente", group: "Demandes en attente" },
+  { key: "affecter_commercial",           label: "Assigner à un commercial", group: "Demandes en attente" },
+  { key: "valider_demandes",              label: "Valider & convertir en mission", group: "Demandes en attente" },
+  { key: "refuser_demande",               label: "Refuser / annuler une demande", group: "Demandes en attente" },
+
+  // Listing profils
+  { key: "consulter_agents",              label: "Consulter le listing des profils (agents)", group: "Listing profils" },
+  { key: "consulter_docs_confidentiels",  label: "Ouvrir la fiche profil & pièces jointes", group: "Listing profils" },
+  { key: "creer_agents",                  label: "Créer un nouveau profil", group: "Listing profils" },
+  { key: "modifier_agents",               label: "Modifier / mettre à jour un profil", group: "Listing profils" },
+  { key: "desactiver_profil",             label: "Désactiver / archiver un profil", group: "Listing profils" },
+  { key: "blacklister_agents",            label: "Blacklister un profil", group: "Listing profils" },
+  { key: "supprimer_profil",              label: "Supprimer un profil", group: "Listing profils" },
+
+  // Listing clients
+  { key: "consulter_clients",             label: "Consulter le listing clients", group: "Listing clients" },
+  { key: "consulter_compte_client",       label: "Consulter compte client", group: "Listing clients" },
+  { key: "affectation_client",            label: "Affectation client", group: "Listing clients" },
+  { key: "note_operationnelle",           label: "Note opérationnel", group: "Listing clients" },
+  { key: "note_commerciale",              label: "Note commercial", group: "Listing clients" },
+  { key: "geste_commercial",              label: "Geste commercial", group: "Listing clients" },
+  { key: "modifier_clients",              label: "Editer compte client", group: "Listing clients" },
+  { key: "blacklister_clients",           label: "Blacklister / archiver un client", group: "Listing clients" },
+  { key: "delete_client",                 label: "Supprimer définitivement", group: "Listing clients" },
+
+  // Historique
+  { key: "consulter_historique_global",   label: "Consulter l'historique des interventions", group: "Historique" },
+  { key: "filtrer_historique",            label: "Filtrer & rechercher dans l'historique", group: "Historique" },
+  { key: "exporter_historique_csv",       label: "Exporter l'historique", group: "Historique" },
+
+  // Vue globale
+  { key: "voir_la_caisse",                label: "Accéder à la vue financière globale", group: "Gestion financière — Vue globale" },
+  { key: "consulter_factures",            label: "Consulter la liste des factures", group: "Gestion financière — Vue globale" },
+  { key: "generer_exporter_factures",     label: "Générer / exporter les factures", group: "Gestion financière — Vue globale" },
+  { key: "valider_paiements_clients",     label: "Valider les paiements des clients", group: "Gestion financière — Vue globale" },
+  { key: "gerer_relances_facturation",     label: "Gérer les relances de facturation", group: "Gestion financière — Vue globale" },
+  { key: "consulter_stats_ca",            label: "Consulter les statistiques de chiffre d'affaires", group: "Gestion financière — Vue globale" },
+
+  // La caisse
+  { key: "consulter_solde_caisse",        label: "Consulter le solde de la caisse", group: "Gestion financière — La caisse" },
+  { key: "mouvements_caisse",             label: "Saisir des entrées de caisse", group: "Gestion financière — La caisse" },
+  { key: "sorties_caisse",                label: "Saisir des sorties de caisse", group: "Gestion financière — La caisse" },
+  { key: "modifier_mouvement_caisse",    label: "Modifier un mouvement de caisse", group: "Gestion financière — La caisse" },
+  { key: "exporter_mouvements_caisse",    label: "Exporter les mouvements de caisse", group: "Gestion financière — La caisse" },
+  { key: "cloturer_caisse_journaliere",   label: "Clôturer la caisse journalière", group: "Gestion financière — La caisse" },
+
+  // Marketing
+  { key: "consulter_codes_promo",         label: "Consulter les codes promotionnels", group: "Marketing" },
+  { key: "creer_code_promo",              label: "Créer un nouveau code promo", group: "Marketing" },
+  { key: "activer_desactiver_code_promo", label: "Activer / désactiver un code promo", group: "Marketing" },
+  { key: "gerer_remises",                 label: "Gérer les gestes commerciaux (remises)", group: "Marketing" },
+  { key: "consulter_campagnes_marketing", label: "Consulter les campagnes marketing", group: "Marketing" },
+  { key: "creer_campagne_whatsapp",       label: "Créer / éditer une campagne WhatsApp", group: "Marketing" },
+
+  // Qualité
+  { key: "consulter_retours_qualite",     label: "Consulter les retours qualité clients", group: "Qualité & Feedback" },
+  { key: "envoyer_questionnaires_feedback", label: "Envoyer les questionnaires de feedback", group: "Qualité & Feedback" },
+  { key: "traiter_reclamations",          label: "Traiter les réclamations clients", group: "Qualité & Feedback" },
+  { key: "consulter_stats_qualite",       label: "Consulter les statistiques qualité", group: "Qualité & Feedback" },
+  { key: "modifier_criteres_evaluation",  label: "Modifier les critères d'évaluation", group: "Qualité & Feedback" },
+  { key: "exporter_rapports_satisfaction", label: "Exporter les rapports de satisfaction", group: "Qualité & Feedback" },
+
+  // SEO - Blog
+  { key: "rediger_blog",                  label: "Consulter les articles du blog", group: "SEO — Blog" },
+  { key: "publier_articles_blog",         label: "Rédiger et publier un article", group: "SEO — Blog" },
+  { key: "modifier_articles_blog",        label: "Modifier / éditer un article existant", group: "SEO — Blog" },
+  { key: "gerer_categories_blog",         label: "Gérer les catégories du blog", group: "SEO — Blog" },
+  { key: "configurer_seo_pages",          label: "Configurer le SEO des pages", group: "SEO — Blog" },
+
+  // Paramètres - Mon profil
+  { key: "consulter_infos_profil",        label: "Consulter ses informations personnelles", group: "Paramètres — Mon profil" },
+  { key: "modifier_infos_profil",         label: "Modifier ses informations personnelles", group: "Paramètres — Mon profil" },
+  { key: "modifier_mot_de_passe",         label: "Changer son mot de passe", group: "Paramètres — Mon profil" },
+  { key: "activer_mfa",                   label: "Activer la double authentification (MFA)", group: "Paramètres — Mon profil" },
+  { key: "consulter_logs_connexion",      label: "Consulter ses propres logs de connexion", group: "Paramètres — Mon profil" },
+
+  // Paramètres - Utilisateurs & Rôles
+  { key: "consulter_utilisateurs",        label: "Consulter la liste des utilisateurs", group: "Paramètres — Utilisateurs & Rôles" },
+  { key: "creer_utilisateurs",            label: "Créer un nouvel utilisateur", group: "Paramètres — Utilisateurs & Rôles" },
+  { key: "modifier_utilisateurs",         label: "Modifier un utilisateur", group: "Paramètres — Utilisateurs & Rôles" },
+  { key: "activer_desactiver_utilisateurs", label: "Désactiver / activer un utilisateur", group: "Paramètres — Utilisateurs & Rôles" },
+  { key: "parametres_globaux",            label: "Modifier la matrice des droits d'accès", group: "Paramètres — Utilisateurs & Rôles" }
 ];
 
 const ROLES = [
@@ -61,13 +145,140 @@ const ROLES = [
 ];
 
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-  "Admin":                      PERMISSIONS.map((p) => p.key),
-  "Moderateur":                 ["consulter_clients","creer_clients","consulter_demandes","consulter_agents","rediger_blog"],
-  "Responsable commercial":     ["consulter_clients","creer_clients","consulter_demandes","valider_demandes","consulter_agents"],
-  "commercial":                 ["consulter_clients","creer_clients","consulter_demandes"],
-  "Responsable des Opérations": ["consulter_clients","consulter_demandes","valider_demandes","voir_la_caisse","consulter_agents","creer_agents","documents_agents"],
-  "Chargée des Opérations":     ["consulter_clients","consulter_demandes","consulter_agents"],
-  "Opérationnel":               ["consulter_demandes"],
+  "Admin": PERMISSIONS.map((p) => p.key),
+  "Moderateur": [
+    // Tableau de bord
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    // Demandes en attente
+    "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
+    // Listing profils
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil",
+    // Listing clients
+    "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
+    // Historique
+    "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
+    // Vue globale
+    "voir_la_caisse", "consulter_factures", "generer_exporter_factures", "valider_paiements_clients", "gerer_relances_facturation", "consulter_stats_ca",
+    // La caisse
+    "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "modifier_mouvement_caisse", "exporter_mouvements_caisse", "cloturer_caisse_journaliere",
+    // Marketing
+    "consulter_codes_promo", "creer_code_promo", "activer_desactiver_code_promo", "gerer_remises", "consulter_campagnes_marketing", "creer_campagne_whatsapp",
+    // Qualité
+    "consulter_retours_qualite", "envoyer_questionnaires_feedback", "traiter_reclamations", "consulter_stats_qualite", "modifier_criteres_evaluation", "exporter_rapports_satisfaction",
+    // SEO - Blog
+    "rediger_blog", "publier_articles_blog", "modifier_articles_blog", "gerer_categories_blog", "configurer_seo_pages",
+    // Paramètres - Mon profil
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
+    // Paramètres - Utilisateurs & Rôles
+    "consulter_utilisateurs", "creer_utilisateurs", "modifier_utilisateurs", "activer_desactiver_utilisateurs", "parametres_globaux"
+  ],
+  "Responsable commercial": [
+    // Tableau de bord
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    // Demandes en attente
+    "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
+    // Listing profils
+    "consulter_agents",
+    // Listing clients
+    "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients",
+    // Historique
+    "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
+    // Vue globale
+    "voir_la_caisse", "consulter_factures", "generer_exporter_factures", "valider_paiements_clients", "gerer_relances_facturation", "consulter_stats_ca",
+    // La caisse
+    "consulter_solde_caisse", "mouvements_caisse", "modifier_mouvement_caisse", "exporter_mouvements_caisse",
+    // Marketing
+    "consulter_codes_promo", "creer_code_promo", "activer_desactiver_code_promo", "gerer_remises", "consulter_campagnes_marketing", "creer_campagne_whatsapp",
+    // Qualité
+    "consulter_retours_qualite", "envoyer_questionnaires_feedback", "traiter_reclamations", "consulter_stats_qualite",
+    // SEO
+    "rediger_blog", "gerer_categories_blog",
+    // Paramètres - Mon profil
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
+    // Paramètres - Utilisateurs & Rôles
+    "consulter_utilisateurs"
+  ],
+  "commercial": [
+    // Tableau de bord
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    // Demandes en attente
+    "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
+    // Listing profils
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil",
+    // Listing clients
+    "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
+    // Historique
+    "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
+    // Vue globale
+    "consulter_factures", "generer_exporter_factures",
+    // La caisse
+    "consulter_solde_caisse",
+    // Marketing
+    "consulter_codes_promo", "activer_desactiver_code_promo", "gerer_remises", "consulter_campagnes_marketing",
+    // Qualité
+    "consulter_retours_qualite", "envoyer_questionnaires_feedback",
+    // SEO
+    "rediger_blog",
+    // Paramètres - Mon profil
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
+    // Paramètres - Utilisateurs & Rôles
+    "consulter_utilisateurs", "modifier_utilisateurs"
+  ],
+  "Responsable des Opérations": [
+    // Tableau de bord
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    // Demandes en attente
+    "creer_demande", "consulter_demandes", "valider_demandes",
+    // Listing profils
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents",
+    // Listing clients
+    "consulter_clients", "consulter_compte_client", "note_operationnelle",
+    // Historique
+    "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
+    // Vue globale
+    "consulter_factures",
+    // La caisse
+    "consulter_solde_caisse", "mouvements_caisse", "modifier_mouvement_caisse",
+    // Marketing
+    "consulter_campagnes_marketing",
+    // Qualité
+    "consulter_retours_qualite", "traiter_reclamations", "consulter_stats_qualite", "exporter_rapports_satisfaction",
+    // SEO
+    "rediger_blog",
+    // Paramètres - Mon profil
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
+    // Paramètres - Utilisateurs & Rôles
+    "consulter_utilisateurs"
+  ],
+  "Chargée des Opérations": [
+    // Tableau de bord
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    // Demandes en attente
+    "creer_demande", "consulter_demandes",
+    // Listing profils
+    "consulter_agents", "consulter_docs_confidentiels",
+    // Listing clients
+    "consulter_clients", "consulter_compte_client", "note_operationnelle",
+    // Historique
+    "consulter_historique_global", "filtrer_historique",
+    // Vue globale
+    "consulter_factures",
+    // La caisse
+    "consulter_solde_caisse",
+    // Marketing
+    "consulter_campagnes_marketing",
+    // Qualité
+    "consulter_retours_qualite", "envoyer_questionnaires_feedback", "traiter_reclamations",
+    // SEO
+    "rediger_blog",
+    // Paramètres - Mon profil
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
+    // Paramètres - Utilisateurs & Rôles
+    "consulter_utilisateurs"
+  ],
+  "Opérationnel": [
+    "consulter_dashboard", "consulter_demandes"
+  ],
 };
 
 
@@ -580,16 +791,44 @@ function Pagination({ page, totalPages, total, start, end, onChange }: {
 export default function Utilisateurs() {
   const { user } = useAuthStore();
   const isSystemAdmin = user?.role?.toLowerCase() === 'admin';
+  const [activeTab, setActiveTab] = useState<'users' | 'rights'>('users');
+  
+  // Collaborateurs (Users) State
   const [users, setUsers]         = useState<User[]>([]);
-  const [privileges, setPrivileges] = useState<Record<string, string[]>>({});
   const [search, setSearch]       = useState("");
   const [pageSize, setPageSize]   = useState(10);
   const [page, setPage]           = useState(1);
   const [formOpen, setFormOpen]   = useState(false);
   const [editing, setEditing]     = useState<User | null>(null);
   const [toDelete, setToDelete]   = useState<User | null>(null);
-  const [toast, setToast]         = useState<string | null>(null);
+  
+  // Droits d'accès (Permissions) State
+  const [privileges, setPrivileges] = useState<Record<string, string[]>>({});
+  const [draftPrivileges, setDraftPrivileges] = useState<Record<string, string[]>>({});
+  const [privilegeSearch, setPrivilegeSearch] = useState("");
+  const [selectedModule, setSelectedModule] = useState("all");
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(["Tableau de bord"]);
+  
+  // Popover State
+  const [activeRolePopover, setActiveRolePopover] = useState<string | null>(null);
+  const [activeRowPopover, setActiveRowPopover] = useState<string | null>(null);
 
+  // Close popovers when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (activeRolePopover && !target.closest('.role-popover-wrapper')) {
+        setActiveRolePopover(null);
+      }
+      if (activeRowPopover && !target.closest('.row-popover-wrapper')) {
+        setActiveRowPopover(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [activeRolePopover, activeRowPopover]);
+
+  const [toast, setToast]         = useState<string | null>(null);
   const showToast = (msg: string) => setToast(msg);
 
   const fetchUsers = async () => {
@@ -612,16 +851,21 @@ export default function Utilisateurs() {
         const matrix = res.data;
         if (matrix && Object.keys(matrix).length > 0) {
           setPrivileges(matrix);
+          setDraftPrivileges(JSON.parse(JSON.stringify(matrix)));
           localStorage.setItem("roles_permissions", JSON.stringify(matrix));
         } else {
           const savedPriv = localStorage.getItem("roles_permissions");
-          setPrivileges(savedPriv ? JSON.parse(savedPriv) : DEFAULT_PERMISSIONS);
+          const fallback = savedPriv ? JSON.parse(savedPriv) : DEFAULT_PERMISSIONS;
+          setPrivileges(fallback);
+          setDraftPrivileges(JSON.parse(JSON.stringify(fallback)));
         }
       })
       .catch((err) => {
         console.error("Failed to fetch roles permissions from API:", err);
         const savedPriv = localStorage.getItem("roles_permissions");
-        setPrivileges(savedPriv ? JSON.parse(savedPriv) : DEFAULT_PERMISSIONS);
+        const fallback = savedPriv ? JSON.parse(savedPriv) : DEFAULT_PERMISSIONS;
+        setPrivileges(fallback);
+        setDraftPrivileges(JSON.parse(JSON.stringify(fallback)));
       });
   }, []);
 
@@ -693,56 +937,210 @@ export default function Utilisateurs() {
     }
   };
 
-  const togglePermission = useCallback((roleKey: string, permKey: string) => {
+  // Toggle single permission check in the draft state
+  const handleTogglePermission = useCallback((roleKey: string, permKey: string) => {
     const isUserAdmin = user?.role?.toLowerCase() === 'admin';
     if (!isUserAdmin) {
       showToast("Action non autorisée. Seul le compte Admin est autorisé à modifier les privilèges.");
       return;
     }
-    const perms = privileges[roleKey] || [];
-    const updated = {
-      ...privileges,
-      [roleKey]: perms.includes(permKey) ? perms.filter((p) => p !== permKey) : [...perms, permKey],
-    };
-    setPrivileges(updated);
-    localStorage.setItem("roles_permissions", JSON.stringify(updated));
-    
-    updateRolesPermissions(updated)
-      .then(() => {
-        showToast("Privilèges mis à jour et synchronisés avec le serveur.");
-      })
-      .catch((err) => {
-        console.error("Failed to sync updated privileges to API:", err);
-        showToast("Privilèges mis à jour localement (erreur de synchronisation serveur).");
-      });
-  }, [privileges, user]);
+    setDraftPrivileges((prev) => {
+      const rolePerms = prev[roleKey] || [];
+      const updated = rolePerms.includes(permKey)
+        ? rolePerms.filter((k) => k !== permKey)
+        : [...rolePerms, permKey];
+      return { ...prev, [roleKey]: updated };
+    });
+  }, [user]);
 
-  const filtered = useMemo(() => {
+  // Bulk column activations
+  const handleBulkActivateRole = useCallback((roleKey: string) => {
+    setDraftPrivileges((prev) => ({
+      ...prev,
+      [roleKey]: PERMISSIONS.map((p) => p.key),
+    }));
+    setActiveRolePopover(null);
+    showToast(`Toutes les autorisations activées pour le rôle ${roleKey}`);
+  }, []);
+
+  const handleBulkDeactivateRole = useCallback((roleKey: string) => {
+    setDraftPrivileges((prev) => ({
+      ...prev,
+      [roleKey]: [],
+    }));
+    setActiveRolePopover(null);
+    showToast(`Toutes les autorisations désactivées pour le rôle ${roleKey}`);
+  }, []);
+
+  const handleCopyRolePermissions = useCallback((sourceRoleKey: string, targetRoleKey: string) => {
+    setDraftPrivileges((prev) => ({
+      ...prev,
+      [targetRoleKey]: [...(prev[sourceRoleKey] || [])],
+    }));
+    setActiveRolePopover(null);
+    showToast(`Autorisations copiées de ${sourceRoleKey} vers ${targetRoleKey}`);
+  }, []);
+
+  // Bulk row activations
+  const handleBulkActivatePermission = useCallback((permKey: string) => {
+    setDraftPrivileges((prev) => {
+      const next = { ...prev };
+      CONFIGURABLE_ROLES.forEach((r) => {
+        const perms = next[r.key] || [];
+        if (!perms.includes(permKey)) {
+          next[r.key] = [...perms, permKey];
+        }
+      });
+      return next;
+    });
+    setActiveRowPopover(null);
+    showToast("Autorisation activée pour tous les rôles");
+  }, []);
+
+  const handleBulkDeactivatePermission = useCallback((permKey: string) => {
+    setDraftPrivileges((prev) => {
+      const next = { ...prev };
+      CONFIGURABLE_ROLES.forEach((r) => {
+        const perms = next[r.key] || [];
+        next[r.key] = perms.filter((k) => k !== permKey);
+      });
+      return next;
+    });
+    setActiveRowPopover(null);
+    showToast("Autorisation désactivée pour tous les rôles");
+  }, []);
+
+  // Save changes to backend
+  const handleSaveChanges = async () => {
+    const isUserAdmin = user?.role?.toLowerCase() === 'admin';
+    if (!isUserAdmin) {
+      showToast("Action non autorisée. Seul le compte Admin est autorisé à modifier les privilèges.");
+      return;
+    }
+    try {
+      await updateRolesPermissions(draftPrivileges);
+      setPrivileges(JSON.parse(JSON.stringify(draftPrivileges)));
+      localStorage.setItem("roles_permissions", JSON.stringify(draftPrivileges));
+      showToast("Les modifications ont été enregistrées avec succès.");
+    } catch (err) {
+      console.error(err);
+      showToast("Erreur lors de l'enregistrement des modifications.");
+    }
+  };
+
+  // Discard changes
+  const handleResetChanges = () => {
+    setDraftPrivileges(JSON.parse(JSON.stringify(privileges)));
+    showToast("Modifications annulées.");
+  };
+
+  // Group names array
+  const moduleGroups = useMemo(() => {
+    const uniq: string[] = [];
+    PERMISSIONS.forEach((p) => {
+      if (!uniq.includes(p.group)) uniq.push(p.group);
+    });
+    return uniq;
+  }, []);
+
+  // Filtered permission structure
+  const filteredModules = useMemo(() => {
+    const q = privilegeSearch.trim().toLowerCase();
+    const list: { group: string; perms: typeof PERMISSIONS }[] = [];
+    
+    moduleGroups.forEach((group) => {
+      if (selectedModule !== "all" && group !== selectedModule) return;
+      
+      const matched = PERMISSIONS.filter(
+        (p) => p.group === group && (!q || p.label.toLowerCase().includes(q))
+      );
+      
+      if (matched.length > 0) {
+        list.push({ group, perms: matched });
+      }
+    });
+    
+    return list;
+  }, [privilegeSearch, selectedModule, moduleGroups]);
+
+  // Compute effective expanded modules
+  const effectiveExpanded = useMemo(() => {
+    const q = privilegeSearch.trim();
+    if (q || selectedModule !== "all") {
+      return filteredModules.map((m) => m.group);
+    }
+    return expandedGroups;
+  }, [expandedGroups, privilegeSearch, selectedModule, filteredModules]);
+
+  const toggleGroupExpand = (group: string) => {
+    setExpandedGroups((prev) =>
+      prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group]
+    );
+  };
+
+  // Users sorting & filtering
+  const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
     return q ? users.filter((u) => [u.fullName, u.email, u.username, u.position, u.city].join(" ").toLowerCase().includes(q)) : users;
   }, [users, search]);
 
-  const totalPages  = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalPages  = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
   const curPage     = Math.min(page, totalPages);
-  const paged       = filtered.slice((curPage - 1) * pageSize, curPage * pageSize);
-  const start       = filtered.length === 0 ? 0 : (curPage - 1) * pageSize + 1;
-  const end         = Math.min(curPage * pageSize, filtered.length);
+  const paged       = filteredUsers.slice((curPage - 1) * pageSize, curPage * pageSize);
+  const start       = filteredUsers.length === 0 ? 0 : (curPage - 1) * pageSize + 1;
+  const end         = Math.min(curPage * pageSize, filteredUsers.length);
 
-  // Group permissions by group
-  const groupedPermissions = useMemo(() => {
-    const groups: { group: string; perms: typeof PERMISSIONS }[] = [];
-    let last = "";
-    for (const p of PERMISSIONS) {
-      if (p.group !== last) { groups.push({ group: p.group, perms: [] }); last = p.group; }
-      groups[groups.length - 1].perms.push(p);
-    }
-    return groups;
-  }, []);
+  // Colors for accordion headers
+  const getAccordionColor = (index: number) => {
+    const colors = [
+      { bg: "#064e43", text: "#ffffff" },
+      { bg: "#0d5e50", text: "#ffffff" },
+      { bg: "#0f6d5c", text: "#ffffff" },
+      { bg: "#127d6a", text: "#ffffff" },
+      { bg: "#148c77", text: "#ffffff" },
+      { bg: "#17a68c", text: "#ffffff" },
+      { bg: "#29ccaf", text: "#04332c" },
+      { bg: "#85ebd5", text: "#04332c" },
+    ];
+    return colors[index % colors.length];
+  };
+
+  const popoverItemStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    width: "100%",
+    padding: "8px 16px",
+    fontSize: "13.5px",
+    background: "transparent",
+    border: "none",
+    color: "#18181b",
+    cursor: "pointer",
+    textAlign: "left",
+    fontFamily: "inherit",
+    transition: "background 0.15s",
+  };
+
+  const tabItemStyle = (active: boolean): React.CSSProperties => ({
+    padding: "10px 24px",
+    fontSize: "14.5px",
+    fontWeight: 500,
+    borderRadius: "10px",
+    cursor: "pointer",
+    border: "none",
+    background: active ? "#0F6E56" : "transparent",
+    color: active ? "#ffffff" : "#71717a",
+    transition: "all 0.15s ease",
+  });
 
   return (
-    <div style={{ position: "relative", maxWidth: 1200, margin: "0 auto", padding: "40px 32px 64px", display: "flex", flexDirection: "column", gap: 28, fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", color: "#18181b" }}>
-      <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
+    <div style={{ position: "relative", width: "90%", margin: "0 auto", padding: "40px 16px 64px", display: "flex", flexDirection: "column", gap: 28, fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", color: "#18181b" }}>
+      <style>{`
+        @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .popover-item:hover { background-color: #f4f4f5 !important; }
+        .row-hover:hover { background-color: #fafafa; }
+      `}</style>
 
+      {/* Admin Access Restriction Overlay */}
       {!isSystemAdmin && (
         <div style={{
           position: "absolute",
@@ -792,186 +1190,362 @@ export default function Utilisateurs() {
       )}
 
       <div style={!isSystemAdmin ? { filter: "grayscale(100%)", opacity: 0.45, pointerEvents: "none" } : undefined}>
-
-      {/* Page header */}
-      <div>
-        <h1 style={{ fontSize: 28, fontWeight: 600, margin: 0, letterSpacing: "-0.3px" }}>Collaborateurs & Privilèges</h1>
-        <p style={{ fontSize: 15, color: "#71717a", margin: "6px 0 0" }}>Gérez les comptes d'utilisateurs et leurs droits d'accès au backoffice</p>
-      </div>
-
-      {/* ── Section Collaborateurs ── */}
-      <CardSection
-        icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>}
-        title="Gestion des collaborateurs"
-        description="Créez, modifiez, désactivez ou supprimez les comptes de l'agence"
-      >
-        {/* Toolbar */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-          <div style={{ flex: 1, position: "relative" }}>
-            <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#a1a1aa", pointerEvents: "none" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Rechercher un collaborateur…"
-              style={{ width: "100%", padding: "11px 12px 11px 40px", fontSize: 15, border: "0.5px solid #e4e4e7", borderRadius: 8, background: "#f9f9f9", color: "#18181b", outline: "none", fontFamily: "inherit" }}
-            />
+        
+        {/* Dynamic Header Section */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              {activeTab === 'rights' && (
+                <div style={{ width: 44, height: 44, borderRadius: 10, background: "#f4f4f5", border: "0.5px solid #e4e4e7", display: "flex", alignItems: "center", justifyContent: "center", color: "#71717a" }}>
+                  <Lock size={20} />
+                </div>
+              )}
+              <div>
+                <h1 style={{ fontSize: 26, fontWeight: 600, margin: 0, letterSpacing: "-0.3px" }}>
+                  {activeTab === 'users' ? "Gestion des collaborateurs" : "Droits d'accès & Privilèges par rôle"}
+                </h1>
+                <p style={{ fontSize: 14.5, color: "#71717a", margin: "4px 0 0" }}>
+                  {activeTab === 'users' 
+                    ? "Gérez les comptes d'utilisateurs et leurs droits d'accès au backoffice" 
+                    : "Configurez les autorisations pour chaque rôle de l'agence."}
+                </p>
+              </div>
+            </div>
           </div>
-          <select
-            value={pageSize}
-            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-            style={{ padding: "11px 14px", fontSize: 15, border: "0.5px solid #e4e4e7", borderRadius: 8, background: "#f9f9f9", color: "#18181b", outline: "none", cursor: "pointer" }}
-          >
-            {[5, 10, 20].map((n) => <option key={n} value={n}>{n} / page</option>)}
-          </select>
-          <button
-            onClick={() => {
-              const perm = checkPermission(user, 'manage_users');
-              if (!perm.allowed) {
-                showToast(perm.message || 'Action non autorisée');
-                return;
-              }
-              setEditing(null);
-              setFormOpen(true);
-            }}
-            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 22px", fontSize: 15, fontWeight: 500, background: "#0F6E56", color: "#9FE1CB", border: "none", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Ajouter
+          
+          {activeTab === 'rights' && (
+            <div style={{ display: "flex", gap: 10 }}>
+              <button 
+                onClick={handleResetChanges} 
+                style={{ padding: "10px 20px", fontSize: 14.5, borderRadius: 10, border: "0.5px solid #e4e4e7", background: "#ffffff", color: "#3f3f46", cursor: "pointer", fontWeight: 500 }}
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={handleSaveChanges} 
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 14.5, fontWeight: 500, borderRadius: 10, border: "none", background: "#0F6E56", color: "#ffffff", cursor: "pointer" }}
+              >
+                <Check size={16} />
+                Enregistrer
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Tab Controls Bar */}
+        <div style={{ display: "flex", gap: 8, background: "#f4f4f5", padding: 6, borderRadius: 12, width: "fit-content", marginBottom: 28 }}>
+          <button onClick={() => setActiveTab('users')} style={tabItemStyle(activeTab === 'users')}>
+            Collaborateurs
+          </button>
+          <button onClick={() => setActiveTab('rights')} style={tabItemStyle(activeTab === 'rights')}>
+            Droits d'accès & Privilèges
           </button>
         </div>
 
-        {/* Table */}
-        <div style={{ border: "0.5px solid #f0f0f0", borderRadius: 10, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 15 }}>
-            <thead>
-              <tr style={{ background: "#fafafa", borderBottom: "0.5px solid #f0f0f0" }}>
-                {["Collaborateur", "Rôle", "Ville", "Statut", ""].map((h, i) => (
-                  <th key={i} style={{ padding: "14px 18px", textAlign: i === 4 ? "right" : "left", fontSize: 13, fontWeight: 500, color: "#71717a", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paged.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: "#a1a1aa", fontSize: 15 }}>Aucun collaborateur trouvé</td></tr>
-              ) : paged.map((u) => (
-                <tr key={u.id} style={{ borderBottom: "0.5px solid #f5f5f5" }}>
-                  <td style={{ padding: "15px 18px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <Avatar name={u.fullName} />
-                      <div>
-                        <div style={{ fontWeight: 500, fontSize: 15, color: "#18181b" }}>{u.fullName}</div>
-                        <div style={{ fontSize: 12, color: "#a1a1aa", marginTop: 1 }}>{u.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: "15px 18px" }}><RoleBadge role={u.position} /></td>
-                  <td style={{ padding: "15px 18px", fontSize: 14, color: "#71717a" }}>{u.city}</td>
-                  <td style={{ padding: "15px 18px" }}><StatusBadge status={u.status} /></td>
-                  <td style={{ padding: "15px 18px" }}>
-                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                      <IconButton title="Modifier" onClick={() => {
-                        const perm = checkPermission(user, 'manage_users');
-                        const isUserAdmin = user?.role?.toLowerCase() === 'admin';
-                        if (!perm.allowed || !isUserAdmin) {
-                          showToast("Action non autorisée. Seul le compte Admin est autorisé à modifier les comptes utilisateurs.");
-                          return;
-                        }
-                        setEditing(u);
-                        setFormOpen(true);
-                      }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      </IconButton>
-                      <IconButton title="Supprimer" danger onClick={() => {
-                        const perm = checkPermission(user, 'manage_users');
-                        const isUserAdmin = user?.role?.toLowerCase() === 'admin';
-                        if (!perm.allowed || !isUserAdmin) {
-                          showToast("Action non autorisée. Seul le compte Admin est autorisé à supprimer les comptes utilisateurs.");
-                          return;
-                        }
-                        setToDelete(u);
-                      }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-                      </IconButton>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* ── Tab Content: Collaborateurs (Users CRUD) ── */}
+        {activeTab === 'users' && (
+          <CardSection
+            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>}
+            title="Gestion des collaborateurs"
+            description="Créez, modifiez, désactivez ou supprimez les comptes de l'agence"
+          >
+            {/* Toolbar */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+              <div style={{ flex: 1, position: "relative" }}>
+                <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#a1a1aa", pointerEvents: "none" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  placeholder="Rechercher un collaborateur…"
+                  style={{ width: "100%", padding: "11px 12px 11px 40px", fontSize: 15, border: "0.5px solid #e4e4e7", borderRadius: 8, background: "#f9f9f9", color: "#18181b", outline: "none", fontFamily: "inherit" }}
+                />
+              </div>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{ padding: "11px 14px", fontSize: 15, border: "0.5px solid #e4e4e7", borderRadius: 8, background: "#f9f9f9", color: "#18181b", outline: "none", cursor: "pointer" }}
+              >
+                {[5, 10, 20].map((n) => <option key={n} value={n}>{n} / page</option>)}
+              </select>
+              <button
+                onClick={() => {
+                  const perm = checkPermission(user, 'manage_users');
+                  if (!perm.allowed) {
+                    showToast(perm.message || 'Action non autorisée');
+                    return;
+                  }
+                  setEditing(null);
+                  setFormOpen(true);
+                }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 22px", fontSize: 15, fontWeight: 500, background: "#0F6E56", color: "#9FE1CB", border: "none", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                <Plus size={16} strokeWidth={2.5} />
+                Ajouter
+              </button>
+            </div>
 
-        <Pagination page={curPage} totalPages={totalPages} total={filtered.length} start={start} end={end} onChange={setPage} />
-      </CardSection>
-
-      {/* ── Section Privilèges ── */}
-      <div style={{
-        background: "#fff", border: "0.5px solid #e4e4e7",
-        borderRadius: 12, overflow: "visible",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-      }}>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 16,
-          padding: "22px 30px 20px", borderBottom: "0.5px solid #f0f0f0",
-        }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 10,
-            background: "#f4f4f5", border: "0.5px solid #e4e4e7",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#71717a", flexShrink: 0,
-          }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-          </div>
-          <div>
-            <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#18181b" }}>Droits d'accès & Privilèges par rôle</p>
-            <p style={{ fontSize: 14, color: "#a1a1aa", margin: "2px 0 0" }}>Configurez les autorisations pour chaque rôle de l'agence</p>
-          </div>
-        </div>
-        <div style={{ padding: "26px 30px" }}>
-          <div style={{ border: "0.5px solid #f0f0f0", borderRadius: 10, overflow: "visible" }}>
-            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 15 }}>
-              <thead>
-                <tr style={{ background: "#fafafa", borderBottom: "0.5px solid #f0f0f0" }}>
-                  <th style={{ position: "sticky", top: "60px", zIndex: 10, background: "#fafafa", padding: "14px 18px", textAlign: "left", fontSize: 13, fontWeight: 500, color: "#71717a", minWidth: 260, borderBottom: "0.5px solid #f0f0f0" }}>Module & autorisation</th>
-                  {ROLES.filter(r => r.key !== 'Admin').map((r) => (
-                    <th key={r.key} style={{ position: "sticky", top: "60px", zIndex: 10, background: "#fafafa", padding: "14px 16px", textAlign: "center", fontSize: 13, fontWeight: 500, color: "#18181b", minWidth: 120, whiteSpace: "nowrap", borderBottom: "0.5px solid #f0f0f0" }}>
-                      {r.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {groupedPermissions.map(({ group, perms }) => (
-                  <React.Fragment key={group}>
-                    <tr style={{ background: "#fafafa" }}>
-                      <td colSpan={ROLES.filter(r => r.key !== 'Admin').length + 1} style={{ padding: "11px 18px", fontSize: 13, fontWeight: 500, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: "0.5px solid #f0f0f0", borderTop: "0.5px solid #f0f0f0" }}>
-                        {group}
+            {/* Table */}
+            <div style={{ border: "0.5px solid #f0f0f0", borderRadius: 10, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 15 }}>
+                <thead>
+                  <tr style={{ background: "#fafafa", borderBottom: "0.5px solid #f0f0f0" }}>
+                    {["Collaborateur", "Rôle", "Ville", "Statut", ""].map((h, i) => (
+                      <th key={i} style={{ padding: "14px 18px", textAlign: i === 4 ? "right" : "left", fontSize: 13, fontWeight: 500, color: "#71717a", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paged.length === 0 ? (
+                    <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: "#a1a1aa", fontSize: 15 }}>Aucun collaborateur trouvé</td></tr>
+                  ) : paged.map((u) => (
+                    <tr key={u.id} style={{ borderBottom: "0.5px solid #f5f5f5" }}>
+                      <td style={{ padding: "15px 18px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <Avatar name={u.fullName} />
+                          <div>
+                            <div style={{ fontWeight: 500, fontSize: 15, color: "#18181b" }}>{u.fullName}</div>
+                            <div style={{ fontSize: 12, color: "#a1a1aa", marginTop: 1 }}>{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: "15px 18px" }}><RoleBadge role={u.position} /></td>
+                      <td style={{ padding: "15px 18px", fontSize: 14, color: "#71717a" }}>{u.city}</td>
+                      <td style={{ padding: "15px 18px" }}><StatusBadge status={u.status} /></td>
+                      <td style={{ padding: "15px 18px" }}>
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          <IconButton title="Modifier" onClick={() => {
+                            const perm = checkPermission(user, 'manage_users');
+                            const isUserAdmin = user?.role?.toLowerCase() === 'admin';
+                            if (!perm.allowed || !isUserAdmin) {
+                              showToast("Action non autorisée. Seul le compte Admin est autorisé à modifier les comptes utilisateurs.");
+                              return;
+                            }
+                            setEditing(u);
+                            setFormOpen(true);
+                          }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </IconButton>
+                          <IconButton title="Supprimer" danger onClick={() => {
+                            const perm = checkPermission(user, 'manage_users');
+                            const isUserAdmin = user?.role?.toLowerCase() === 'admin';
+                            if (!perm.allowed || !isUserAdmin) {
+                              showToast("Action non autorisée. Seul le compte Admin est autorisé à supprimer les comptes utilisateurs.");
+                              return;
+                            }
+                            setToDelete(u);
+                          }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                          </IconButton>
+                        </div>
                       </td>
                     </tr>
-                    {perms.map((p) => (
-                      <tr key={p.key} style={{ borderBottom: "0.5px solid #f5f5f5" }}>
-                        <td style={{ padding: "14px 18px", fontSize: 14, color: "#334155" }}>{p.label}</td>
-                        {ROLES.filter(r => r.key !== 'Admin').map((r) => (
-                          <td key={r.key} style={{ padding: "14px 16px", textAlign: "center" }}>
-                            <Toggle checked={(privileges[r.key] || []).includes(p.key)} onChange={() => togglePermission(r.key, p.key)} />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          {/* Info banner */}
-          <div style={{ marginTop: 20, padding: "14px 18px", background: "#E1F5EE", borderLeft: "3px solid #0F6E56", borderRadius: "0 8px 8px 0", display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, color: "#085041" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
-            <span><strong>Sécurité :</strong> Les modifications sont enregistrées immédiatement et de manière persistante. Les administrateurs disposent de l'ensemble des privilèges par défaut.</span>
+            <Pagination page={curPage} totalPages={totalPages} total={filteredUsers.length} start={start} end={end} onChange={setPage} />
+          </CardSection>
+        )}
+
+        {/* ── Tab Content: Droits d'accès & Privilèges par rôle ── */}
+        {activeTab === 'rights' && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            
+            {/* Horizontal Cards Row */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+              {CONFIGURABLE_ROLES.map((role) => {
+                const checkedCount = PERMISSIONS.filter(p => (draftPrivileges[role.key] || []).includes(p.key)).length;
+                const percentage = Math.round((checkedCount / PERMISSIONS.length) * 100);
+                return (
+                  <div key={role.key} style={{ background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between", height: 105, boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 15, fontWeight: 600, color: "#18181b" }}>{role.label}</span>
+                      <span style={{ fontSize: 11.5, color: "#71717a", background: "#f4f4f5", padding: "2px 8px", borderRadius: 6, fontWeight: 650 }}>
+                        {checkedCount}/{PERMISSIONS.length}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, color: "#a1a1aa", marginTop: 2 }}>{role.description}</div>
+                    
+                    {/* Progress Bar */}
+                    <div style={{ width: "100%", height: 5, background: "#f4f4f5", borderRadius: 10, overflow: "hidden", marginTop: 12 }}>
+                      <div style={{ width: `${percentage}%`, height: "100%", background: "#0F6E56", borderRadius: 10, transition: "width 0.2s" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Toolbar: Search and Module Category Selector */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center" }}>
+              <div style={{ position: "relative" }}>
+                <Search style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#a1a1aa", pointerEvents: "none" }} size={18} />
+                <input
+                  value={privilegeSearch}
+                  onChange={(e) => setPrivilegeSearch(e.target.value)}
+                  placeholder="Rechercher une autorisation..."
+                  style={{ width: "100%", padding: "12px 14px 12px 42px", fontSize: 15, border: "0.5px solid #e4e4e7", borderRadius: 10, background: "#ffffff", color: "#18181b", outline: "none", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}
+                />
+              </div>
+
+              {/* Module Selector Dropdown */}
+              <div style={{ position: "relative" }}>
+                <select
+                  value={selectedModule}
+                  onChange={(e) => setSelectedModule(e.target.value)}
+                  style={{ padding: "12px 40px 12px 16px", fontSize: 15, border: "0.5px solid #e4e4e7", borderRadius: 10, background: "#ffffff", color: "#18181b", outline: "none", cursor: "pointer", minWidth: 200, appearance: "none", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}
+                >
+                  <option value="all">Tous les modules</option>
+                  {moduleGroups.map((group) => (
+                    <option key={group} value={group}>{group}</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", color: "#71717a", pointerEvents: "none" }} />
+              </div>
+            </div>
+
+            {/* Access Rights Grid Card */}
+            <div style={{ background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, overflow: "visible", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <div style={{ overflow: "visible" }}>
+                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 15 }}>
+                  <thead>
+                    <tr style={{ background: "#ffffff", borderBottom: "1px solid #f0f0f0" }}>
+                      <th style={{ padding: "16px 20px", textAlign: "left", fontSize: 13, fontWeight: 500, color: "#71717a", width: "40%", borderBottom: "1px solid #f0f0f0" }}>
+                        Module & autorisation
+                      </th>
+                      {CONFIGURABLE_ROLES.map((role) => (
+                        <th key={role.key} className="role-popover-wrapper" style={{ position: "relative", padding: "16px 10px", width: "11%", textAlign: "center", borderBottom: "1px solid #f0f0f0", verticalAlign: "top", overflow: "visible" }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <span style={{ fontSize: 13.5, fontWeight: 650, color: "#18181b" }}>{role.label}</span>
+                            <button
+                              onClick={() => setActiveRolePopover(activeRolePopover === role.key ? null : role.key)}
+                              style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", fontSize: 18, fontWeight: "bold", padding: "2px 8px", marginTop: 2, outline: "none" }}
+                            >
+                              ...
+                            </button>
+                          </div>
+
+                          {/* Column Bulk Actions Popover */}
+                          {activeRolePopover === role.key && (
+                            <div style={{ position: "absolute", top: "85%", left: "50%", transform: "translateX(-50%)", zIndex: 1000, background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, boxShadow: "0 10px 25px rgba(0,0,0,0.08)", minWidth: 170, padding: "8px 0", textAlign: "left", animation: "slideUp 0.15s ease-out" }}>
+                              
+                              <div style={{ padding: "6px 16px 4px", fontSize: 11.5, fontWeight: 650, color: "#71717a", textTransform: "uppercase" }}>
+                                {role.label}
+                              </div>
+                              <button onClick={() => handleBulkActivateRole(role.key)} className="popover-item" style={popoverItemStyle}>
+                                Tout activer
+                              </button>
+                              <button onClick={() => handleBulkDeactivateRole(role.key)} className="popover-item" style={popoverItemStyle}>
+                                Tout désactiver
+                              </button>
+                              
+                              <div style={{ height: 0.5, background: "#e4e4e7", margin: "6px 0" }} />
+                              
+                              <div style={{ padding: "4px 16px 4px", fontSize: 11.5, fontWeight: 600, color: "#a1a1aa" }}>
+                                Copier depuis...
+                              </div>
+                              {CONFIGURABLE_ROLES.filter(o => o.key !== role.key).map(o => (
+                                <button key={o.key} onClick={() => handleCopyRolePermissions(o.key, role.key)} className="popover-item" style={{ ...popoverItemStyle, paddingLeft: 12 }}>
+                                  <Copy size={12.5} style={{ marginRight: 8, color: "#71717a" }} />
+                                  {o.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </th>
+                      ))}
+                      <th style={{ width: "5%", borderBottom: "1px solid #f0f0f0" }}></th>
+                    </tr>
+                  </thead>
+                  
+                  <tbody>
+                    {filteredModules.map(({ group, perms }, idx) => {
+                      const isExpanded = effectiveExpanded.includes(group);
+                      const headerColors = getAccordionColor(idx);
+                      return (
+                        <React.Fragment key={group}>
+                          
+                          {/* Collapsible Section Header (Accordion) */}
+                          <tr 
+                            onClick={() => toggleGroupExpand(group)}
+                            style={{ background: headerColors.bg, color: headerColors.text, cursor: "pointer", userSelect: "none" }}
+                          >
+                            <td colSpan={7} style={{ padding: "14px 20px", fontSize: "14px", fontWeight: 700, letterSpacing: "0.3px", textTransform: "uppercase", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <span style={{ transition: "transform 0.2s", display: "inline-block", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>
+                                  <ChevronRight size={16} strokeWidth={2.5} />
+                                </span>
+                                {group}
+                              </div>
+                            </td>
+                          </tr>
+                          
+                          {/* Expanded Child Rows */}
+                          {isExpanded && perms.map((p) => {
+                            // Compute count of active roles for this permission
+                            const enabledRolesCount = CONFIGURABLE_ROLES.filter(r => (draftPrivileges[r.key] || []).includes(p.key)).length;
+                            return (
+                              <tr key={p.key} className="row-hover" style={{ borderBottom: "0.5px solid #e4e4e7" }}>
+                                <td style={{ padding: "14px 20px", borderBottom: "0.5px solid #e4e4e7" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                    <span style={{ fontSize: "14px", color: "#3f3f46", fontWeight: 500 }}>{p.label}</span>
+                                    <span style={{ fontSize: "11px", color: "#71717a", background: "#f4f4f5", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
+                                      {enabledRolesCount}/5
+                                    </span>
+                                  </div>
+                                </td>
+                                
+                                {CONFIGURABLE_ROLES.map((role) => (
+                                  <td key={role.key} style={{ padding: "10px", textAlign: "center", borderBottom: "0.5px solid #e4e4e7" }}>
+                                    <Toggle 
+                                      checked={(draftPrivileges[role.key] || []).includes(p.key)} 
+                                      onChange={() => handleTogglePermission(role.key, p.key)} 
+                                    />
+                                  </td>
+                                ))}
+                                
+                                {/* Row bulk actions (...) */}
+                                <td className="row-popover-wrapper" style={{ position: "relative", padding: "14px 18px", textAlign: "right", borderBottom: "0.5px solid #e4e4e7", overflow: "visible" }}>
+                                  <button
+                                    onClick={() => setActiveRowPopover(activeRowPopover === p.key ? null : p.key)}
+                                    style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", fontSize: 18, padding: "2px 8px", outline: "none" }}
+                                  >
+                                    ...
+                                  </button>
+                                  
+                                  {activeRowPopover === p.key && (
+                                    <div style={{ position: "absolute", top: "85%", right: 18, zIndex: 1000, background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, boxShadow: "0 10px 25px rgba(0,0,0,0.08)", minWidth: 160, padding: "8px 0", textAlign: "left", animation: "slideUp 0.15s ease-out" }}>
+                                      
+                                      <button onClick={() => handleBulkActivatePermission(p.key)} className="popover-item" style={popoverItemStyle}>
+                                        Activer pour tous
+                                      </button>
+                                      <button onClick={() => handleBulkDeactivatePermission(p.key)} className="popover-item" style={popoverItemStyle}>
+                                        Désactiver pour tous
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Info Banner */}
+            <div style={{ padding: "14px 18px", background: "#E1F5EE", borderLeft: "4px solid #0F6E56", borderRadius: "0 8px 8px 0", display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, color: "#085041", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <span><strong>Sécurité :</strong> Seul le bouton <strong>Enregistrer</strong> applique les modifications de manière permanente sur le serveur. Les administrateurs conservent automatiquement tous les privilèges.</span>
+            </div>
+            
           </div>
-        </div>
-      </div>
+        )}
 
       </div>
 
@@ -984,3 +1558,12 @@ export default function Utilisateurs() {
     </div>
   );
 }
+
+// Configuration helper structure for visual matching
+const CONFIGURABLE_ROLES = [
+  { key: "Moderateur",                 label: "Modérateur",                 description: "Supervision globale" },
+  { key: "Responsable commercial",     label: "Resp. Commercial",           description: "Pilotage commercial" },
+  { key: "commercial",                 label: "Commercial",                 description: "Terrain commercial" },
+  { key: "Responsable des Opérations", label: "Resp. Opérations",           description: "Pilotage opérations" },
+  { key: "Chargée des Opérations",     label: "Chargée Opérations",         description: "Suivi opérations" },
+];

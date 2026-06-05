@@ -28,6 +28,11 @@ interface DevisPostSinistreData {
     desodorisation: number;
     rapportPhoto: number;
   };
+  avanceActive?: boolean;
+  avanceType?: 'pourcentage' | 'fixe';
+  avancePourcentage?: number;
+  avanceFixe?: number;
+  avancePaiement?: number;
 }
 
 // Données d'exemple (correspondant au devis original)
@@ -235,6 +240,20 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   doc.text('TOTAL HT', col1, y + 5.5);
   doc.text(`${formatNumber(totalHT)} DH`, right - 5, y + 5.5, { align: 'right' });
   y += rowHeight + 6;
+
+  if (data.avanceActive) {
+    doc.setFillColor(239, 246, 255);
+    doc.rect(margin, y - 4, tableWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    const labelAvance = data.avanceType === 'pourcentage'
+      ? `Avance requise (${data.avancePourcentage}%)`
+      : 'Avance requise';
+    doc.text(labelAvance, right - 65, y + 1.5);
+    doc.text(`${formatNumber(data.avancePaiement || 0)} DH`, right - 5, y + 1.5, { align: 'right' });
+    y += 10;
+  }
 
   const pageHeight = doc.internal.pageSize.getHeight();
   const footerThreshold = pageHeight - 40;
