@@ -23,7 +23,7 @@ export type UserAction =
 export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   "Admin": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
     // Listing profils
@@ -33,23 +33,23 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
-    "voir_la_caisse", "consulter_factures", "generer_exporter_factures", "valider_paiements_clients", "gerer_relances_facturation", "consulter_stats_ca",
+    "voir_la_caisse", "consulter_debit", "valider_paiement_debit", "filtrer_debit", "consulter_credit", "valider_paiement_credit", "filtrer_credit", "consulter_factures", "exporter_pdf_excel_facture", "editer_facture", "modifier_facture", "editer_besoin_facture", "generer_facture", "envoi_facture_client", "consulter_comptes_profil",
     // La caisse
-    "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "modifier_mouvement_caisse", "exporter_mouvements_caisse", "cloturer_caisse_journaliere",
+    "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "cloturer_caisse_journaliere",
     // Marketing
-    "consulter_codes_promo", "creer_code_promo", "activer_desactiver_code_promo", "gerer_remises", "consulter_campagnes_marketing", "creer_campagne_whatsapp",
+    "consulter_marketing", "creer_code_promo", "creer_geste_commercial", "creer_campagne",
     // Qualité
-    "consulter_retours_qualite", "envoyer_questionnaires_feedback", "traiter_reclamations", "consulter_stats_qualite", "modifier_criteres_evaluation", "exporter_rapports_satisfaction",
+    "consulter_retours_qualite", "repondre_avis_clients", "moderer_masquer_avis", "generer_rapports_qualite",
     // SEO - Blog
-    "rediger_blog", "publier_articles_blog", "modifier_articles_blog", "gerer_categories_blog", "configurer_seo_pages",
+    "rediger_blog", "modifier_articles_blog", "publier_articles_blog",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa",
     // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs", "creer_utilisateurs", "modifier_utilisateurs", "activer_desactiver_utilisateurs", "parametres_globaux"
+    "consulter_utilisateurs", "creer_utilisateurs", "parametres_globaux", "activer_desactiver_utilisateurs"
   ],
   "Moderateur": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
     // Listing profils
@@ -59,23 +59,23 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
-    "voir_la_caisse", "consulter_factures", "generer_exporter_factures", "valider_paiements_clients", "gerer_relances_facturation", "consulter_stats_ca",
+    "voir_la_caisse", "consulter_debit", "valider_paiement_debit", "filtrer_debit", "consulter_credit", "valider_paiement_credit", "filtrer_credit", "consulter_factures", "exporter_pdf_excel_facture", "editer_facture", "modifier_facture", "editer_besoin_facture", "generer_facture", "envoi_facture_client", "consulter_comptes_profil",
     // La caisse
-    "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "modifier_mouvement_caisse", "exporter_mouvements_caisse", "cloturer_caisse_journaliere",
+    "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "cloturer_caisse_journaliere",
     // Marketing
-    "consulter_codes_promo", "creer_code_promo", "activer_desactiver_code_promo", "gerer_remises", "consulter_campagnes_marketing", "creer_campagne_whatsapp",
+    "consulter_marketing", "creer_code_promo", "creer_geste_commercial", "creer_campagne",
     // Qualité
-    "consulter_retours_qualite", "envoyer_questionnaires_feedback", "traiter_reclamations", "consulter_stats_qualite", "modifier_criteres_evaluation", "exporter_rapports_satisfaction",
+    "consulter_retours_qualite", "repondre_avis_clients", "moderer_masquer_avis", "generer_rapports_qualite",
     // SEO - Blog
-    "rediger_blog", "publier_articles_blog", "modifier_articles_blog", "gerer_categories_blog", "configurer_seo_pages",
+    "rediger_blog", "modifier_articles_blog", "publier_articles_blog",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa",
     // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs", "creer_utilisateurs", "modifier_utilisateurs", "activer_desactiver_utilisateurs", "parametres_globaux"
+    "consulter_utilisateurs", "creer_utilisateurs", "parametres_globaux", "activer_desactiver_utilisateurs"
   ],
   "Responsable commercial": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
     // Listing profils
@@ -85,19 +85,17 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
-    "voir_la_caisse", "consulter_factures", "generer_exporter_factures", "valider_paiements_clients", "gerer_relances_facturation", "consulter_stats_ca",
+    "voir_la_caisse", "consulter_debit", "valider_paiement_debit", "filtrer_debit", "consulter_credit", "valider_paiement_credit", "filtrer_credit", "consulter_factures", "exporter_pdf_excel_facture", "editer_facture", "modifier_facture", "editer_besoin_facture", "generer_facture", "envoi_facture_client", "consulter_comptes_profil",
     // La caisse
-    "consulter_solde_caisse", "mouvements_caisse", "modifier_mouvement_caisse", "exporter_mouvements_caisse",
+    "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "cloturer_caisse_journaliere",
     // Marketing
-    "consulter_codes_promo", "creer_code_promo", "activer_desactiver_code_promo", "gerer_remises", "consulter_campagnes_marketing", "creer_campagne_whatsapp",
+    "consulter_marketing", "creer_code_promo", "creer_geste_commercial", "creer_campagne",
     // Qualité
-    "consulter_retours_qualite", "envoyer_questionnaires_feedback", "traiter_reclamations", "consulter_stats_qualite",
+    "consulter_retours_qualite", "repondre_avis_clients",
     // SEO
-    "rediger_blog", "gerer_categories_blog",
+    "rediger_blog",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
-    // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs"
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa"
   ],
   "commercial": [
     // Tableau de bord
@@ -111,23 +109,19 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
-    "consulter_factures", "generer_exporter_factures",
+    "consulter_factures", "editer_besoin_facture",
     // La caisse
-    "consulter_solde_caisse",
+    "mouvements_caisse",
     // Marketing
-    "consulter_codes_promo", "activer_desactiver_code_promo", "gerer_remises", "consulter_campagnes_marketing",
+    "consulter_marketing",
     // Qualité
-    "consulter_retours_qualite", "envoyer_questionnaires_feedback",
-    // SEO
-    "rediger_blog",
+    "consulter_retours_qualite",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
-    // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs", "modifier_utilisateurs"
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa"
   ],
   "Responsable des Opérations": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard",
     // Demandes en attente
     "creer_demande", "consulter_demandes", "valider_demandes",
     // Listing profils
@@ -137,19 +131,15 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
-    "consulter_factures",
+    "voir_la_caisse", "consulter_debit", "filtrer_debit", "consulter_credit", "valider_paiement_credit", "filtrer_credit", "consulter_factures", "consulter_comptes_profil",
     // La caisse
-    "consulter_solde_caisse", "mouvements_caisse", "modifier_mouvement_caisse",
+    "consulter_solde_caisse", "sorties_caisse",
     // Marketing
-    "consulter_campagnes_marketing",
+    "consulter_marketing",
     // Qualité
-    "consulter_retours_qualite", "traiter_reclamations", "consulter_stats_qualite", "exporter_rapports_satisfaction",
-    // SEO
-    "rediger_blog",
+    "consulter_retours_qualite", "generer_rapports_qualite",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
-    // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs"
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa"
   ],
   "Chargée des Opérations": [
     // Tableau de bord
@@ -163,23 +153,18 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique",
     // Vue globale
-    "consulter_factures",
-    // La caisse
-    "consulter_solde_caisse",
+    "consulter_comptes_profil",
     // Marketing
-    "consulter_campagnes_marketing",
+    "consulter_marketing",
     // Qualité
-    "consulter_retours_qualite", "envoyer_questionnaires_feedback", "traiter_reclamations",
-    // SEO
-    "rediger_blog",
+    "consulter_retours_qualite",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
-    // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs"
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa"
   ],
   "Opérationnel": [
-    "consulter_dashboard", "consulter_demandes"
-  ],
+    "consulter_dashboard",
+    "consulter_demandes"
+  ]
 };
 
 export const mapRoleToStorageKey = (role: string): string => {

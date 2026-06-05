@@ -45,6 +45,10 @@ const PERMISSIONS = [
   { key: "annulation_demande",            label: "Annulation de la demande", group: "Tableau de bord" },
   { key: "note_operationnelle_dashboard", label: "Note opérationnelle", group: "Tableau de bord" },
   { key: "note_commerciale_dashboard",    label: "Note commercial", group: "Tableau de bord" },
+  { key: "assigner_charge_operation",     label: "Assigner à un chargé opération", group: "Tableau de bord" },
+  { key: "application_taux_horaire_standard", label: "Application de taux horaire standard", group: "Tableau de bord" },
+  { key: "taux_horaire_exceptionnel",     label: "Taux horaire exceptionnel", group: "Tableau de bord" },
+  { key: "taux_forfaitaire",              label: "Taux forfaitaire", group: "Tableau de bord" },
 
   // Demandes en attente
   { key: "creer_demande",                 label: "Créer une nouvelle demande", group: "Demandes en attente" },
@@ -81,57 +85,56 @@ const PERMISSIONS = [
   { key: "exporter_historique_csv",       label: "Exporter l'historique", group: "Historique" },
 
   // Vue globale
-  { key: "voir_la_caisse",                label: "Accéder à la vue financière globale", group: "Gestion financière — Vue globale" },
-  { key: "consulter_factures",            label: "Consulter la liste des factures", group: "Gestion financière — Vue globale" },
-  { key: "generer_exporter_factures",     label: "Générer / exporter les factures", group: "Gestion financière — Vue globale" },
-  { key: "valider_paiements_clients",     label: "Valider les paiements des clients", group: "Gestion financière — Vue globale" },
-  { key: "gerer_relances_facturation",     label: "Gérer les relances de facturation", group: "Gestion financière — Vue globale" },
-  { key: "consulter_stats_ca",            label: "Consulter les statistiques de chiffre d'affaires", group: "Gestion financière — Vue globale" },
+  { key: "voir_la_caisse",                label: "Consulter la vue financière globale", group: "Gestion financière — Vue globale", subgroup: "VUE GLOBALE" },
+  { key: "consulter_debit",               label: "Consulter (profil doit à l'agence)", group: "Gestion financière — Vue globale", subgroup: "DÉBIT" },
+  { key: "valider_paiement_debit",        label: "Valider le paiement", group: "Gestion financière — Vue globale", subgroup: "DÉBIT" },
+  { key: "filtrer_debit",                 label: "Filtrer", group: "Gestion financière — Vue globale", subgroup: "DÉBIT" },
+  { key: "consulter_credit",              label: "Consulter (agence doit au profil)", group: "Gestion financière — Vue globale", subgroup: "CRÉDIT" },
+  { key: "valider_paiement_credit",       label: "Valider le paiement", group: "Gestion financière — Vue globale", subgroup: "CRÉDIT" },
+  { key: "filtrer_credit",                label: "Filtrer", group: "Gestion financière — Vue globale", subgroup: "CRÉDIT" },
+  { key: "consulter_factures",            label: "Consulter les factures", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "exporter_pdf_excel_facture",    label: "Exporter en PDF ou Excel", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "editer_facture",                label: "Éditer facture", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "modifier_facture",              label: "Modifier", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "editer_besoin_facture",         label: "Éditer le besoin", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "generer_facture",               label: "Générer facture", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "envoi_facture_client",          label: "Envoi de facture au client", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "consulter_comptes_profil",      label: "Consulter les comptes profil", group: "Gestion financière — Vue globale", subgroup: "COMPTE PROFIL" },
 
   // La caisse
-  { key: "consulter_solde_caisse",        label: "Consulter le solde de la caisse", group: "Gestion financière — La caisse" },
-  { key: "mouvements_caisse",             label: "Saisir des entrées de caisse", group: "Gestion financière — La caisse" },
-  { key: "sorties_caisse",                label: "Saisir des sorties de caisse", group: "Gestion financière — La caisse" },
-  { key: "modifier_mouvement_caisse",    label: "Modifier un mouvement de caisse", group: "Gestion financière — La caisse" },
-  { key: "exporter_mouvements_caisse",    label: "Exporter les mouvements de caisse", group: "Gestion financière — La caisse" },
+  { key: "consulter_solde_caisse",        label: "Consulter le solde de caisse", group: "Gestion financière — La caisse" },
+  { key: "mouvements_caisse",             label: "Encaisser un paiement client", group: "Gestion financière — La caisse" },
+  { key: "sorties_caisse",                label: "Saisir une sortie / dépense", group: "Gestion financière — La caisse" },
   { key: "cloturer_caisse_journaliere",   label: "Clôturer la caisse journalière", group: "Gestion financière — La caisse" },
 
   // Marketing
-  { key: "consulter_codes_promo",         label: "Consulter les codes promotionnels", group: "Marketing" },
-  { key: "creer_code_promo",              label: "Créer un nouveau code promo", group: "Marketing" },
-  { key: "activer_desactiver_code_promo", label: "Activer / désactiver un code promo", group: "Marketing" },
-  { key: "gerer_remises",                 label: "Gérer les gestes commerciaux (remises)", group: "Marketing" },
-  { key: "consulter_campagnes_marketing", label: "Consulter les campagnes marketing", group: "Marketing" },
-  { key: "creer_campagne_whatsapp",       label: "Créer / éditer une campagne WhatsApp", group: "Marketing" },
+  { key: "consulter_marketing",           label: "Consulter toutes les pages", group: "Marketing" },
+  { key: "creer_code_promo",              label: "Créer un code promo", group: "Marketing" },
+  { key: "creer_geste_commercial",        label: "Créer un geste commercial", group: "Marketing" },
+  { key: "creer_campagne",                label: "Créer une campagne", group: "Marketing" },
 
   // Qualité
-  { key: "consulter_retours_qualite",     label: "Consulter les retours qualité clients", group: "Qualité & Feedback" },
-  { key: "envoyer_questionnaires_feedback", label: "Envoyer les questionnaires de feedback", group: "Qualité & Feedback" },
-  { key: "traiter_reclamations",          label: "Traiter les réclamations clients", group: "Qualité & Feedback" },
-  { key: "consulter_stats_qualite",       label: "Consulter les statistiques qualité", group: "Qualité & Feedback" },
-  { key: "modifier_criteres_evaluation",  label: "Modifier les critères d'évaluation", group: "Qualité & Feedback" },
-  { key: "exporter_rapports_satisfaction", label: "Exporter les rapports de satisfaction", group: "Qualité & Feedback" },
+  { key: "consulter_retours_qualite",     label: "Consulter les avis & feedbacks clients", group: "Qualité & Feedback" },
+  { key: "repondre_avis_clients",         label: "Répondre aux avis clients", group: "Qualité & Feedback" },
+  { key: "moderer_masquer_avis",          label: "Modérer / masquer un avis", group: "Qualité & Feedback" },
+  { key: "generer_rapports_qualite",      label: "Générer les rapports qualité", group: "Qualité & Feedback" },
 
   // SEO - Blog
   { key: "rediger_blog",                  label: "Consulter les articles du blog", group: "SEO — Blog" },
-  { key: "publier_articles_blog",         label: "Rédiger et publier un article", group: "SEO — Blog" },
-  { key: "modifier_articles_blog",        label: "Modifier / éditer un article existant", group: "SEO — Blog" },
-  { key: "gerer_categories_blog",         label: "Gérer les catégories du blog", group: "SEO — Blog" },
-  { key: "configurer_seo_pages",          label: "Configurer le SEO des pages", group: "SEO — Blog" },
+  { key: "modifier_articles_blog",        label: "Rédiger & modifier les articles", group: "SEO — Blog" },
+  { key: "publier_articles_blog",         label: "Publier / dépublier un article", group: "SEO — Blog" },
 
   // Paramètres - Mon profil
-  { key: "consulter_infos_profil",        label: "Consulter ses informations personnelles", group: "Paramètres — Mon profil" },
-  { key: "modifier_infos_profil",         label: "Modifier ses informations personnelles", group: "Paramètres — Mon profil" },
-  { key: "modifier_mot_de_passe",         label: "Changer son mot de passe", group: "Paramètres — Mon profil" },
-  { key: "activer_mfa",                   label: "Activer la double authentification (MFA)", group: "Paramètres — Mon profil" },
-  { key: "consulter_logs_connexion",      label: "Consulter ses propres logs de connexion", group: "Paramètres — Mon profil" },
+  { key: "consulter_infos_profil",        label: "Consulter mon profil", group: "Paramètres — Mon profil" },
+  { key: "modifier_infos_profil",         label: "Modifier mes informations", group: "Paramètres — Mon profil" },
+  { key: "modifier_mot_de_passe",         label: "Changer mon mot de passe", group: "Paramètres — Mon profil" },
+  { key: "activer_mfa",                   label: "Activer la double authentification", group: "Paramètres — Mon profil" },
 
   // Paramètres - Utilisateurs & Rôles
-  { key: "consulter_utilisateurs",        label: "Consulter la liste des utilisateurs", group: "Paramètres — Utilisateurs & Rôles" },
-  { key: "creer_utilisateurs",            label: "Créer un nouvel utilisateur", group: "Paramètres — Utilisateurs & Rôles" },
-  { key: "modifier_utilisateurs",         label: "Modifier un utilisateur", group: "Paramètres — Utilisateurs & Rôles" },
-  { key: "activer_desactiver_utilisateurs", label: "Désactiver / activer un utilisateur", group: "Paramètres — Utilisateurs & Rôles" },
-  { key: "parametres_globaux",            label: "Modifier la matrice des droits d'accès", group: "Paramètres — Utilisateurs & Rôles" }
+  { key: "consulter_utilisateurs",        label: "Consulter les utilisateurs back-office", group: "Paramètres — Utilisateurs & Rôles" },
+  { key: "creer_utilisateurs",            label: "Inviter / créer un utilisateur", group: "Paramètres — Utilisateurs & Rôles" },
+  { key: "parametres_globaux",            label: "Gérer les rôles & permissions", group: "Paramètres — Utilisateurs & Rôles" },
+  { key: "activer_desactiver_utilisateurs", label: "Désactiver / réinitialiser un compte", group: "Paramètres — Utilisateurs & Rôles" }
 ];
 
 const ROLES = [
@@ -148,7 +151,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   "Admin": PERMISSIONS.map((p) => p.key),
   "Moderateur": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
     // Listing profils
@@ -158,23 +161,23 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
-    "voir_la_caisse", "consulter_factures", "generer_exporter_factures", "valider_paiements_clients", "gerer_relances_facturation", "consulter_stats_ca",
+    "voir_la_caisse", "consulter_debit", "valider_paiement_debit", "filtrer_debit", "consulter_credit", "valider_paiement_credit", "filtrer_credit", "consulter_factures", "exporter_pdf_excel_facture", "editer_facture", "modifier_facture", "editer_besoin_facture", "generer_facture", "envoi_facture_client", "consulter_comptes_profil",
     // La caisse
-    "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "modifier_mouvement_caisse", "exporter_mouvements_caisse", "cloturer_caisse_journaliere",
+    "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "cloturer_caisse_journaliere",
     // Marketing
-    "consulter_codes_promo", "creer_code_promo", "activer_desactiver_code_promo", "gerer_remises", "consulter_campagnes_marketing", "creer_campagne_whatsapp",
+    "consulter_marketing", "creer_code_promo", "creer_geste_commercial", "creer_campagne",
     // Qualité
-    "consulter_retours_qualite", "envoyer_questionnaires_feedback", "traiter_reclamations", "consulter_stats_qualite", "modifier_criteres_evaluation", "exporter_rapports_satisfaction",
+    "consulter_retours_qualite", "repondre_avis_clients", "moderer_masquer_avis", "generer_rapports_qualite",
     // SEO - Blog
-    "rediger_blog", "publier_articles_blog", "modifier_articles_blog", "gerer_categories_blog", "configurer_seo_pages",
+    "rediger_blog", "modifier_articles_blog", "publier_articles_blog",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa",
     // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs", "creer_utilisateurs", "modifier_utilisateurs", "activer_desactiver_utilisateurs", "parametres_globaux"
+    "consulter_utilisateurs", "creer_utilisateurs", "parametres_globaux", "activer_desactiver_utilisateurs"
   ],
   "Responsable commercial": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
     // Listing profils
@@ -184,19 +187,17 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
-    "voir_la_caisse", "consulter_factures", "generer_exporter_factures", "valider_paiements_clients", "gerer_relances_facturation", "consulter_stats_ca",
+    "voir_la_caisse", "consulter_debit", "valider_paiement_debit", "filtrer_debit", "consulter_credit", "valider_paiement_credit", "filtrer_credit", "consulter_factures", "exporter_pdf_excel_facture", "editer_facture", "modifier_facture", "editer_besoin_facture", "generer_facture", "envoi_facture_client", "consulter_comptes_profil",
     // La caisse
-    "consulter_solde_caisse", "mouvements_caisse", "modifier_mouvement_caisse", "exporter_mouvements_caisse",
+    "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "cloturer_caisse_journaliere",
     // Marketing
-    "consulter_codes_promo", "creer_code_promo", "activer_desactiver_code_promo", "gerer_remises", "consulter_campagnes_marketing", "creer_campagne_whatsapp",
+    "consulter_marketing", "creer_code_promo", "creer_geste_commercial", "creer_campagne",
     // Qualité
-    "consulter_retours_qualite", "envoyer_questionnaires_feedback", "traiter_reclamations", "consulter_stats_qualite",
+    "consulter_retours_qualite", "repondre_avis_clients",
     // SEO
-    "rediger_blog", "gerer_categories_blog",
+    "rediger_blog",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
-    // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs"
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa"
   ],
   "commercial": [
     // Tableau de bord
@@ -210,23 +211,19 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
-    "consulter_factures", "generer_exporter_factures",
+    "consulter_factures", "editer_besoin_facture",
     // La caisse
-    "consulter_solde_caisse",
+    "mouvements_caisse",
     // Marketing
-    "consulter_codes_promo", "activer_desactiver_code_promo", "gerer_remises", "consulter_campagnes_marketing",
+    "consulter_marketing",
     // Qualité
-    "consulter_retours_qualite", "envoyer_questionnaires_feedback",
-    // SEO
-    "rediger_blog",
+    "consulter_retours_qualite",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
-    // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs", "modifier_utilisateurs"
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa"
   ],
   "Responsable des Opérations": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard",
     // Demandes en attente
     "creer_demande", "consulter_demandes", "valider_demandes",
     // Listing profils
@@ -236,19 +233,15 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
-    "consulter_factures",
+    "voir_la_caisse", "consulter_debit", "filtrer_debit", "consulter_credit", "valider_paiement_credit", "filtrer_credit", "consulter_factures", "consulter_comptes_profil",
     // La caisse
-    "consulter_solde_caisse", "mouvements_caisse", "modifier_mouvement_caisse",
+    "consulter_solde_caisse", "sorties_caisse",
     // Marketing
-    "consulter_campagnes_marketing",
+    "consulter_marketing",
     // Qualité
-    "consulter_retours_qualite", "traiter_reclamations", "consulter_stats_qualite", "exporter_rapports_satisfaction",
-    // SEO
-    "rediger_blog",
+    "consulter_retours_qualite", "generer_rapports_qualite",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
-    // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs"
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa"
   ],
   "Chargée des Opérations": [
     // Tableau de bord
@@ -262,23 +255,18 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Historique
     "consulter_historique_global", "filtrer_historique",
     // Vue globale
-    "consulter_factures",
-    // La caisse
-    "consulter_solde_caisse",
+    "consulter_comptes_profil",
     // Marketing
-    "consulter_campagnes_marketing",
+    "consulter_marketing",
     // Qualité
-    "consulter_retours_qualite", "envoyer_questionnaires_feedback", "traiter_reclamations",
-    // SEO
-    "rediger_blog",
+    "consulter_retours_qualite",
     // Paramètres - Mon profil
-    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa", "consulter_logs_connexion",
-    // Paramètres - Utilisateurs & Rôles
-    "consulter_utilisateurs"
+    "consulter_infos_profil", "modifier_infos_profil", "modifier_mot_de_passe", "activer_mfa"
   ],
   "Opérationnel": [
-    "consulter_dashboard", "consulter_demandes"
-  ],
+    "consulter_dashboard",
+    "consulter_demandes"
+  ]
 };
 
 
@@ -342,10 +330,9 @@ function Avatar({ name, size = 42 }: { name: string; size?: number }) {
   );
 }
 
-/* ─── Toggle Switch ────────────────────────────────────────────────────────── */
-function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+function Toggle({ checked, onChange, tooltip }: { checked: boolean; onChange: () => void; tooltip?: string }) {
   return (
-    <label style={{ position: "relative", display: "inline-flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
+    <label className="toggle-container" style={{ position: "relative", display: "inline-flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}>
       <input type="checkbox" checked={checked} onChange={onChange} style={{ opacity: 0, width: 0, height: 0, position: "absolute" }} />
       <div style={{
         width: 44, height: 24, borderRadius: 24,
@@ -359,6 +346,39 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
           background: "#fff", transition: "left 0.2s",
         }} />
       </div>
+      {tooltip && (
+        <div className="toggle-tooltip" style={{
+          position: "absolute",
+          bottom: "100%",
+          left: "50%",
+          transform: "translateX(-50%) translateY(4px)",
+          background: "#0F6E56",
+          color: "#ffffff",
+          padding: "5px 10px",
+          borderRadius: "6px",
+          fontSize: "11.5px",
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+          pointerEvents: "none",
+          opacity: 0,
+          transition: "opacity 0.12s ease, transform 0.12s ease",
+          zIndex: 100,
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+        }}>
+          {tooltip}
+          <div style={{
+            position: "absolute",
+            top: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 0,
+            height: 0,
+            borderLeft: "5px solid transparent",
+            borderRight: "5px solid transparent",
+            borderTop: "5px solid #0F6E56",
+          }} />
+        </div>
+      )}
     </label>
   );
 }
@@ -1138,6 +1158,10 @@ export default function Utilisateurs() {
         @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
         .popover-item:hover { background-color: #f4f4f5 !important; }
         .row-hover:hover { background-color: #fafafa; }
+        .toggle-container:hover .toggle-tooltip {
+          opacity: 1 !important;
+          transform: translateX(-50%) translateY(-6px) !important;
+        }
       `}</style>
 
       {/* Admin Access Restriction Overlay */}
@@ -1481,11 +1505,20 @@ export default function Utilisateurs() {
                           </tr>
                           
                           {/* Expanded Child Rows */}
-                          {isExpanded && perms.map((p) => {
+                          {isExpanded && perms.map((p, pIdx) => {
                             // Compute count of active roles for this permission
                             const enabledRolesCount = CONFIGURABLE_ROLES.filter(r => (draftPrivileges[r.key] || []).includes(p.key)).length;
+                            const showSubgroup = p.subgroup && (pIdx === 0 || perms[pIdx - 1].subgroup !== p.subgroup);
                             return (
-                              <tr key={p.key} className="row-hover" style={{ borderBottom: "0.5px solid #e4e4e7" }}>
+                              <React.Fragment key={p.key}>
+                                {showSubgroup && (
+                                  <tr style={{ background: "#fcfdfc" }}>
+                                    <td colSpan={CONFIGURABLE_ROLES.length + 2} style={{ padding: "10px 20px", fontSize: "11px", fontWeight: 700, color: "#0F6E56", letterSpacing: "0.5px", textTransform: "uppercase", borderBottom: "0.5px solid #e4e4e7" }}>
+                                      {p.subgroup}
+                                    </td>
+                                  </tr>
+                                )}
+                                <tr className="row-hover" style={{ borderBottom: "0.5px solid #e4e4e7" }}>
                                 <td style={{ padding: "14px 20px", borderBottom: "0.5px solid #e4e4e7" }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                                     <span style={{ fontSize: "14px", color: "#3f3f46", fontWeight: 500 }}>{p.label}</span>
@@ -1500,6 +1533,7 @@ export default function Utilisateurs() {
                                     <Toggle 
                                       checked={(draftPrivileges[role.key] || []).includes(p.key)} 
                                       onChange={() => handleTogglePermission(role.key, p.key)} 
+                                      tooltip={role.label} 
                                     />
                                   </td>
                                 ))}
@@ -1526,6 +1560,7 @@ export default function Utilisateurs() {
                                   )}
                                 </td>
                               </tr>
+                            </React.Fragment>
                             );
                           })}
                         </React.Fragment>

@@ -87,7 +87,7 @@ export default function AppLayout() {
       return hasPermission(user, 'consulter_demandes') ? item : null;
     }
     if (item.to === '/marketing') {
-      return hasPermission(user, 'rediger_blog') ? item : null;
+      return hasPermission(user, 'consulter_marketing') ? item : null;
     }
     
     return item;

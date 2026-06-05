@@ -88,7 +88,7 @@ export default function App() {
             <Route path="la-caisse" element={<PermissionRoute permission="voir_la_caisse"><LaCaisse /></PermissionRoute>} />
           </Route>
           <Route path="qualite" element={<PermissionRoute permission="consulter_demandes"><Qualite /></PermissionRoute>} />
-          <Route path="marketing" element={<PermissionRoute permission="rediger_blog"><Marketing /></PermissionRoute>} />
+          <Route path="marketing" element={<PermissionRoute permission="consulter_marketing"><Marketing /></PermissionRoute>} />
           <Route path="devis" element={<MoteurDevis />} />
           <Route path="parametres">
             <Route path="profil" element={<ParametresProfil />} />
