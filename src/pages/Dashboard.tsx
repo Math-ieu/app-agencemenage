@@ -2175,16 +2175,15 @@ export default function Dashboard() {
                           </div>
                           <div className="form-group">
                             <label>Segment</label>
-                            <select value={editFormData.segment} onChange={e => { const ns = e.target.value as keyof typeof SERVICES_LIST; const svcs = SERVICES_LIST[ns] || []; setEditFormData({ ...editFormData, segment: ns, service: svcs.includes(editFormData.service) ? editFormData.service : (svcs[0] || '') }); }} className="edit-input">
-                              <option value="particulier">Particulier</option>
-                              <option value="entreprise">Entreprise</option>
-                            </select>
+                            <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', fontWeight: 500, fontSize: '14px', height: '38px', color: '#64748b' }}>
+                              {editFormData.segment === 'entreprise' ? 'Entreprise' : 'Particulier'}
+                            </div>
                           </div>
                           <div className="form-group">
                             <label>Type de service</label>
-                            <select value={editFormData.service} onChange={e => setEditFormData({ ...editFormData, service: e.target.value })} className="edit-input">
-                              {(SERVICES_LIST[editFormData.segment as keyof typeof SERVICES_LIST] || []).map(s => (<option key={s} value={s}>{s}</option>))}
-                            </select>
+                            <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', fontWeight: 500, fontSize: '14px', height: '38px', color: '#64748b' }}>
+                              {editFormData.service || '—'}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2198,7 +2197,9 @@ export default function Dashboard() {
                         <div className="form-grid-3 gap-4">
                           <div className="form-group">
                             <label>Montant HT (MAD)</label>
-                            <input type="number" value={editFormData.montant_ht} onChange={e => setEditFormData({ ...editFormData, montant_ht: e.target.value })} className="edit-input" />
+                            <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', fontWeight: 500, fontSize: '14px', height: '38px', color: '#64748b' }}>
+                              {editFormData.montant_ht}
+                            </div>
                             {editFormData.statut_paiement_ui === 'facturation_annulee' && (
                               <p style={{ fontSize: '12px', color: '#DC2626', fontWeight: 600, marginTop: '6px' }}>
                                 « CA de cette demande : {toNumber(editFormData.ca_initial)} DH »
