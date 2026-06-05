@@ -858,6 +858,7 @@ export default function DemandesEnAttente() {
           prix: patch.montant !== undefined ? patch.montant : patch.prix !== undefined ? patch.prix : d.prix,
           nb_heures: patch.duree !== undefined ? patch.duree : patch.nb_heures !== undefined ? patch.nb_heures : d.nb_heures,
           nb_intervenants: patch.nb_intervenants !== undefined ? patch.nb_intervenants : d.nb_intervenants,
+          avance_paiement: patch.avance_paiement !== undefined ? patch.avance_paiement : d.avance_paiement,
           formulaire_data: {
             ...(d.formulaire_data || {}),
             ...patch
@@ -886,6 +887,8 @@ export default function DemandesEnAttente() {
       else if (patch.nb_heures !== undefined) payload.nb_heures = patch.nb_heures;
 
       if (patch.nb_intervenants !== undefined) payload.nb_intervenants = patch.nb_intervenants;
+      
+      if (patch.avance_paiement !== undefined) payload.avance_paiement = patch.avance_paiement;
 
       await updateDemande(demandeId, payload);
     } catch (e) {
