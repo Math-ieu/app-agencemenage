@@ -827,7 +827,7 @@ export default function Utilisateurs() {
   const [draftPrivileges, setDraftPrivileges] = useState<Record<string, string[]>>({});
   const [privilegeSearch, setPrivilegeSearch] = useState("");
   const [selectedModule, setSelectedModule] = useState("all");
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(["Tableau de bord"]);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   
   // Popover State
   const [activeRolePopover, setActiveRolePopover] = useState<string | null>(null);

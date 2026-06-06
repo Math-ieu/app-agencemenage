@@ -12,7 +12,7 @@ import {
   XCircle, Send, Download, CheckCircle, X
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
-import { checkPermission } from '../utils/permissions';
+import { checkPermission, hasPermission } from '../utils/permissions';
 import { useAuthStore } from '../store/auth';
 import { Client, Demande } from '../types';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
@@ -333,6 +333,16 @@ export default function ClientDetails() {
   const handleSaveAvis = async () => {
     const newComm = avisComm.trim();
     const newOp = avisOp.trim();
+
+    if (newComm && !hasPermission(user, 'note_commerciale')) {
+      addToast("Vous n'êtes pas autorisé à saisir une note commerciale", 'error');
+      return;
+    }
+    if (newOp && !hasPermission(user, 'note_operationnelle')) {
+      addToast("Vous n'êtes pas autorisé à saisir une note opérationnelle", 'error');
+      return;
+    }
+
     if (!newComm && !newOp) {
       addToast('Veuillez saisir au moins une note', 'info');
       return;
@@ -506,32 +516,36 @@ export default function ClientDetails() {
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 10 }} className="flex-wrap">
-            <button
-              onClick={() => setShowEditModal(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 18px', border: '1px solid #e2e8f0',
-                borderRadius: 8, background: 'white', color: '#475569',
-                fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              <FileText size={16} color={C.teal} /> Éditer
-            </button>
-            <button
-              onClick={handleToggleBlacklist}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 18px',
-                border: client?.is_blacklisted ? '1px solid #cbd5e1' : '1px solid #FEB2B2',
-                borderRadius: 8,
-                background: client?.is_blacklisted ? '#f1f5f9' : 'white',
-                color: client?.is_blacklisted ? '#475569' : '#E53E3E',
-                fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              {client?.is_blacklisted ? <CheckCircle size={16} color="#10b981" /> : <Slash size={16} />}
-              {client?.is_blacklisted ? 'Déblacklister' : 'Black lister'}
-            </button>
+            {hasPermission(user, 'modifier_clients') && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 18px', border: '1px solid #e2e8f0',
+                  borderRadius: 8, background: 'white', color: '#475569',
+                  fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <FileText size={16} color={C.teal} /> Éditer
+              </button>
+            )}
+            {hasPermission(user, 'blacklister_clients') && (
+              <button
+                onClick={handleToggleBlacklist}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 18px',
+                  border: client?.is_blacklisted ? '1px solid #cbd5e1' : '1px solid #FEB2B2',
+                  borderRadius: 8,
+                  background: client?.is_blacklisted ? '#f1f5f9' : 'white',
+                  color: client?.is_blacklisted ? '#475569' : '#E53E3E',
+                  fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                {client?.is_blacklisted ? <CheckCircle size={16} color="#10b981" /> : <Slash size={16} />}
+                {client?.is_blacklisted ? 'Déblacklister' : 'Black lister'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -693,12 +707,16 @@ export default function ClientDetails() {
                     </div>
                   </div>
                 )}
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Saisir une nouvelle note</div>
-                <textarea
-                  style={{ width: '100%', height: 70, padding: 10, border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: '#334155', resize: 'none', fontWeight: 500, fontFamily: 'inherit', outline: 'none' }}
-                  placeholder="Saisir une nouvelle note commerciale..."
-                  value={avisComm} onChange={e => setAvisComm(e.target.value)}
-                />
+                {hasPermission(user, 'note_commerciale') && (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Saisir une nouvelle note</div>
+                    <textarea
+                      style={{ width: '100%', height: 70, padding: 10, border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: '#334155', resize: 'none', fontWeight: 500, fontFamily: 'inherit', outline: 'none' }}
+                      placeholder="Saisir une nouvelle note commerciale..."
+                      value={avisComm} onChange={e => setAvisComm(e.target.value)}
+                    />
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -731,33 +749,39 @@ export default function ClientDetails() {
                     </div>
                   </div>
                 )}
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Saisir une nouvelle note</div>
-                <textarea
-                  style={{ width: '100%', height: 70, padding: 10, border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: '#334155', resize: 'none', fontWeight: 500, fontFamily: 'inherit', outline: 'none' }}
-                  placeholder="Saisir une nouvelle note opérationnelle..."
-                  value={avisOp} onChange={e => setAvisOp(e.target.value)}
-                />
+                {hasPermission(user, 'note_operationnelle') && (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Saisir une nouvelle note</div>
+                    <textarea
+                      style={{ width: '100%', height: 70, padding: 10, border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, color: '#334155', resize: 'none', fontWeight: 500, fontFamily: 'inherit', outline: 'none' }}
+                      placeholder="Saisir une nouvelle note opérationnelle..."
+                      value={avisOp} onChange={e => setAvisOp(e.target.value)}
+                    />
+                  </>
+                )}
               </div>
             )}
           </div>
         </div>
 
         {/* Save notes button */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-          <button
-            onClick={handleSaveAvis} disabled={saving}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '10px 22px', backgroundColor: C.teal, color: 'white',
-              borderRadius: 10, fontWeight: 700, fontSize: 14, border: 'none',
-              cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1,
-              boxShadow: '0 2px 8px rgba(3,114,101,0.15)',
-            }}
-          >
-            <FileText size={17} />
-            {saving ? 'Enregistrement...' : 'Enregistrer les notes'}
-          </button>
-        </div>
+        {(hasPermission(user, 'note_commerciale') || hasPermission(user, 'note_operationnelle')) && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+            <button
+              onClick={handleSaveAvis} disabled={saving}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 22px', backgroundColor: C.teal, color: 'white',
+                borderRadius: 10, fontWeight: 700, fontSize: 14, border: 'none',
+                cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1,
+                boxShadow: '0 2px 8px rgba(3,114,101,0.15)',
+              }}
+            >
+              <FileText size={17} />
+              {saving ? 'Enregistrement...' : 'Enregistrer les notes'}
+            </button>
+          </div>
+        )}
 
         {/* ── 4. Type de Fréquence ── */}
         <Accordion title="Type de Fréquence" icon={<Clock size={18} />} isOpen={openSections.frequence} onToggle={() => toggle('frequence')} color={C.sage}>

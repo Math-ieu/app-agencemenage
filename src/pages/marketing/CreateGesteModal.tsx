@@ -6,6 +6,7 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { X, Check, Search } from 'lucide-react';
 import { STATUTS_GESTE, CANAUX_DIFFUSION } from '@/lib/marketing-constants';
 import type { Demande } from '@/types';
+import { useAuthStore } from '@/store/auth';
 
 export interface GesteFormState {
   demande_id: string;
@@ -41,6 +42,30 @@ interface Props {
 }
 
 export function CreateGesteModal({ demandes, commerciaux, form, setForm, onClose, onSubmit }: Props) {
+  const { user } = useAuthStore();
+
+  useEffect(() => {
+    if (!form.cree_par && user?.id) {
+      setForm(prev => ({
+        ...prev,
+        cree_par: String(user.id)
+      }));
+    }
+  }, [user, form.cree_par, setForm]);
+
+  const creatorName = useMemo(() => {
+    if (form.cree_par && /^\d+$/.test(form.cree_par)) {
+      const comm = commerciaux.find(c => String(c.id) === form.cree_par);
+      if (comm) return comm.full_name || `${comm.first_name} ${comm.last_name}`;
+    }
+    if (user) {
+      if (!form.cree_par || String(user.id) === form.cree_par) {
+        return user.full_name || `${user.first_name} ${user.last_name}`;
+      }
+    }
+    return form.cree_par || '';
+  }, [form.cree_par, commerciaux, user]);
+
   // Extraction unique des clients
   const clients = useMemo(() => {
     const map = new Map<string, {
@@ -488,17 +513,12 @@ export function CreateGesteModal({ demandes, commerciaux, form, setForm, onClose
           {/* 9. Créé par */}
           <label className="mk-field">
             <span>Créé par</span>
-            <select
-              value={form.cree_par}
-              onChange={(e) => setForm({ ...form, cree_par: e.target.value })}
-            >
-              <option value="">Sélectionner le commercial</option>
-              {commerciaux.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name || `${c.first_name} ${c.last_name}`}
-                </option>
-              ))}
-            </select>
+            <input
+              type="text"
+              value={creatorName}
+              readOnly
+              disabled
+            />
           </label>
         </div>
 

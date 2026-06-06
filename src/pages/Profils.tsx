@@ -8,7 +8,7 @@ import AddProfileModal from './ProfilEditModal';
 import { useToastStore } from '../store/toast';
 import { PROFIL_FILTER_TABS } from '../lib/profil-form-constants';
 import { useAuthStore } from '../store/auth';
-import { checkPermission } from '../utils/permissions';
+import { checkPermission, hasPermission } from '../utils/permissions';
 
 const TABS = PROFIL_FILTER_TABS.map(tab => ({ id: tab.value, label: tab.label }));
 
@@ -222,17 +222,12 @@ export default function Profils() {
             <RotateCw size={18} />
             Actualiser
           </button>
-          <button className="btn btn-primary" onClick={() => {
-            const perm = checkPermission(user, 'edit_candidat');
-            if (!perm.allowed) {
-              addToast(perm.message || 'Action non autorisée', 'error');
-              return;
-            }
-            setShowAddModal(true);
-          }}>
-            <Plus size={18} />
-            Ajouter Profil
-          </button>
+          {hasPermission(user, 'creer_agents') && (
+            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+              <Plus size={18} />
+              Ajouter Profil
+            </button>
+          )}
         </div>
       </div>
 
@@ -404,7 +399,7 @@ export default function Profils() {
                         <User size={14} className="mr-2" />
                         Compte Profil
                       </button>
-                      {!agent.is_blacklisted && (
+                      {!agent.is_blacklisted && hasPermission(user, 'supprimer_profil') && (
                         <button
                           type="button"
                           className="table-delete-icon-btn"

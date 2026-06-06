@@ -7,6 +7,7 @@ import { PostSinistreForm } from './services/PostSinistreForm';
 import { PostDemenagementForm } from './services/PostDemenagementForm';
 import { FinChantierForm } from './services/FinChantierForm';
 import { PlacementForm } from './services/PlacementForm';
+import { AutreServiceForm } from './services/AutreServiceForm';
 
 interface DynamicServiceFormProps {
   serviceKey: string;
@@ -27,6 +28,7 @@ export const DynamicServiceForm: React.FC<DynamicServiceFormProps> = (props) => 
   if (sk.includes('demenagement')) return <PostDemenagementForm {...props} />;
   if (sk.includes('chantier')) return <FinChantierForm {...props} />;
   if (sk.includes('placement') || sk.includes('gestion')) return <PlacementForm {...props} />;
+  if (sk.includes('autre service')) return <AutreServiceForm {...props} />;
 
   // Par défaut, si rien ne correspond mais que c'est un service de nettoyage
   return null;

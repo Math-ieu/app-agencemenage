@@ -1,10 +1,109 @@
 import { User } from '../types';
 
-export type UserAction =
+/**
+ * All permission keys used in the privileges matrix.
+ * This is the single source of truth matching the PERMISSIONS array in Utilisateurs.tsx.
+ */
+export type PermissionKey =
+  // Tableau de bord
+  | 'consulter_dashboard'
+  | 'consulter_compte_client_dashboard'
+  | 'editer_besoin'
+  | 'confirmation_avant_operation'
+  | 'supprimer_demande_dashboard'
+  | 'facturation_annulee'
+  | 'annulation_demande'
+  | 'note_operationnelle_dashboard'
+  | 'note_commerciale_dashboard'
+  | 'assigner_charge_operation'
+  | 'application_taux_horaire_standard'
+  | 'taux_horaire_exceptionnel'
+  | 'taux_forfaitaire'
+  // Demandes en attente
+  | 'creer_demande'
+  | 'creer_devis'
+  | 'modifier_demande'
+  | 'consulter_demandes'
+  | 'affecter_commercial'
+  | 'valider_demandes'
+  | 'refuser_demande'
+  // Listing profils
+  | 'consulter_agents'
+  | 'consulter_docs_confidentiels'
+  | 'creer_agents'
+  | 'modifier_agents'
+  | 'desactiver_profil'
+  | 'blacklister_agents'
+  | 'supprimer_profil'
+  // Listing clients
+  | 'consulter_clients'
+  | 'consulter_compte_client'
+  | 'affectation_client'
+  | 'note_operationnelle'
+  | 'note_commerciale'
+  | 'geste_commercial'
+  | 'modifier_clients'
+  | 'blacklister_clients'
   | 'delete_client'
-  | 'blacklist_client'
+  // Historique
+  | 'consulter_historique_global'
+  | 'filtrer_historique'
+  | 'exporter_historique_csv'
+  // Gestion financière — Vue globale
+  | 'voir_la_caisse'
+  | 'consulter_debit'
+  | 'valider_paiement_debit'
+  | 'filtrer_debit'
+  | 'consulter_credit'
+  | 'valider_paiement_credit'
+  | 'filtrer_credit'
+  | 'consulter_factures'
+  | 'exporter_pdf_excel_facture'
+  | 'editer_facture'
+  | 'modifier_facture'
+  | 'editer_besoin_facture'
+  | 'generer_facture'
+  | 'envoi_facture_client'
+  | 'consulter_comptes_profil'
+  // Gestion financière — La caisse
+  | 'consulter_solde_caisse'
+  | 'mouvements_caisse'
+  | 'sorties_caisse'
+  | 'cloturer_caisse_journaliere'
+  // Marketing
+  | 'consulter_marketing'
+  | 'creer_code_promo'
+  | 'creer_geste_commercial'
+  | 'creer_campagne'
+  // Qualité & Feedback
+  | 'consulter_retours_qualite'
+  | 'repondre_avis_clients'
+  | 'moderer_masquer_avis'
+  | 'generer_rapports_qualite'
+  // SEO — Blog
+  | 'rediger_blog'
+  | 'modifier_articles_blog'
+  | 'publier_articles_blog'
+  // Paramètres — Mon profil
+  | 'consulter_infos_profil'
+  | 'modifier_infos_profil'
+  | 'modifier_mot_de_passe'
+  | 'activer_mfa'
+  // Paramètres — Utilisateurs & Rôles
+  | 'consulter_utilisateurs'
+  | 'creer_utilisateurs'
+  | 'parametres_globaux'
+  | 'activer_desactiver_utilisateurs';
+
+/**
+ * Backward-compatible UserAction type — now just an alias for PermissionKey
+ * plus legacy action names that are mapped below.
+ */
+export type UserAction =
+  | PermissionKey
   | 'delete_profile'
   | 'blacklist_profile'
+  | 'blacklist_client'
   | 'manage_users'
   | 'edit_client'
   | 'create_client'
@@ -19,6 +118,28 @@ export type UserAction =
   | 'dispatch_clients'
   | 'edit_candidat'
   | 'consulter_feedback';
+
+/**
+ * Maps legacy action names to the actual permission key in the matrix.
+ */
+const LEGACY_ACTION_MAP: Record<string, PermissionKey> = {
+  'delete_profile': 'supprimer_profil',
+  'blacklist_profile': 'blacklister_agents',
+  'blacklist_client': 'blacklister_clients',
+  'manage_users': 'parametres_globaux',
+  'edit_client': 'modifier_clients',
+  'create_client': 'modifier_clients',
+  'create_demande': 'creer_demande',
+  'edit_demande': 'modifier_demande',
+  'valider_demande': 'valider_demandes',
+  'annuler_demande': 'refuser_demande',
+  'financier': 'voir_la_caisse',
+  'remboursement': 'mouvements_caisse',
+  'remise': 'mouvements_caisse',
+  'dispatch_clients': 'affectation_client',
+  'edit_candidat': 'modifier_agents',
+  'consulter_feedback': 'consulter_retours_qualite',
+};
 
 export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   "Admin": [
@@ -204,6 +325,11 @@ export const getRolePermissions = (role: string): string[] => {
   return DEFAULT_PERMISSIONS[key] || [];
 };
 
+/**
+ * Primary permission check — used everywhere in the app.
+ * Checks whether the user's role has the given permission key.
+ * Admin always returns true.
+ */
 export const hasPermission = (user: User | null, permissionKey: string): boolean => {
   if (!user) return false;
   const role = user.role || '';
@@ -212,6 +338,11 @@ export const hasPermission = (user: User | null, permissionKey: string): boolean
   return permissions.includes(permissionKey);
 };
 
+/**
+ * Extended permission check with contextual rules and user-facing messages.
+ * Resolves legacy action names via LEGACY_ACTION_MAP, then checks the matrix.
+ * Keeps contextual ownership checks for commercial role.
+ */
 export const checkPermission = (
   user: User | null,
   action: UserAction,
@@ -229,158 +360,40 @@ export const checkPermission = (
     return { allowed: true };
   }
 
+  // Resolve legacy action to actual permission key
+  const permKey = LEGACY_ACTION_MAP[action] || action;
   const permissions = getRolePermissions(role);
+  const hasPerm = permissions.includes(permKey);
 
-  switch (action) {
-    case 'delete_client':
-    case 'blacklist_client':
-      if (permissions.includes('blacklister_clients')) {
-        return { allowed: true };
-      }
-      return {
-        allowed: false,
-        message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Clients : Blacklister & archiver'."
-      };
-
-    case 'delete_profile':
-    case 'blacklist_profile':
-    case 'edit_candidat':
-      if (permissions.includes('creer_agents')) {
-        return { allowed: true };
-      }
-      return {
-        allowed: false,
-        message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Agents : Créer & éditer'."
-      };
-
-    case 'manage_users':
-      if (permissions.includes('parametres_globaux')) {
-        return { allowed: true };
-      }
-      return {
-        allowed: false,
-        message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Config : Gérer la sécurité & les accès'."
-      };
-
-    case 'edit_client':
-      if (!permissions.includes('creer_clients')) {
-        return {
-          allowed: false,
-          message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Clients : Créer & éditer'."
-        };
-      }
-      // Contrôles contextuels
-      if (isRole('commercial')) {
-        if (context && context.targetOwnerId !== undefined && context.targetOwnerId !== user.id) {
-          return {
-            allowed: false,
-            message: "Action non autorisée. Les commerciaux peuvent uniquement modifier leurs propres clients attribués."
-          };
-        }
-      }
-      return { allowed: true };
-
-    case 'create_client':
-      if (permissions.includes('creer_clients')) {
-        return { allowed: true };
-      }
-      return {
-        allowed: false,
-        message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Clients : Créer & éditer'."
-      };
-
-    case 'create_demande':
-      if (permissions.includes('consulter_demandes')) {
-        return { allowed: true };
-      }
-      return {
-        allowed: false,
-        message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Demandes : Consulter le listing'."
-      };
-
-    case 'edit_demande':
-      if (!permissions.includes('consulter_demandes')) {
-        return {
-          allowed: false,
-          message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Demandes : Consulter le listing'."
-        };
-      }
-      // Contrôles contextuels
-      if (isRole('commercial')) {
-        if (context && context.targetOwnerId !== undefined && context.targetOwnerId !== user.id) {
-          return {
-            allowed: false,
-            message: "Action non autorisée. Les commerciaux peuvent uniquement modifier leurs propres demandes attribuées."
-          };
-        }
-      }
-      return { allowed: true };
-
-    case 'valider_demande':
-      if (permissions.includes('valider_demandes')) {
-        return { allowed: true };
-      }
-      return {
-        allowed: false,
-        message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Demandes : Valider & planifier (CAO)'."
-      };
-
-    case 'annuler_demande':
-      if (permissions.includes('annuler_demandes')) {
-        return { allowed: true };
-      }
-      return {
-        allowed: false,
-        message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Demandes : Annuler la facturation'."
-      };
-
-    case 'remboursement':
-    case 'remise':
-      if (permissions.includes('mouvements_caisse')) {
-        return { allowed: true };
-      }
-      return {
-        allowed: false,
-        message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Finances : Saisir des entrées/sorties'."
-      };
-
-    case 'financier':
-      if (permissions.includes('voir_la_caisse')) {
-        return { allowed: true };
-      }
-      return {
-        allowed: false,
-        message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Finances : Consulter le solde de caisse'."
-      };
-
-    case 'affecter_commercial':
-    case 'dispatch_clients':
-      if (permissions.includes('valider_demandes')) {
-        return { allowed: true };
-      }
-      return {
-        allowed: false,
-        message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Demandes : Valider & planifier (CAO)'."
-      };
-
-    case 'consulter_feedback':
-      if (!permissions.includes('consulter_demandes')) {
-        return {
-          allowed: false,
-          message: "Action non autorisée. Votre rôle ne dispose pas du droit 'Demandes : Consulter le listing'."
-        };
-      }
-      if (isRole('chargée des opérations') || isRole('charge_operations')) {
-        if (context && context.targetOwnerId !== undefined && context.targetOwnerId !== user.id) {
-          return {
-            allowed: false,
-            message: "Action non autorisée. Les chargées des opérations ont accès uniquement aux retours qualité de leurs propres clients."
-          };
-        }
-      }
-      return { allowed: true };
-
-    default:
-      return { allowed: true };
+  if (!hasPerm) {
+    return {
+      allowed: false,
+      message: `Action non autorisée. Votre rôle ne dispose pas de cette permission.`
+    };
   }
+
+  // Contextual ownership checks for commercial role
+  if (isRole('commercial') && context && context.targetOwnerId !== undefined && context.targetOwnerId !== user.id) {
+    // Commercial editing/modifying items not assigned to them
+    if (['edit_client', 'modifier_clients', 'edit_demande', 'modifier_demande'].includes(action)) {
+      return {
+        allowed: false,
+        message: "Action non autorisée. Les commerciaux peuvent uniquement modifier leurs propres éléments attribués."
+      };
+    }
+  }
+
+  // Contextual check for feedback on Chargée des Opérations
+  if (action === 'consulter_feedback' || action === 'consulter_retours_qualite') {
+    if (isRole('chargée des opérations') || isRole('charge_operations')) {
+      if (context && context.targetOwnerId !== undefined && context.targetOwnerId !== user.id) {
+        return {
+          allowed: false,
+          message: "Action non autorisée. Les chargées des opérations ont accès uniquement aux retours qualité de leurs propres clients."
+        };
+      }
+    }
+  }
+
+  return { allowed: true };
 };

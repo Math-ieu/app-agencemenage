@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getDemandesHistorique } from '../api/client';
-import { Search, CalendarDays, History as HistoryIcon } from 'lucide-react';
+import { Search, CalendarDays, Download, History as HistoryIcon } from 'lucide-react';
 import { encodeId } from '../utils/obfuscation';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
+import { hasPermission } from '../utils/permissions';
+import { useAuthStore } from '../store/auth';
 
 interface Demande {
   id: number;
@@ -44,6 +46,7 @@ const formatCreationDate = (value: string): string => {
 };
 
 export default function Historique() {
+  const { user } = useAuthStore();
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -70,6 +73,32 @@ export default function Historique() {
     }
   };
 
+  const handleExportCSV = () => {
+    const headers = ['Ref', 'Date creation', 'Nom client', 'Type de service', 'Segment', 'Profil', 'Statut besoin', 'Statut paiement', 'Motif'];
+    const rows = demandes.map(d => [
+      `#${d.id}`,
+      formatCreationDate(d.created_at),
+      d.client_name || '',
+      d.service || '',
+      d.segment || '',
+      d.profil_name || '',
+      d.statut || '',
+      d.statut_paiement || '',
+      d.motif || ''
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8,\ufeff" 
+      + [headers.join(','), ...rows.map(e => e.map(val => `"${val.replace(/"/g, '""')}"`).join(','))].join('\n');
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `historique_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchHistorique();
@@ -80,57 +109,66 @@ export default function Historique() {
 
   return (
     <div className="page">
-      <div className="flex items-center gap-2 mb-6">
-        <HistoryIcon size={22} className="text-teal-800" />
-        <h1 className="text-2xl fw-bold text-teal-800">Historique</h1>
+      <div className="flex justify-between items-center gap-2 mb-6 flex-wrap">
+        <div className="flex items-center gap-2">
+          <HistoryIcon size={22} className="text-teal-800" />
+          <h1 className="text-2xl fw-bold text-teal-800">Historique</h1>
+        </div>
+        {hasPermission(user, 'exporter_historique_csv') && (
+          <button onClick={handleExportCSV} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <Download size={16} /> Exporter en CSV
+          </button>
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-6" style={{ maxWidth: '900px', alignItems: 'center' }}>
-        <div className="search-box" style={{ flex: 1, minWidth: '300px', maxWidth: '420px' }}>
-          <Search size={16} className="search-icon" />
-          <input
-            type="text"
-            placeholder="Rechercher par client, service ou réf #..."
-            className="search-input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+      {hasPermission(user, 'filtrer_historique') && (
+        <div className="flex flex-wrap gap-3 mb-6" style={{ maxWidth: '900px', alignItems: 'center' }}>
+          <div className="search-box" style={{ flex: 1, minWidth: '300px', maxWidth: '420px' }}>
+            <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Rechercher par client, service ou réf #..."
+              className="search-input"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div className="relative" style={{ position: 'relative' }}>
-            <button 
-              className="btn btn-secondary" 
-              style={{ minWidth: '220px', justifyContent: 'flex-start', cursor: 'pointer', position: 'relative' }}
-              onClick={() => (document.getElementById('history-date-picker') as HTMLInputElement)?.showPicker?.()}
-            >
-              <CalendarDays size={16} />
-              <span>{dateFilter ? new Date(dateFilter).toLocaleDateString('fr-FR') : 'Filtrer par date'}</span>
-              <input
-                id="history-date-picker"
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                style={{ position: 'absolute', opacity: 0, inset: 0, cursor: 'pointer', width: '100%', height: '100%' }}
-              />
-            </button>
-            {dateFilter && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="relative" style={{ position: 'relative' }}>
               <button 
-                onClick={() => setDateFilter('')}
-                style={{ 
-                  position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
-                  background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '20px', height: '20px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                  fontSize: '14px', color: '#64748b', fontWeight: 'bold'
-                }}
-                title="Effacer la date"
+                className="btn btn-secondary" 
+                style={{ minWidth: '220px', justifyContent: 'flex-start', cursor: 'pointer', position: 'relative' }}
+                onClick={() => (document.getElementById('history-date-picker') as HTMLInputElement)?.showPicker?.()}
               >
-                &times;
+                <CalendarDays size={16} />
+                <span>{dateFilter ? new Date(dateFilter).toLocaleDateString('fr-FR') : 'Filtrer par date'}</span>
+                <input
+                  id="history-date-picker"
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  style={{ position: 'absolute', opacity: 0, inset: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+                />
               </button>
-            )}
+              {dateFilter && (
+                <button 
+                  onClick={() => setDateFilter('')}
+                  style={{ 
+                    position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                    background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '20px', height: '20px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    fontSize: '14px', color: '#64748b', fontWeight: 'bold'
+                  }}
+                  title="Effacer la date"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {loading ? (
         <div className="loading-state"><div className="spinner" /></div>

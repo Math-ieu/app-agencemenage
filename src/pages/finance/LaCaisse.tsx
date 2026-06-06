@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X, Slash } from 'lucide-react';
 import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement, getMissions, getDemandesHistorique } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
-import { checkPermission } from '../../utils/permissions';
+import { checkPermission, hasPermission } from '../../utils/permissions';
 import './LaCaisse.css';
 
 interface CashRow {
@@ -301,7 +301,7 @@ export default function LaCaisse() {
   const openAddMovementModal = () => {
     setIsEditMode(false);
     setEditingMovementId(null);
-    setSelectedOperationType('Entrée');
+    setSelectedOperationType(hasPermission(user, 'mouvements_caisse') ? 'Entrée' : 'Sortie');
     setSelectedPaymentMode('Espèces');
     setMovementDate(todayInputDate());
     setMovementAmount('0.00');
@@ -333,8 +333,18 @@ export default function LaCaisse() {
   const saveMovement = async () => {
     if (!movementLabel.trim() || !movementDate) return;
 
+    const opTypeCode = typeLabelToCode(selectedOperationType);
+    if (opTypeCode === 'sortie' && !hasPermission(user, 'sorties_caisse')) {
+      alert("Vous n'avez pas la permission de saisir une sortie.");
+      return;
+    }
+    if (opTypeCode !== 'sortie' && !hasPermission(user, 'mouvements_caisse')) {
+      alert("Vous n'avez pas la permission de saisir une entrée/alimentation.");
+      return;
+    }
+
     const formData = new FormData();
-    formData.append('type_mouvement', typeLabelToCode(selectedOperationType));
+    formData.append('type_mouvement', opTypeCode);
     formData.append('date', movementDate);
     formData.append('montant', extractAmount(movementAmount));
     formData.append('description', movementLabel.trim());
@@ -411,9 +421,11 @@ export default function LaCaisse() {
       </section>
 
       <section className="lc-actions-row">
-        <button type="button" className="btn btn-primary lc-add-btn" onClick={openAddMovementModal}>
-          <Plus size={18} /> Ajouter un mouvement
-        </button>
+        {(hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse')) && (
+          <button type="button" className="btn btn-primary lc-add-btn" onClick={openAddMovementModal}>
+            <Plus size={18} /> Ajouter un mouvement
+          </button>
+        )}
         <button type="button" className="btn btn-secondary lc-export-btn" onClick={handleExportCsv} disabled={exportingCsv}>
           <Download size={16} /> Export CSV
         </button>
@@ -422,7 +434,7 @@ export default function LaCaisse() {
       <section className="lc-stats-grid">
         <article className="lc-stat-card lc-stat-teal">
           <p>SOLDE ACTUEL</p>
-          <strong>{moneyFormatter.format(stats.solde)} DH</strong>
+          <strong>{hasPermission(user, 'consulter_solde_caisse') ? `${moneyFormatter.format(stats.solde)} DH` : '*** DH'}</strong>
         </article>
         <article className="lc-stat-card lc-stat-green">
           <p>TOTAL ENTRÉES CAISSE</p>
@@ -515,9 +527,12 @@ export default function LaCaisse() {
                   <td>{row.utilisateur}</td>
                   <td>{row.document}</td>
                   <td>
-                    <button type="button" className="icon-btn" title="Modifier" onClick={() => openEditMovementModal(row)}>
-                      <Pencil size={14} />
-                    </button>
+                    {((row.typeCode === 'sortie' && hasPermission(user, 'sorties_caisse')) ||
+                      (row.typeCode !== 'sortie' && hasPermission(user, 'mouvements_caisse'))) && (
+                      <button type="button" className="icon-btn" title="Modifier" onClick={() => openEditMovementModal(row)}>
+                        <Pencil size={14} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -560,22 +575,27 @@ export default function LaCaisse() {
 
                     {isOperationMenuOpen && (
                       <div className="lc-modal-custom-menu">
-                        {operationTypes.map((type) => (
-                          <button
-                            key={type}
-                            type="button"
-                            className={`lc-modal-custom-item ${selectedOperationType === type ? 'selected' : ''}`}
-                            onClick={() => {
-                              setSelectedOperationType(type);
-                              setIsOperationMenuOpen(false);
-                            }}
-                          >
-                            <span className="lc-check-wrap">
-                              {selectedOperationType === type ? <Check size={14} /> : null}
-                            </span>
-                            <span>{type}</span>
-                          </button>
-                        ))}
+                        {operationTypes
+                          .filter((type) => {
+                            if (type === 'Sortie') return hasPermission(user, 'sorties_caisse');
+                            return hasPermission(user, 'mouvements_caisse');
+                          })
+                          .map((type) => (
+                            <button
+                              key={type}
+                              type="button"
+                              className={`lc-modal-custom-item ${selectedOperationType === type ? 'selected' : ''}`}
+                              onClick={() => {
+                                setSelectedOperationType(type);
+                                setIsOperationMenuOpen(false);
+                              }}
+                            >
+                              <span className="lc-check-wrap">
+                                {selectedOperationType === type ? <Check size={14} /> : null}
+                              </span>
+                              <span>{type}</span>
+                            </button>
+                          ))}
                       </div>
                     )}
                   </div>

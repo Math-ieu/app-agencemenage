@@ -5,6 +5,7 @@ import { TYPES_GESTE, SEGMENTS_CLIENT } from '@/lib/marketing-constants';
 import { getDemandes, getPromoCodes, createPromoCode, deletePromoCode, updatePromoCode, getCommercialGestures, createCommercialGesture, deleteCommercialGesture, updateCommercialGesture, getCampaigns, createCampaign, deleteCampaign, updateCampaign, getUsers } from '@/api/client';
 import { useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
+import { hasPermission } from '../utils/permissions';
 import type { Demande } from '@/types';
 import { CreateOffreModal, type PromoFormState } from './marketing/CreateOffreModal';
 import { CreateGesteModal, type GesteFormState } from './marketing/CreateGesteModal';
@@ -36,6 +37,7 @@ interface CommercialGestureItem {
   date: string;
   demande_id: number | null;
   commercial_name: string;
+  cree_par?: number | null;
   client_name: string;
   gesture_type: string;
   status: 'en_attente' | 'en_cours' | 'cloture';
@@ -479,7 +481,15 @@ export default function Marketing() {
         ? 'Créer un geste commercial'
         : 'Créer une campagne';
 
+  const canCreate = useMemo(() => {
+    if (activeTab === 'codes') return hasPermission(user, 'creer_code_promo');
+    if (activeTab === 'gestes') return hasPermission(user, 'creer_geste_commercial');
+    if (activeTab === 'campagnes') return hasPermission(user, 'creer_campagne');
+    return false;
+  }, [activeTab, user]);
+
   const onCreateClick = () => {
+    if (!canCreate) return;
     if (activeTab === 'codes') setShowCreatePromo(true);
     if (activeTab === 'gestes') setShowCreateGesture(true);
     if (activeTab === 'campagnes') setShowCreateCampaign(true);
@@ -536,9 +546,11 @@ export default function Marketing() {
 
       <div className="mk-section-head">
         <h2>{tabTitle}</h2>
-        <button type="button" className="btn btn-primary" onClick={onCreateClick}>
-          <Plus size={16} /> {createLabel}
-        </button>
+        {canCreate && (
+          <button type="button" className="btn btn-primary" onClick={onCreateClick}>
+            <Plus size={16} /> {createLabel}
+          </button>
+        )}
       </div>
 
       {activeTab === 'codes' && (
@@ -613,40 +625,42 @@ export default function Marketing() {
                       </span>
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button className="icon-btn" title="Modifier" onClick={() => {
-                        setPromoForm({
-                          nom: item.name, statut: item.status, code_promo: item.code,
-                          type_reduction: item.reduction_type || 'pourcentage',
-                          valeur_reduction: String(item.reduction),
-                          segment_client: item.segment,
-                          statut_client: Object.entries(STATUTS_CLIENT_MAP).find(([, v]) => v === item.customer_status)?.[0] || 'tous',
-                          services: [], canaux: [], message_promotionnel: '',
-                          date_debut: item.valid_from, date_fin: item.valid_until, date_indeterminee: !item.valid_until,
-                        });
-                        setEditingPromoId(item.id);
-                        setShowCreatePromo(true);
-                      }}>
-                        <Pencil size={14} />
-                      </button>
-                      <button className="icon-btn" title="Supprimer" onClick={() => {
-                        if (window.confirm('Supprimer ce code promo ?')) {
-                          deletePromoCode(item.id).then(() => {
-                            setPromoCodes((prev) => prev.filter((x) => x.id !== item.id));
-                          }).catch(console.error);
-                        }
-                      }}>
-                        <Trash2 size={14} />
-                      </button>
-                      <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
-                        updatePromoCode(item.id, { archived: !item.archived }).then((res) => {
-                          setPromoCodes((prev) => prev.map((x) => x.id === item.id ? res.data : x));
-                        }).catch(console.error);
-                      }}>
-                        {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                      </button>
-                    </div>
-                  </td>
+                      {hasPermission(user, 'creer_code_promo') && (
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button className="icon-btn" title="Modifier" onClick={() => {
+                            setPromoForm({
+                              nom: item.name, statut: item.status, code_promo: item.code,
+                              type_reduction: item.reduction_type || 'pourcentage',
+                              valeur_reduction: String(item.reduction),
+                              segment_client: item.segment,
+                              statut_client: Object.entries(STATUTS_CLIENT_MAP).find(([, v]) => v === item.customer_status)?.[0] || 'tous',
+                              services: [], canaux: [], message_promotionnel: '',
+                              date_debut: item.valid_from, date_fin: item.valid_until, date_indeterminee: !item.valid_until,
+                            });
+                            setEditingPromoId(item.id);
+                            setShowCreatePromo(true);
+                          }}>
+                            <Pencil size={14} />
+                          </button>
+                          <button className="icon-btn" title="Supprimer" onClick={() => {
+                            if (window.confirm('Supprimer ce code promo ?')) {
+                              deletePromoCode(item.id).then(() => {
+                                setPromoCodes((prev) => prev.filter((x) => x.id !== item.id));
+                              }).catch(console.error);
+                            }
+                          }}>
+                            <Trash2 size={14} />
+                          </button>
+                          <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
+                            updatePromoCode(item.id, { archived: !item.archived }).then((res) => {
+                              setPromoCodes((prev) => prev.map((x) => x.id === item.id ? res.data : x));
+                            }).catch(console.error);
+                          }}>
+                            {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {filteredCodes.length === 0 && (
@@ -718,42 +732,44 @@ export default function Marketing() {
                     <td style={{ color: '#0f766e' }}>{Number(item.part_agence || 0).toFixed(2)} MAD</td>
                     <td style={{ color: '#0369a1' }}>{Number(item.part_profil || 0).toFixed(2)} MAD</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button className="icon-btn" title="Modifier" onClick={() => {
-                        setGestureForm({
-                          demande_id: item.demande_id ? String(item.demande_id) : '',
-                          client_nom: item.client_name, client_telephone: '', ville: '', quartier: '',
-                          fidelite: 'Nouveau client', frequence: 'Une seule fois',
-                          date_geste: item.date, statut_geste: item.status,
-                          type_geste: item.gesture_type,
-                          montant_ht: String(item.montant_ht), tva_active: item.tva_active,
-                          reduction_type: item.reduction_type || 'montant', reduction_valeur: String(item.reduction_value),
-                          part_profil: String(item.part_profil), part_agence: String(item.part_agence), motif: item.motif,
-                          envoyer_message: item.envoyer_message, message_client: item.message_client, canal_diffusion: item.canal_diffusion || [], cree_par: item.commercial_name,
-                        });
-                        setEditingGesteId(item.id);
-                        setShowCreateGesture(true);
-                      }}>
-                        <Pencil size={14} />
-                      </button>
-                      <button className="icon-btn" title="Supprimer" onClick={() => {
-                        if (window.confirm('Supprimer ce geste commercial ?')) {
-                          deleteCommercialGesture(item.id).then(() => {
-                            setGestures((prev) => prev.filter((x) => x.id !== item.id));
-                          }).catch(console.error);
-                        }
-                      }}>
-                        <Trash2 size={14} />
-                      </button>
-                      <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
-                        updateCommercialGesture(item.id, { archived: !item.archived }).then((res) => {
-                          setGestures((prev) => prev.map((x) => x.id === item.id ? res.data : x));
-                        }).catch(console.error);
-                      }}>
-                        {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                      </button>
-                    </div>
-                  </td>
+                      {hasPermission(user, 'creer_geste_commercial') && (
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button className="icon-btn" title="Modifier" onClick={() => {
+                            setGestureForm({
+                              demande_id: item.demande_id ? String(item.demande_id) : '',
+                              client_nom: item.client_name, client_telephone: '', ville: '', quartier: '',
+                              fidelite: 'Nouveau client', frequence: 'Une seule fois',
+                              date_geste: item.date, statut_geste: item.status,
+                              type_geste: item.gesture_type,
+                              montant_ht: String(item.montant_ht), tva_active: item.tva_active,
+                              reduction_type: item.reduction_type || 'montant', reduction_valeur: String(item.reduction_value),
+                              part_profil: String(item.part_profil), part_agence: String(item.part_agence), motif: item.motif,
+                              envoyer_message: item.envoyer_message, message_client: item.message_client, canal_diffusion: item.canal_diffusion || [], cree_par: item.cree_par ? String(item.cree_par) : '',
+                            });
+                            setEditingGesteId(item.id);
+                            setShowCreateGesture(true);
+                          }}>
+                            <Pencil size={14} />
+                          </button>
+                          <button className="icon-btn" title="Supprimer" onClick={() => {
+                            if (window.confirm('Supprimer ce geste commercial ?')) {
+                              deleteCommercialGesture(item.id).then(() => {
+                                setGestures((prev) => prev.filter((x) => x.id !== item.id));
+                              }).catch(console.error);
+                            }
+                          }}>
+                            <Trash2 size={14} />
+                          </button>
+                          <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
+                            updateCommercialGesture(item.id, { archived: !item.archived }).then((res) => {
+                              setGestures((prev) => prev.map((x) => x.id === item.id ? res.data : x));
+                            }).catch(console.error);
+                          }}>
+                            {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {filteredGestes.length === 0 && (
@@ -827,41 +843,43 @@ export default function Marketing() {
                       </span>
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button className="icon-btn" title="Modifier" onClick={() => {
-                        setCampaignForm({
-                          nom: item.title, message: item.message || '', statut: item.status,
-                          cible: item.target.toLowerCase(), segment_cible: item.segment, critere_ciblage: item.criteria || 'tous',
-                          canal: Array.isArray(item.channel) ? item.channel : [item.channel], ville_ciblage: item.city || '',
-                          heure_debut: item.broadcast_time_start || '', heure_fin: item.broadcast_time_end || '',
-                          date_diffusion: item.broadcast_date || '', nombre_destinataires_jour: String(item.per_day_dest || 0),
-                        });
-                        setEditingCampagneId(item.id);
-                        setShowCreateCampaign(true);
-                      }}>
-                        <Pencil size={14} />
-                      </button>
-                      <button className="icon-btn" title="Envoyer">
-                        <Send size={14} />
-                      </button>
-                      <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
-                        updateCampaign(item.id, { archived: !item.archived }).then((res) => {
-                          setCampaigns((prev) => prev.map((x) => x.id === item.id ? res.data : x));
-                        }).catch(console.error);
-                      }}>
-                        {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                      </button>
-                      <button className="icon-btn" title="Supprimer" onClick={() => {
-                        if (window.confirm('Supprimer cette campagne ?')) {
-                          deleteCampaign(item.id).then(() => {
-                            setCampaigns((prev) => prev.filter((x) => x.id !== item.id));
-                          }).catch(console.error);
-                        }
-                      }}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
+                      {hasPermission(user, 'creer_campagne') && (
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button className="icon-btn" title="Modifier" onClick={() => {
+                            setCampaignForm({
+                              nom: item.title, message: item.message || '', statut: item.status,
+                              cible: item.target.toLowerCase(), segment_cible: item.segment, critere_ciblage: item.criteria || 'tous',
+                              canal: Array.isArray(item.channel) ? item.channel : [item.channel], ville_ciblage: item.city || '',
+                              heure_debut: item.broadcast_time_start || '', heure_fin: item.broadcast_time_end || '',
+                              date_diffusion: item.broadcast_date || '', nombre_destinataires_jour: String(item.per_day_dest || 0),
+                            });
+                            setEditingCampagneId(item.id);
+                            setShowCreateCampaign(true);
+                          }}>
+                            <Pencil size={14} />
+                          </button>
+                          <button className="icon-btn" title="Envoyer">
+                            <Send size={14} />
+                          </button>
+                          <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
+                            updateCampaign(item.id, { archived: !item.archived }).then((res) => {
+                              setCampaigns((prev) => prev.map((x) => x.id === item.id ? res.data : x));
+                            }).catch(console.error);
+                          }}>
+                            {item.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                          </button>
+                          <button className="icon-btn" title="Supprimer" onClick={() => {
+                            if (window.confirm('Supprimer cette campagne ?')) {
+                              deleteCampaign(item.id).then(() => {
+                                setCampaigns((prev) => prev.filter((x) => x.id !== item.id));
+                              }).catch(console.error);
+                            }
+                          }}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {filteredCampagnes.length === 0 && (

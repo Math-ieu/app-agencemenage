@@ -33,7 +33,7 @@ import { User as ApiUser } from '../../types';
 import { encodeId } from '../../utils/obfuscation';
 import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
-import { checkPermission } from '../../utils/permissions';
+import { checkPermission, hasPermission } from '../../utils/permissions';
 import './VueGlobale.css';
 
 type FinanceSubTab = 'vue-globale' | 'debit-profil' | 'credit-profil' | 'suivi-facturation' | 'comptes-profils';
@@ -790,6 +790,18 @@ export default function VueGlobale() {
 
   const [activeTab, setActiveTab] = useState<FinanceSubTab>('vue-globale');
   const [displayMode, setDisplayMode] = useState<ProfileDisplayMode>('cards');
+
+  useEffect(() => {
+    if (activeTab === 'debit-profil' && !hasPermission(user, 'consulter_debit')) {
+      setActiveTab('vue-globale');
+    } else if (activeTab === 'credit-profil' && !hasPermission(user, 'consulter_credit')) {
+      setActiveTab('vue-globale');
+    } else if (activeTab === 'suivi-facturation' && !hasPermission(user, 'consulter_factures')) {
+      setActiveTab('vue-globale');
+    } else if (activeTab === 'comptes-profils' && !hasPermission(user, 'consulter_comptes_profil')) {
+      setActiveTab('vue-globale');
+    }
+  }, [activeTab, user]);
   const [showNewMissionModal, setShowNewMissionModal] = useState(false);
   const [selectedMission, setSelectedMission] = useState<FacturationRow | null>(null);
   const [selectedProfileAccount, setSelectedProfileAccount] = useState<ProfileBalance | null>(null);
@@ -2737,34 +2749,42 @@ export default function VueGlobale() {
         >
           <BarChart3 size={15} /> Vue globale
         </button>
-        <button
-          type="button"
-          className={`fg-tab ${activeTab === 'debit-profil' ? 'active active-red' : ''}`}
-          onClick={() => setActiveTab('debit-profil')}
-        >
-          <ArrowUpRight size={15} /> Débit (Profil doit à l'Agence)
-        </button>
-        <button
-          type="button"
-          className={`fg-tab ${activeTab === 'credit-profil' ? 'active active-blue' : ''}`}
-          onClick={() => setActiveTab('credit-profil')}
-        >
-          <ArrowUpRight size={15} /> Crédit (L'Agence doit au Profil)
-        </button>
-        <button
-          type="button"
-          className={`fg-tab ${activeTab === 'suivi-facturation' ? 'active active-amber' : ''}`}
-          onClick={() => setActiveTab('suivi-facturation')}
-        >
-          <FileText size={15} /> Suivi Facturation
-        </button>
-        <button
-          type="button"
-          className={`fg-tab ${activeTab === 'comptes-profils' ? 'active active-purple' : ''}`}
-          onClick={() => setActiveTab('comptes-profils')}
-        >
-          <Users size={15} /> Comptes Profils
-        </button>
+        {hasPermission(user, 'consulter_debit') && (
+          <button
+            type="button"
+            className={`fg-tab ${activeTab === 'debit-profil' ? 'active active-red' : ''}`}
+            onClick={() => setActiveTab('debit-profil')}
+          >
+            <ArrowUpRight size={15} /> Débit (Profil doit à l'Agence)
+          </button>
+        )}
+        {hasPermission(user, 'consulter_credit') && (
+          <button
+            type="button"
+            className={`fg-tab ${activeTab === 'credit-profil' ? 'active active-blue' : ''}`}
+            onClick={() => setActiveTab('credit-profil')}
+          >
+            <ArrowUpRight size={15} /> Crédit (L'Agence doit au Profil)
+          </button>
+        )}
+        {hasPermission(user, 'consulter_factures') && (
+          <button
+            type="button"
+            className={`fg-tab ${activeTab === 'suivi-facturation' ? 'active active-amber' : ''}`}
+            onClick={() => setActiveTab('suivi-facturation')}
+          >
+            <FileText size={15} /> Suivi Facturation
+          </button>
+        )}
+        {hasPermission(user, 'consulter_comptes_profil') && (
+          <button
+            type="button"
+            className={`fg-tab ${activeTab === 'comptes-profils' ? 'active active-purple' : ''}`}
+            onClick={() => setActiveTab('comptes-profils')}
+          >
+            <Users size={15} /> Comptes Profils
+          </button>
+        )}
       </div>
 
       {activeTab === 'vue-globale' && (
@@ -2974,7 +2994,7 @@ export default function VueGlobale() {
         </>
       )}
 
-      {activeTab === 'debit-profil' && (
+      {activeTab === 'debit-profil' && hasPermission(user, 'consulter_debit') && (
         <>
           <div className="fg-global-kpis fg-duo-kpis">
             <article className="fg-global-kpi red">
@@ -2987,40 +3007,42 @@ export default function VueGlobale() {
             </article>
           </div>
 
-          <div className="fg-facturation-filters">
-            <label className="fg-search-wrap">
-              <Search size={15} />
-              <input
-                type="text"
-                placeholder="Rechercher par nom client/profil..."
-                value={debitSearch}
-                onChange={(e) => setDebitSearch(e.target.value)}
-              />
-            </label>
-            <div className="fg-period-wrap">
-              <label><Calendar size={14} /><input type="date" aria-label="Date début débit" value={debitDateFrom} onChange={(e) => setDebitDateFrom(e.target.value)} /></label>
-              <span className="fg-period-arrow">→</span>
-              <label><Calendar size={14} /><input type="date" aria-label="Date fin débit" value={debitDateTo} onChange={(e) => setDebitDateTo(e.target.value)} /></label>
-            </div>
-            <div className="fg-select-group">
-              <label className="fg-select-wrap">
-                <select value={debitSegmentFilter} onChange={(e) => setDebitSegmentFilter(e.target.value as 'Tous les segments' | 'Particulier' | 'Entreprise')}>
-                  <option>Tous les segments</option>
-                  <option>Particulier</option>
-                  <option>Entreprise</option>
-                </select>
-                <ChevronDown size={14} />
+          {hasPermission(user, 'filtrer_debit') && (
+            <div className="fg-facturation-filters">
+              <label className="fg-search-wrap">
+                <Search size={15} />
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom client/profil..."
+                  value={debitSearch}
+                  onChange={(e) => setDebitSearch(e.target.value)}
+                />
               </label>
-              <label className="fg-select-wrap">
-                <select value={debitPaymentFilter} onChange={(e) => setDebitPaymentFilter(e.target.value as 'Non payé' | 'Payé' | 'Tous')}>
-                  <option value="Non payé">Non payé</option>
-                  <option value="Payé">Payé</option>
-                  <option value="Tous">Tous</option>
-                </select>
-                <ChevronDown size={14} />
-              </label>
+              <div className="fg-period-wrap">
+                <label><Calendar size={14} /><input type="date" aria-label="Date début débit" value={debitDateFrom} onChange={(e) => setDebitDateFrom(e.target.value)} /></label>
+                <span className="fg-period-arrow">→</span>
+                <label><Calendar size={14} /><input type="date" aria-label="Date fin débit" value={debitDateTo} onChange={(e) => setDebitDateTo(e.target.value)} /></label>
+              </div>
+              <div className="fg-select-group">
+                <label className="fg-select-wrap">
+                  <select value={debitSegmentFilter} onChange={(e) => setDebitSegmentFilter(e.target.value as 'Tous les segments' | 'Particulier' | 'Entreprise')}>
+                    <option>Tous les segments</option>
+                    <option>Particulier</option>
+                    <option>Entreprise</option>
+                  </select>
+                  <ChevronDown size={14} />
+                </label>
+                <label className="fg-select-wrap">
+                  <select value={debitPaymentFilter} onChange={(e) => setDebitPaymentFilter(e.target.value as 'Non payé' | 'Payé' | 'Tous')}>
+                    <option value="Non payé">Non payé</option>
+                    <option value="Payé">Payé</option>
+                    <option value="Tous">Tous</option>
+                  </select>
+                  <ChevronDown size={14} />
+                </label>
+              </div>
             </div>
-          </div>
+          )}
 
           <section className="fg-table-section">
             <div className="table-wrapper">
@@ -3062,6 +3084,7 @@ export default function VueGlobale() {
                             className={`fg-status-select ${debitPaymentLabel(row) === 'Payé' ? 'paid' : 'unpaid'}`}
                             value={debitPaymentLabel(row)}
                             onChange={(e) => void updateDebitPaymentStatus(row, e.target.value as 'Payé' | 'Non payé')}
+                            disabled={!hasPermission(user, 'valider_paiement_debit')}
                           >
                             <option value="Non payé">Non payé</option>
                             <option value="Payé">Payé</option>
@@ -3083,7 +3106,7 @@ export default function VueGlobale() {
         </>
       )}
 
-      {activeTab === 'credit-profil' && (
+      {activeTab === 'credit-profil' && hasPermission(user, 'consulter_credit') && (
         <>
           <div className="fg-global-kpis fg-duo-kpis">
             <article className="fg-global-kpi blue">
@@ -3096,40 +3119,42 @@ export default function VueGlobale() {
             </article>
           </div>
 
-          <div className="fg-facturation-filters">
-            <label className="fg-search-wrap">
-              <Search size={15} />
-              <input
-                type="text"
-                placeholder="Rechercher par nom client/profil..."
-                value={creditSearch}
-                onChange={(e) => setCreditSearch(e.target.value)}
-              />
-            </label>
-            <div className="fg-period-wrap">
-              <label><Calendar size={14} /><input type="date" aria-label="Date début crédit" value={creditDateFrom} onChange={(e) => setCreditDateFrom(e.target.value)} /></label>
-              <span className="fg-period-arrow">→</span>
-              <label><Calendar size={14} /><input type="date" aria-label="Date fin crédit" value={creditDateTo} onChange={(e) => setCreditDateTo(e.target.value)} /></label>
-            </div>
-            <div className="fg-select-group">
-              <label className="fg-select-wrap">
-                <select value={creditSegmentFilter} onChange={(e) => setCreditSegmentFilter(e.target.value as 'Tous les segments' | 'Particulier' | 'Entreprise')}>
-                  <option>Tous les segments</option>
-                  <option>Particulier</option>
-                  <option>Entreprise</option>
-                </select>
-                <ChevronDown size={14} />
+          {hasPermission(user, 'filtrer_credit') && (
+            <div className="fg-facturation-filters">
+              <label className="fg-search-wrap">
+                <Search size={15} />
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom client/profil..."
+                  value={creditSearch}
+                  onChange={(e) => setCreditSearch(e.target.value)}
+                />
               </label>
-              <label className="fg-select-wrap">
-                <select value={creditPaymentFilter} onChange={(e) => setCreditPaymentFilter(e.target.value as 'Non payé' | 'Payé' | 'Tous')}>
-                  <option value="Non payé">Non payé</option>
-                  <option value="Payé">Payé</option>
-                  <option value="Tous">Tous</option>
-                </select>
-                <ChevronDown size={14} />
-              </label>
+              <div className="fg-period-wrap">
+                <label><Calendar size={14} /><input type="date" aria-label="Date début crédit" value={creditDateFrom} onChange={(e) => setCreditDateFrom(e.target.value)} /></label>
+                <span className="fg-period-arrow">→</span>
+                <label><Calendar size={14} /><input type="date" aria-label="Date fin crédit" value={creditDateTo} onChange={(e) => setCreditDateTo(e.target.value)} /></label>
+              </div>
+              <div className="fg-select-group">
+                <label className="fg-select-wrap">
+                  <select value={creditSegmentFilter} onChange={(e) => setCreditSegmentFilter(e.target.value as 'Tous les segments' | 'Particulier' | 'Entreprise')}>
+                    <option>Tous les segments</option>
+                    <option>Particulier</option>
+                    <option>Entreprise</option>
+                  </select>
+                  <ChevronDown size={14} />
+                </label>
+                <label className="fg-select-wrap">
+                  <select value={creditPaymentFilter} onChange={(e) => setCreditPaymentFilter(e.target.value as 'Non payé' | 'Payé' | 'Tous')}>
+                    <option value="Non payé">Non payé</option>
+                    <option value="Payé">Payé</option>
+                    <option value="Tous">Tous</option>
+                  </select>
+                  <ChevronDown size={14} />
+                </label>
+              </div>
             </div>
-          </div>
+          )}
 
           <section className="fg-table-section">
             <div className="table-wrapper">
@@ -3190,6 +3215,7 @@ export default function VueGlobale() {
                             className={`fg-status-select ${creditPaymentLabel(row) === 'Payé' ? 'paid' : 'unpaid'}`}
                             value={creditPaymentLabel(row)}
                             onChange={(e) => void updateCreditPaymentStatus(row, e.target.value as 'Payé' | 'Non payé')}
+                            disabled={!hasPermission(user, 'valider_paiement_credit')}
                           >
                             <option value="Non payé">Non payé</option>
                             <option value="Payé">Payé</option>
@@ -3211,17 +3237,19 @@ export default function VueGlobale() {
         </>
       )}
 
-      {activeTab === 'suivi-facturation' && (
+      {activeTab === 'suivi-facturation' && hasPermission(user, 'consulter_factures') && (
         <>
           <section className="fg-hero">
             <div>
               <h2>Suivi Facturation</h2>
               <p>Suivi complet de toutes les factures</p>
             </div>
-            <div className="fg-export-actions">
-              <button className="btn btn-secondary" onClick={exportSuiviReportPdf}>Exporter PDF</button>
-              <button className="btn btn-primary" onClick={exportSuiviReportExcel}>Exporter Excel</button>
-            </div>
+            {hasPermission(user, 'exporter_pdf_excel_facture') && (
+              <div className="fg-export-actions">
+                <button className="btn btn-secondary" onClick={exportSuiviReportPdf}>Exporter PDF</button>
+                <button className="btn btn-primary" onClick={exportSuiviReportExcel}>Exporter Excel</button>
+              </div>
+            )}
           </section>
 
           <div className="fg-hero-stats">
@@ -3390,7 +3418,7 @@ export default function VueGlobale() {
         </>
       )}
 
-      {activeTab === 'comptes-profils' && (
+      {activeTab === 'comptes-profils' && hasPermission(user, 'consulter_comptes_profil') && (
         <>
           <section className="fg-hero">
             <div>
@@ -4115,8 +4143,10 @@ export default function VueGlobale() {
             </div>
 
             <footer className="fg-mission-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => openMissionEditModal()}>Modifier</button>
-              {selectedMission?.demandeId && (
+              {hasPermission(user, 'modifier_facture') && (
+                <button type="button" className="btn btn-secondary" onClick={() => openMissionEditModal()}>Modifier</button>
+              )}
+              {selectedMission?.demandeId && hasPermission(user, 'editer_besoin_facture') && (
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -4129,12 +4159,16 @@ export default function VueGlobale() {
                   <Pencil size={14} /> Éditer le besoin
                 </button>
               )}
-              <button type="button" className="btn btn-secondary" onClick={handleGenerateInvoicePreview} disabled={isGeneratingInvoice}>
-                {isGeneratingInvoice ? 'Génération...' : 'Générer la facture'}
-              </button>
-              <button type="button" className="btn btn-primary" onClick={handleSendInvoice} disabled={!invoicePreview || isSendingInvoice}>
-                {isSendingInvoice ? 'Envoi...' : 'Envoyer au client'}
-              </button>
+              {hasPermission(user, 'generer_facture') && (
+                <button type="button" className="btn btn-secondary" onClick={handleGenerateInvoicePreview} disabled={isGeneratingInvoice}>
+                  {isGeneratingInvoice ? 'Génération...' : 'Générer la facture'}
+                </button>
+              )}
+              {hasPermission(user, 'envoi_facture_client') && (
+                <button type="button" className="btn btn-primary" onClick={handleSendInvoice} disabled={!invoicePreview || isSendingInvoice}>
+                  {isSendingInvoice ? 'Envoi...' : 'Envoyer au client'}
+                </button>
+              )}
               <button type="button" className="btn btn-secondary" onClick={closeMissionDetails}>Fermer</button>
             </footer>
           </div>
@@ -4174,15 +4208,17 @@ export default function VueGlobale() {
               <a href={invoicePreview.url} download={invoicePreview.name} target="_blank" rel="noreferrer" className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }}>
                 <Download size={18} /> Télécharger
               </a>
-              <button
-                className="btn transition-all flex items-center gap-2"
-                style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none', opacity: isSendingInvoice ? 0.7 : 1 }}
-                onClick={handleSendInvoice}
-                disabled={isSendingInvoice}
-              >
-                {isSendingInvoice ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
-                {isSendingInvoice ? 'Envoi...' : 'Envoyer au client'}
-              </button>
+              {hasPermission(user, 'envoi_facture_client') && (
+                <button
+                  className="btn transition-all flex items-center gap-2"
+                  style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none', opacity: isSendingInvoice ? 0.7 : 1 }}
+                  onClick={handleSendInvoice}
+                  disabled={isSendingInvoice}
+                >
+                  {isSendingInvoice ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
+                  {isSendingInvoice ? 'Envoi...' : 'Envoyer au client'}
+                </button>
+              )}
             </div>
           </div>
         </div>

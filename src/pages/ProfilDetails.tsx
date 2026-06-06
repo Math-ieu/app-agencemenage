@@ -17,7 +17,7 @@ import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtil
 import { Agent } from '../types';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
-import { checkPermission } from '../utils/permissions';
+import { checkPermission, hasPermission } from '../utils/permissions';
 import AddProfileModal from './ProfilEditModal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 
@@ -878,65 +878,71 @@ export default function ProfilDetails() {
           </div>
 
           <div style={{ display: 'flex', gap: 10 }} className="flex-wrap">
-            <button
-              onClick={() => {
-                const perm = checkPermission(user, 'edit_candidat');
-                if (!perm.allowed) {
-                  addToast(perm.message || 'Action non autorisée', 'error');
-                  return;
-                }
-                setShowEditModal(true);
-              }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 18px', border: '1px solid #e2e8f0',
-                borderRadius: 8, background: 'white', color: '#475569',
-                fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              <FileText size={16} color={C.teal} /> Éditer
-            </button>
-            <button
-              disabled={isAgentBusy}
-              onClick={() => {
-                const perm = checkPermission(user, 'edit_candidat');
-                if (!perm.allowed) {
-                  addToast(perm.message || 'Action non autorisée', 'error');
-                  return;
-                }
-                setShowPostulerModal(true);
-                setSelectedDemande(null);
-                setDemandesSearch('');
-              }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '10px 20px',
-                backgroundColor: isAgentBusy ? '#94a3b8' : C.teal,
-                color: 'white',
-                borderRadius: 8, border: 'none', fontWeight: 700,
-                fontSize: 14, cursor: isAgentBusy ? 'not-allowed' : 'pointer',
-                opacity: isAgentBusy ? 0.8 : 1,
-              }}
-              title={isAgentBusy ? "Ce profil est déjà affecté à une prestation en cours" : ""}
-            >
-              {isAgentBusy ? <AlertTriangle size={16} /> : <PlusCircle size={16} />}
-              {isAgentBusy ? 'Déjà affecté' : 'Postuler'}
-            </button>
-            <button
-              onClick={handleToggleBlacklist}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 18px',
-                border: agent?.is_blacklisted ? '1px solid #cbd5e1' : '1px solid #FEB2B2',
-                borderRadius: 8,
-                background: agent?.is_blacklisted ? '#f1f5f9' : '#FFF5F5',
-                color: agent?.is_blacklisted ? '#475569' : '#C53030',
-                fontSize: 14, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              {agent?.is_blacklisted ? <CheckCircle size={16} color="#10b981" /> : <ShieldAlert size={16} />}
-              {agent?.is_blacklisted ? 'Déblacklister' : 'Blacklister'}
-            </button>
+            {hasPermission(user, 'modifier_agents') && (
+              <button
+                onClick={() => {
+                  const perm = checkPermission(user, 'edit_candidat');
+                  if (!perm.allowed) {
+                    addToast(perm.message || 'Action non autorisée', 'error');
+                    return;
+                  }
+                  setShowEditModal(true);
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 18px', border: '1px solid #e2e8f0',
+                  borderRadius: 8, background: 'white', color: '#475569',
+                  fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <FileText size={16} color={C.teal} /> Éditer
+              </button>
+            )}
+            {hasPermission(user, 'modifier_agents') && (
+              <button
+                disabled={isAgentBusy}
+                onClick={() => {
+                  const perm = checkPermission(user, 'edit_candidat');
+                  if (!perm.allowed) {
+                    addToast(perm.message || 'Action non autorisée', 'error');
+                    return;
+                  }
+                  setShowPostulerModal(true);
+                  setSelectedDemande(null);
+                  setDemandesSearch('');
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 20px',
+                  backgroundColor: isAgentBusy ? '#94a3b8' : C.teal,
+                  color: 'white',
+                  borderRadius: 8, border: 'none', fontWeight: 700,
+                  fontSize: 14, cursor: isAgentBusy ? 'not-allowed' : 'pointer',
+                  opacity: isAgentBusy ? 0.8 : 1,
+                }}
+                title={isAgentBusy ? "Ce profil est déjà affecté à une prestation en cours" : ""}
+              >
+                {isAgentBusy ? <AlertTriangle size={16} /> : <PlusCircle size={16} />}
+                {isAgentBusy ? 'Déjà affecté' : 'Postuler'}
+              </button>
+            )}
+            {hasPermission(user, 'blacklister_agents') && (
+              <button
+                onClick={handleToggleBlacklist}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 18px',
+                  border: agent?.is_blacklisted ? '1px solid #cbd5e1' : '1px solid #FEB2B2',
+                  borderRadius: 8,
+                  background: agent?.is_blacklisted ? '#f1f5f9' : '#FFF5F5',
+                  color: agent?.is_blacklisted ? '#475569' : '#C53030',
+                  fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                {agent?.is_blacklisted ? <CheckCircle size={16} color="#10b981" /> : <ShieldAlert size={16} />}
+                {agent?.is_blacklisted ? 'Déblacklister' : 'Blacklister'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1028,65 +1034,67 @@ export default function ProfilDetails() {
         </Accordion>
 
         {/* ── 3. Média ── */}
-        <Accordion title="Média" icon={<Eye size={18} />} isOpen={openSections.media} onToggle={() => toggle('media')} color={C.teal}>
-          <div className="media-layout-grid">
-            {/* Photo */}
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>PHOTO DE PROFIL</p>
-              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {agent.photo ? <img src={agent.photo} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} /> : <User size={40} color="#cbd5e1" />}
+        {hasPermission(user, 'consulter_docs_confidentiels') && (
+          <Accordion title="Média" icon={<Eye size={18} />} isOpen={openSections.media} onToggle={() => toggle('media')} color={C.teal}>
+            <div className="media-layout-grid">
+              {/* Photo */}
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>PHOTO DE PROFIL</p>
+                <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {agent.photo ? <img src={agent.photo} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} /> : <User size={40} color="#cbd5e1" />}
+                </div>
+                <button onClick={() => agent.photo && handleDownload(agent.photo, `Photo_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  <Download size={14} /> Télécharger
+                </button>
               </div>
-              <button onClick={() => agent.photo && handleDownload(agent.photo, `Photo_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                <Download size={14} /> Télécharger
-              </button>
-            </div>
-            {/* CIN */}
-            <div style={{ textAlign: 'center', position: 'relative' }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>CIN</p>
-              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                {getMediaIcon(agent.cin_file, <FileText size={40} color={agent.cin_file ? C.teal : "#cbd5e1"} />)}
-                {agent.cin_file && (
-                  <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
-                    <CheckCircle size={14} />
-                  </div>
-                )}
+              {/* CIN */}
+              <div style={{ textAlign: 'center', position: 'relative' }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>CIN</p>
+                <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                  {getMediaIcon(agent.cin_file, <FileText size={40} color={agent.cin_file ? C.teal : "#cbd5e1"} />)}
+                  {agent.cin_file && (
+                    <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
+                      <CheckCircle size={14} />
+                    </div>
+                  )}
+                </div>
+                <button disabled={!agent.cin_file} onClick={() => agent.cin_file && handleDownload(agent.cin_file, `CIN_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.cin_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.cin_file ? 'pointer' : 'not-allowed' }}>
+                  <Download size={14} /> {agent.cin_file ? 'Télécharger' : 'Indisponible'}
+                </button>
               </div>
-              <button disabled={!agent.cin_file} onClick={() => agent.cin_file && handleDownload(agent.cin_file, `CIN_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.cin_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.cin_file ? 'pointer' : 'not-allowed' }}>
-                <Download size={14} /> {agent.cin_file ? 'Télécharger' : 'Indisponible'}
-              </button>
-            </div>
-            {/* Attestation */}
-            <div style={{ textAlign: 'center', position: 'relative' }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>ATTESTATION</p>
-              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                {getMediaIcon(agent.attestation_file, <ClipboardCheck size={40} color={agent.attestation_file ? C.teal : "#cbd5e1"} />)}
-                {agent.attestation_file && (
-                  <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
-                    <CheckCircle size={14} />
-                  </div>
-                )}
+              {/* Attestation */}
+              <div style={{ textAlign: 'center', position: 'relative' }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>ATTESTATION</p>
+                <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                  {getMediaIcon(agent.attestation_file, <ClipboardCheck size={40} color={agent.attestation_file ? C.teal : "#cbd5e1"} />)}
+                  {agent.attestation_file && (
+                    <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
+                      <CheckCircle size={14} />
+                    </div>
+                  )}
+                </div>
+                <button disabled={!agent.attestation_file} onClick={() => agent.attestation_file && handleDownload(agent.attestation_file, `Attestation_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.attestation_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.attestation_file ? 'pointer' : 'not-allowed' }}>
+                  <Download size={14} /> {agent.attestation_file ? 'Télécharger' : 'Indisponible'}
+                </button>
               </div>
-              <button disabled={!agent.attestation_file} onClick={() => agent.attestation_file && handleDownload(agent.attestation_file, `Attestation_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.attestation_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.attestation_file ? 'pointer' : 'not-allowed' }}>
-                <Download size={14} /> {agent.attestation_file ? 'Télécharger' : 'Indisponible'}
-              </button>
-            </div>
-            {/* Fiche Antropométrique */}
-            <div style={{ textAlign: 'center', position: 'relative' }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>FICHE ANTROPOMÉTRIQUE</p>
-              <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                {getMediaIcon(agent.fiche_antropometrique, <FileText size={40} color={agent.fiche_antropometrique ? C.teal : "#cbd5e1"} />)}
-                {agent.fiche_antropometrique && (
-                  <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
-                    <CheckCircle size={14} />
-                  </div>
-                )}
+              {/* Fiche Antropométrique */}
+              <div style={{ textAlign: 'center', position: 'relative' }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>FICHE ANTROPOMÉTRIQUE</p>
+                <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                  {getMediaIcon(agent.fiche_antropometrique, <FileText size={40} color={agent.fiche_antropometrique ? C.teal : "#cbd5e1"} />)}
+                  {agent.fiche_antropometrique && (
+                    <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
+                      <CheckCircle size={14} />
+                    </div>
+                  )}
+                </div>
+                <button disabled={!agent.fiche_antropometrique} onClick={() => agent.fiche_antropometrique && handleDownload(agent.fiche_antropometrique, `Fiche_Antropometrique_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.fiche_antropometrique ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.fiche_antropometrique ? 'pointer' : 'not-allowed' }}>
+                  <Download size={14} /> {agent.fiche_antropometrique ? 'Télécharger' : 'Indisponible'}
+                </button>
               </div>
-              <button disabled={!agent.fiche_antropometrique} onClick={() => agent.fiche_antropometrique && handleDownload(agent.fiche_antropometrique, `Fiche_Antropometrique_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.fiche_antropometrique ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.fiche_antropometrique ? 'pointer' : 'not-allowed' }}>
-                <Download size={14} /> {agent.fiche_antropometrique ? 'Télécharger' : 'Indisponible'}
-              </button>
             </div>
-          </div>
-        </Accordion>
+          </Accordion>
+        )}
 
         {/* ── 4. Solde financier ── */}
         <Accordion title="Solde financier" icon={<ArrowLeft size={18} />} isOpen={openSections.finance} onToggle={() => toggle('finance')} color={C.tan}>

@@ -4,7 +4,7 @@ import { encodeId } from '../utils/obfuscation';
 import { getClients, getUsers, affecterDemande, updateClient, deleteClient } from '../api/client';
 import { renderStatusBadge } from '../utils/statusUtils';
 import { useAuthStore } from '../store/auth';
-import { checkPermission } from '../utils/permissions';
+import { checkPermission, hasPermission } from '../utils/permissions';
 import { useToastStore } from '../store/toast';
 import { User } from '../types';
 import {
@@ -599,23 +599,27 @@ export default function Clients() {
                               <span>Compte client</span>
                             </Link>
 
-                            <div className="dropdown-divider"></div>
-                            <div className="dropdown-item" onClick={() => {
-                              setShowAvisModal({ clientId: c.id, type: 'commercial', avis: '' });
-                              setActiveDropdown(null);
-                            }}>
-                              <MessageSquare size={16} className="dropdown-item-icon" />
-                              <span>Note commerciale</span>
-                            </div>
-                            <div className="dropdown-item" onClick={() => {
-                              setShowAvisModal({ clientId: c.id, type: 'operationnel', avis: '' });
-                              setActiveDropdown(null);
-                            }}>
-                              <MessageSquare size={16} className="dropdown-item-icon" />
-                              <span>Note opérationnelle</span>
-                            </div>
-                            <div className="dropdown-divider"></div>
-                            {checkPermission(user, 'affecter_commercial').allowed && c.latest_demande && (
+                            {hasPermission(user, 'modifier_clients') && (
+                              <>
+                                <div className="dropdown-divider"></div>
+                                <div className="dropdown-item" onClick={() => {
+                                  setShowAvisModal({ clientId: c.id, type: 'commercial', avis: '' });
+                                  setActiveDropdown(null);
+                                }}>
+                                  <MessageSquare size={16} className="dropdown-item-icon" />
+                                  <span>Note commerciale</span>
+                                </div>
+                                <div className="dropdown-item" onClick={() => {
+                                  setShowAvisModal({ clientId: c.id, type: 'operationnel', avis: '' });
+                                  setActiveDropdown(null);
+                                }}>
+                                  <MessageSquare size={16} className="dropdown-item-icon" />
+                                  <span>Note opérationnelle</span>
+                                </div>
+                                <div className="dropdown-divider"></div>
+                              </>
+                            )}
+                            {hasPermission(user, 'affectation_client') && c.latest_demande && (
                               <div className="dropdown-item" onClick={(e) => {
                                 e.stopPropagation();
                                 setShowAssignmentModal(c.latest_demande!.id);
@@ -625,15 +629,21 @@ export default function Clients() {
                                 <span>Affectation</span>
                               </div>
                             )}
-                            <Link to="/marketing" state={{ tab: 'gestes' }} className="dropdown-item">
-                              <Slash size={16} className="dropdown-item-icon" />
-                              <span>Geste commercial</span>
-                            </Link>
-                            <div className="dropdown-divider"></div>
-                            <div className="dropdown-item dropdown-item-danger" onClick={() => handleDeleteClient(c)}>
-                              <Trash2 size={16} className="dropdown-item-icon" />
-                              <span>Supprimer</span>
-                            </div>
+                            {hasPermission(user, 'geste_commercial') && (
+                              <Link to="/marketing" state={{ tab: 'gestes' }} className="dropdown-item">
+                                <Slash size={16} className="dropdown-item-icon" />
+                                <span>Geste commercial</span>
+                              </Link>
+                            )}
+                            {hasPermission(user, 'delete_client') && (
+                              <>
+                                <div className="dropdown-divider"></div>
+                                <div className="dropdown-item dropdown-item-danger" onClick={() => handleDeleteClient(c)}>
+                                  <Trash2 size={16} className="dropdown-item-icon" />
+                                  <span>Supprimer</span>
+                                </div>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -687,15 +697,17 @@ export default function Clients() {
                             </div>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          className="table-delete-icon-btn"
-                          title="Supprimer le client"
-                          aria-label="Supprimer le client"
-                          onClick={() => handleDeleteClient(c)}
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        {hasPermission(user, 'delete_client') && (
+                          <button
+                            type="button"
+                            className="table-delete-icon-btn"
+                            title="Supprimer le client"
+                            aria-label="Supprimer le client"
+                            onClick={() => handleDeleteClient(c)}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>

@@ -76,18 +76,18 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Dashboard />} />
+          <Route index element={<PermissionRoute permission="consulter_dashboard"><Dashboard /></PermissionRoute>} />
           <Route path="demandes" element={<PermissionRoute permission="consulter_demandes"><DemandesEnAttente /></PermissionRoute>} />
           <Route path="clients/:id" element={<PermissionRoute permission="consulter_clients"><ClientDetails /></PermissionRoute>} />
           <Route path="clients" element={<PermissionRoute permission="consulter_clients"><Clients /></PermissionRoute>} />
           <Route path="profils/:id" element={<PermissionRoute permission="consulter_agents"><ProfilDetails /></PermissionRoute>} />
           <Route path="profils" element={<PermissionRoute permission="consulter_agents"><Profils /></PermissionRoute>} />
-          <Route path="historique" element={<Historique />} />
+          <Route path="historique" element={<PermissionRoute permission="consulter_historique_global"><Historique /></PermissionRoute>} />
           <Route path="finance">
             <Route path="vue-globale" element={<PermissionRoute permission="voir_la_caisse"><VueGlobale /></PermissionRoute>} />
             <Route path="la-caisse" element={<PermissionRoute permission="voir_la_caisse"><LaCaisse /></PermissionRoute>} />
           </Route>
-          <Route path="qualite" element={<PermissionRoute permission="consulter_demandes"><Qualite /></PermissionRoute>} />
+          <Route path="qualite" element={<PermissionRoute permission="consulter_retours_qualite"><Qualite /></PermissionRoute>} />
           <Route path="marketing" element={<PermissionRoute permission="consulter_marketing"><Marketing /></PermissionRoute>} />
           <Route path="devis" element={<MoteurDevis />} />
           <Route path="parametres">

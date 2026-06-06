@@ -74,6 +74,9 @@ export default function AppLayout() {
     }
     
     // Top-level items
+    if (item.to === '/') {
+      return hasPermission(user, 'consulter_dashboard') ? item : null;
+    }
     if (item.to === '/demandes') {
       return hasPermission(user, 'consulter_demandes') ? item : null;
     }
@@ -83,8 +86,11 @@ export default function AppLayout() {
     if (item.to === '/clients') {
       return hasPermission(user, 'consulter_clients') ? item : null;
     }
+    if (item.to === '/historique') {
+      return hasPermission(user, 'consulter_historique_global') ? item : null;
+    }
     if (item.to === '/qualite') {
-      return hasPermission(user, 'consulter_demandes') ? item : null;
+      return hasPermission(user, 'consulter_retours_qualite') ? item : null;
     }
     if (item.to === '/marketing') {
       return hasPermission(user, 'consulter_marketing') ? item : null;

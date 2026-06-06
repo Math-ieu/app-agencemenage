@@ -6,6 +6,7 @@ import AuxvieQuote from "./AuxvieQuote";
 import SinistreQuote from "./SinistreQuote";
 import BureauxQuote from "./BureauxQuote";
 import PlacementQuote from "./PlacementQuote";
+import AutreServiceQuote from "./AutreServiceQuote";
 import { fmt, Field, s } from "./QuoteShared";
 
 export interface QuotePrestationLine {
@@ -27,9 +28,11 @@ interface QuoteSectionProps {
 export default function QuoteSection({ demande, onPreview, onSend, formData, setFormData, onUpdateDemandeData }: QuoteSectionProps) {
   const service = (demande.service || "").toLowerCase();
   const isDevis = demande.segment === 'entreprise' || 
+    demande.formulaire_data?.is_autre_service === true ||
     service.includes('air bnb') || service.includes('airbnb') || 
     service.includes('sinistre') || service.includes('auxiliaire') || 
-    service.includes('chantier') || service.includes('placement') || service.includes('gestion');
+    service.includes('chantier') || service.includes('placement') || service.includes('gestion') ||
+    service.includes('autre service') || service.includes('autre_service');
   
   const type = isDevis ? 'devis' : 'png';
 
@@ -206,6 +209,9 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
   };
 
   const getComponent = () => {
+    if (demande.formulaire_data?.is_autre_service === true || service.includes("autre service") || service.includes("autre_service")) {
+      return <AutreServiceQuote demande={demande} onPrestationsChange={handlePrestationsChange} formData={formData} setFormData={setFormData} onUpdateDemandeData={patch => onUpdateDemandeData?.(demande.id, patch)} />;
+    }
     if (service.includes("air bnb") || service.includes("airbnb")) return <AirbnbQuote demande={demande} onPrestationsChange={handlePrestationsChange} formData={formData} setFormData={setFormData} onUpdateDemandeData={patch => onUpdateDemandeData?.(demande.id, patch)} />;
     if (service.includes("chantier")) return <ChantierQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
     if (service.includes("auxiliaire")) return <AuxvieQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;

@@ -11,7 +11,7 @@ import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, aff
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
-import { checkPermission } from '../utils/permissions';
+import { checkPermission, hasPermission } from '../utils/permissions';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -46,7 +46,12 @@ interface PartRepartitionItem {
   profile_id: number | '';
   amount: number;
   is_delegate?: boolean;
+  rate_type?: 'taux_horaire_standard' | 'taux_horaire_exceptionnel' | 'taux_forfaitaire';
+  hours?: number;
+  days?: number;
+  rate_value?: number;
 }
+
 
 const PAYMENT_STATUS_OPTIONS = [
   { value: 'non_confirme', apiValue: 'non_paye', label: 'Non confirmé' },
@@ -79,6 +84,52 @@ const roundMoney = (value: number): number => Math.round(value * 100) / 100;
 
 const asArray = <T,>(value: unknown, fallback: T[]): T[] =>
   Array.isArray(value) ? (value as T[]) : fallback;
+
+const getServiceDefaultRate = (service: string, rateType: string, hours?: number): { rate: number; type: 'hourly' | 'forfait' } => {
+  const norm = (service || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  
+  if (rateType === 'taux_forfaitaire') {
+    if (norm.includes('auxiliaire')) {
+      return { rate: 150, type: 'forfait' };
+    }
+    if (norm.includes('placement')) {
+      return { rate: 200, type: 'forfait' };
+    }
+    return { rate: 150, type: 'forfait' }; // Default flat rate
+  }
+  
+  // hourly rates:
+  if (norm.includes('menage standard') || norm.includes('standard')) {
+    return { rate: 30, type: 'hourly' };
+  }
+  if (norm.includes('grand menage') || norm.includes('grand')) {
+    return { rate: 40, type: 'hourly' };
+  }
+  if (norm.includes('fin de chantier') || norm.includes('fin chantier') || norm.includes('nettoyage fin')) {
+    return { rate: 40, type: 'hourly' };
+  }
+  if (norm.includes('post-sinistre') || norm.includes('post sinistre')) {
+    return { rate: 40, type: 'hourly' };
+  }
+  if (norm.includes('airbnb') || norm.includes('air bnb')) {
+    const h = hours || 0;
+    return { rate: (h > 0 && h <= 2) ? 40 : 30, type: 'hourly' };
+  }
+  if (norm.includes('bureaux') || norm.includes('bureau')) {
+    return { rate: 30, type: 'hourly' };
+  }
+  
+  return { rate: 30, type: 'hourly' }; // Default hourly rate
+};
+
+const getDefaultRateTypeForService = (service: string): 'taux_horaire_standard' | 'taux_forfaitaire' => {
+  const norm = (service || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  if (norm.includes('auxiliaire') || norm.includes('placement')) {
+    return 'taux_forfaitaire';
+  }
+  return 'taux_horaire_standard';
+};
+
 
 const AUDIT_FIELD_LABELS: Record<string, string> = {
   service: 'Service',
@@ -627,6 +678,10 @@ export default function Dashboard() {
           profile_id: item.profile_id,
           amount: toNumber(item.amount),
           is_delegate: Boolean(item.is_delegate),
+          rate_type: item.rate_type,
+          hours: item.hours,
+          days: item.days,
+          rate_value: item.rate_value,
         }))
         .filter((item) => item.profile_id !== '');
 
@@ -737,8 +792,12 @@ export default function Dashboard() {
           annulation_raison: editFormData.annulation_raison || '',
           profil_sera_paye: Boolean(editFormData.profil_sera_paye),
           montant_profil_annulation: editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0,
-          montant_agence_doit_profil: editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0,
-          montant_profil_doit_agence: isFreeOrCancelled ? 0 : toNumber(editFormData.montant_profil_doit_agence),
+          montant_agence_doit_profil: finalStatutPaiementUi === 'agence_payee_client'
+            ? partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0)
+            : (editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0),
+          montant_profil_doit_agence: finalStatutPaiementUi === 'profil_paye_client'
+            ? partAgence
+            : 0,
           ca_initial: toNumber(editFormData.ca_initial),
         },
         part_agence: partAgence,
@@ -860,6 +919,67 @@ export default function Dashboard() {
       // Si aucun profil n'est assigné, la répartition doit être vide
       savedParts = [];
     }
+
+    // Ensure all savedParts elements are fully initialized with rate details
+    savedParts = savedParts.map(p => {
+      const rateType = p.rate_type || getDefaultRateTypeForService(d.service);
+      let hours = p.hours;
+      let days = p.days;
+      let rateValue = p.rate_value;
+      let amount = p.amount;
+
+      const defaultHours = Number(d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || 4);
+      const defaultDays = Number(d.formulaire_data?.nb_jours || 1);
+
+      if (rateType === 'taux_forfaitaire') {
+        if (days === undefined) days = defaultDays;
+        if (rateValue === undefined) {
+          if (amount > 0) {
+            rateValue = roundMoney(amount / days);
+          } else {
+            rateValue = getServiceDefaultRate(d.service, rateType).rate;
+          }
+        }
+        amount = roundMoney(days * rateValue);
+      } else {
+        // hourly
+        if (hours === undefined) hours = defaultHours;
+        if (rateValue === undefined) {
+          if (amount > 0) {
+            rateValue = roundMoney(amount / hours);
+          } else {
+            rateValue = getServiceDefaultRate(d.service, rateType, hours).rate;
+          }
+        }
+        // Check if the rate_type wasn't set and rate matches standard, or if it differs:
+        let finalRateType = p.rate_type;
+        if (!finalRateType) {
+          const standardRate = getServiceDefaultRate(d.service, 'taux_horaire_standard', hours).rate;
+          if (Math.abs(rateValue - standardRate) < 0.01) {
+            finalRateType = 'taux_horaire_standard';
+            rateValue = standardRate;
+          } else {
+            finalRateType = 'taux_horaire_exceptionnel';
+          }
+        }
+        amount = roundMoney(hours * rateValue);
+        return {
+          ...p,
+          rate_type: finalRateType,
+          hours,
+          rate_value: rateValue,
+          amount
+        };
+      }
+
+      return {
+        ...p,
+        rate_type: rateType,
+        days,
+        rate_value: rateValue,
+        amount
+      };
+    });
 
     setSelectedDemande(d);
     setIsEditing(true);
@@ -1267,29 +1387,35 @@ export default function Dashboard() {
                             right: 'auto',
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
-                              <Edit2 size={14} /> Éditer le besoin
-                            </button>
+                            {hasPermission(user, 'editer_besoin') && (
+                              <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
+                                <Edit2 size={14} /> Éditer le besoin
+                              </button>
+                            )}
 
+                            {hasPermission(user, 'confirmation_avant_operation') && (
+                              <button
+                                className="menu-item w-full"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openCAOModal(d);
+                                  setActiveMenu(null);
+                                }}
+                              >
+                                <CheckCircle size={14} className={d.cao ? 'text-green-500' : ''} /> {d.cao ? 'Confirmation avant opération' : 'Confirmation avant opération'}
+                              </button>
+                            )}
 
-                            <button
-                              className="menu-item w-full"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openCAOModal(d);
-                                setActiveMenu(null);
-                              }}
-                            >
-                              <CheckCircle size={14} className={d.cao ? 'text-green-500' : ''} /> {d.cao ? 'Confirmation avant opération' : 'Confirmation avant opération'}
-                            </button>
-                            <Link
-                              to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
-                              className="menu-item"
-                              onClick={() => setActiveMenu(null)}
-                              style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}
-                            >
-                              <UserCheck size={14} /> Compte Client
-                            </Link>
+                            {hasPermission(user, 'consulter_compte_client_dashboard') && (
+                              <Link
+                                to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
+                                className="menu-item"
+                                onClick={() => setActiveMenu(null)}
+                                style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}
+                              >
+                                <UserCheck size={14} /> Compte Client
+                              </Link>
+                            )}
                           </div>
                         )}
                       </td>
@@ -1377,97 +1503,112 @@ export default function Dashboard() {
                             minWidth: '220px',
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
-                              <Pencil size={16} /> Éditer le besoin
-                            </button>
+                            {hasPermission(user, 'editer_besoin') && (
+                              <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
+                                <Pencil size={16} /> Éditer le besoin
+                              </button>
+                            )}
 
-                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                              setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
-                              setActiveMoreMenu(null);
-                            }}>
-                              <MessageSquare size={16} /> Note commerciale
-                            </button>
-                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                              setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
-                              setActiveMoreMenu(null);
-                            }}>
-                              <MessageSquare size={16} /> Note opérationnelle
-                            </button>
-
-                            <div className="menu-divider" />
-
-                            <button 
-                              className="menu-item" 
-                              style={{ 
-                                color: '#6366f1',
-                                opacity: !d.cao ? 0.5 : 1,
-                                cursor: !d.cao ? 'not-allowed' : 'pointer'
-                              }} 
-                              disabled={!d.cao}
-                              onClick={async () => {
-                                if (!d.cao) return;
-                                await updateDemande(d.id, { statut: 'pres_en_cours' });
-                                addToast('Statut mis à jour : Prestation en cours', 'success');
-                                fetchData();
+                            {hasPermission(user, 'note_commerciale_dashboard') && (
+                              <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
                                 setActiveMoreMenu(null);
-                              }}
-                            >
-                              <CheckCircle size={16} /> Pres. en cours
-                            </button>
-
-                            <button 
-                              className="menu-item" 
-                              style={{ 
-                                color: '#0ea5e9',
-                                opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
-                                cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
-                              }} 
-                              disabled={!(d.cao && d.statut === 'pres_en_cours')}
-                              onClick={async () => {
-                                if (!(d.cao && d.statut === 'pres_en_cours')) return;
-                                await updateDemande(d.id, { statut: 'pres_terminee' });
-                                addToast('Statut mis à jour : Prestation terminée', 'success');
-                                addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
-                                fetchData();
+                              }}>
+                                <MessageSquare size={16} /> Note commerciale
+                              </button>
+                            )}
+                            {hasPermission(user, 'note_operationnelle_dashboard') && (
+                              <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
                                 setActiveMoreMenu(null);
-                              }}
-                            >
-                              <CheckCircle size={16} /> Pres. terminée
-                            </button>
+                              }}>
+                                <MessageSquare size={16} /> Note opérationnelle
+                              </button>
+                            )}
 
-                            <div className="menu-divider" />
+                            {(hasPermission(user, 'editer_besoin') || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
 
-                            <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
-                              setAnnulationReason('');
-                              setShowAnnulationModal({ demandeId: d.id });
-                              setActiveMoreMenu(null);
-                            }}>
-                              <XCircle size={16} /> Rejeté / Annulé
-                            </button>
+                            {hasPermission(user, 'editer_besoin') && (
+                              <>
+                                <button 
+                                  className="menu-item" 
+                                  style={{ 
+                                    color: '#6366f1',
+                                    opacity: !d.cao ? 0.5 : 1,
+                                    cursor: !d.cao ? 'not-allowed' : 'pointer'
+                                  }} 
+                                  disabled={!d.cao}
+                                  onClick={async () => {
+                                    if (!d.cao) return;
+                                    await updateDemande(d.id, { statut: 'pres_en_cours' });
+                                    addToast('Statut mis à jour : Prestation en cours', 'success');
+                                    fetchData();
+                                    setActiveMoreMenu(null);
+                                  }}
+                                >
+                                  <CheckCircle size={16} /> Pres. en cours
+                                </button>
 
-                            <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
-                              setFacturationAnnuleeReason('');
-                              setFacturationAnnuleeProfilPaye(false);
-                              setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
-                              setActiveMoreMenu(null);
-                            }}>
-                              <XCircle size={16} /> Facturation annulée
-                            </button>
+                                <button 
+                                  className="menu-item" 
+                                  style={{ 
+                                    color: '#0ea5e9',
+                                    opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
+                                    cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
+                                  }} 
+                                  disabled={!(d.cao && d.statut === 'pres_en_cours')}
+                                  onClick={async () => {
+                                    if (!(d.cao && d.statut === 'pres_en_cours')) return;
+                                    await updateDemande(d.id, { statut: 'pres_terminee' });
+                                    addToast('Statut mis à jour : Prestation terminée', 'success');
+                                    addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
+                                    fetchData();
+                                    setActiveMoreMenu(null);
+                                  }}
+                                >
+                                  <CheckCircle size={16} /> Pres. terminée
+                                </button>
+                                <div className="menu-divider" />
+                              </>
+                            )}
 
-                            <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
-                              if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
-                                try {
-                                  await deleteDemande(d.id);
-                                  addToast('Demande supprimée avec succès', 'success');
-                                  fetchData();
-                                  setActiveMoreMenu(null);
-                                } catch (err) {
-                                  addToast('Erreur lors de la suppression', 'error');
+                            {hasPermission(user, 'annulation_demande') && (
+                              <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
+                                setAnnulationReason('');
+                                setShowAnnulationModal({ demandeId: d.id });
+                                setActiveMoreMenu(null);
+                              }}>
+                                <XCircle size={16} /> Rejeté / Annulé
+                              </button>
+                            )}
+
+                            {hasPermission(user, 'facturation_annulee') && (
+                              <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
+                                setFacturationAnnuleeReason('');
+                                setFacturationAnnuleeProfilPaye(false);
+                                setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
+                                setActiveMoreMenu(null);
+                              }}>
+                                <XCircle size={16} /> Facturation annulée
+                              </button>
+                            )}
+
+                            {hasPermission(user, 'supprimer_demande_dashboard') && (
+                              <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
+                                if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
+                                  try {
+                                    await deleteDemande(d.id);
+                                    addToast('Demande supprimée avec succès', 'success');
+                                    fetchData();
+                                    setActiveMoreMenu(null);
+                                  } catch (err) {
+                                    addToast('Erreur lors de la suppression', 'error');
+                                  }
                                 }
-                              }
-                            }}>
-                              <Trash2 size={16} /> Supprimer
-                            </button>
+                              }}>
+                                <Trash2 size={16} /> Supprimer
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>
@@ -1531,97 +1672,112 @@ export default function Dashboard() {
                             zIndex: 50,
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
-                              <Pencil size={16} /> Éditer le besoin
-                            </button>
+                            {hasPermission(user, 'editer_besoin') && (
+                              <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
+                                <Pencil size={16} /> Éditer le besoin
+                              </button>
+                            )}
 
-                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                              setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
-                              setActiveMoreMenu(null);
-                            }}>
-                              <MessageSquare size={16} /> Note commerciale
-                            </button>
-                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                              setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
-                              setActiveMoreMenu(null);
-                            }}>
-                              <MessageSquare size={16} /> Note opérationnelle
-                            </button>
-
-                            <div className="menu-divider" />
-
-                            <button 
-                              className="menu-item" 
-                              style={{ 
-                                color: '#6366f1',
-                                opacity: !d.cao ? 0.5 : 1,
-                                cursor: !d.cao ? 'not-allowed' : 'pointer'
-                              }} 
-                              disabled={!d.cao}
-                              onClick={async () => {
-                                if (!d.cao) return;
-                                await updateDemande(d.id, { statut: 'pres_en_cours' });
-                                addToast('Statut mis à jour : Prestation en cours', 'success');
-                                fetchData();
+                            {hasPermission(user, 'note_commerciale_dashboard') && (
+                              <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
                                 setActiveMoreMenu(null);
-                              }}
-                            >
-                              <CheckCircle size={16} /> Pres. en cours
-                            </button>
-
-                            <button 
-                              className="menu-item" 
-                              style={{ 
-                                color: '#0ea5e9',
-                                opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
-                                cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
-                              }} 
-                              disabled={!(d.cao && d.statut === 'pres_en_cours')}
-                              onClick={async () => {
-                                if (!(d.cao && d.statut === 'pres_en_cours')) return;
-                                await updateDemande(d.id, { statut: 'pres_terminee' });
-                                addToast('Statut mis à jour : Prestation terminée', 'success');
-                                addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
-                                fetchData();
+                              }}>
+                                <MessageSquare size={16} /> Note commerciale
+                              </button>
+                            )}
+                            {hasPermission(user, 'note_operationnelle_dashboard') && (
+                              <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
                                 setActiveMoreMenu(null);
-                              }}
-                            >
-                              <CheckCircle size={16} /> Pres. terminée
-                            </button>
+                              }}>
+                                <MessageSquare size={16} /> Note opérationnelle
+                              </button>
+                            )}
 
-                            <div className="menu-divider" />
+                            {(hasPermission(user, 'editer_besoin') || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
 
-                            <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
-                              setAnnulationReason('');
-                              setShowAnnulationModal({ demandeId: d.id });
-                              setActiveMoreMenu(null);
-                            }}>
-                              <XCircle size={16} /> Rejeté / Annulé
-                            </button>
+                            {hasPermission(user, 'editer_besoin') && (
+                              <>
+                                <button 
+                                  className="menu-item" 
+                                  style={{ 
+                                    color: '#6366f1',
+                                    opacity: !d.cao ? 0.5 : 1,
+                                    cursor: !d.cao ? 'not-allowed' : 'pointer'
+                                  }} 
+                                  disabled={!d.cao}
+                                  onClick={async () => {
+                                    if (!d.cao) return;
+                                    await updateDemande(d.id, { statut: 'pres_en_cours' });
+                                    addToast('Statut mis à jour : Prestation en cours', 'success');
+                                    fetchData();
+                                    setActiveMoreMenu(null);
+                                  }}
+                                >
+                                  <CheckCircle size={16} /> Pres. en cours
+                                </button>
 
-                            <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
-                              setFacturationAnnuleeReason('');
-                              setFacturationAnnuleeProfilPaye(false);
-                              setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
-                              setActiveMoreMenu(null);
-                            }}>
-                              <XCircle size={16} /> Facturation annulée
-                            </button>
+                                <button 
+                                  className="menu-item" 
+                                  style={{ 
+                                    color: '#0ea5e9',
+                                    opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
+                                    cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
+                                  }} 
+                                  disabled={!(d.cao && d.statut === 'pres_en_cours')}
+                                  onClick={async () => {
+                                    if (!(d.cao && d.statut === 'pres_en_cours')) return;
+                                    await updateDemande(d.id, { statut: 'pres_terminee' });
+                                    addToast('Statut mis à jour : Prestation terminée', 'success');
+                                    addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
+                                    fetchData();
+                                    setActiveMoreMenu(null);
+                                  }}
+                                >
+                                  <CheckCircle size={16} /> Pres. terminée
+                                </button>
+                                <div className="menu-divider" />
+                              </>
+                            )}
 
-                            <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
-                              if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
-                                try {
-                                  await deleteDemande(d.id);
-                                  addToast('Demande supprimée avec succès', 'success');
-                                  fetchData();
-                                  setActiveMoreMenu(null);
-                                } catch (err) {
-                                  addToast('Erreur lors de la suppression', 'error');
+                            {hasPermission(user, 'annulation_demande') && (
+                              <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
+                                setAnnulationReason('');
+                                setShowAnnulationModal({ demandeId: d.id });
+                                setActiveMoreMenu(null);
+                              }}>
+                                <XCircle size={16} /> Rejeté / Annulé
+                              </button>
+                            )}
+
+                            {hasPermission(user, 'facturation_annulee') && (
+                              <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
+                                setFacturationAnnuleeReason('');
+                                setFacturationAnnuleeProfilPaye(false);
+                                setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
+                                setActiveMoreMenu(null);
+                              }}>
+                                <XCircle size={16} /> Facturation annulée
+                              </button>
+                            )}
+
+                            {hasPermission(user, 'supprimer_demande_dashboard') && (
+                              <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
+                                if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
+                                  try {
+                                    await deleteDemande(d.id);
+                                    addToast('Demande supprimée avec succès', 'success');
+                                    fetchData();
+                                    setActiveMoreMenu(null);
+                                  } catch (err) {
+                                    addToast('Erreur lors de la suppression', 'error');
+                                  }
                                 }
-                              }
-                            }}>
-                              <Trash2 size={16} /> Supprimer
-                            </button>
+                              }}>
+                                <Trash2 size={16} /> Supprimer
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1696,17 +1852,23 @@ export default function Dashboard() {
                           right: 'auto', left: 0, zIndex: 50, minWidth: '220px',
                           ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
                         }}>
-                          <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMenu(null); }}>
-                            <Pencil size={16} /> Éditer le besoin
-                          </button>
+                          {hasPermission(user, 'editer_besoin') && (
+                            <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMenu(null); }}>
+                              <Pencil size={16} /> Éditer le besoin
+                            </button>
+                          )}
 
-                          <button className="menu-item" style={{ color: '#0d9488' }} onClick={(e) => { e.stopPropagation(); openCAOModal(d); setActiveMenu(null); }}>
-                            <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> Confirmation avant opération
-                          </button>
+                          {hasPermission(user, 'confirmation_avant_operation') && (
+                            <button className="menu-item" style={{ color: '#0d9488' }} onClick={(e) => { e.stopPropagation(); openCAOModal(d); setActiveMenu(null); }}>
+                              <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> Confirmation avant opération
+                            </button>
+                          )}
 
-                          <Link to={d.client ? `/clients/${encodeId(d.client)}` : '#'} className="menu-item" onClick={() => setActiveMenu(null)} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <UserCheck size={16} /> Compte Client
-                          </Link>
+                          {hasPermission(user, 'consulter_compte_client_dashboard') && (
+                            <Link to={d.client ? `/clients/${encodeId(d.client)}` : '#'} className="menu-item" onClick={() => setActiveMenu(null)} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <UserCheck size={16} /> Compte Client
+                            </Link>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2217,7 +2379,31 @@ export default function Dashboard() {
                           </div>
                           <div className="form-group">
                             <label>TVA (20%)</label>
-                            <label className="switch-inline"><label className="switch"><input type="checkbox" checked={Boolean(editFormData.tva_active)} onChange={e => setEditFormData({ ...editFormData, tva_active: e.target.checked })} /><span className="slider round" /></label><span>{editFormData.tva_active ? 'Oui' : 'Non'}</span></label>
+                            <label className="switch-inline"><label className="switch"><input type="checkbox" checked={Boolean(editFormData.tva_active)} onChange={e => {
+                              const isChecked = e.target.checked;
+                              const nextTTC = roundMoney(isChecked ? montantHT * 1.2 : montantHT);
+                              const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                              const nextPartAgence = roundMoney(nextTTC - totalParts);
+
+                              setEditFormData((prev: any) => {
+                                const updates: any = {
+                                  ...prev,
+                                  tva_active: isChecked,
+                                  part_agence: nextPartAgence,
+                                };
+                                if (prev.statut_paiement_ui === 'profil_paye_client') {
+                                  updates.montant_profil_doit_agence = nextPartAgence;
+                                  updates.montant_agence_doit_profil = 0;
+                                } else if (prev.statut_paiement_ui === 'agence_payee_client') {
+                                  updates.montant_agence_doit_profil = totalParts;
+                                  updates.montant_profil_doit_agence = 0;
+                                } else {
+                                  updates.montant_profil_doit_agence = 0;
+                                  updates.montant_agence_doit_profil = 0;
+                                }
+                                return updates;
+                              });
+                            }} /><span className="slider round" /></label><span>{editFormData.tva_active ? 'Oui' : 'Non'}</span></label>
                             {!editFormData.tva_active && <p style={{ fontSize: '11px', color: '#DC2626', fontWeight: 600, marginTop: '4px' }}>Montant sans TVA</p>}
                           </div>
                           <div className="form-group">
@@ -2285,45 +2471,6 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {editFormData.statut_paiement_ui === 'profil_paye_client' && (
-                          <div style={{ marginTop: '16px', padding: '16px', borderRadius: '10px', border: '1px solid #FECACA', background: '#FEF2F2' }}>
-                            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#B91C1C', margin: '0 0 8px' }}>Profil doit</h4>
-                            <div className="form-group mb-0" style={{ maxWidth: '280px' }}>
-                              <label style={{ color: '#B91C1C' }}>Montant (MAD)</label>
-                              <input type="number" value={editFormData.montant_profil_doit_agence || ''} onChange={e => {
-                                const val = toNumber(e.target.value);
-                                // Auto-dispatch: profil doit = part_agence, profil part = TTC - part_agence
-                                const totalProfilPart = roundMoney(montantTTC - val);
-                                const count = partsRepartition.length || 1;
-                                const amountPerProfile = roundMoney(totalProfilPart / count);
-                                const nextParts = partsRepartition.length > 0 ? partsRepartition.map((p, i) => {
-                                  return { ...p, amount: i === count - 1 ? roundMoney(totalProfilPart - (amountPerProfile * (count - 1))) : amountPerProfile };
-                                }) : partsRepartition;
-                                setEditFormData({ ...editFormData, montant_profil_doit_agence: e.target.value, part_agence: val, parts_repartition: nextParts });
-                              }} className="edit-input" placeholder="0" style={{ borderColor: '#FECACA', color: '#B91C1C', fontWeight: 600 }} />
-                            </div>
-                          </div>
-                        )}
-
-                        {editFormData.statut_paiement_ui === 'agence_payee_client' && (
-                          <div style={{ marginTop: '16px', padding: '16px', borderRadius: '10px', border: '1px solid #FED7AA', background: '#FFF7ED' }}>
-                            <h4 style={{ fontSize: '13px', fontWeight: 700, color: '#C2410C', margin: '0 0 8px' }}>Agence doit</h4>
-                            <div className="form-group mb-0" style={{ maxWidth: '280px' }}>
-                              <label style={{ color: '#C2410C' }}>Montant (MAD)</label>
-                              <input type="number" value={editFormData.montant_agence_doit_profil || ''} onChange={e => {
-                                const val = toNumber(e.target.value);
-                                // Auto-dispatch: agence doit = profil part, agence part = TTC - profil part
-                                const totalProfilPart = val;
-                                const count = partsRepartition.length || 1;
-                                const amountPerProfile = roundMoney(totalProfilPart / count);
-                                const nextParts = partsRepartition.length > 0 ? partsRepartition.map((p, i) => {
-                                  return { ...p, amount: i === count - 1 ? roundMoney(totalProfilPart - (amountPerProfile * (count - 1))) : amountPerProfile };
-                                }) : partsRepartition;
-                                setEditFormData({ ...editFormData, montant_agence_doit_profil: e.target.value, part_agence: roundMoney(montantTTC - val), parts_repartition: nextParts });
-                              }} className="edit-input" placeholder="0" style={{ borderColor: '#FED7AA', color: '#C2410C', fontWeight: 600 }} />
-                            </div>
-                          </div>
-                        )}
 
                         {editFormData.statut_paiement_ui === 'paye' && (() => {
                           let allProfilesPaid = false;
@@ -2498,23 +2645,274 @@ export default function Dashboard() {
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                               <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>Profils intervenants</span>
-                              <button type="button" onClick={() => setEditFormData({ ...editFormData, parts_repartition: [...partsRepartition, { profile_id: '', amount: 0, is_delegate: false }] })} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'white', fontSize: '12px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}><Plus size={14} /> Ajouter un autre profil</button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const defaultRateType = getDefaultRateTypeForService(editFormData.service);
+                                  const defaultHours = defaultRateType !== 'taux_forfaitaire' ? Number(editFormData.nb_heures || editFormData.duree || 4) : undefined;
+                                  const defaultDays = defaultRateType === 'taux_forfaitaire' ? Number(editFormData.nb_jours || 1) : undefined;
+                                  const defaultRateVal = defaultRateType === 'taux_horaire_standard'
+                                    ? getServiceDefaultRate(editFormData.service, defaultRateType, defaultHours).rate
+                                    : undefined;
+                                  const defaultAmount = defaultRateVal !== undefined
+                                    ? roundMoney((defaultRateType === 'taux_forfaitaire' ? defaultDays! : defaultHours!) * defaultRateVal)
+                                    : 0;
+
+                                  setEditFormData({
+                                    ...editFormData,
+                                    parts_repartition: [
+                                      ...partsRepartition,
+                                      {
+                                        profile_id: '',
+                                        rate_type: defaultRateType,
+                                        hours: defaultHours,
+                                        days: defaultDays,
+                                        rate_value: defaultRateVal,
+                                        amount: defaultAmount,
+                                        is_delegate: false
+                                      }
+                                    ]
+                                  });
+                                }}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'white', fontSize: '12px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+                              >
+                                <Plus size={14} /> Ajouter un autre profil
+                              </button>
                             </div>
+
                             {partsRepartition.map((line, idx) => (
-                              <div key={`${line.profile_id}-${idx}`} style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', marginBottom: '12px' }}>
-                                <div style={{ flex: 1 }}>
-                                  <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>Nom du profil{line.is_delegate && partsRepartition.length > 1 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 6px' }}>Délégué</span>}</label>
-                                    <select value={line.profile_id} onChange={e => { const next = [...partsRepartition]; next[idx] = { ...line, profile_id: e.target.value ? parseInt(e.target.value, 10) : '' }; setEditFormData({ ...editFormData, parts_repartition: next }); }} className="edit-input">
+                              <div key={`${line.profile_id}-${idx}`} style={{ padding: '16px', border: '1px solid #E2E8F0', borderRadius: '10px', backgroundColor: '#F8FAFC', marginBottom: '16px' }}>
+                                {/* First row of fields: Nom du profil, Type de taux, buttons */}
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginBottom: '12px' }}>
+                                  <div style={{ flex: 2 }}>
+                                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                      Nom du profil
+                                      {line.is_delegate && partsRepartition.length > 1 && (
+                                        <span style={{ fontSize: '10px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 6px' }}>
+                                          Délégué
+                                        </span>
+                                      )}
+                                    </label>
+                                    <select
+                                      value={line.profile_id}
+                                      onChange={e => {
+                                        const next = [...partsRepartition];
+                                        next[idx] = { ...line, profile_id: e.target.value ? parseInt(e.target.value, 10) : '' };
+                                        setEditFormData({ ...editFormData, parts_repartition: next });
+                                      }}
+                                      className="edit-input"
+                                      style={{ width: '100%' }}
+                                    >
                                       <option value="">Sélectionner un profil...</option>
-                                      {allProfils.map(p => (<option key={p.id} value={p.id}>{p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`}</option>))}
+                                      {allProfils.map(p => (
+                                        <option key={p.id} value={p.id}>
+                                          {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`}
+                                        </option>
+                                      ))}
                                     </select>
+                                  </div>
+
+                                  <div style={{ flex: 2 }}>
+                                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Type de taux</label>
+                                    <select
+                                      value={line.rate_type || 'taux_horaire_standard'}
+                                      onChange={e => {
+                                        const nextType = e.target.value as any;
+                                        const next = [...partsRepartition];
+                                        const updatedLine = { ...line, rate_type: nextType };
+
+                                        if (nextType === 'taux_forfaitaire') {
+                                          updatedLine.days = updatedLine.days || Number(editFormData.nb_jours || 1);
+                                          updatedLine.hours = undefined;
+                                          updatedLine.rate_value = undefined;
+                                          updatedLine.amount = 0;
+                                        } else if (nextType === 'taux_horaire_standard') {
+                                          updatedLine.hours = updatedLine.hours || Number(editFormData.nb_heures || editFormData.duree || 4);
+                                          updatedLine.days = undefined;
+                                          updatedLine.rate_value = getServiceDefaultRate(editFormData.service, nextType, updatedLine.hours).rate;
+                                          updatedLine.amount = roundMoney((updatedLine.hours || 0) * updatedLine.rate_value);
+                                        } else if (nextType === 'taux_horaire_exceptionnel') {
+                                          updatedLine.hours = updatedLine.hours || Number(editFormData.nb_heures || editFormData.duree || 4);
+                                          updatedLine.days = undefined;
+                                          updatedLine.rate_value = undefined;
+                                          updatedLine.amount = 0;
+                                        }
+
+                                        next[idx] = updatedLine;
+                                        setEditFormData({ ...editFormData, parts_repartition: next });
+                                      }}
+                                      className="edit-input"
+                                      style={{ width: '100%' }}
+                                    >
+                                      <option value="taux_horaire_standard" disabled={!hasPermission(user, 'application_taux_horaire_standard')}>
+                                        Taux horaire standard {!hasPermission(user, 'application_taux_horaire_standard') && '🔒'}
+                                      </option>
+                                      <option value="taux_horaire_exceptionnel" disabled={!hasPermission(user, 'taux_horaire_exceptionnel')}>
+                                        Taux horaire exceptionnel {!hasPermission(user, 'taux_horaire_exceptionnel') && '🔒'}
+                                      </option>
+                                      <option value="taux_forfaitaire" disabled={!hasPermission(user, 'taux_forfaitaire')}>
+                                        Taux forfaitaire {!hasPermission(user, 'taux_forfaitaire') && '🔒'}
+                                      </option>
+                                    </select>
+                                  </div>
+
+                                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                                    {partsRepartition.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const next = partsRepartition.map((p, i) => ({ ...p, is_delegate: i === idx ? !p.is_delegate : false }));
+                                          setEditFormData({ ...editFormData, parts_repartition: next });
+                                        }}
+                                        style={{
+                                          height: '38px',
+                                          padding: '0 12px',
+                                          borderRadius: '8px',
+                                          border: 'none',
+                                          fontSize: '12px',
+                                          fontWeight: 600,
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '4px',
+                                          background: line.is_delegate ? '#F59E0B' : '#E2E8F0',
+                                          color: line.is_delegate ? 'white' : '#475569',
+                                          transition: 'all 0.2s'
+                                        }}
+                                        title="Désigner comme délégué"
+                                      >
+                                        <UserCheck size={16} />
+                                        {line.is_delegate ? 'Délégué' : 'Désigner'}
+                                      </button>
+                                    )}
+                                    {partsRepartition.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const f = partsRepartition.filter((_, i) => i !== idx);
+                                          if (!f.some(p => p.is_delegate) && f.length > 0) f[0] = { ...f[0], is_delegate: true };
+                                          setEditFormData({ ...editFormData, parts_repartition: f });
+                                        }}
+                                        style={{
+                                          height: '38px',
+                                          width: '38px',
+                                          borderRadius: '8px',
+                                          border: '1px solid #FCA5A5',
+                                          background: 'white',
+                                          color: '#DC2626',
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          transition: 'all 0.2s'
+                                        }}
+                                      >
+                                        <Trash2 size={16} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
-                                <div style={{ width: '120px' }}>
-                                  <label style={{ fontSize: '12px' }}>Part (MAD)</label>
-                                  <input type="number" value={line.amount} onChange={e => { const next = [...partsRepartition]; next[idx] = { ...line, amount: toNumber(e.target.value) }; if (editFormData.encaisse_par === 'profil') { const tp = next.reduce((a, p) => a + toNumber(p.amount), 0); setEditFormData({ ...editFormData, parts_repartition: next, part_agence: roundMoney(toNumber(montantTTC) - tp) }); } else { setEditFormData({ ...editFormData, parts_repartition: next }); } }} className="edit-input" />
+
+                                {/* Second row of fields: duration, unit price, total */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'flex-end' }}>
+                                  {line.rate_type === 'taux_forfaitaire' ? (
+                                    <>
+                                      <div>
+                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Nombre de jours</label>
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          value={line.days || ''}
+                                          onChange={e => {
+                                            const val = Number(e.target.value);
+                                            const next = [...partsRepartition];
+                                            const updatedLine = { ...line, days: val };
+                                            updatedLine.amount = roundMoney(val * (updatedLine.rate_value || 0));
+                                            next[idx] = updatedLine;
+                                            setEditFormData({ ...editFormData, parts_repartition: next });
+                                          }}
+                                          className="edit-input"
+                                          style={{ width: '100%' }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Prix forfaitaire (MAD)</label>
+                                        <input
+                                          type="number"
+                                          value={line.rate_value || ''}
+                                          onChange={e => {
+                                            const val = Number(e.target.value);
+                                            const next = [...partsRepartition];
+                                            const updatedLine = { ...line, rate_value: val };
+                                            updatedLine.amount = roundMoney((updatedLine.days || 1) * val);
+                                            next[idx] = updatedLine;
+                                            setEditFormData({ ...editFormData, parts_repartition: next });
+                                          }}
+                                          className="edit-input"
+                                          style={{ width: '100%' }}
+                                          required={true}
+                                        />
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div>
+                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Nombre d'heures</label>
+                                        <input
+                                          type="number"
+                                          min={0.5}
+                                          step={0.5}
+                                          value={line.hours || ''}
+                                          onChange={e => {
+                                            const val = Number(e.target.value);
+                                            const next = [...partsRepartition];
+                                            const updatedLine = { ...line, hours: val };
+
+                                            if (updatedLine.rate_type === 'taux_horaire_standard') {
+                                              updatedLine.rate_value = getServiceDefaultRate(editFormData.service, 'taux_horaire_standard', val).rate;
+                                            }
+
+                                            updatedLine.amount = roundMoney(val * (updatedLine.rate_value || 0));
+                                            next[idx] = updatedLine;
+                                            setEditFormData({ ...editFormData, parts_repartition: next });
+                                          }}
+                                          className="edit-input"
+                                          style={{ width: '100%' }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>
+                                          Prix par heure (MAD) {line.rate_type === 'taux_horaire_exceptionnel' && <span style={{ color: '#dc2626' }}>*</span>}
+                                        </label>
+                                        <input
+                                          type="number"
+                                          value={line.rate_value || ''}
+                                          onChange={e => {
+                                            const val = Number(e.target.value);
+                                            const next = [...partsRepartition];
+                                            const updatedLine = { ...line, rate_value: val };
+                                            updatedLine.amount = roundMoney((updatedLine.hours || 0) * val);
+                                            next[idx] = updatedLine;
+                                            setEditFormData({ ...editFormData, parts_repartition: next });
+                                          }}
+                                          disabled={line.rate_type === 'taux_horaire_standard'}
+                                          className="edit-input"
+                                          style={{
+                                            width: '100%',
+                                            ...(line.rate_type === 'taux_horaire_standard' ? { background: '#E2E8F0', color: '#64748B', cursor: 'not-allowed' } : {})
+                                          }}
+                                          required={line.rate_type === 'taux_horaire_exceptionnel'}
+                                        />
+                                      </div>
+                                    </>
+                                  )}
+                                  <div>
+                                    <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Montant total (MAD)</label>
+                                    <div style={{ padding: '0 12px', background: '#F1F5F9', borderRadius: '8px', border: '1px solid #CBD5E1', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                                      {toNumber(line.amount).toFixed(2)}
+                                    </div>
+                                  </div>
                                 </div>
-                                {partsRepartition.length > 1 && <button type="button" onClick={() => { const next = partsRepartition.map((p, i) => ({ ...p, is_delegate: i === idx ? !p.is_delegate : false })); setEditFormData({ ...editFormData, parts_repartition: next }); }} style={{ height: '38px', padding: '0 12px', borderRadius: '8px', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', background: line.is_delegate ? '#F59E0B' : '#F1F5F9', color: line.is_delegate ? 'white' : '#64748B' }} title="Désigner comme délégué"><UserCheck size={16} />{line.is_delegate ? 'Délégué' : 'Désigner'}</button>}
-                                {partsRepartition.length > 1 && <button type="button" onClick={() => { const f = partsRepartition.filter((_, i) => i !== idx); if (!f.some(p => p.is_delegate) && f.length > 0) f[0] = { ...f[0], is_delegate: true }; setEditFormData({ ...editFormData, parts_repartition: f }); }} style={{ height: '38px', width: '38px', borderRadius: '8px', border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={16} /></button>}
                               </div>
                             ))}
                           </div>
@@ -2533,12 +2931,55 @@ export default function Dashboard() {
                                   <span>Total réparti : <strong>{tr.toFixed(2)} MAD</strong></span>
                                   <span>Reste à répartir : <strong style={{ color: ok ? '#059669' : '#DC2626' }}>{r.toFixed(2)} MAD</strong></span>
                                 </div>
-                                <span style={{ fontSize: '12px', fontWeight: 600, color: ok ? '#059669' : '#DC2626' }}>
-                                  {ok ? '✓ Répartition correcte' : '⚠ Répartition incorrecte'}
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                  <span style={{ fontSize: '12px', fontWeight: 600, color: ok ? '#059669' : '#DC2626' }}>
+                                    {ok ? '✓ Répartition correcte' : '⚠ Répartition incorrecte'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                                      const nextPartAgence = roundMoney(montantTTC - totalParts);
+
+                                      setEditFormData((prev: any) => {
+                                        const updates: any = {
+                                          ...prev,
+                                          part_agence: nextPartAgence,
+                                        };
+                                        if (prev.statut_paiement_ui === 'profil_paye_client') {
+                                          updates.montant_profil_doit_agence = nextPartAgence;
+                                          updates.montant_agence_doit_profil = 0;
+                                        } else if (prev.statut_paiement_ui === 'agence_payee_client') {
+                                          updates.montant_agence_doit_profil = totalParts;
+                                          updates.montant_profil_doit_agence = 0;
+                                        } else {
+                                          updates.montant_profil_doit_agence = 0;
+                                          updates.montant_agence_doit_profil = 0;
+                                        }
+                                        return updates;
+                                      });
+                                    }}
+                                    style={{
+                                      padding: '8px 16px',
+                                      borderRadius: '8px',
+                                      backgroundColor: '#059669',
+                                      color: 'white',
+                                      border: 'none',
+                                      fontSize: '13px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      transition: 'background 0.2s',
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#047857'}
+                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#059669'}
+                                  >
+                                    Valider les parts
+                                  </button>
+                                </div>
                               </div>
                             );
                           })()}
+
                         </div>)}
                       </div>
 

@@ -8,6 +8,7 @@ import { genererDevisMenageBureaux, type DevisMenageBureauxData } from './devis-
 import { genererDevisPlacementFlexible, type DevisPlacementFlexibleData } from './devis-placement_flexible';
 import { genererDevisPostSinistre, type DevisPostSinistreData } from './devis-post_sinistre';
 import { genererDevis as genererDevisFinChantier, type DevisData as DevisFinChantierData } from './devis-nettoyagefinchantier';
+import { genererDevisAutreService } from './devis-autreservice';
 
 const toNumber = (value: unknown): number => {
   const n = Number(value);
@@ -186,6 +187,75 @@ const buildAirbnbData = (demande: Demande): DevisAirbnbData => {
     totalHT,
     note: form.note_devis,
     ...getAdvanceFields(form),
+  };
+};
+
+const buildAutreServiceData = (demande: Demande) => {
+  const form = demande.formulaire_data || {};
+  const total = getTotalPrice(demande, form);
+  const customServiceType = form.custom_service_type || demande.service || 'Service personnalisé';
+  const objet = `${customServiceType} — ${form.property_subtype || form.property_category || 'Sur mesure'}`;
+
+  const lignes: Array<{ designation: string; montant: number }> = [];
+  
+  lignes.push({
+    designation: customServiceType,
+    montant: parseMoney(form.amount_ht || total)
+  });
+
+  if (Array.isArray(form.options)) {
+    form.options.forEach((opt: any) => {
+      if (opt.enabled) {
+        lignes.push({
+          designation: opt.label,
+          montant: parseMoney(opt.price || 0)
+        });
+      }
+    });
+  }
+
+  const totalHT = lignes.reduce((s, l) => s + l.montant, 0) || total;
+  const vatRate = form.vat_rate !== undefined ? Number(form.vat_rate) : 20;
+  const tvaAmount = totalHT * (vatRate / 100);
+  const totalTTC = totalHT + tvaAmount;
+
+  let avancePaiement = 0;
+  if (form.advance_required) {
+    if (form.advance_mode === 'percent') {
+      avancePaiement = Math.round((totalTTC * (Number(form.advance_percent) || 0)) / 100);
+    } else {
+      avancePaiement = Number(form.advance_amount) || 0;
+    }
+  }
+
+  return {
+    numero: buildDevisNumber(demande),
+    date: formatLongDate(demande.created_at || demande.date_intervention),
+    client: {
+      nom: getClientName(demande, form),
+      telephone: getClientPhone(demande, form),
+      whatsapp: form.whatsapp_phone || demande.client_whatsapp || getClientPhone(demande, form),
+      email: form.email || form.mail || '—',
+      adresse: getClientAddress(demande, form),
+    },
+    objet,
+    lignes,
+    totalHT,
+    vatRate,
+    totalTTC,
+    description: form.description || '',
+    avanceRequired: Boolean(form.advance_required),
+    avanceMode: form.advance_mode,
+    avancePercent: form.advance_percent !== undefined ? Number(form.advance_percent) : 30,
+    avanceAmount: form.avance_amount !== undefined ? Number(form.avance_amount) : 0,
+    avancePaiement,
+    surface: form.surface !== undefined ? Number(form.surface) : undefined,
+    duree: form.duree !== undefined ? Number(form.duree) : undefined,
+    durationUnit: form.duration_unit,
+    staffCount: form.nb_intervenants || form.staff_count,
+    frequence: form.frequence,
+    datePrestation: form.date,
+    heurePrestation: form.heure
   };
 };
 
@@ -539,7 +609,10 @@ export const generateDevisPdf = async (demande: Demande): Promise<{ blob: Blob; 
 
   let blob: Blob;
 
-  if (serviceKey.includes('air bnb') || serviceKey.includes('airbnb')) {
+  if (demande.formulaire_data?.is_autre_service === true || serviceKey.includes('autre service') || serviceKey.includes('autre_service')) {
+    const data = buildAutreServiceData(demande);
+    blob = await genererDevisAutreService(data, logoBase64, signatureBase64);
+  } else if (serviceKey.includes('air bnb') || serviceKey.includes('airbnb')) {
     const data = buildAirbnbData(demande);
     blob = await genererDevisAirbnb(data, logoBase64, signatureBase64);
   } else if (serviceKey.includes('auxiliaire')) {

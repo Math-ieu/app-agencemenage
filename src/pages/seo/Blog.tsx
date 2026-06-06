@@ -7,8 +7,14 @@ import {
 import { getBlogPosts, deleteBlogPost, updateBlogPost } from '../../api/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useAuthStore } from '../../store/auth';
+import { hasPermission } from '../../utils/permissions';
 
 export default function Blog() {
+  const { user } = useAuthStore();
+  const canEdit = hasPermission(user, 'modifier_articles_blog');
+  const canPublish = hasPermission(user, 'publier_articles_blog');
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('tous');
   const [dateStart, setDateStart] = useState('');
@@ -203,6 +209,8 @@ export default function Blog() {
             onEdit={() => handleEdit(article)}
             onDelete={() => handleDelete(article)}
             onTogglePublish={() => handlePublishToggle(article)}
+            canEdit={canEdit}
+            canPublish={canPublish}
           />
         ))}
       </div>
@@ -237,7 +245,7 @@ function StatCard({ icon, iconBg, iconColor, value, label }: any) {
   );
 }
 
-function ArticleCard({ article, onEdit, onDelete, onTogglePublish }: any) {
+function ArticleCard({ article, onEdit, onDelete, onTogglePublish, canEdit, canPublish }: any) {
   const [hovered, setHovered] = useState(false);
 
   // Format date nicely
@@ -308,7 +316,9 @@ function ArticleCard({ article, onEdit, onDelete, onTogglePublish }: any) {
         opacity: hovered ? 1 : 0, transition: 'opacity 0.2s',
         flexShrink: 0, marginLeft: '16px',
       }}>
-        <ActionBtn title="Éditer" onClick={onEdit} hoverColor="#64748b" hoverBg="#f1f5f9" icon={<Edit2 size={16} />} />
+        {canEdit && (
+          <ActionBtn title="Éditer" onClick={onEdit} hoverColor="#64748b" hoverBg="#f1f5f9" icon={<Edit2 size={16} />} />
+        )}
         
         {/* Link to public blog article */}
         <ActionBtn 
@@ -319,13 +329,17 @@ function ArticleCard({ article, onEdit, onDelete, onTogglePublish }: any) {
           icon={<Eye size={16} />} 
         />
 
-        <ActionBtn 
-          title={isPublished ? "Passer en brouillon" : "Publier"} 
-          onClick={onTogglePublish} 
-          hoverColor="#0ea5e9" hoverBg="#e0f2fe" 
-          icon={isPublished ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg> : <Send size={16} />} 
-        />
-        <ActionBtn title="Supprimer" onClick={onDelete} hoverColor="#ef4444" hoverBg="#fef2f2" icon={<Trash2 size={16} />} />
+        {canPublish && (
+          <ActionBtn 
+            title={isPublished ? "Passer en brouillon" : "Publier"} 
+            onClick={onTogglePublish} 
+            hoverColor="#0ea5e9" hoverBg="#e0f2fe" 
+            icon={isPublished ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg> : <Send size={16} />} 
+          />
+        )}
+        {canEdit && (
+          <ActionBtn title="Supprimer" onClick={onDelete} hoverColor="#ef4444" hoverBg="#fef2f2" icon={<Trash2 size={16} />} />
+        )}
       </div>
     </div>
   );

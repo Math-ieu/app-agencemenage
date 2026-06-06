@@ -4,7 +4,7 @@ import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, cr
 import { decodeId } from '../utils/obfuscation';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
-import { checkPermission } from '../utils/permissions';
+import { checkPermission, hasPermission } from '../utils/permissions';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
 import {
   RefreshCw, Search, XCircle,
@@ -22,10 +22,12 @@ import { DynamicServiceForm } from '../components/demandes/forms/DynamicServiceF
 const isDevisRequired = (d: Demande | null) => {
   if (!d) return false;
   if (d.segment === 'entreprise') return true;
+  if (d.formulaire_data?.is_autre_service) return true;
   const s = (d.service || '').toLowerCase();
   return s.includes('air bnb') || s.includes('airbnb') || 
          s.includes('sinistre') || s.includes('auxiliaire') || 
-         s.includes('chantier') || s.includes('placement') || s.includes('gestion');
+         s.includes('chantier') || s.includes('placement') || s.includes('gestion') ||
+         s.includes('autre service') || s.includes('autre_service');
 };
 
 const normalizeServiceLabel = (value: string) =>
@@ -139,7 +141,32 @@ export default function DemandesEnAttente() {
     formula: 'A' as 'A' | 'B',
     size_tier: '1chambre',
     conso: false,
-    linen_sets: 0
+    linen_sets: 0,
+    // Autre service
+    custom_service_type: '',
+    property_category: 'logement',
+    property_subtype: 'Appartement',
+    duration_unit: 'heures',
+    description: '',
+    amount_ht: 0,
+    tva_active: true,
+    quote_number: '',
+    frequency_custom: '',
+    options: [
+      { key: "produits", label: "Produits de nettoyage", price: 0, enabled: false },
+      { key: "torchons", label: "Torchons et serpillières", price: 0, enabled: false },
+      { key: "machines", label: "Machines et équipements (aspirateur, vapeur, etc.)", price: 0, enabled: false }
+    ] as any[],
+    vat_rate: 20,
+    advance_required: false,
+    advance_mode: 'percent',
+    advance_percent: 30,
+    advance_amount: 0,
+    avance_paiement: 0,
+    avance_active: false,
+    avance_type: 'percent',
+    avance_pourcentage: 30,
+    avance_fixe: 0
   });
 
   const { user } = useAuthStore();
@@ -169,6 +196,8 @@ export default function DemandesEnAttente() {
   const isMenageAirBnBService = selectedServiceKey.includes('air bnb') || selectedServiceKey.includes('airbnb');
   // @ts-ignore
   const isFinChantierService = selectedServiceKey.includes('fin de chantier') || selectedServiceKey.includes('fin chantier');
+  // @ts-ignore
+  const isAutreService = selectedServiceKey.includes('autre service') || selectedServiceKey.includes('autre_service');
   const minDuree = isGrandMenageService ? 6 : isMenageBureauxService ? 2 : 4;
 
   const calculatedPrice = usePriceCalculator(formData, selectedService);
@@ -331,13 +360,15 @@ export default function DemandesEnAttente() {
       "Ménage Air BnB",
       "Ménage fin de chantier",
       "Auxiliaire de vie",
-      "Ménage post-sinistre"
+      "Ménage post-sinistre",
+      "Autre service"
     ],
     entreprise: [
       "Ménage bureaux",
       "Nettoyage fin de chantier",
       "Placement & gestion",
-      "Ménage post-sinistre"
+      "Ménage post-sinistre",
+      "Autre service"
     ]
   };
 
@@ -529,7 +560,16 @@ export default function DemandesEnAttente() {
         cuisine: 0, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 0, chambre: 0,
         salonMarocain: 0, salonEuropeen: 0, toilettesLavabo: 0, rooftop: 0, escalier: 0
       },
-      formula: 'A', size_tier: '1chambre', conso: false, linen_sets: 0
+      formula: 'A', size_tier: '1chambre', conso: false, linen_sets: 0,
+      custom_service_type: '', property_category: 'logement', property_subtype: 'Appartement', duration_unit: 'heures', description: '', amount_ht: 0, tva_active: true,
+      quote_number: '', frequency_custom: '', 
+      options: [
+        { key: "produits", label: "Produits de nettoyage", price: 0, enabled: false },
+        { key: "torchons", label: "Torchons et serpillières", price: 0, enabled: false },
+        { key: "machines", label: "Machines et équipements (aspirateur, vapeur, etc.)", price: 0, enabled: false }
+      ],
+      vat_rate: 20, advance_required: false, advance_mode: 'percent', advance_percent: 30, advance_amount: 0,
+      avance_paiement: 0, avance_active: false, avance_type: 'percent', avance_pourcentage: 30, avance_fixe: 0
     });
     setShowCreateModal(true);
     setShowNewMenu(false);
@@ -538,7 +578,8 @@ export default function DemandesEnAttente() {
   const openEditModal = (d: Demande) => {
     setIsRenewal(false);
     setEditingDemande(d);
-    setSelectedService(d.service);
+    const isAutre = d.formulaire_data?.is_autre_service === true;
+    setSelectedService(isAutre ? 'Autre service' : d.service);
     setActiveSegment(d.segment);
 
     const rawPhone = d.client_phone || d.client_detail?.phone || d.formulaire_data?.phone || d.formulaire_data?.telephone || d.formulaire_data?.whatsapp_phone || '';
@@ -595,7 +636,31 @@ export default function DemandesEnAttente() {
       formula: d.formulaire_data?.formula || 'A',
       size_tier: d.formulaire_data?.size_tier || d.formulaire_data?.sizeTier || '1chambre',
       conso: d.formulaire_data?.conso || false,
-      linen_sets: d.formulaire_data?.linen_sets || d.formulaire_data?.linenSets || 0
+      linen_sets: d.formulaire_data?.linen_sets || d.formulaire_data?.linenSets || 0,
+      custom_service_type: d.formulaire_data?.custom_service_type || d.service || '',
+      property_category: d.formulaire_data?.property_category || 'logement',
+      property_subtype: d.formulaire_data?.property_subtype || 'Appartement',
+      duration_unit: d.formulaire_data?.duration_unit || 'heures',
+      description: d.formulaire_data?.description || '',
+      amount_ht: d.formulaire_data?.amount_ht || d.prix || 0,
+      tva_active: d.formulaire_data?.tva_active !== false,
+      quote_number: d.formulaire_data?.quote_number || '',
+      frequency_custom: d.formulaire_data?.frequency_custom || '',
+      options: d.formulaire_data?.options || [
+        { key: "produits", label: "Produits de nettoyage", price: 0, enabled: false },
+        { key: "torchons", label: "Torchons et serpillières", price: 0, enabled: false },
+        { key: "machines", label: "Machines et équipements (aspirateur, vapeur, etc.)", price: 0, enabled: false }
+      ],
+      vat_rate: d.formulaire_data?.vat_rate !== undefined ? Number(d.formulaire_data?.vat_rate) : 20,
+      advance_required: d.formulaire_data?.advance_required || d.formulaire_data?.avance_active || false,
+      advance_mode: d.formulaire_data?.advance_mode || d.formulaire_data?.avance_type || 'percent',
+      advance_percent: d.formulaire_data?.advance_percent !== undefined ? Number(d.formulaire_data?.advance_percent) : (d.formulaire_data?.avance_pourcentage !== undefined ? Number(d.formulaire_data?.avance_pourcentage) : 30),
+      advance_amount: d.formulaire_data?.advance_amount || d.formulaire_data?.avance_fixe || 0,
+      avance_paiement: d.formulaire_data?.avance_paiement || 0,
+      avance_active: d.formulaire_data?.avance_active || d.formulaire_data?.advance_required || false,
+      avance_type: d.formulaire_data?.avance_type || d.formulaire_data?.advance_mode || 'percent',
+      avance_pourcentage: d.formulaire_data?.avance_pourcentage !== undefined ? Number(d.formulaire_data?.avance_pourcentage) : (d.formulaire_data?.advance_percent !== undefined ? Number(d.formulaire_data?.advance_percent) : 30),
+      avance_fixe: d.formulaire_data?.avance_fixe || d.formulaire_data?.advance_amount || 0
     });
     setShowCreateModal(true);
   };
@@ -603,7 +668,8 @@ export default function DemandesEnAttente() {
   const openRenewModal = (d: Demande) => {
     setIsRenewal(true);
     setEditingDemande(null);
-    setSelectedService(d.service);
+    const isAutre = d.formulaire_data?.is_autre_service === true;
+    setSelectedService(isAutre ? 'Autre service' : d.service);
     setActiveSegment(d.segment);
 
     const rawPhone = d.client_phone || d.client_detail?.phone || d.formulaire_data?.phone || d.formulaire_data?.telephone || d.formulaire_data?.whatsapp_phone || '';
@@ -660,7 +726,31 @@ export default function DemandesEnAttente() {
       formula: d.formulaire_data?.formula || 'A',
       size_tier: d.formulaire_data?.size_tier || d.formulaire_data?.sizeTier || '1chambre',
       conso: d.formulaire_data?.conso || false,
-      linen_sets: d.formulaire_data?.linen_sets || d.formulaire_data?.linenSets || 0
+      linen_sets: d.formulaire_data?.linen_sets || d.formulaire_data?.linenSets || 0,
+      custom_service_type: d.formulaire_data?.custom_service_type || d.service || '',
+      property_category: d.formulaire_data?.property_category || 'logement',
+      property_subtype: d.formulaire_data?.property_subtype || 'Appartement',
+      duration_unit: d.formulaire_data?.duration_unit || 'heures',
+      description: d.formulaire_data?.description || '',
+      amount_ht: d.formulaire_data?.amount_ht || d.prix || 0,
+      tva_active: d.formulaire_data?.tva_active !== false,
+      quote_number: d.formulaire_data?.quote_number || '',
+      frequency_custom: d.formulaire_data?.frequency_custom || '',
+      options: d.formulaire_data?.options || [
+        { key: "produits", label: "Produits de nettoyage", price: 0, enabled: false },
+        { key: "torchons", label: "Torchons et serpillières", price: 0, enabled: false },
+        { key: "machines", label: "Machines et équipements (aspirateur, vapeur, etc.)", price: 0, enabled: false }
+      ],
+      vat_rate: d.formulaire_data?.vat_rate !== undefined ? Number(d.formulaire_data?.vat_rate) : 20,
+      advance_required: d.formulaire_data?.advance_required || d.formulaire_data?.avance_active || false,
+      advance_mode: d.formulaire_data?.advance_mode || d.formulaire_data?.avance_type || 'percent',
+      advance_percent: d.formulaire_data?.advance_percent !== undefined ? Number(d.formulaire_data?.advance_percent) : (d.formulaire_data?.avance_pourcentage !== undefined ? Number(d.formulaire_data?.avance_pourcentage) : 30),
+      advance_amount: d.formulaire_data?.advance_amount || d.formulaire_data?.avance_fixe || 0,
+      avance_paiement: d.formulaire_data?.avance_paiement || 0,
+      avance_active: d.formulaire_data?.avance_active || d.formulaire_data?.advance_required || false,
+      avance_type: d.formulaire_data?.avance_type || d.formulaire_data?.advance_mode || 'percent',
+      avance_pourcentage: d.formulaire_data?.avance_pourcentage !== undefined ? Number(d.formulaire_data?.avance_pourcentage) : (d.formulaire_data?.advance_percent !== undefined ? Number(d.formulaire_data?.advance_percent) : 30),
+      avance_fixe: d.formulaire_data?.avance_fixe || d.formulaire_data?.advance_amount || 0
     });
     setShowCreateModal(true);
   };
@@ -721,15 +811,20 @@ export default function DemandesEnAttente() {
         }
       }
 
+      const finalService = selectedService === 'Autre service'
+        ? (formData.custom_service_type || 'Autre service')
+        : selectedService;
+
       const payload = {
         client_name: clientDisplayName,
         client_phone: finalPhone,
         client_whatsapp: finalWhatsApp,
-        service: selectedService,
+        service: finalService,
         segment: activeSegment,
         date_intervention: formData.date || null,
         heure_intervention: isFixedSchedule ? (formData.heure || '') : '',
         prix: formData.montant || null,
+        is_devis: selectedService === 'Autre service' || isDevisRequired({ service: selectedService, segment: activeSegment, formulaire_data: formData } as any),
         mode_paiement: formData.mode_paiement,
         statut_paiement: paymentOption?.apiValue || 'non_paye',
         frequency: frequencyValue,
@@ -758,8 +853,12 @@ export default function DemandesEnAttente() {
           schedulingDate: formData.date || null,
           fixedTime: isFixedSchedule ? (formData.heure || '') : '',
           schedulingTime: isFixedSchedule ? '' : (formData.preference_horaire === 'matin' ? 'morning' : formData.preference_horaire === 'apres_midi' ? 'afternoon' : ''),
-          type_habitation: formData.type_habitation,
-          propertyType: formData.type_habitation ? formData.type_habitation.toLowerCase() : '',
+          type_habitation: selectedService === 'Autre service'
+            ? (formData.property_category === 'logement' ? formData.property_subtype : formData.property_category)
+            : formData.type_habitation,
+          propertyType: selectedService === 'Autre service'
+            ? (formData.property_category === 'logement' ? (formData.property_subtype || '').toLowerCase() : (formData.property_category || '').toLowerCase())
+            : (formData.type_habitation ? formData.type_habitation.toLowerCase() : ''),
           surface: formData.surface,
           surfaceArea: formData.surface,
           duree: formData.duree,
@@ -807,7 +906,29 @@ export default function DemandesEnAttente() {
           sizeTier: formData.size_tier,
           conso: formData.conso,
           linen_sets: formData.linen_sets,
-          linenSets: formData.linen_sets
+          linenSets: formData.linen_sets,
+          // Autre service
+          is_autre_service: selectedService === 'Autre service' || editingDemande?.formulaire_data?.is_autre_service || false,
+          custom_service_type: formData.custom_service_type,
+          property_category: formData.property_category,
+          property_subtype: formData.property_subtype,
+          duration_unit: formData.duration_unit,
+          description: formData.description,
+          amount_ht: formData.amount_ht,
+          tva_active: formData.tva_active,
+          quote_number: formData.quote_number,
+          frequency_custom: formData.frequency_custom,
+          options: formData.options,
+          vat_rate: formData.vat_rate,
+          advance_required: formData.advance_required,
+          advance_mode: formData.advance_mode,
+          advance_percent: formData.advance_percent,
+          advance_amount: formData.advance_amount,
+          avance_paiement: formData.avance_paiement,
+          avance_active: formData.avance_active,
+          avance_type: formData.avance_type,
+          avance_pourcentage: formData.avance_pourcentage,
+          avance_fixe: formData.avance_fixe
         }
       };
 
@@ -909,53 +1030,55 @@ export default function DemandesEnAttente() {
             <RefreshCw size={18} />
           </button>
 
-          <div className="dropdown-container" onClick={e => e.stopPropagation()}>
-            <button className="btn btn-primary" onClick={() => setShowNewMenu(!showNewMenu)}>
-              <Plus size={18} /> Nouveau
-            </button>
+          {hasPermission(user, 'creer_demande') && (
+            <div className="dropdown-container" onClick={e => e.stopPropagation()}>
+              <button className="btn btn-primary" onClick={() => setShowNewMenu(!showNewMenu)}>
+                <Plus size={18} /> Nouveau
+              </button>
 
-            {showNewMenu && (
-              <div className="nested-menu">
-                <div
-                  className="menu-group"
-                  onMouseEnter={() => setActiveSegment('particulier')}
-                >
-                  <div className={`menu-group-item ${activeSegment === 'particulier' ? 'active' : ''}`}>
-                    <span>Particulier</span>
-                    <ChevronDown size={14} style={{ transform: 'rotate(-90deg)' }} />
-                  </div>
-                  {activeSegment === 'particulier' && (
-                    <div className="submenu">
-                      {SERVICES.particulier.map(s => (
-                        <button key={s} className="submenu-item" onClick={() => openCreateModal(s)}>
-                          {s}
-                        </button>
-                      ))}
+              {showNewMenu && (
+                <div className="nested-menu">
+                  <div
+                    className="menu-group"
+                    onMouseEnter={() => setActiveSegment('particulier')}
+                  >
+                    <div className={`menu-group-item ${activeSegment === 'particulier' ? 'active' : ''}`}>
+                      <span>Particulier</span>
+                      <ChevronDown size={14} style={{ transform: 'rotate(-90deg)' }} />
                     </div>
-                  )}
-                </div>
+                    {activeSegment === 'particulier' && (
+                      <div className="submenu">
+                        {SERVICES.particulier.map(s => (
+                          <button key={s} className="submenu-item" onClick={() => openCreateModal(s)}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-                <div
-                  className="menu-group"
-                  onMouseEnter={() => setActiveSegment('entreprise')}
-                >
-                  <div className={`menu-group-item ${activeSegment === 'entreprise' ? 'active' : ''}`}>
-                    <span>Entreprise</span>
-                    <ChevronDown size={14} style={{ transform: 'rotate(-90deg)' }} />
-                  </div>
-                  {activeSegment === 'entreprise' && (
-                    <div className="submenu">
-                      {SERVICES.entreprise.map(s => (
-                        <button key={s} className="submenu-item" onClick={() => openCreateModal(s)}>
-                          {s}
-                        </button>
-                      ))}
+                  <div
+                    className="menu-group"
+                    onMouseEnter={() => setActiveSegment('entreprise')}
+                  >
+                    <div className={`menu-group-item ${activeSegment === 'entreprise' ? 'active' : ''}`}>
+                      <span>Entreprise</span>
+                      <ChevronDown size={14} style={{ transform: 'rotate(-90deg)' }} />
                     </div>
-                  )}
+                    {activeSegment === 'entreprise' && (
+                      <div className="submenu">
+                        {SERVICES.entreprise.map(s => (
+                          <button key={s} className="submenu-item" onClick={() => openCreateModal(s)}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1182,28 +1305,30 @@ export default function DemandesEnAttente() {
                     </div>
                   )}
 
-                  <div className="accordion mt-3">
-                    <div className="accordion-header" onClick={() => toggleSection(d.id, 'devis')}>
-                      <span>Préparer le devis</span>
-                      {isExpanded(d.id, 'devis') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    </div>
-                    {isExpanded(d.id, 'devis') && (
-                      <div className="accordion-content" style={{ display: 'block' }}>
-                        <QuoteSection 
-                          demande={d} 
-                          onPreview={handlePreviewDocument}
-                          onSend={handleDirectSendWhatsApp}
-                          onUpdateDemandeData={handleQuoteUpdate}
-                        />
+                  {hasPermission(user, 'creer_devis') && (
+                    <div className="accordion mt-3">
+                      <div className="accordion-header" onClick={() => toggleSection(d.id, 'devis')}>
+                        <span>Préparer le devis</span>
+                        {isExpanded(d.id, 'devis') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </div>
-                    )}
-                  </div>
+                      {isExpanded(d.id, 'devis') && (
+                        <div className="accordion-content" style={{ display: 'block' }}>
+                          <QuoteSection 
+                            demande={d} 
+                            onPreview={handlePreviewDocument}
+                            onSend={handleDirectSendWhatsApp}
+                            onUpdateDemandeData={handleQuoteUpdate}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="pending-footer">
                     <div className="detail-item">
                       <span className="detail-label">Montant :</span>
                       <span className="detail-value text-main-teal fw-bold" style={{ fontSize: '0.9rem' }}>
-                        {d.is_devis ? 'Sur devis' : (d.prix ? `${d.prix} MAD (Réservation)` : '— (Réservation)')}
+                        {d.is_devis ? (d.prix ? `${d.prix} MAD` : 'Sur devis') : (d.prix ? `${d.prix} MAD (Réservation)` : '— (Réservation)')}
                       </span>
                     </div>
                     <div className="detail-item">
@@ -1217,11 +1342,17 @@ export default function DemandesEnAttente() {
                   <button className="btn btn-nrp flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'nrp')}>
                     NRP ({d.nrp_count ?? 0})
                   </button>
-                  <button className="btn btn-cancel flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
-                  <button className="btn btn-validate flex-[1.5] leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
-                  <button className="btn btn-edit flex-1 flex justify-center items-center px-1 py-2 text-[13px] text-center" title="Modifier" onClick={() => openEditModal(d)}>
-                    Modifier
-                  </button>
+                  {hasPermission(user, 'refuser_demande') && (
+                    <button className="btn btn-cancel flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
+                  )}
+                  {hasPermission(user, 'valider_demandes') && (
+                    <button className="btn btn-validate flex-[1.5] leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
+                  )}
+                  {hasPermission(user, 'modifier_demande') && (
+                    <button className="btn btn-edit flex-1 flex justify-center items-center px-1 py-2 text-[13px] text-center" title="Modifier" onClick={() => openEditModal(d)}>
+                      Modifier
+                    </button>
+                  )}
 
                   {checkPermission(user, 'affecter_commercial').allowed && (
                     <button className="btn transition-all flex-1 text-[13px] leading-tight px-1 py-2 text-center flex items-center justify-center"
@@ -1296,40 +1427,48 @@ export default function DemandesEnAttente() {
                   <div className="mobile-detail-row mobile-price-row">
                     <span className="mobile-detail-label">Montant</span>
                     <span className="mobile-detail-value fw-bold">
-                      {d.is_devis ? 'Sur devis' : (d.prix ? `${d.prix} MAD` : '—')}
+                      {d.is_devis ? (d.prix ? `${d.prix} MAD` : 'Sur devis') : (d.prix ? `${d.prix} MAD` : '—')}
                       {!d.is_devis && d.mode_paiement && <span className="text-xs text-muted fw-normal"> ({d.mode_paiement})</span>}
                     </span>
                   </div>
-                  <div className="accordion mt-3">
-                    <div className="accordion-header" onClick={() => toggleSection(d.id, 'devis')}>
-                      <span>Préparer le devis</span>
-                      {isExpanded(d.id, 'devis') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    </div>
-                    {isExpanded(d.id, 'devis') && (
-                      <div className="accordion-content" style={{ display: 'block' }}>
-                        <QuoteSection 
-                          demande={d} 
-                          onPreview={handlePreviewDocument}
-                          onSend={handleDirectSendWhatsApp}
-                          onUpdateDemandeData={handleQuoteUpdate}
-                        />
+                  {hasPermission(user, 'creer_devis') && (
+                    <div className="accordion mt-3">
+                      <div className="accordion-header" onClick={() => toggleSection(d.id, 'devis')}>
+                        <span>Préparer le devis</span>
+                        {isExpanded(d.id, 'devis') ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </div>
-                    )}
-                  </div>
+                      {isExpanded(d.id, 'devis') && (
+                        <div className="accordion-content" style={{ display: 'block' }}>
+                          <QuoteSection 
+                            demande={d} 
+                            onPreview={handlePreviewDocument}
+                            onSend={handleDirectSendWhatsApp}
+                            onUpdateDemandeData={handleQuoteUpdate}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="mobile-card-actions">
-                  <button className="btn btn-validate btn-full mb-2" onClick={() => handleAction(d.id, 'valider')}>
-                    <CheckCircle size={18} /> Valider
-                  </button>
+                  {hasPermission(user, 'valider_demandes') && (
+                    <button className="btn btn-validate btn-full mb-2" onClick={() => handleAction(d.id, 'valider')}>
+                      <CheckCircle size={18} /> Valider
+                    </button>
+                  )}
                   <div className="flex gap-2">
                     <button className="btn btn-nrp flex-1" onClick={() => handleAction(d.id, 'nrp')}>
                       NRP ({d.nrp_count ?? 0})
                     </button>
-                    <button className="btn btn-cancel flex-1" onClick={() => handleAction(d.id, 'annuler')}>Annuler</button>
-                    <button className="btn btn-edit flex-none px-3" title="Modifier" onClick={() => openEditModal(d)}>
-                      <Edit size={16} />
-                    </button>
+                    {hasPermission(user, 'refuser_demande') && (
+                      <button className="btn btn-cancel flex-1" onClick={() => handleAction(d.id, 'annuler')}>Annuler</button>
+                    )}
+                    {hasPermission(user, 'modifier_demande') && (
+                      <button className="btn btn-edit flex-none px-3" title="Modifier" onClick={() => openEditModal(d)}>
+                        <Edit size={16} />
+                      </button>
+                    )}
 
                     {checkPermission(user, 'affecter_commercial').allowed && (
                       <button className="btn transition-all flex items-center justify-center p-2"

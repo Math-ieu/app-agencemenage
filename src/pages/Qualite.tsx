@@ -17,6 +17,8 @@ import {
 import { Feedback } from '../types';
 import { useToastStore } from '../store/toast';
 import { encodeId } from '../utils/obfuscation';
+import { useAuthStore } from '../store/auth';
+import { hasPermission } from '../utils/permissions';
 
 const COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444'];
 
@@ -29,6 +31,7 @@ const SATISFACTION_CONFIG: Record<string, { label: string; bg: string; text: str
 
 export default function Qualite() {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const { user } = useAuthStore();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
@@ -190,24 +193,26 @@ export default function Qualite() {
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', margin: 0 }}>Qualité & Feedback</h1>
         </div>
-        <button
-          onClick={() => addToast('Génération en cours...', 'info')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            background: '#fff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 10,
-            padding: '9px 18px',
-            fontSize: 13,
-            fontWeight: 600,
-            color: '#374151',
-            cursor: 'pointer',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            transition: 'all 0.15s',
-          }}
-        >
-          <Download size={16} /> Générer les feedbacks
-        </button>
+        {hasPermission(user, 'generer_rapports_qualite') && (
+          <button
+            onClick={() => addToast('Génération en cours...', 'info')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: '#fff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 10,
+              padding: '9px 18px',
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#374151',
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+              transition: 'all 0.15s',
+            }}
+          >
+            <Download size={16} /> Générer les feedbacks
+          </button>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -551,14 +556,21 @@ export default function Qualite() {
                         {[
                           { 
                             Icon: Share2, hoverBg: '#eff6ff', hoverColor: '#3b82f6', title: 'Partager', 
-                            onClick: () => handleShare(f.demande) 
+                            onClick: () => handleShare(f.demande),
+                            visible: hasPermission(user, 'repondre_avis_clients')
                           },
-                          { Icon: Eye, hoverBg: '#eff6ff', hoverColor: '#3b82f6', title: 'Voir détails', onClick: () => setSelectedFeedback(f) },
+                          { 
+                            Icon: Eye, hoverBg: '#eff6ff', hoverColor: '#3b82f6', title: 'Voir détails', 
+                            onClick: () => setSelectedFeedback(f),
+                            visible: true 
+                          },
                           {
                             Icon: Trash2, hoverBg: '#fff1f2', hoverColor: '#ef4444', title: 'Supprimer',
-                            onClick: () => handleDelete(f.id)
+                            onClick: () => handleDelete(f.id),
+                            visible: hasPermission(user, 'moderer_masquer_avis')
                           },
-                        ].map(({ Icon, hoverBg, hoverColor, title, onClick }, i) => (
+                        ].filter(btn => btn.visible)
+                         .map(({ Icon, hoverBg, hoverColor, title, onClick }, i) => (
                           <button
                             key={i}
                             title={title}
