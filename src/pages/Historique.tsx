@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getDemandesHistorique } from '../api/client';
-import { Search, CalendarDays, Download, History as HistoryIcon } from 'lucide-react';
+import { getDemandesHistorique, exportHistoriqueCsv } from '../api/client';
+import { Search, CalendarDays, Download, History as HistoryIcon, Loader2 } from 'lucide-react';
 import { encodeId } from '../utils/obfuscation';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
 import { hasPermission } from '../utils/permissions';
@@ -51,6 +51,7 @@ export default function Historique() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [exportingCsv, setExportingCsv] = useState(false);
 
   const getRowClass = (d: Demande) => {
     if (d.statut_paiement === 'integral' || d.statut === 'termine') return 'row-status-paye';
@@ -73,30 +74,28 @@ export default function Historique() {
     }
   };
 
-  const handleExportCSV = () => {
-    const headers = ['Ref', 'Date creation', 'Nom client', 'Type de service', 'Segment', 'Profil', 'Statut besoin', 'Statut paiement', 'Motif'];
-    const rows = demandes.map(d => [
-      `#${d.id}`,
-      formatCreationDate(d.created_at),
-      d.client_name || '',
-      d.service || '',
-      d.segment || '',
-      d.profil_name || '',
-      d.statut || '',
-      d.statut_paiement || '',
-      d.motif || ''
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8,\ufeff" 
-      + [headers.join(','), ...rows.map(e => e.map(val => `"${val.replace(/"/g, '""')}"`).join(','))].join('\n');
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `historique_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportCSV = async () => {
+    setExportingCsv(true);
+    try {
+      const params: Record<string, string> = {};
+      if (search) params.search = search;
+      if (dateFilter) params.date = dateFilter;
+      const response = await exportHistoriqueCsv(params);
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const stamp = new Date().toISOString().split('T')[0];
+      link.href = url;
+      link.download = `historique_${stamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Erreur export CSV:', e);
+    } finally {
+      setExportingCsv(false);
+    }
   };
 
   useEffect(() => {
@@ -115,8 +114,9 @@ export default function Historique() {
           <h1 className="text-2xl fw-bold text-teal-800">Historique</h1>
         </div>
         {hasPermission(user, 'exporter_historique_csv') && (
-          <button onClick={handleExportCSV} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-            <Download size={16} /> Exporter en CSV
+          <button onClick={handleExportCSV} className="btn btn-secondary" disabled={exportingCsv} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            {exportingCsv ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            {exportingCsv ? 'Export en cours…' : 'Exporter en CSV'}
           </button>
         )}
       </div>

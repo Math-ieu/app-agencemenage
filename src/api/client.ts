@@ -135,6 +135,12 @@ export const getNotificationsUrgentes = () =>
 export const getDemandesHistorique = (params?: Record<string, string | number>) =>
   apiClient.get('/api/demandes/historique/', { params });
 
+export const exportHistoriqueCsv = (params?: Record<string, string | number>) =>
+  apiClient.get('/api/demandes/export_csv/', {
+    params,
+    responseType: 'blob',
+  });
+
 export const getDemande = (id: number) => apiClient.get(`/api/demandes/${id}/`);
 
 export const createDemande = (data: Record<string, unknown>) =>
