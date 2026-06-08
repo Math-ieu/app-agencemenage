@@ -486,3 +486,46 @@ export const StructureTypePlacementBlock: React.FC<FormBlockProps> = ({ formData
     </div>
 );
 
+export const ServiceBureauxBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => (
+    <div className="ws-form-block">
+        <div className="ws-section-header">Service</div>
+        <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: '1rem', padding: '0.5rem' }}>
+            {[
+                { v: false, t: 'Ménage sans produit', d: 'Vous fournissez vous-même les produits de nettoyage. Notre équipe se déplace uniquement pour réaliser la prestation.' },
+                { v: true, t: 'Ménage avec produit', d: 'Notre équipe apporte les produits de ménage, torchons et serpillères nécessaires à la prestation.' }
+            ].map(item => (
+                <label
+                    key={item.t}
+                    className={`ws-nature-card ${formData.produits === item.v ? 'active' : ''}`}
+                    style={{
+                        padding: '1rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.75rem',
+                        textAlign: 'left',
+                        border: '2px solid transparent',
+                        borderRadius: '0.75rem',
+                        backgroundColor: formData.produits === item.v ? 'white' : 'rgba(255,255,255,0.5)',
+                        transition: 'all 0.2s',
+                        height: '100%'
+                    }}
+                    onClick={() => setFormData({ ...formData, produits: item.v })}
+                >
+                    <input
+                        type="radio"
+                        name="produits"
+                        checked={formData.produits === item.v}
+                        onChange={() => setFormData({ ...formData, produits: item.v })}
+                        style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', flexShrink: 0, marginTop: '2px' }}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#1e293b' }}>{item.t}</span>
+                        <span style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: '1.4' }}>{item.d}</span>
+                    </div>
+                </label>
+            ))}
+        </div>
+    </div>
+);
+

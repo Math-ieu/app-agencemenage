@@ -98,8 +98,6 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
     }
 
     // Common options and surcharges
-    const productsPrice = produits ? 90 : 0;
-    const torchonsPrice = torchons ? 40 : 0;
     const locationSurcharge = SURCHARGE_CITIES.includes(ville) ? 50 : 0;
     const multiplier = calculateSurchargeMultiplier(date, scheduling_type, heure, preference_horaire);
 
@@ -166,8 +164,9 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
 
     // 3. Ménage Bureaux
     if (serviceLower.includes('menage bureaux')) {
-        const perVisitBasePrice = duree * nb_intervenants * 60 * multiplier;
-        const perVisitTotal = perVisitBasePrice + productsPrice + torchonsPrice;
+        const hourlyRate = produits ? 70 : 60;
+        const perVisitBasePrice = duree * nb_intervenants * hourlyRate * multiplier;
+        const perVisitTotal = perVisitBasePrice;
         
         if (isSubscription && !isOneShot) {
             const subtotalMonthly = perVisitTotal * visitsPerWeek * 4;

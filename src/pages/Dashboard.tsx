@@ -282,6 +282,24 @@ export default function Dashboard() {
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
 
+  // Nouveaux flags pour le formulaire complet
+  const exactEditService = (editFormData.service || selectedDemande?.service || '').toString();
+  const exactEditServiceLower = exactEditService.toLowerCase();
+  const isCleaningService = exactEditServiceLower.includes('ménage') || exactEditServiceLower.includes('menage') || exactEditServiceLower.includes('nettoyage') || exactEditServiceLower.includes('chantier') || exactEditServiceLower.includes('sinistre') || exactEditServiceLower.includes('déménagement');
+  // @ts-ignore
+  const isMenageStandardService = exactEditService === 'Ménage Standard';
+  const isMenageAirBnBService = exactEditService === 'Ménage AirBnB';
+  const isGrandMenageService = exactEditService === 'Grand Ménage';
+  const isFinChantierService = exactEditService === 'Ménage fin de chantier';
+  const isMenageBureauxService = exactEditService === 'Ménage Bureaux';
+  const isPostDemenagementService = exactEditService === 'Ménage post-déménagement';
+  // @ts-ignore
+  const isPostSinistreService = exactEditService === 'Ménage post-sinistre';
+  const isAuxiliaireService = exactEditService.includes('Auxiliaire de vie');
+  // @ts-ignore
+  const isPlacementGestionService = exactEditService === 'Placement & Gestion';
+  const minDuree = (isGrandMenageService || isPostDemenagementService || isFinChantierService) ? 4 : isMenageBureauxService ? (editFormData.frequence === 'une fois' ? 4 : 2) : isMenageAirBnBService ? 2 : 3;
+
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png' | 'facture', name: string, demandeId: number } | null>(null);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
@@ -1077,6 +1095,12 @@ export default function Dashboard() {
     setShowDetail(true);
   };
 
+  useEffect(() => {
+    if (editFormData?.duree !== undefined && editFormData.duree < minDuree) {
+      setEditFormData((prev: any) => ({ ...prev, duree: minDuree }));
+    }
+  }, [minDuree, editFormData?.duree]);
+
   useEffect(() => { fetchData(); }, []);
 
   // Auto-open edit modal when navigating with ?edit=<demandeId>
@@ -1179,23 +1203,7 @@ export default function Dashboard() {
 
 
 
-  // Nouveaux flags pour le formulaire complet
-  const exactEditService = (editFormData.service || selectedDemande?.service || '').toString();
-  const exactEditServiceLower = exactEditService.toLowerCase();
-  const isCleaningService = exactEditServiceLower.includes('ménage') || exactEditServiceLower.includes('menage') || exactEditServiceLower.includes('nettoyage') || exactEditServiceLower.includes('chantier') || exactEditServiceLower.includes('sinistre') || exactEditServiceLower.includes('déménagement');
-  // @ts-ignore
-  const isMenageStandardService = exactEditService === 'Ménage Standard';
-  const isMenageAirBnBService = exactEditService === 'Ménage AirBnB';
-  const isGrandMenageService = exactEditService === 'Grand Ménage';
-  const isFinChantierService = exactEditService === 'Ménage fin de chantier';
-  const isMenageBureauxService = exactEditService === 'Ménage Bureaux';
-  const isPostDemenagementService = exactEditService === 'Ménage post-déménagement';
-  // @ts-ignore
-  const isPostSinistreService = exactEditService === 'Ménage post-sinistre';
-  const isAuxiliaireService = exactEditService.includes('Auxiliaire de vie');
-  // @ts-ignore
-  const isPlacementGestionService = exactEditService === 'Placement & Gestion';
-  const minDuree = (isGrandMenageService || isPostDemenagementService || isFinChantierService) ? 4 : (isMenageBureauxService || isMenageAirBnBService) ? 2 : 3;
+
 
 
   const montantHT = toNumber(editFormData.montant_ht ?? editFormData.prix);
@@ -1462,7 +1470,9 @@ export default function Dashboard() {
                         ) : '—'}
                       </td>
                       <td>
-                        {d.avec_produit ? (
+                        {d.service.toLowerCase().includes('bureaux') ? (
+                          d.avec_produit ? 'Avec produits' : 'Sans produits'
+                        ) : d.avec_produit ? (
                           <span className="text-sm">Oui ({d.tarif_produit} MAD)</span>
                         ) : 'Non'}
                       </td>
@@ -3068,7 +3078,7 @@ export default function Dashboard() {
                       <div className="detail-item"><span>Date:</span> {selectedDemande.date_intervention ? new Date(selectedDemande.date_intervention).toLocaleDateString('fr-FR') : (selectedDemande.formulaire_data?.date_intervention || selectedDemande.formulaire_data?.date || '—')}</div>
                       <div className="detail-item"><span>Heures:</span> {selectedDemande.nb_heures || selectedDemande.formulaire_data?.duree || selectedDemande.formulaire_data?.nb_heures || '—'}h</div>
                       <div className="detail-item"><span>Fréquence:</span> {selectedDemande.frequency_label || (selectedDemande.frequency === 'oneshot' ? 'Une fois' : 'Abonnement')}</div>
-                      <div className="detail-item"><span>Avec produit:</span> {selectedDemande.avec_produit ? `Oui (${selectedDemande.tarif_produit} MAD)` : 'Non'}</div>
+                      <div className="detail-item"><span>Avec produit:</span> {selectedDemande.service.toLowerCase().includes('bureaux') ? (selectedDemande.avec_produit ? 'Oui' : 'Non') : (selectedDemande.avec_produit ? `Oui (${selectedDemande.tarif_produit} MAD)` : 'Non')}</div>
                     </div>
                   </div>
 

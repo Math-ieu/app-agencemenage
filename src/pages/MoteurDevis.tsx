@@ -343,26 +343,34 @@ function SinistreCalc() {
 
 // ─── BUREAUX ─────────────────────────────────────────────────────────────────
 function BureauxCalc() {
-  const [heures, setHeures] = useState(3);
+  const [heures, setHeures] = useState(4);
   const [personnes, setPersonnes] = useState(1);
   const [freq, setFreq] = useState("1.00");
-  const [opts, setOpts] = useState({ produits: false, serpiere: false, zone: false });
+  const [opts, setOpts] = useState({ produits: false, zone: false });
   const tog = (k: keyof typeof opts) => setOpts(o => ({ ...o, [k]: !o[k] }));
 
-  const base = heures * personnes * 60 * parseFloat(freq);
-  const op = (opts.produits ? 90 : 0) + (opts.serpiere ? 40 : 0) + (opts.zone ? 50 : 0);
+  const minHours = freq === "1.00" ? 4 : 2;
+
+  React.useEffect(() => {
+    if (heures < minHours) {
+      setHeures(minHours);
+    }
+  }, [minHours, heures]);
+
+  const hourlyRate = opts.produits ? 70 : 60;
+  const base = heures * personnes * hourlyRate * parseFloat(freq);
+  const op = opts.zone ? 50 : 0;
   const total = base + op;
 
   return (
     <div>
       <FormulaBox>
-        <B>Base :</B> Heures × Personnes × 60 DH/h · <B>Abonnement :</B> −10% · <B>Zone éloignée :</B> +50 DH
-        <br /><span style={{ fontSize: 10, marginTop: 3, display: "block" }}>Tarification identique au site actuel agencemenage.ma</span>
+        <B>Base :</B> Heures × Personnes × (60 DH/h sans produit / 70 DH/h avec produit) · <B>Abonnement :</B> −10% · <B>Zone éloignée :</B> +50 DH
       </FormulaBox>
       <div style={s.grid2}>
         <div>
-          <Field label="Durée de l'intervention (heures)">
-            <input type="number" value={heures} min={1} max={12} onChange={e => setHeures(+e.target.value)} style={s.input as any} />
+          <Field label={`Durée de l'intervention (heures) — min ${minHours}h`}>
+            <input type="number" value={heures} min={minHours} max={12} onChange={e => setHeures(Math.max(minHours, +e.target.value))} style={s.input as any} />
           </Field>
           <Field label="Nombre d'intervenantes">
             <input type="number" value={personnes} min={1} max={20} onChange={e => setPersonnes(+e.target.value)} style={s.input as any} />
@@ -376,13 +384,12 @@ function BureauxCalc() {
         </div>
         <div>
           <div style={s.optTitle}>Options</div>
-          <OptRow label="Produits fournis par l'agence" note="Nettoyants multi-usage, désinfectants, vitres..." price="+90 DH" checked={opts.produits} onChange={() => tog("produits")} />
-          <OptRow label="Torchons et serpières" price="+40 DH" checked={opts.serpiere} onChange={() => tog("serpiere")} />
+          <OptRow label="Ménage avec produit (70 DH/heure)" note="Produits, torchons et serpillères inclus par l'agence" price="Taux 70 DH/h" checked={opts.produits} onChange={() => tog("produits")} />
           <OptRow label="Supplément zone éloignée" note="Bouskoura, Dar Bouazza, Mohammédia..." price="+50 DH" checked={opts.zone} onChange={() => tog("zone")} />
         </div>
       </div>
       <ResultBar
-        detail={`${heures}h × ${personnes} pers × 60 DH${parseFloat(freq) < 1 ? ` × abo ${freq}` : ""} = ${fmt(base)} DH + options ${fmt(op)} DH`}
+        detail={`${heures}h × ${personnes} pers × ${hourlyRate} DH${parseFloat(freq) < 1 ? ` × abo ${freq}` : ""} = ${fmt(base)} DH${op > 0 ? ` + options ${fmt(op)} DH` : ""}`}
         total={`${fmt(total)} DH`} label="Total intervention HT" />
     </div>
   );

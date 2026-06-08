@@ -2,6 +2,7 @@ import React from 'react';
 import { FormBlockProps } from '../ServiceFormBlocks';
 import { 
   SurfaceBureauxBlock,
+  ServiceBureauxBlock,
   FrequenceBlock, 
   DurationBlock, 
   PeopleBlock, 
@@ -17,6 +18,7 @@ export const MenageBureauxForm: React.FC<MenageBureauxFormProps> = (props) => {
   return (
     <>
       <SurfaceBureauxBlock {...props} />
+      <ServiceBureauxBlock {...props} />
       <FrequenceBlock {...props} />
       <DurationBlock {...props} />
       <PeopleBlock {...props} />

@@ -198,7 +198,7 @@ export default function DemandesEnAttente() {
   const isFinChantierService = selectedServiceKey.includes('fin de chantier') || selectedServiceKey.includes('fin chantier');
   // @ts-ignore
   const isAutreService = selectedServiceKey.includes('autre service') || selectedServiceKey.includes('autre_service');
-  const minDuree = isGrandMenageService ? 6 : isMenageBureauxService ? 2 : 4;
+  const minDuree = isGrandMenageService ? 6 : isMenageBureauxService ? (formData.frequence === 'une fois' ? 4 : 2) : 4;
 
   const calculatedPrice = usePriceCalculator(formData, selectedService);
   const estimatedResources = useResourceEstimator(formData, selectedService);
@@ -222,6 +222,13 @@ export default function DemandesEnAttente() {
       setFormData(prev => ({ ...prev, montant: '' }));
     }
   }, [calculatedPrice]);
+
+  // Enforce minDuree for duration
+  useEffect(() => {
+    if (formData.duree < minDuree) {
+      setFormData(prev => ({ ...prev, duree: minDuree }));
+    }
+  }, [minDuree, formData.duree]);
 
   // Fecth Commerciaux for Assignation
   useEffect(() => {
