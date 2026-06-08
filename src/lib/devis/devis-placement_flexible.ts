@@ -170,7 +170,10 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
     y += h;
   });
 
-  const totalHT = data.details.prixApresReduction;
+  const totalHT = data.prestations.reduce((sum, p) => {
+    const amt = typeof p.montant === 'number' ? p.montant : 0;
+    return sum + amt;
+  }, 0);
   doc.setDrawColor(...BLUE).setLineWidth(0.4).line(margin, y - 4, right, y - 4);
   doc.setFillColor(239, 246, 255).rect(margin, y - 4, contentWidth, 10, 'F');
   doc.setFont('helvetica', 'bold').setFontSize(12).text('TOTAL HT / MOIS', right - 60, y + 2, { align: 'right' });

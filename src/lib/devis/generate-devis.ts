@@ -81,7 +81,7 @@ const getInterlocuteur = (demande: Demande, form: Record<string, any>): string =
 
 const parseMoney = (value: unknown): number => {
   if (typeof value === 'string') {
-    return toNumber(value.replace(/[^0-9.,]/g, '').replace(',', '.'));
+    return toNumber(value.replace(/[^-0-9.,]/g, '').replace(',', '.'));
   }
   return toNumber(value);
 };
@@ -506,12 +506,30 @@ const buildPlacementFlexibleData = (demande: Demande): DevisPlacementFlexibleDat
   const prestations: Array<{ designation: string; montant: number | string; isReduction?: boolean }> = [
     { designation: baseDesignation, montant: prixBase },
   ];
-  if (reduction > 0) {
+  if (form.frequency === 'subscription') {
+    const freqDiscountMontant = Math.round(prixBase * 0.10);
     prestations.push({
-      designation: `Réduction engagement ${toNumber(form.engagement_mois || 0) || ''} mois (${reductionPourcentage ? `–${reductionPourcentage}%` : 'réduction'})`.trim(),
-      montant: -Math.abs(reduction),
+      designation: 'Remise abonnement (–10%)',
+      montant: -freqDiscountMontant,
       isReduction: true,
     });
+    const engDiscount = form.engagement_mois === 12 ? 0.10 : form.engagement_mois === 6 ? 0.05 : 0;
+    if (engDiscount > 0) {
+      const engDiscountMontant = Math.round(prixBase * engDiscount);
+      prestations.push({
+        designation: `Réduction engagement ${form.engagement_mois} mois (–${Math.round(engDiscount * 100)}%)`,
+        montant: -engDiscountMontant,
+        isReduction: true,
+      });
+    }
+  } else {
+    if (reduction > 0) {
+      prestations.push({
+        designation: `Réduction engagement ${toNumber(form.engagement_mois || 0) || ''} mois (${reductionPourcentage ? `–${reductionPourcentage}%` : 'réduction'})`.trim(),
+        montant: -Math.abs(reduction),
+        isReduction: true,
+      });
+    }
   }
   if (tenueTravail > 0) {
     prestations.push({
@@ -563,12 +581,30 @@ const buildGestion360Data = (demande: Demande): DevisGestion360Data => {
       montant: prixBase,
     },
   ];
-  if (reduction > 0) {
+  if (form.frequency === 'subscription') {
+    const freqDiscountMontant = Math.round(prixBase * 0.10);
     prestations.push({
-      designation: `Réduction engagement ${toNumber(form.engagement_mois || 0) || ''} mois (−5%)`.trim(),
-      montant: -Math.abs(reduction),
+      designation: 'Remise abonnement (–10%)',
+      montant: -freqDiscountMontant,
       isReduction: true,
     });
+    const engDiscount = form.engagement_mois === 12 ? 0.10 : form.engagement_mois === 6 ? 0.05 : 0;
+    if (engDiscount > 0) {
+      const engDiscountMontant = Math.round(prixBase * engDiscount);
+      prestations.push({
+        designation: `Réduction engagement ${form.engagement_mois} mois (–${Math.round(engDiscount * 100)}%)`,
+        montant: -engDiscountMontant,
+        isReduction: true,
+      });
+    }
+  } else {
+    if (reduction > 0) {
+      prestations.push({
+        designation: `Réduction engagement ${toNumber(form.engagement_mois || 0) || ''} mois (${prixBase > 0 && reduction > 0 ? `–${Math.round((reduction / prixBase) * 100)}%` : 'réduction'})`.trim(),
+        montant: -Math.abs(reduction),
+        isReduction: true,
+      });
+    }
   }
   prestations.push(
     { designation: `Tenues de travail incluses (${nbIntervenantes} personne${nbIntervenantes > 1 ? 's' : ''})`, montant: 'Inclus' },

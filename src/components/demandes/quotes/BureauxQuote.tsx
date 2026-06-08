@@ -1,6 +1,65 @@
 import { useState, useEffect } from "react";
-import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
+import { FormulaBox, B, s, ResultBar, fmt, Field } from "./QuoteShared";
 import type { QuotePrestationLine } from "./QuoteSection";
+
+const visitsMap: Record<string, number> = {
+  "1foisParSemaine": 1,
+  "2foisParSemaine": 2,
+  "3foisParSemaine": 3,
+  "4foisParSemaine": 4,
+  "5foisParSemaine": 5,
+  "6foisParSemaine": 6,
+  "7foisParSemaine": 7,
+  "3foisParMois": 0.75,
+  "2foisParMois": 0.5,
+  "1foisParMois": 0.25,
+  "4foisParMois": 1,
+};
+
+const dbSubFreqMap: Record<string, string> = {
+  "1foisParSemaine": "1/sem",
+  "2foisParSemaine": "2/sem",
+  "3foisParSemaine": "3/sem",
+  "4foisParSemaine": "4/sem",
+  "5foisParSemaine": "5/sem",
+  "6foisParSemaine": "6/sem",
+  "7foisParSemaine": "7/sem",
+  "1foisParMois": "1/mois",
+  "2foisParMois": "2/mois",
+  "3foisParMois": "3/mois",
+  "4foisParMois": "4/mois",
+};
+
+const uiSubFreqMap: Record<string, string> = {
+  "1/sem": "1foisParSemaine",
+  "2/sem": "2foisParSemaine",
+  "3/sem": "3foisParSemaine",
+  "4/sem": "4foisParSemaine",
+  "5/sem": "5foisParSemaine",
+  "6/sem": "6foisParSemaine",
+  "7/sem": "7foisParSemaine",
+  "1/mois": "1foisParMois",
+  "2/mois": "2foisParMois",
+  "3/mois": "3foisParMois",
+  "4/mois": "4foisParMois",
+};
+
+const getCadenceLabel = (val: string) => {
+  switch (val) {
+    case "1foisParSemaine": return "1 fois par semaine";
+    case "2foisParSemaine": return "2 fois par semaine";
+    case "3foisParSemaine": return "3 fois par semaine";
+    case "4foisParSemaine": return "4 fois par semaine";
+    case "5foisParSemaine": return "5 fois par semaine";
+    case "6foisParSemaine": return "6 fois par semaine";
+    case "7foisParSemaine": return "7 fois par semaine";
+    case "1foisParMois": return "1 fois par mois";
+    case "2foisParMois": return "2 fois par mois";
+    case "3foisParMois": return "3 fois par mois";
+    case "4foisParMois": return "4 fois par mois";
+    default: return "";
+  }
+};
 
 interface BureauxQuoteProps {
   demande: any;
@@ -9,65 +68,167 @@ interface BureauxQuoteProps {
 
 export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQuoteProps) {
   const data = demande.formulaire_data || {};
-  
+
+  const [prestationType, setPrestationType] = useState(data.produits ? "avec_produit" : "sans_produit");
   const [heures, setHeures] = useState(data.nb_heures || data.heures || data.duree || data.duration || 3);
   const [personnes, setPersonnes] = useState(data.nb_intervenantes || data.nb_intervenants || data.numberOfPeople || 1);
-  const [freq, setFreq] = useState(data.reduction_abonnement === 10 ? "0.90" : (demande.frequency === 'abonnement' ? "0.90" : "1.00"));
-  const [opts, setOpts] = useState({ produits: Boolean(data.produits), serpiere: Boolean(data.torchons), zone: Boolean(data.zone_eloignee) });
-  const tog = (k: keyof typeof opts) => setOpts(o => ({ ...o, [k]: !o[k] }));
+  
+  // frequency state
+  const [frequency, setFrequency] = useState(() => {
+    if (data.frequency) return data.frequency;
+    if (data.frequence === "une fois" || data.frequence === "oneshot") return "oneshot";
+    if (data.reduction_abonnement === 10 || (data.frequence && data.frequence !== "une fois")) return "subscription";
+    return "oneshot";
+  });
 
-  const isAbo = parseFloat(freq) < 1;
-  const base = heures * personnes * 60 * parseFloat(freq);
-  const op = (opts.produits ? 90 : 0) + (opts.serpiere ? 40 : 0) + (opts.zone ? 50 : 0);
-  const total = base + op;
+  // subFrequency state
+  const [subFrequency, setSubFrequency] = useState(() => {
+    if (data.subFrequency) return data.subFrequency;
+    if (data.frequence && data.frequence !== "une fois") {
+      return uiSubFreqMap[data.frequence] || "1foisParSemaine";
+    }
+    return "1foisParSemaine";
+  });
+
+  const minHours = frequency === "oneshot" ? 4 : 2;
+
+  useEffect(() => {
+    if (heures < minHours) {
+      setHeures(minHours);
+    }
+  }, [minHours, heures]);
+
+  const hourlyRate = prestationType === "avec_produit" ? 70 : 60;
+  const isAbo = frequency === "subscription";
+  const frequencyDiscount = isAbo ? 0.10 : 0.00;
+  
+  const pricePerPassage = Math.round(heures * personnes * hourlyRate * (1 - frequencyDiscount));
+  const nbPassages = isAbo ? (visitsMap[subFrequency] * 4) : 1;
+  const total = isAbo ? (pricePerPassage * nbPassages) : pricePerPassage;
 
   useEffect(() => {
     if (!onPrestationsChange) return;
-    const prestations: QuotePrestationLine[] = [
-      { designation: `Ménage bureaux — ${heures}h × ${personnes} intervenante × 4 passages/mois${isAbo ? " (abonnement –10%)" : ""}`, montant: Math.round(base) },
-    ];
-    if (opts.produits) prestations.push({ designation: "Produits ménagers professionnels fournis par l'agence", montant: 90 });
-    if (opts.serpiere) prestations.push({ designation: "Torchons et serpillières fournis", montant: 40 });
-    if (opts.zone) prestations.push({ designation: "Supplément zone éloignée", montant: 50 });
+
+    const prestations: QuotePrestationLine[] = [];
+    const dbSubFrequency = dbSubFreqMap[subFrequency] || "1/sem";
+    const typeLabel = prestationType === "avec_produit" ? "avec produit" : "sans produit";
+
+    if (isAbo) {
+      const baseMonthly = Math.round(heures * personnes * hourlyRate * nbPassages);
+      const discountAmount = Math.round(baseMonthly * 0.10);
+      
+      prestations.push({
+        designation: `Ménage bureaux ${typeLabel} — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} × ${nbPassages} passages/mois`,
+        montant: baseMonthly
+      });
+      prestations.push({
+        designation: `Remise abonnement (–10%)`,
+        montant: -discountAmount,
+        isReduction: true
+      });
+    } else {
+      prestations.push({
+        designation: `Ménage bureaux ${typeLabel} — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} (prestation ponctuelle)`,
+        montant: pricePerPassage
+      });
+    }
+
     onPrestationsChange(prestations, total, {
-      nb_heures: heures, heures, nb_intervenantes: personnes, nb_intervenants: personnes,
-      nb_passages_mois: 4, reduction_abonnement: isAbo ? 10 : 0,
-      prix_base: Math.round(base), prix_produits: opts.produits ? 90 : 0,
-      produits: opts.produits, torchons: opts.serpiere, zone_eloignee: opts.zone
+      nb_heures: heures,
+      heures,
+      nb_intervenantes: personnes,
+      nb_intervenants: personnes,
+      nb_passages_mois: nbPassages,
+      reduction_abonnement: isAbo ? 10 : 0,
+      prix_base: isAbo ? Math.round(heures * personnes * hourlyRate * nbPassages) : total,
+      prix_produits: 0,
+      produits: prestationType === "avec_produit",
+      torchons: false,
+      zone_eloignee: false,
+      frequence: isAbo ? dbSubFrequency : "une fois",
+      frequency,
+      subFrequency
     });
-  }, [heures, personnes, freq, opts, base, total, isAbo]);
+  }, [heures, personnes, frequency, subFrequency, prestationType, total, nbPassages, pricePerPassage, hourlyRate, onPrestationsChange]);
 
   return (
     <div className="quote-calculator">
       <FormulaBox>
-        <B>Base :</B> Heures × Personnes × 60 DH/h · <B>Abonnement :</B> −10% · <B>Zone éloignée :</B> +50 DH
-        <br /><span style={{ fontSize: 10, marginTop: 3, display: "block" }}>Tarification identique au site actuel agencemenage.ma</span>
+        <B>Base :</B> Heures × Personnes × {hourlyRate} DH/h · <B>Abonnement :</B> −10%
       </FormulaBox>
       <div style={s.grid2}>
         <div>
-          <Field label="Heures">
-            <input type="number" value={heures} onChange={e => setHeures(+e.target.value)} style={s.input as any} />
-          </Field>
-          <Field label="Personnes">
-            <input type="number" value={personnes} onChange={e => setPersonnes(+e.target.value)} style={s.input as any} />
-          </Field>
-          <Field label="Fréquence">
-            <select value={freq} onChange={e => setFreq(e.target.value)} style={s.input as any}>
-              <option value="1.00">Ponctuel</option>
-              <option value="0.90">Abonnement (−10%)</option>
+          <Field label="Type de prestation">
+            <select value={prestationType} onChange={e => setPrestationType(e.target.value)} style={s.input as any}>
+              <option value="sans_produit">Ménage bureaux sans produit — 60 DH/h</option>
+              <option value="avec_produit">Ménage bureaux avec produit — 70 DH/h</option>
             </select>
           </Field>
+          <Field label="Heures par passage">
+            <input type="number" value={heures} min={minHours} max={12} onChange={e => setHeures(Math.max(minHours, +e.target.value))} style={s.input as any} />
+          </Field>
+          <Field label="Nombre d'agents">
+            <input type="number" value={personnes} min={1} max={20} onChange={e => setPersonnes(+e.target.value)} style={s.input as any} />
+          </Field>
+          <Field label="Fréquence">
+            <select value={frequency} onChange={e => setFrequency(e.target.value)} style={s.input as any}>
+              <option value="oneshot">Une fois</option>
+              <option value="subscription">Abonnement (-10%)</option>
+            </select>
+          </Field>
+          {isAbo && (
+            <Field label="Cadence d'abonnement">
+              <select value={subFrequency} onChange={e => setSubFrequency(e.target.value)} style={s.input as any}>
+                <option value="1foisParSemaine">1 fois par semaine</option>
+                <option value="2foisParSemaine">2 fois par semaine</option>
+                <option value="3foisParSemaine">3 fois par semaine</option>
+                <option value="4foisParSemaine">4 fois par semaine</option>
+                <option value="5foisParSemaine">5 fois par semaine</option>
+                <option value="6foisParSemaine">6 fois par semaine</option>
+                <option value="7foisParSemaine">7 fois par semaine</option>
+                <option value="1foisParMois">1 fois par mois</option>
+                <option value="2foisParMois">2 fois par mois</option>
+                <option value="3foisParMois">3 fois par mois</option>
+                <option value="4foisParMois">4 fois par mois</option>
+              </select>
+            </Field>
+          )}
         </div>
         <div>
-          <div style={s.optTitle}>Options</div>
-          <OptRow label="Produits fournis par l'agence" note="Nettoyants multi-usage, désinfectants, vitres..." price="+90 DH" checked={opts.produits} onChange={() => tog("produits")} />
-          <OptRow label="Torchons et serpillères" price="+40 DH" checked={opts.serpiere} onChange={() => tog("serpiere")} />
-          <OptRow label="Supplément zone éloignée" note="Bouskoura, Dar Bouazza, Mohammédia..." price="+50 DH" checked={opts.zone} onChange={() => tog("zone")} />
+          {prestationType === "sans_produit" ? (
+            <div style={{
+              padding: "16px",
+              background: "#E8F5E9",
+              border: "1px solid #C8E6C9",
+              borderRadius: "12px",
+              fontSize: "13px",
+              lineHeight: "1.6",
+              color: "#2E7D32"
+            }}>
+              Sans produit de ménage et serpillères fournis.<br />
+              L'intervenant fera le ménage avec vos produits.
+            </div>
+          ) : (
+            <div style={{
+              padding: "16px",
+              background: "#E3F2FD",
+              border: "1px solid #BBDEFB",
+              borderRadius: "12px",
+              fontSize: "13px",
+              lineHeight: "1.6",
+              color: "#1565C0"
+            }}>
+              Avec option produit de ménage et serpillière, l'intervenant interviendra équipé de produits de ménage.
+            </div>
+          )}
         </div>
       </div>
       <ResultBar
-        detail={`${heures}h × ${personnes} pers × 60 DH${parseFloat(freq) < 1 ? ` × abo ${freq}` : ""} = ${fmt(base)} DH + options ${fmt(op)} DH`}
-        total={`${fmt(total)} DH`} label="Total intervention HT" />
+        detail={isAbo
+          ? `${heures}h × ${personnes} agent(s) × ${hourlyRate} DH × 0,90 (abonnement - ${getCadenceLabel(subFrequency)}) = ${fmt(pricePerPassage)} DH/passage (${nbPassages} passages/mois)`
+          : `${heures}h × ${personnes} agent(s) × ${hourlyRate} DH`}
+        total={`${fmt(total)} DH`} label={isAbo ? "Total mensuel HT" : "Total intervention HT"} />
     </div>
   );
 }
+

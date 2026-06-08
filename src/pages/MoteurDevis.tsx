@@ -343,13 +343,13 @@ function SinistreCalc() {
 
 // ─── BUREAUX ─────────────────────────────────────────────────────────────────
 function BureauxCalc() {
-  const [heures, setHeures] = useState(4);
+  const [prestationType, setPrestationType] = useState("sans_produit");
+  const [heures, setHeures] = useState(3);
   const [personnes, setPersonnes] = useState(1);
-  const [freq, setFreq] = useState("1.00");
-  const [opts, setOpts] = useState({ produits: false, zone: false });
-  const tog = (k: keyof typeof opts) => setOpts(o => ({ ...o, [k]: !o[k] }));
+  const [frequency, setFrequency] = useState("oneshot");
+  const [subFrequency, setSubFrequency] = useState("1foisParSemaine");
 
-  const minHours = freq === "1.00" ? 4 : 2;
+  const minHours = frequency === "oneshot" ? 4 : 2;
 
   React.useEffect(() => {
     if (heures < minHours) {
@@ -357,40 +357,104 @@ function BureauxCalc() {
     }
   }, [minHours, heures]);
 
-  const hourlyRate = opts.produits ? 70 : 60;
-  const base = heures * personnes * hourlyRate * parseFloat(freq);
-  const op = opts.zone ? 50 : 0;
-  const total = base + op;
+  const hourlyRate = prestationType === "avec_produit" ? 70 : 60;
+  const frequencyDiscount = frequency === "subscription" ? 0.10 : 0.00;
+  const pricePerPassage = Math.round(heures * personnes * hourlyRate * (1 - frequencyDiscount));
+
+  const getCadenceLabel = (val: string) => {
+    switch (val) {
+      case "1foisParSemaine": return "1 fois par semaine";
+      case "2foisParSemaine": return "2 fois par semaine";
+      case "3foisParSemaine": return "3 fois par semaine";
+      case "4foisParSemaine": return "4 fois par semaine";
+      case "5foisParSemaine": return "5 fois par semaine";
+      case "6foisParSemaine": return "6 fois par semaine";
+      case "7foisParSemaine": return "7 fois par semaine";
+      case "1foisParMois": return "1 fois par mois";
+      case "2foisParMois": return "2 fois par mois";
+      case "3foisParMois": return "3 fois par mois";
+      case "4foisParMois": return "4 fois par mois";
+      default: return "";
+    }
+  };
 
   return (
     <div>
       <FormulaBox>
-        <B>Base :</B> Heures × Personnes × (60 DH/h sans produit / 70 DH/h avec produit) · <B>Abonnement :</B> −10% · <B>Zone éloignée :</B> +50 DH
+        <B>Base :</B> Heures × Personnes × {hourlyRate} DH/h · <B>Abonnement :</B> −10%
       </FormulaBox>
       <div style={s.grid2}>
         <div>
-          <Field label={`Durée de l'intervention (heures) — min ${minHours}h`}>
+          <Field label="Type de prestation">
+            <select value={prestationType} onChange={e => setPrestationType(e.target.value)} style={s.input as any}>
+              <option value="sans_produit">Ménage bureaux sans produit — 60 DH/h</option>
+              <option value="avec_produit">Ménage bureaux avec produit — 70 DH/h</option>
+            </select>
+          </Field>
+          <Field label="Heures par passage">
             <input type="number" value={heures} min={minHours} max={12} onChange={e => setHeures(Math.max(minHours, +e.target.value))} style={s.input as any} />
           </Field>
-          <Field label="Nombre d'intervenantes">
+          <Field label="Nombre d'agents">
             <input type="number" value={personnes} min={1} max={20} onChange={e => setPersonnes(+e.target.value)} style={s.input as any} />
           </Field>
           <Field label="Fréquence">
-            <select value={freq} onChange={e => setFreq(e.target.value)} style={s.input as any}>
-              <option value="1.00">Une seule fois</option>
-              <option value="0.90">Abonnement régulier (−10%)</option>
+            <select value={frequency} onChange={e => setFrequency(e.target.value)} style={s.input as any}>
+              <option value="oneshot">Une fois</option>
+              <option value="subscription">Abonnement (-10%)</option>
             </select>
           </Field>
+          {frequency === "subscription" && (
+            <Field label="Cadence d'abonnement">
+              <select value={subFrequency} onChange={e => setSubFrequency(e.target.value)} style={s.input as any}>
+                <option value="1foisParSemaine">1 fois par semaine</option>
+                <option value="2foisParSemaine">2 fois par semaine</option>
+                <option value="3foisParSemaine">3 fois par semaine</option>
+                <option value="4foisParSemaine">4 fois par semaine</option>
+                <option value="5foisParSemaine">5 fois par semaine</option>
+                <option value="6foisParSemaine">6 fois par semaine</option>
+                <option value="7foisParSemaine">7 fois par semaine</option>
+                <option value="1foisParMois">1 fois par mois</option>
+                <option value="2foisParMois">2 fois par mois</option>
+                <option value="3foisParMois">3 fois par mois</option>
+                <option value="4foisParMois">4 fois par mois</option>
+              </select>
+            </Field>
+          )}
         </div>
         <div>
-          <div style={s.optTitle}>Options</div>
-          <OptRow label="Ménage avec produit (70 DH/heure)" note="Produits, torchons et serpillères inclus par l'agence" price="Taux 70 DH/h" checked={opts.produits} onChange={() => tog("produits")} />
-          <OptRow label="Supplément zone éloignée" note="Bouskoura, Dar Bouazza, Mohammédia..." price="+50 DH" checked={opts.zone} onChange={() => tog("zone")} />
+          {prestationType === "sans_produit" ? (
+            <div style={{
+              padding: "16px",
+              background: "#E8F5E9",
+              border: "1px solid #C8E6C9",
+              borderRadius: "12px",
+              fontSize: "13px",
+              lineHeight: "1.6",
+              color: "#2E7D32"
+            }}>
+              Sans produit de ménage et serpillères fournis.<br />
+              L'intervenant fera le ménage avec vos produits.
+            </div>
+          ) : (
+            <div style={{
+              padding: "16px",
+              background: "#E3F2FD",
+              border: "1px solid #BBDEFB",
+              borderRadius: "12px",
+              fontSize: "13px",
+              lineHeight: "1.6",
+              color: "#1565C0"
+            }}>
+              Avec option produit de ménage et serpillière, l'intervenant interviendra équipé de produits de ménage.
+            </div>
+          )}
         </div>
       </div>
       <ResultBar
-        detail={`${heures}h × ${personnes} pers × ${hourlyRate} DH${parseFloat(freq) < 1 ? ` × abo ${freq}` : ""} = ${fmt(base)} DH${op > 0 ? ` + options ${fmt(op)} DH` : ""}`}
-        total={`${fmt(total)} DH`} label="Total intervention HT" />
+        detail={frequency === "subscription"
+          ? `${heures}h x ${personnes} agent(s) x ${hourlyRate} DH x 0,90 (abonnement - ${getCadenceLabel(subFrequency)})`
+          : `${heures}h x ${personnes} agent(s) x ${hourlyRate} DH`}
+        total={`${fmt(pricePerPassage)} DH`} label="PRIX PAR PASSAGE" />
     </div>
   );
 }
@@ -411,6 +475,20 @@ function PlacementCalc() {
   );
 }
 
+const visitsMap: Record<string, number> = {
+  "1foisParSemaine": 1,
+  "2foisParSemaine": 2,
+  "3foisParSemaine": 3,
+  "4foisParSemaine": 4,
+  "5foisParSemaine": 5,
+  "6foisParSemaine": 6,
+  "7foisParSemaine": 7,
+  "3foisParMois": 0.75,
+  "2foisParMois": 0.5,
+  "1foisParMois": 0.25,
+  "4foisParMois": 1,
+};
+
 function FlexCalc() {
   const [hj, setHj] = useState(4);
   const [js, setJs] = useState("22");
@@ -418,12 +496,16 @@ function FlexCalc() {
   const [eng, setEng] = useState("0");
   const [ferie, setFerie] = useState(false);
   const [tenue, setTenue] = useState(false);
+  const [frequency, setFrequency] = useState("oneshot");
+  const [subFrequency, setSubFrequency] = useState("1foisParSemaine");
 
-  const jm = parseFloat(js);
+  const jm = frequency === "subscription" ? (visitsMap[subFrequency] * 4) : parseFloat(js);
   const hm = hj * jm;
   const base = hm * 32 * nb * (ferie ? 1.20 : 1);
   const reduction = parseFloat(eng);
-  const mensuel = Math.round(base * (1 - reduction));
+  const frequencyDiscount = frequency === "subscription" ? 0.10 : 0.00;
+  const totalDiscount = reduction + frequencyDiscount;
+  const mensuel = Math.round(base * (1 - totalDiscount));
   const tenueCost = tenue ? 200 * nb : 0;
   const total = mensuel + tenueCost;
 
@@ -439,7 +521,7 @@ function FlexCalc() {
             <input type="number" value={hj} min={1} max={12} onChange={e => setHj(+e.target.value)} style={s.input as any} />
           </Field>
           <Field label="Jours de travail / semaine">
-            <select value={js} onChange={e => setJs(e.target.value)} style={s.input as any}>
+            <select value={js} onChange={e => setJs(e.target.value)} disabled={frequency === "subscription"} style={{ ...s.input, opacity: frequency === "subscription" ? 0.5 : 1 } as any}>
               <option value="22">5 j/semaine — 22 j/mois</option>
               <option value="26">6 j/semaine — 26 j/mois</option>
               <option value="30">7 j/semaine — 30 j/mois</option>
@@ -455,6 +537,29 @@ function FlexCalc() {
               <option value="0.10">12 mois (−10%)</option>
             </select>
           </Field>
+          <Field label="Fréquence">
+            <select value={frequency} onChange={e => setFrequency(e.target.value)} style={s.input as any}>
+              <option value="oneshot">Une fois</option>
+              <option value="subscription">Abonnement (-10%)</option>
+            </select>
+          </Field>
+          {frequency === "subscription" && (
+            <Field label="Cadence d'abonnement">
+              <select value={subFrequency} onChange={e => setSubFrequency(e.target.value)} style={s.input as any}>
+                <option value="1foisParSemaine">1 fois par semaine</option>
+                <option value="2foisParSemaine">2 fois par semaine</option>
+                <option value="3foisParSemaine">3 fois par semaine</option>
+                <option value="4foisParSemaine">4 fois par semaine</option>
+                <option value="5foisParSemaine">5 fois par semaine</option>
+                <option value="6foisParSemaine">6 fois par semaine</option>
+                <option value="7foisParSemaine">7 fois par semaine</option>
+                <option value="1foisParMois">1 fois par mois</option>
+                <option value="2foisParMois">2 fois par mois</option>
+                <option value="3foisParMois">3 fois par mois</option>
+                <option value="4foisParMois">4 fois par mois</option>
+              </select>
+            </Field>
+          )}
         </div>
         <div>
           <div style={s.optTitle}>Options</div>
@@ -466,7 +571,7 @@ function FlexCalc() {
         </div>
       </div>
       <ResultBar
-        detail={`${hm.toFixed(0)}h/mois × 32 DH × ${nb} pers${ferie ? " × 1,20" : ""} × ${(1 - reduction).toFixed(2)} = ${fmt(mensuel)} DH/mois${tenueCost ? ` + tenue ${fmt(tenueCost)} DH (1er mois)` : ""}`}
+        detail={`${hm.toFixed(0)}h/mois × 32 DH × ${nb} pers${ferie ? " × 1,20" : ""}${frequencyDiscount > 0 ? " × 0,90 (Abonnement)" : ""}${reduction > 0 ? ` × ${(1 - reduction).toFixed(2)}` : ""} = ${fmt(mensuel)} DH/mois${tenueCost ? ` + tenue ${fmt(tenueCost)} DH (1er mois)` : ""}`}
         total={`${fmt(total)} DH`} label="Total / mois HT" />
     </div>
   );
@@ -478,14 +583,18 @@ function G360Calc() {
   const [nb, setNb] = useState(2);
   const [eng, setEng] = useState("0");
   const [ferie, setFerie] = useState(false);
+  const [frequency, setFrequency] = useState("oneshot");
+  const [subFrequency, setSubFrequency] = useState("1foisParSemaine");
 
   const nbS = Math.max(nb, 2);
-  const jm = parseFloat(js);
+  const jm = frequency === "subscription" ? (visitsMap[subFrequency] * 4) : parseFloat(js);
   const hm = hj * jm;
   const base = hm * 45 * nbS * (ferie ? 1.20 : 1);
   const reduction = parseFloat(eng);
+  const frequencyDiscount = frequency === "subscription" ? 0.10 : 0.00;
+  const totalDiscount = reduction + frequencyDiscount;
   const superv = nbS < 3 ? 800 : 0;
-  const total = Math.round(base * (1 - reduction)) + superv;
+  const total = Math.round(base * (1 - totalDiscount)) + superv;
 
   return (
     <div>
@@ -499,7 +608,7 @@ function G360Calc() {
             <input type="number" value={hj} min={1} max={12} onChange={e => setHj(+e.target.value)} style={s.input as any} />
           </Field>
           <Field label="Jours de travail / semaine">
-            <select value={js} onChange={e => setJs(e.target.value)} style={s.input as any}>
+            <select value={js} onChange={e => setJs(e.target.value)} disabled={frequency === "subscription"} style={{ ...s.input, opacity: frequency === "subscription" ? 0.5 : 1 } as any}>
               <option value="22">5 j/semaine — 22 j/mois</option>
               <option value="26">6 j/semaine — 26 j/mois</option>
               <option value="30">7 j/semaine — 30 j/mois</option>
@@ -515,6 +624,29 @@ function G360Calc() {
               <option value="0.10">12 mois (−10%)</option>
             </select>
           </Field>
+          <Field label="Fréquence">
+            <select value={frequency} onChange={e => setFrequency(e.target.value)} style={s.input as any}>
+              <option value="oneshot">Une fois</option>
+              <option value="subscription">Abonnement (-10%)</option>
+            </select>
+          </Field>
+          {frequency === "subscription" && (
+            <Field label="Cadence d'abonnement">
+              <select value={subFrequency} onChange={e => setSubFrequency(e.target.value)} style={s.input as any}>
+                <option value="1foisParSemaine">1 fois par semaine</option>
+                <option value="2foisParSemaine">2 fois par semaine</option>
+                <option value="3foisParSemaine">3 fois par semaine</option>
+                <option value="4foisParSemaine">4 fois par semaine</option>
+                <option value="5foisParSemaine">5 fois par semaine</option>
+                <option value="6foisParSemaine">6 fois par semaine</option>
+                <option value="7foisParSemaine">7 fois par semaine</option>
+                <option value="1foisParMois">1 fois par mois</option>
+                <option value="2foisParMois">2 fois par mois</option>
+                <option value="3foisParMois">3 fois par mois</option>
+                <option value="4foisParMois">4 fois par mois</option>
+              </select>
+            </Field>
+          )}
         </div>
         <div>
           <div style={s.optTitle}>Options</div>
@@ -528,7 +660,7 @@ function G360Calc() {
         </div>
       </div>
       <ResultBar
-        detail={`${hm.toFixed(0)}h/mois × 45 DH × ${nbS} pers${ferie ? " × 1,20" : ""} × ${(1 - reduction).toFixed(2)} = ${fmt(Math.round(base * (1 - reduction)))} DH${superv ? ` + supervision ${fmt(superv)} DH` : ""}`}
+        detail={`${hm.toFixed(0)}h/mois × 45 DH × ${nbS} pers${ferie ? " × 1,20" : ""}${frequencyDiscount > 0 ? " × 0,90 (Abonnement)" : ""}${reduction > 0 ? ` × ${(1 - reduction).toFixed(2)}` : ""} = ${fmt(Math.round(base * (1 - totalDiscount)))} DH${superv ? ` + supervision ${fmt(superv)} DH` : ""}`}
         total={`${fmt(total)} DH`} label="Total / mois HT" />
     </div>
   );

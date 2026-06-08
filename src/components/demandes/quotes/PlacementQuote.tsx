@@ -2,6 +2,34 @@ import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
 import type { QuotePrestationLine } from "./QuoteSection";
 
+const visitsMap: Record<string, number> = {
+  "1foisParSemaine": 1,
+  "2foisParSemaine": 2,
+  "3foisParSemaine": 3,
+  "4foisParSemaine": 4,
+  "5foisParSemaine": 5,
+  "6foisParSemaine": 6,
+  "7foisParSemaine": 7,
+  "3foisParMois": 0.75,
+  "2foisParMois": 0.5,
+  "1foisParMois": 0.25,
+  "4foisParMois": 1,
+};
+
+const PLACEMENT_FREQUENCES = [
+  { value: "1foisParSemaine", label: "1 fois par semaine" },
+  { value: "2foisParSemaine", label: "2 fois par semaine" },
+  { value: "3foisParSemaine", label: "3 fois par semaine" },
+  { value: "4foisParSemaine", label: "4 fois par semaine" },
+  { value: "5foisParSemaine", label: "5 fois par semaine" },
+  { value: "6foisParSemaine", label: "6 fois par semaine" },
+  { value: "7foisParSemaine", label: "7 fois par semaine" },
+  { value: "1foisParMois", label: "1 fois par mois" },
+  { value: "2foisParMois", label: "2 fois par mois" },
+  { value: "3foisParMois", label: "3 fois par mois" },
+  { value: "4foisParMois", label: "4 fois par mois" },
+];
+
 interface PlacementQuoteProps {
   demande: any;
   onPrestationsChange?: (prestations: QuotePrestationLine[], total: number, extra?: Record<string, any>) => void;
@@ -31,24 +59,37 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const [eng, setEng] = useState(data.engagement_mois === 12 ? "0.10" : data.engagement_mois === 6 ? "0.05" : "0");
   const [ferie, setFerie] = useState(Boolean(data.ferie || data.majoration_ferie));
   const [tenue, setTenue] = useState(Boolean(data.tenue_travail));
+  const [frequency, setFrequency] = useState(data.frequency || "oneshot");
+  const [subFrequency, setSubFrequency] = useState(data.subFrequency || "1foisParSemaine");
 
-  const jm = parseFloat(js);
+  const jm = frequency === "subscription" ? (visitsMap[subFrequency] * 4) : parseFloat(js);
   const hm = hj * jm;
   const base = hm * 32 * nb * (ferie ? 1.20 : 1);
   const reduction = parseFloat(eng);
-  const mensuel = Math.round(base * (1 - reduction));
-  const tenueCost = tenue ? 200 * nb : 0;
-  const total = mensuel + tenueCost;
+  const frequencyDiscount = frequency === "subscription" ? 0.10 : 0.00;
+  const frequencyDiscountMontant = Math.round(base * frequencyDiscount);
   const reductionMontant = Math.round(base * reduction);
+  const tenueCost = tenue ? 200 * nb : 0;
+  const total = Math.round(base * (1 - reduction - frequencyDiscount)) + tenueCost;
   const engLabel = eng === "0.05" ? "6 mois" : eng === "0.10" ? "12 mois" : "";
   const engPct = Math.round(reduction * 100);
-  const jsSem = jm === 22 ? 5 : jm === 26 ? 6 : 7;
+  const jsSem = frequency === "subscription" ? (visitsMap[subFrequency] || 1) : (jm === 22 ? 5 : jm === 26 ? 6 : 7);
 
   useEffect(() => {
     if (!onPrestationsChange) return;
+    
+    const subFreqObj = PLACEMENT_FREQUENCES.find(f => f.value === subFrequency);
+    const subFreqLabel = subFreqObj ? subFreqObj.label.toLowerCase() : "";
+    const scheduleLabel = frequency === "subscription"
+      ? `${hj}h/j, ${subFreqLabel} (${hm}h/mois)`
+      : `${hj}h/j × ${jsSem}j/sem (${hm}h/mois)`;
+
     const prestations: QuotePrestationLine[] = [
-      { designation: `Mise à disposition — ${nb} intervenante — ${hj}h/j × ${jsSem}j/sem (${hm}h/mois)`, montant: Math.round(base) },
+      { designation: `Mise à disposition — ${nb} intervenante — ${scheduleLabel}`, montant: Math.round(base) },
     ];
+    if (frequencyDiscountMontant > 0) {
+      prestations.push({ designation: `Remise abonnement (–10%)`, montant: -frequencyDiscountMontant, isReduction: true });
+    }
     if (reductionMontant > 0) {
       prestations.push({ designation: `Réduction engagement ${engLabel} (–${engPct}%)`, montant: -reductionMontant, isReduction: true });
     }
@@ -61,12 +102,16 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
     onPrestationsChange(prestations, total, {
       heures_par_jour: hj, jours_par_semaine: jsSem, heures_par_mois: hm,
       nb_intervenantes: nb, nb_intervenants: nb, prix_base: Math.round(base),
-      reduction: reductionMontant, reduction_montant: reductionMontant,
-      reduction_pourcentage: engPct, engagement_mois: eng === "0.05" ? 6 : eng === "0.10" ? 12 : 0,
+      reduction: reductionMontant + frequencyDiscountMontant,
+      reduction_montant: reductionMontant + frequencyDiscountMontant,
+      reduction_pourcentage: engPct + (frequency === "subscription" ? 10 : 0),
+      engagement_mois: eng === "0.05" ? 6 : eng === "0.10" ? 12 : 0,
       tenue_travail: tenueCost,
       service_type: "flexible",
+      frequency,
+      subFrequency,
     });
-  }, [hj, js, nb, eng, ferie, tenue, base, total, reductionMontant, tenueCost, hm, jsSem]);
+  }, [hj, js, nb, eng, ferie, tenue, base, total, reductionMontant, frequencyDiscountMontant, frequency, subFrequency, tenueCost, hm, jsSem, engLabel, engPct]);
 
   return (
     <div>
@@ -80,7 +125,7 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
             <input type="number" value={hj} onChange={e => setHj(+e.target.value)} style={s.input as any} />
           </Field>
           <Field label="Jours/mois">
-            <select value={js} onChange={e => setJs(e.target.value)} style={s.input as any}>
+            <select value={js} onChange={e => setJs(e.target.value)} disabled={frequency === "subscription"} style={{ ...s.input, opacity: frequency === "subscription" ? 0.5 : 1 } as any}>
               <option value="22">22j (5j/sem)</option>
               <option value="26">26j (6j/sem)</option>
               <option value="30">30j (7j/sem)</option>
@@ -98,12 +143,35 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
               <option value="0.10">12 mois (−10%)</option>
             </select>
           </Field>
+          <Field label="Fréquence">
+            <select value={frequency} onChange={e => setFrequency(e.target.value)} style={s.input as any}>
+              <option value="oneshot">Une fois</option>
+              <option value="subscription">Abonnement (-10%)</option>
+            </select>
+          </Field>
+          {frequency === "subscription" && (
+            <Field label="Cadence d'abonnement">
+              <select value={subFrequency} onChange={e => setSubFrequency(e.target.value)} style={s.input as any}>
+                <option value="1foisParSemaine">1 fois par semaine</option>
+                <option value="2foisParSemaine">2 fois par semaine</option>
+                <option value="3foisParSemaine">3 fois par semaine</option>
+                <option value="4foisParSemaine">4 fois par semaine</option>
+                <option value="5foisParSemaine">5 fois par semaine</option>
+                <option value="6foisParSemaine">6 fois par semaine</option>
+                <option value="7foisParSemaine">7 fois par semaine</option>
+                <option value="1foisParMois">1 fois par mois</option>
+                <option value="2foisParMois">2 fois par mois</option>
+                <option value="3foisParMois">3 fois par mois</option>
+                <option value="4foisParMois">4 fois par mois</option>
+              </select>
+            </Field>
+          )}
           <OptRow label="Jours fériés" price="+20%" checked={ferie} onChange={setFerie} />
           <OptRow label="Tenue de travail fournie" note="+200 DH/pers — coût unique facturé au 1er mois" price="+200 DH/pers" checked={tenue} onChange={setTenue} />
         </div>
       </div>
       <ResultBar
-        detail={`${hm.toFixed(0)}h × 32 DH × ${nb} pers × ${(1 - reduction).toFixed(2)}`}
+        detail={`${hm.toFixed(0)}h × 32 DH × ${nb} pers${ferie ? " × 1,20" : ""}${frequencyDiscount > 0 ? " × 0,90" : ""}${reduction > 0 ? ` × ${(1 - reduction).toFixed(2)}` : ""}`}
         total={`${fmt(total)} DH`} label="Mensuel HT" />
     </div>
   );
@@ -116,24 +184,38 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const [nb, setNb] = useState(Math.max(2, data.nb_intervenantes || data.nb_intervenants || data.nb_personnel || 2));
   const [eng, setEng] = useState(data.engagement_mois === 12 ? "0.10" : data.engagement_mois === 6 ? "0.05" : "0");
   const [ferie, setFerie] = useState(Boolean(data.ferie || data.majoration_ferie));
+  const [frequency, setFrequency] = useState(data.frequency || "oneshot");
+  const [subFrequency, setSubFrequency] = useState(data.subFrequency || "1foisParSemaine");
 
   const nbS = Math.max(nb, 2);
-  const jm = parseFloat(js);
+  const jm = frequency === "subscription" ? (visitsMap[subFrequency] * 4) : parseFloat(js);
   const hm = hj * jm;
   const base = hm * 45 * nbS * (ferie ? 1.20 : 1);
   const reduction = parseFloat(eng);
-  const superv = nbS < 3 ? 800 : 0;
-  const total = Math.round(base * (1 - reduction)) + superv;
+  const frequencyDiscount = frequency === "subscription" ? 0.10 : 0.00;
+  const frequencyDiscountMontant = Math.round(base * frequencyDiscount);
   const reductionMontant = Math.round(base * reduction);
+  const superv = nbS < 3 ? 800 : 0;
+  const total = Math.round(base * (1 - reduction - frequencyDiscount)) + superv;
   const engLabel = eng === "0.05" ? "6 mois" : eng === "0.10" ? "12 mois" : "";
   const engPct = Math.round(reduction * 100);
-  const jsSem = jm === 22 ? 5 : jm === 26 ? 6 : 7;
+  const jsSem = frequency === "subscription" ? (visitsMap[subFrequency] || 1) : (jm === 22 ? 5 : jm === 26 ? 6 : 7);
 
   useEffect(() => {
     if (!onPrestationsChange) return;
+
+    const subFreqObj = PLACEMENT_FREQUENCES.find(f => f.value === subFrequency);
+    const subFreqLabel = subFreqObj ? subFreqObj.label.toLowerCase() : "";
+    const scheduleLabel = frequency === "subscription"
+      ? `${hj}h/j, ${subFreqLabel} (${hm}h/mois)`
+      : `${hj}h/j × ${jsSem}j/sem (${hm}h/mois)`;
+
     const prestations: QuotePrestationLine[] = [
-      { designation: `Gestion 360° — ${nbS} intervenante(s) — ${hj}h/j × ${jsSem}j/sem (${hm}h/mois)`, montant: Math.round(base) },
+      { designation: `Gestion 360° — ${nbS} intervenante(s) — ${scheduleLabel}`, montant: Math.round(base) },
     ];
+    if (frequencyDiscountMontant > 0) {
+      prestations.push({ designation: `Remise abonnement (–10%)`, montant: -frequencyDiscountMontant, isReduction: true });
+    }
     if (reductionMontant > 0) {
       prestations.push({ designation: `Réduction engagement ${engLabel} (–${engPct}%)`, montant: -reductionMontant, isReduction: true });
     }
@@ -145,11 +227,15 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
     onPrestationsChange(prestations, total, {
       heures_par_jour: hj, jours_par_semaine: jsSem, heures_par_mois: hm,
       nb_intervenantes: nbS, nb_intervenants: nbS, prix_base: Math.round(base),
-      reduction: reductionMontant, reduction_montant: reductionMontant,
-      reduction_pourcentage: engPct, engagement_mois: eng === "0.05" ? 6 : eng === "0.10" ? 12 : 3,
+      reduction: reductionMontant + frequencyDiscountMontant,
+      reduction_montant: reductionMontant + frequencyDiscountMontant,
+      reduction_pourcentage: engPct + (frequency === "subscription" ? 10 : 0),
+      engagement_mois: eng === "0.05" ? 6 : eng === "0.10" ? 12 : 3,
       service_type: "gestion360",
+      frequency,
+      subFrequency,
     });
-  }, [hj, js, nb, eng, ferie, base, total, reductionMontant, superv, hm, jsSem, nbS]);
+  }, [hj, js, nb, eng, ferie, base, total, reductionMontant, frequencyDiscountMontant, frequency, subFrequency, superv, hm, jsSem, nbS, engLabel, engPct]);
 
   return (
     <div>
@@ -163,7 +249,7 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
             <input type="number" value={hj} onChange={e => setHj(+e.target.value)} style={s.input as any} />
           </Field>
           <Field label="Jours/mois">
-            <select value={js} onChange={e => setJs(e.target.value)} style={s.input as any}>
+            <select value={js} onChange={e => setJs(e.target.value)} disabled={frequency === "subscription"} style={{ ...s.input, opacity: frequency === "subscription" ? 0.5 : 1 } as any}>
               <option value="22">22j (5j/sem)</option>
               <option value="26">26j (6j/sem)</option>
               <option value="30">30j (7j/sem)</option>
@@ -172,6 +258,8 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
           <Field label="Effectif (min 2)">
             <input type="number" value={nb} onChange={e => setNb(Math.max(2, +e.target.value))} style={s.input as any} />
           </Field>
+        </div>
+        <div>
           <Field label="Engagement">
             <select value={eng} onChange={e => setEng(e.target.value)} style={s.input as any}>
               <option value="0">3 mois</option>
@@ -179,8 +267,29 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
               <option value="0.10">12 mois (−10%)</option>
             </select>
           </Field>
-        </div>
-        <div>
+          <Field label="Fréquence">
+            <select value={frequency} onChange={e => setFrequency(e.target.value)} style={s.input as any}>
+              <option value="oneshot">Une fois</option>
+              <option value="subscription">Abonnement (-10%)</option>
+            </select>
+          </Field>
+          {frequency === "subscription" && (
+            <Field label="Cadence d'abonnement">
+              <select value={subFrequency} onChange={e => setSubFrequency(e.target.value)} style={s.input as any}>
+                <option value="1foisParSemaine">1 fois par semaine</option>
+                <option value="2foisParSemaine">2 fois par semaine</option>
+                <option value="3foisParSemaine">3 fois par semaine</option>
+                <option value="4foisParSemaine">4 fois par semaine</option>
+                <option value="5foisParSemaine">5 fois par semaine</option>
+                <option value="6foisParSemaine">6 fois par semaine</option>
+                <option value="7foisParSemaine">7 fois par semaine</option>
+                <option value="1foisParMois">1 fois par mois</option>
+                <option value="2foisParMois">2 fois par mois</option>
+                <option value="3foisParMois">3 fois par mois</option>
+                <option value="4foisParMois">4 fois par mois</option>
+              </select>
+            </Field>
+          )}
           <OptRow label="Jours fériés" price="+20%" checked={ferie} onChange={setFerie} />
           <div style={{ marginTop: 8, padding: "8px", background: "#F0FDF4", borderRadius: 8, fontSize: 10, color: "#166534" }}>
             ✓ Tenues fournies incluses ·<br></br>✓ Supervision incluse (≥3 personnes)
@@ -190,7 +299,7 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
         </div>
       </div>
       <ResultBar
-        detail={`${hm.toFixed(0)}h × 45 DH × ${nbS} pers × ${(1 - reduction).toFixed(2)}`}
+        detail={`${hm.toFixed(0)}h × 45 DH × ${nbS} pers${ferie ? " × 1,20" : ""}${frequencyDiscount > 0 ? " × 0,90" : ""}${reduction > 0 ? ` × ${(1 - reduction).toFixed(2)}` : ""}`}
         total={`${fmt(total)} DH`} label="Mensuel HT" />
     </div>
   );
