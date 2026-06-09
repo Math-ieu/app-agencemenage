@@ -46,7 +46,11 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
   // State for AVANCE REQUISE
   const [avanceActive, setAvanceActive] = useState<boolean>(Boolean(data.avance_active));
   const [avanceType, setAvanceType] = useState<'pourcentage' | 'fixe'>(data.avance_type || 'pourcentage');
-  const [avancePourcentage, setAvancePourcentage] = useState<number>(data.avance_pourcentage !== undefined ? Number(data.avance_pourcentage) : 30);
+  const [avancePourcentage, setAvancePourcentage] = useState<number | "">(
+    data.avance_pourcentage !== undefined && data.avance_pourcentage !== null && data.avance_pourcentage !== ""
+      ? Number(data.avance_pourcentage)
+      : ""
+  );
   const [avanceFixe, setAvanceFixe] = useState<number>(data.avance_fixe !== undefined ? Number(data.avance_fixe) : 0);
 
   // Sync state when switching demandes
@@ -54,7 +58,11 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
     const freshData = demande.formulaire_data || {};
     setAvanceActive(Boolean(freshData.avance_active));
     setAvanceType(freshData.avance_type || 'pourcentage');
-    setAvancePourcentage(freshData.avance_pourcentage !== undefined ? Number(freshData.avance_pourcentage) : 30);
+    setAvancePourcentage(
+      freshData.avance_pourcentage !== undefined && freshData.avance_pourcentage !== null && freshData.avance_pourcentage !== ""
+        ? Number(freshData.avance_pourcentage)
+        : ""
+    );
     setAvanceFixe(freshData.avance_fixe !== undefined ? Number(freshData.avance_fixe) : 0);
   }, [demande.id]);
 
@@ -62,7 +70,7 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
   const triggerUpdate = (
     active: boolean,
     type: 'pourcentage' | 'fixe',
-    pct: number,
+    pct: number | "",
     fixe: number
   ) => {
     if (!onUpdateDemandeData) return;
@@ -71,7 +79,8 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
     let calculatedAmount = 0;
     if (active) {
       if (type === 'pourcentage') {
-        calculatedAmount = Math.round((totalDevis * pct) / 100);
+        const percentage = pct === "" ? 0 : pct;
+        calculatedAmount = Math.round((totalDevis * percentage) / 100);
       } else {
         calculatedAmount = fixe;
       }
@@ -96,7 +105,7 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
     triggerUpdate(avanceActive, val, avancePourcentage, avanceFixe);
   };
 
-  const handleAvancePourcentageChange = (val: number) => {
+  const handleAvancePourcentageChange = (val: number | "") => {
     setAvancePourcentage(val);
     triggerUpdate(avanceActive, avanceType, val, avanceFixe);
   };
@@ -131,7 +140,8 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
       let calculatedAmount = 0;
       if (avanceActive) {
         if (avanceType === 'pourcentage') {
-          calculatedAmount = Math.round((total * avancePourcentage) / 100);
+          const percentage = avancePourcentage === "" ? 0 : avancePourcentage;
+          calculatedAmount = Math.round((total * percentage) / 100);
         } else {
           calculatedAmount = avanceFixe;
         }
@@ -156,7 +166,8 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
     let avanceMontant = 0;
     if (avanceActive) {
       if (avanceType === 'pourcentage') {
-        avanceMontant = Math.round((totalDevis * avancePourcentage) / 100);
+        const percentage = avancePourcentage === "" ? 0 : avancePourcentage;
+        avanceMontant = Math.round((totalDevis * percentage) / 100);
       } else {
         avanceMontant = avanceFixe;
       }
@@ -185,7 +196,8 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
     let avanceMontant = 0;
     if (avanceActive) {
       if (avanceType === 'pourcentage') {
-        avanceMontant = Math.round((totalDevis * avancePourcentage) / 100);
+        const percentage = avancePourcentage === "" ? 0 : avancePourcentage;
+        avanceMontant = Math.round((totalDevis * percentage) / 100);
       } else {
         avanceMontant = avanceFixe;
       }
@@ -228,7 +240,8 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
   let avanceMontant = 0;
   if (avanceActive) {
     if (avanceType === 'pourcentage') {
-      avanceMontant = Math.round((totalDevis * avancePourcentage) / 100);
+      const percentage = avancePourcentage === "" ? 0 : avancePourcentage;
+      avanceMontant = Math.round((totalDevis * percentage) / 100);
     } else {
       avanceMontant = avanceFixe;
     }
@@ -323,7 +336,10 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
                 <input 
                   type="number" 
                   value={avancePourcentage} 
-                  onChange={e => handleAvancePourcentageChange(Number(e.target.value))} 
+                  onChange={e => {
+                    const val = e.target.value;
+                    handleAvancePourcentageChange(val === "" ? "" : Number(val));
+                  }} 
                   style={s.input as any} 
                 />
               </Field>

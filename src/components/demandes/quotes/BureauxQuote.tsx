@@ -69,15 +69,17 @@ interface BureauxQuoteProps {
 export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQuoteProps) {
   const data = demande.formulaire_data || {};
 
-  const [prestationType, setPrestationType] = useState(data.produits ? "avec_produit" : "sans_produit");
-  const [heures, setHeures] = useState(data.nb_heures || data.heures || data.duree || data.duration || 3);
-  const [personnes, setPersonnes] = useState(data.nb_intervenantes || data.nb_intervenants || data.numberOfPeople || 1);
+  const [prestationType, setPrestationType] = useState(() => data.produits ? "avec_produit" : "sans_produit");
+  const [heures, setHeures] = useState(() => data.nb_heures || data.heures || data.duree || data.duration || demande.nb_heures || 3);
+  const [personnes, setPersonnes] = useState(() => data.nb_intervenantes || data.nb_intervenants || data.numberOfPeople || demande.nb_intervenants || 1);
   
   // frequency state
   const [frequency, setFrequency] = useState(() => {
     if (data.frequency) return data.frequency;
     if (data.frequence === "une fois" || data.frequence === "oneshot") return "oneshot";
     if (data.reduction_abonnement === 10 || (data.frequence && data.frequence !== "une fois")) return "subscription";
+    if (demande.frequency === "oneshot" || demande.frequency_label === "une fois") return "oneshot";
+    if (demande.frequency === "abonnement" || (demande.frequency_label && demande.frequency_label !== "une fois")) return "subscription";
     return "oneshot";
   });
 
@@ -87,8 +89,56 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
     if (data.frequence && data.frequence !== "une fois") {
       return uiSubFreqMap[data.frequence] || "1foisParSemaine";
     }
+    if (demande.frequency_label && demande.frequency_label !== "une fois") {
+      return uiSubFreqMap[demande.frequency_label] || "1foisParSemaine";
+    }
     return "1foisParSemaine";
   });
+
+  // Keep state in sync with prop updates (e.g. when modified via modal)
+  useEffect(() => {
+    const freshData = demande.formulaire_data || {};
+    setPrestationType(freshData.produits ? "avec_produit" : "sans_produit");
+    setHeures(freshData.nb_heures || freshData.heures || freshData.duree || freshData.duration || demande.nb_heures || 3);
+    setPersonnes(freshData.nb_intervenantes || freshData.nb_intervenants || freshData.numberOfPeople || demande.nb_intervenants || 1);
+
+    const nextFrequency = (() => {
+      if (freshData.frequency) return freshData.frequency;
+      if (freshData.frequence === "une fois" || freshData.frequence === "oneshot") return "oneshot";
+      if (freshData.reduction_abonnement === 10 || (freshData.frequence && freshData.frequence !== "une fois")) return "subscription";
+      if (demande.frequency === "oneshot" || demande.frequency_label === "une fois") return "oneshot";
+      if (demande.frequency === "abonnement" || (demande.frequency_label && demande.frequency_label !== "une fois")) return "subscription";
+      return "oneshot";
+    })();
+    setFrequency(nextFrequency);
+
+    const nextSubFrequency = (() => {
+      if (freshData.subFrequency) return freshData.subFrequency;
+      if (freshData.frequence && freshData.frequence !== "une fois") {
+        return uiSubFreqMap[freshData.frequence] || "1foisParSemaine";
+      }
+      if (demande.frequency_label && demande.frequency_label !== "une fois") {
+        return uiSubFreqMap[demande.frequency_label] || "1foisParSemaine";
+      }
+      return "1foisParSemaine";
+    })();
+    setSubFrequency(nextSubFrequency);
+  }, [
+    demande.id,
+    demande.frequency,
+    demande.frequency_label,
+    demande.formulaire_data?.produits,
+    demande.formulaire_data?.duree,
+    demande.formulaire_data?.duration,
+    demande.formulaire_data?.nb_heures,
+    demande.formulaire_data?.heures,
+    demande.formulaire_data?.nb_intervenants,
+    demande.formulaire_data?.nb_intervenantes,
+    demande.formulaire_data?.numberOfPeople,
+    demande.formulaire_data?.frequence,
+    demande.formulaire_data?.frequency,
+    demande.formulaire_data?.subFrequency
+  ]);
 
   const minHours = frequency === "oneshot" ? 4 : 2;
 
@@ -136,8 +186,12 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
     onPrestationsChange(prestations, total, {
       nb_heures: heures,
       heures,
+      duree: heures,
+      duration: heures,
       nb_intervenantes: personnes,
       nb_intervenants: personnes,
+      nb_personnel: personnes,
+      numberOfPeople: personnes,
       nb_passages_mois: nbPassages,
       reduction_abonnement: isAbo ? 10 : 0,
       prix_base: isAbo ? Math.round(heures * personnes * hourlyRate * nbPassages) : total,

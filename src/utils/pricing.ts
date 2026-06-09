@@ -252,19 +252,7 @@ export const estimateResources = (service: string, input: any): { duration: numb
     }
 
     if (serviceLower.includes('menage bureaux')) {
-        const s = input.surface;
-        if (typeof s === 'string') {
-            if (s === '0-70') return { duration: 2, people: 1 };
-            if (s === '71-150') return { duration: 4, people: 1 };
-            if (s === '151-300') return { duration: 8, people: 1 };
-            if (s === '300+') return { duration: 8, people: 2 };
-        }
-        
-        const numS = Number(s) || 0;
-        if (numS <= 70) return { duration: 2, people: 1 };
-        if (numS <= 150) return { duration: 4, people: 1 };
-        if (numS <= 300) return { duration: 8, people: 1 };
-        return { duration: 8, people: 2 };
+        return null;
     }
 
     return null;

@@ -60,7 +60,7 @@ function NewQuotePage() {
       vat_rate: 20,
       advance_required: false,
       advance_mode: "percent",
-      advance_percent: 30,
+      advance_percent: "" as any,
       advance_amount: 0,
     },
   });

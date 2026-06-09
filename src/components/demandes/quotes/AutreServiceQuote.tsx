@@ -43,7 +43,11 @@ export default function AutreServiceQuote({
   // Advance payment states
   const [advanceRequired, setAdvanceRequired] = useState<boolean>(Boolean(data.advance_required));
   const [advanceMode, setAdvanceMode] = useState<'percent' | 'fixed'>(data.advance_mode || 'percent');
-  const [advancePercent, setAdvancePercent] = useState<number>(data.advance_percent !== undefined ? Number(data.advance_percent) : 30);
+  const [advancePercent, setAdvancePercent] = useState<number | "">(
+    data.advance_percent !== undefined && data.advance_percent !== null && data.advance_percent !== ""
+      ? Number(data.advance_percent)
+      : ""
+  );
   const [advanceAmount, setAdvanceAmount] = useState<number>(data.advance_amount !== undefined ? Number(data.advance_amount) : 0);
 
   // Options checklist
@@ -73,7 +77,11 @@ export default function AutreServiceQuote({
     setVatRate(freshData.vat_rate !== undefined ? Number(freshData.vat_rate) : 20);
     setAdvanceRequired(Boolean(freshData.advance_required));
     setAdvanceMode(freshData.advance_mode || 'percent');
-    setAdvancePercent(freshData.advance_percent !== undefined ? Number(freshData.advance_percent) : 30);
+    setAdvancePercent(
+      freshData.advance_percent !== undefined && freshData.advance_percent !== null && freshData.advance_percent !== ""
+        ? Number(freshData.advance_percent)
+        : ""
+    );
     setAdvanceAmount(freshData.advance_amount !== undefined ? Number(freshData.advance_amount) : 0);
     setOptions(freshData.options || DEFAULT_OPTIONS);
   }, [demande.id, externalFormData]);
@@ -120,7 +128,7 @@ export default function AutreServiceQuote({
   const totalTtc = baseHt + tvaAmount;
 
   const calculatedAdvance = advanceRequired
-    ? (advanceMode === 'percent' ? Math.round((totalTtc * advancePercent) / 100) : advanceAmount)
+    ? (advanceMode === 'percent' ? Math.round((totalTtc * (advancePercent === "" ? 0 : advancePercent)) / 100) : advanceAmount)
     : 0;
 
   const balanceDue = Math.max(0, totalTtc - calculatedAdvance);
@@ -577,9 +585,10 @@ export default function AutreServiceQuote({
                   max="100"
                   value={advancePercent}
                   onChange={e => {
-                    const val = parseInt(e.target.value) || 0;
-                    setAdvancePercent(val);
-                    update({ advance_percent: val, avance_pourcentage: val });
+                    const val = e.target.value;
+                    const parsed = val === "" ? "" : parseInt(val) || 0;
+                    setAdvancePercent(parsed);
+                    update({ advance_percent: parsed, avance_pourcentage: parsed });
                   }}
                   style={s.input as any}
                 />

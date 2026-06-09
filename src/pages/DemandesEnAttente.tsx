@@ -160,12 +160,12 @@ export default function DemandesEnAttente() {
     vat_rate: 20,
     advance_required: false,
     advance_mode: 'percent',
-    advance_percent: 30,
+    advance_percent: "" as number | "",
     advance_amount: 0,
     avance_paiement: 0,
     avance_active: false,
     avance_type: 'percent',
-    avance_pourcentage: 30,
+    avance_pourcentage: "" as number | "",
     avance_fixe: 0
   });
 
@@ -575,8 +575,8 @@ export default function DemandesEnAttente() {
         { key: "torchons", label: "Torchons et serpillières", price: 0, enabled: false },
         { key: "machines", label: "Machines et équipements (aspirateur, vapeur, etc.)", price: 0, enabled: false }
       ],
-      vat_rate: 20, advance_required: false, advance_mode: 'percent', advance_percent: 30, advance_amount: 0,
-      avance_paiement: 0, avance_active: false, avance_type: 'percent', avance_pourcentage: 30, avance_fixe: 0
+      vat_rate: 20, advance_required: false, advance_mode: 'percent', advance_percent: "", advance_amount: 0,
+      avance_paiement: 0, avance_active: false, avance_type: 'percent', avance_pourcentage: "", avance_fixe: 0
     });
     setShowCreateModal(true);
     setShowNewMenu(false);
@@ -661,12 +661,12 @@ export default function DemandesEnAttente() {
       vat_rate: d.formulaire_data?.vat_rate !== undefined ? Number(d.formulaire_data?.vat_rate) : 20,
       advance_required: d.formulaire_data?.advance_required || d.formulaire_data?.avance_active || false,
       advance_mode: d.formulaire_data?.advance_mode || d.formulaire_data?.avance_type || 'percent',
-      advance_percent: d.formulaire_data?.advance_percent !== undefined ? Number(d.formulaire_data?.advance_percent) : (d.formulaire_data?.avance_pourcentage !== undefined ? Number(d.formulaire_data?.avance_pourcentage) : 30),
+      advance_percent: d.formulaire_data?.advance_percent !== undefined && d.formulaire_data?.advance_percent !== null && d.formulaire_data?.advance_percent !== "" ? Number(d.formulaire_data?.advance_percent) : (d.formulaire_data?.avance_pourcentage !== undefined && d.formulaire_data?.avance_pourcentage !== null && d.formulaire_data?.avance_pourcentage !== "" ? Number(d.formulaire_data?.avance_pourcentage) : ""),
       advance_amount: d.formulaire_data?.advance_amount || d.formulaire_data?.avance_fixe || 0,
       avance_paiement: d.formulaire_data?.avance_paiement || 0,
       avance_active: d.formulaire_data?.avance_active || d.formulaire_data?.advance_required || false,
       avance_type: d.formulaire_data?.avance_type || d.formulaire_data?.advance_mode || 'percent',
-      avance_pourcentage: d.formulaire_data?.avance_pourcentage !== undefined ? Number(d.formulaire_data?.avance_pourcentage) : (d.formulaire_data?.advance_percent !== undefined ? Number(d.formulaire_data?.advance_percent) : 30),
+      avance_pourcentage: d.formulaire_data?.avance_pourcentage !== undefined && d.formulaire_data?.avance_pourcentage !== null && d.formulaire_data?.avance_pourcentage !== "" ? Number(d.formulaire_data?.avance_pourcentage) : (d.formulaire_data?.advance_percent !== undefined && d.formulaire_data?.advance_percent !== null && d.formulaire_data?.advance_percent !== "" ? Number(d.formulaire_data?.advance_percent) : ""),
       avance_fixe: d.formulaire_data?.avance_fixe || d.formulaire_data?.advance_amount || 0
     });
     setShowCreateModal(true);
@@ -751,12 +751,12 @@ export default function DemandesEnAttente() {
       vat_rate: d.formulaire_data?.vat_rate !== undefined ? Number(d.formulaire_data?.vat_rate) : 20,
       advance_required: d.formulaire_data?.advance_required || d.formulaire_data?.avance_active || false,
       advance_mode: d.formulaire_data?.advance_mode || d.formulaire_data?.avance_type || 'percent',
-      advance_percent: d.formulaire_data?.advance_percent !== undefined ? Number(d.formulaire_data?.advance_percent) : (d.formulaire_data?.avance_pourcentage !== undefined ? Number(d.formulaire_data?.avance_pourcentage) : 30),
+      advance_percent: d.formulaire_data?.advance_percent !== undefined && d.formulaire_data?.advance_percent !== null && d.formulaire_data?.advance_percent !== "" ? Number(d.formulaire_data?.advance_percent) : (d.formulaire_data?.avance_pourcentage !== undefined && d.formulaire_data?.avance_pourcentage !== null && d.formulaire_data?.avance_pourcentage !== "" ? Number(d.formulaire_data?.avance_pourcentage) : ""),
       advance_amount: d.formulaire_data?.advance_amount || d.formulaire_data?.avance_fixe || 0,
       avance_paiement: d.formulaire_data?.avance_paiement || 0,
       avance_active: d.formulaire_data?.avance_active || d.formulaire_data?.advance_required || false,
       avance_type: d.formulaire_data?.avance_type || d.formulaire_data?.advance_mode || 'percent',
-      avance_pourcentage: d.formulaire_data?.avance_pourcentage !== undefined ? Number(d.formulaire_data?.avance_pourcentage) : (d.formulaire_data?.advance_percent !== undefined ? Number(d.formulaire_data?.advance_percent) : 30),
+      avance_pourcentage: d.formulaire_data?.avance_pourcentage !== undefined && d.formulaire_data?.avance_pourcentage !== null && d.formulaire_data?.avance_pourcentage !== "" ? Number(d.formulaire_data?.avance_pourcentage) : (d.formulaire_data?.advance_percent !== undefined && d.formulaire_data?.advance_percent !== null && d.formulaire_data?.advance_percent !== "" ? Number(d.formulaire_data?.advance_percent) : ""),
       avance_fixe: d.formulaire_data?.avance_fixe || d.formulaire_data?.advance_amount || 0
     });
     setShowCreateModal(true);
@@ -935,7 +935,8 @@ export default function DemandesEnAttente() {
           avance_active: formData.avance_active,
           avance_type: formData.avance_type,
           avance_pourcentage: formData.avance_pourcentage,
-          avance_fixe: formData.avance_fixe
+          avance_fixe: formData.avance_fixe,
+          frequence: formData.frequence
         }
       };
 
@@ -987,6 +988,10 @@ export default function DemandesEnAttente() {
           nb_heures: patch.duree !== undefined ? patch.duree : patch.nb_heures !== undefined ? patch.nb_heures : d.nb_heures,
           nb_intervenants: patch.nb_intervenants !== undefined ? patch.nb_intervenants : d.nb_intervenants,
           avance_paiement: patch.avance_paiement !== undefined ? patch.avance_paiement : d.avance_paiement,
+          frequency: patch.frequency !== undefined 
+            ? ((patch.frequency === 'subscription' || patch.frequency === 'abonnement') ? 'abonnement' : 'oneshot') 
+            : d.frequency,
+          frequency_label: patch.frequence !== undefined ? patch.frequence : d.frequency_label,
           formulaire_data: {
             ...(d.formulaire_data || {}),
             ...patch
@@ -1017,6 +1022,13 @@ export default function DemandesEnAttente() {
       if (patch.nb_intervenants !== undefined) payload.nb_intervenants = patch.nb_intervenants;
       
       if (patch.avance_paiement !== undefined) payload.avance_paiement = patch.avance_paiement;
+
+      if (patch.frequency !== undefined) {
+        payload.frequency = (patch.frequency === 'subscription' || patch.frequency === 'abonnement') 
+          ? 'abonnement' 
+          : 'oneshot';
+      }
+      if (patch.frequence !== undefined) payload.frequency_label = patch.frequence;
 
       await updateDemande(demandeId, payload);
     } catch (e) {

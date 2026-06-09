@@ -139,7 +139,7 @@ const getAdvanceFields = (form: Record<string, any>) => {
   return {
     avanceActive: Boolean(form.avance_active),
     avanceType: form.avance_type,
-    avancePourcentage: form.avance_pourcentage !== undefined ? Number(form.avance_pourcentage) : undefined,
+    avancePourcentage: form.avance_pourcentage !== undefined && form.avance_pourcentage !== null && form.avance_pourcentage !== "" ? Number(form.avance_pourcentage) : undefined,
     avanceFixe: form.avance_fixe !== undefined ? Number(form.avance_fixe) : undefined,
     avancePaiement: form.avance_paiement !== undefined ? Number(form.avance_paiement) : undefined,
   };
@@ -246,7 +246,7 @@ const buildAutreServiceData = (demande: Demande) => {
     description: form.description || '',
     avanceRequired: Boolean(form.advance_required),
     avanceMode: form.advance_mode,
-    avancePercent: form.advance_percent !== undefined ? Number(form.advance_percent) : 30,
+    avancePercent: form.advance_percent !== undefined && form.advance_percent !== null && form.advance_percent !== "" ? Number(form.advance_percent) : 0,
     avanceAmount: form.avance_amount !== undefined ? Number(form.avance_amount) : 0,
     avancePaiement,
     surface: form.surface !== undefined ? Number(form.surface) : undefined,

@@ -357,8 +357,12 @@ export const AutreServiceForm: React.FC<FormBlockProps> = ({ formData, setFormDa
                     type="number"
                     min="0"
                     max="100"
-                    value={formData.advance_percent !== undefined ? formData.advance_percent : 30}
-                    onChange={e => setFormData({ ...formData, advance_percent: parseInt(e.target.value) || 0, avance_pourcentage: parseInt(e.target.value) || 0 })}
+                    value={formData.advance_percent !== undefined && formData.advance_percent !== null && formData.advance_percent !== "" ? formData.advance_percent : ""}
+                    onChange={e => {
+                      const val = e.target.value;
+                      const parsed = val === "" ? "" : parseInt(val) || 0;
+                      setFormData({ ...formData, advance_percent: parsed, avance_pourcentage: parsed });
+                    }}
                     style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }}
                   />
                 </div>
