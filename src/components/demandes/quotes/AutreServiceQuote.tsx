@@ -2,6 +2,51 @@ import { useEffect, useState } from "react";
 import { FormulaBox, B, s, ResultBar, fmt, Field } from "./QuoteShared";
 import type { QuotePrestationLine } from "./QuoteSection";
 
+const dbSubFreqMap: Record<string, string> = {
+  "1foisParSemaine": "1/sem",
+  "2foisParSemaine": "2/sem",
+  "3foisParSemaine": "3/sem",
+  "4foisParSemaine": "4/sem",
+  "5foisParSemaine": "5/sem",
+  "6foisParSemaine": "6/sem",
+  "7foisParSemaine": "7/sem",
+  "1foisParMois": "1/mois",
+  "2foisParMois": "2/mois",
+  "3foisParMois": "3/mois",
+  "4foisParMois": "4/mois",
+};
+
+const uiSubFreqMap: Record<string, string> = {
+  "1/sem": "1foisParSemaine",
+  "2/sem": "2foisParSemaine",
+  "3/sem": "3foisParSemaine",
+  "4/sem": "4foisParSemaine",
+  "5/sem": "5foisParSemaine",
+  "6/sem": "6foisParSemaine",
+  "7/sem": "7foisParSemaine",
+  "1/mois": "1foisParMois",
+  "2/mois": "2foisParMois",
+  "3/mois": "3foisParMois",
+  "4/mois": "4foisParMois",
+};
+
+const getCadenceLabel = (val: string) => {
+  switch (val) {
+    case "1foisParSemaine": return "1 fois par semaine";
+    case "2foisParSemaine": return "2 fois par semaine";
+    case "3foisParSemaine": return "3 fois par semaine";
+    case "4foisParSemaine": return "4 fois par semaine";
+    case "5foisParSemaine": return "5 fois par semaine";
+    case "6foisParSemaine": return "6 fois par semaine";
+    case "7foisParSemaine": return "7 fois par semaine";
+    case "1foisParMois": return "1 fois par mois";
+    case "2foisParMois": return "2 fois par mois";
+    case "3foisParMois": return "3 fois par mois";
+    case "4foisParMois": return "4 fois par mois";
+    default: return "";
+  }
+};
+
 interface AutreServiceQuoteProps {
   demande: any;
   onPrestationsChange?: (prestations: QuotePrestationLine[], total: number, extra?: Record<string, any>) => void;
@@ -31,10 +76,30 @@ export default function AutreServiceQuote({
   const [propertyCategory, setPropertyCategory] = useState(data.property_category || "logement");
   const [propertySubtype, setPropertySubtype] = useState(data.property_subtype || "Appartement");
   const [surface, setSurface] = useState<number | "">(data.surface !== undefined ? Number(data.surface) : "");
-  const [frequence, setFrequence] = useState(data.frequence || "une fois");
-  const [frequencyCustom, setFrequencyCustom] = useState(data.frequency_custom || "");
+  
+  // Frequency state
+  const [frequency, setFrequency] = useState(() => {
+    if (data.frequency) return data.frequency;
+    if (data.frequence === "une fois" || data.frequence === "oneshot") return "oneshot";
+    if (data.frequence && data.frequence !== "une fois") return "subscription";
+    if (demande.frequency === "oneshot" || demande.frequency_label === "une fois") return "oneshot";
+    if (demande.frequency === "abonnement" || (demande.frequency_label && demande.frequency_label !== "une fois")) return "subscription";
+    return "oneshot";
+  });
+
+  // SubFrequency state
+  const [subFrequency, setSubFrequency] = useState(() => {
+    if (data.subFrequency) return data.subFrequency;
+    if (data.frequence && data.frequence !== "une fois") {
+      return uiSubFreqMap[data.frequence] || "1foisParSemaine";
+    }
+    if (demande.frequency_label && demande.frequency_label !== "une fois") {
+      return uiSubFreqMap[demande.frequency_label] || "1foisParSemaine";
+    }
+    return "1foisParSemaine";
+  });
+
   const [duree, setDuree] = useState<number | "">(data.duree !== undefined ? Number(data.duree) : "");
-  const [durationUnit, setDurationUnit] = useState(data.duration_unit || "heures");
   const [nbIntervenants, setNbIntervenants] = useState<number>(data.nb_intervenants !== undefined ? Number(data.nb_intervenants) : 1);
   const [description, setDescription] = useState(data.description || "");
   const [amountHt, setAmountHt] = useState<number>(data.amount_ht !== undefined ? Number(data.amount_ht) : (Number(demande.prix) || 0));
@@ -67,10 +132,30 @@ export default function AutreServiceQuote({
     setPropertyCategory(freshData.property_category || "logement");
     setPropertySubtype(freshData.property_subtype || "Appartement");
     setSurface(freshData.surface !== undefined ? Number(freshData.surface) : "");
-    setFrequence(freshData.frequence || "une fois");
-    setFrequencyCustom(freshData.frequency_custom || "");
+    
+    const nextFrequency = (() => {
+      if (freshData.frequency) return freshData.frequency;
+      if (freshData.frequence === "une fois" || freshData.frequence === "oneshot") return "oneshot";
+      if (freshData.frequence && freshData.frequence !== "une fois") return "subscription";
+      if (demande.frequency === "oneshot" || demande.frequency_label === "une fois") return "oneshot";
+      if (demande.frequency === "abonnement" || (demande.frequency_label && demande.frequency_label !== "une fois")) return "subscription";
+      return "oneshot";
+    })();
+    setFrequency(nextFrequency);
+
+    const nextSubFrequency = (() => {
+      if (freshData.subFrequency) return freshData.subFrequency;
+      if (freshData.frequence && freshData.frequence !== "une fois") {
+        return uiSubFreqMap[freshData.frequence] || "1foisParSemaine";
+      }
+      if (demande.frequency_label && demande.frequency_label !== "une fois") {
+        return uiSubFreqMap[demande.frequency_label] || "1foisParSemaine";
+      }
+      return "1foisParSemaine";
+    })();
+    setSubFrequency(nextSubFrequency);
+
     setDuree(freshData.duree !== undefined ? Number(freshData.duree) : "");
-    setDurationUnit(freshData.duration_unit || "heures");
     setNbIntervenants(freshData.nb_intervenants !== undefined ? Number(freshData.nb_intervenants) : 1);
     setDescription(freshData.description || "");
     setAmountHt(freshData.amount_ht !== undefined ? Number(freshData.amount_ht) : (Number(demande.prix) || 0));
@@ -136,9 +221,13 @@ export default function AutreServiceQuote({
   useEffect(() => {
     if (!onPrestationsChange) return;
 
+    const freqLabel = frequency === "subscription"
+      ? (getCadenceLabel(subFrequency) || "Abonnement")
+      : "Une fois";
+
     const prestations: QuotePrestationLine[] = [
       {
-        designation: `${customServiceType} (${frequence === 'autre' ? frequencyCustom : frequence})`,
+        designation: `${customServiceType} (${freqLabel})`,
         montant: amountHt
       }
     ];
@@ -152,16 +241,21 @@ export default function AutreServiceQuote({
       }
     });
 
+    const frequenceVal = frequency === "subscription"
+      ? (dbSubFreqMap[subFrequency] || "1/sem")
+      : "une fois";
+
     onPrestationsChange(prestations, baseHt, {
       quote_number: quoteNumber,
       custom_service_type: customServiceType,
       property_category: propertyCategory,
       property_subtype: propertySubtype,
       surface: surface === "" ? undefined : surface,
-      frequence,
-      frequency_custom: frequencyCustom,
+      frequency,
+      subFrequency,
+      frequence: frequenceVal,
       duree: duree === "" ? undefined : duree,
-      duration_unit: durationUnit,
+      duration_unit: "heures",
       nb_intervenants: nbIntervenants,
       description,
       amount_ht: amountHt,
@@ -185,10 +279,9 @@ export default function AutreServiceQuote({
     propertyCategory,
     propertySubtype,
     surface,
-    frequence,
-    frequencyCustom,
+    frequency,
+    subFrequency,
     duree,
-    durationUnit,
     nbIntervenants,
     description,
     amountHt,
@@ -243,40 +336,50 @@ export default function AutreServiceQuote({
         </Field>
         <Field label="Fréquence">
           <select
-            value={frequence}
+            value={frequency}
             onChange={e => {
-              setFrequence(e.target.value);
-              update({ frequence: e.target.value });
+              const nextFreq = e.target.value;
+              setFrequency(nextFreq);
+              const nextFrequence = nextFreq === "subscription" ? dbSubFreqMap[subFrequency] || "1/sem" : "une fois";
+              update({
+                frequency: nextFreq,
+                frequence: nextFrequence,
+                subFrequency: nextFreq === "subscription" ? subFrequency : undefined
+              });
             }}
             disabled={!isLinked}
             style={s.input as any}
           >
-            <option value="une fois">Une fois (ponctuel)</option>
-            <option value="hebdomadaire">Hebdomadaire</option>
-            <option value="mensuel">Mensuel</option>
-            <option value="autre">Autre</option>
+            <option value="oneshot">Une fois (ponctuel)</option>
+            <option value="subscription">Abonnement</option>
           </select>
         </Field>
       </div>
 
-      {frequence === "autre" && (
-        <Field label="Préciser la fréquence">
-          <input
-            type="text"
-            value={frequencyCustom}
-            placeholder="Ex: 3 fois par quinzaine"
+      {frequency === "subscription" && (
+        <Field label="Cadence d'abonnement">
+          <select
+            value={subFrequency}
             onChange={e => {
-              setFrequencyCustom(e.target.value);
-              update({ frequency_custom: e.target.value });
+              const nextSubFreq = e.target.value;
+              setSubFrequency(nextSubFreq);
+              update({
+                subFrequency: nextSubFreq,
+                frequence: dbSubFreqMap[nextSubFreq] || nextSubFreq
+              });
             }}
             disabled={!isLinked}
             style={s.input as any}
-          />
+          >
+            {Object.keys(dbSubFreqMap).map(key => (
+              <option key={key} value={key}>{getCadenceLabel(key)}</option>
+            ))}
+          </select>
         </Field>
       )}
 
       {/* 2. Property & Time details */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Field label="Surface (m²)">
           <input
             type="number"
@@ -291,7 +394,7 @@ export default function AutreServiceQuote({
             style={s.input as any}
           />
         </Field>
-        <Field label="Durée de l'intervention">
+        <Field label="Durée (heures)">
           <input
             type="number"
             min="0"
@@ -300,27 +403,11 @@ export default function AutreServiceQuote({
             onChange={e => {
               const val = e.target.value === "" ? "" : parseFloat(e.target.value) || 0;
               setDuree(val);
-              update({ duree: val });
+              update({ duree: val, duration_unit: "heures" });
             }}
             disabled={!isLinked}
             style={s.input as any}
           />
-        </Field>
-        <Field label="Unité de durée">
-          <select
-            value={durationUnit}
-            onChange={e => {
-              setDurationUnit(e.target.value);
-              update({ duration_unit: e.target.value });
-            }}
-            disabled={!isLinked}
-            style={s.input as any}
-          >
-            <option value="heures">Heures</option>
-            <option value="jours">Jours</option>
-            <option value="semaines">Semaines</option>
-            <option value="mois">Mois</option>
-          </select>
         </Field>
       </div>
 
@@ -648,7 +735,7 @@ export default function AutreServiceQuote({
       </div>
 
       <ResultBar
-        detail={`${customServiceType} — ${surface || '—'} m² — ${duree || '—'} ${durationUnit}`}
+        detail={`${customServiceType} — ${surface || '—'} m² — ${duree || '—'} heures`}
         total={`${fmt(totalTtc)} DH`}
         label="Total TTC"
       />

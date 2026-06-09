@@ -13,7 +13,8 @@ export const quoteSchema = z.object({
   property_category: z.string().default("logement"),
   property_subtype: z.string().optional().default(""),
   surface: z.preprocess((val) => (val === "" || val === undefined ? undefined : Number(val)), z.number().optional()),
-  frequency: z.string().default("unique"),
+  frequency: z.string().default("oneshot"),
+  sub_frequency: z.string().optional().default("1foisParSemaine"),
   frequency_custom: z.string().optional().default(""),
   duration_value: z.preprocess((val) => (val === "" || val === undefined ? undefined : Number(val)), z.number().optional()),
   duration_unit: z.string().default("heures"),
@@ -46,17 +47,22 @@ export const propertyCategories = [
 export const logementSubtypes = ["Appartement", "Villa", "Studio", "Duplex", "Riad"];
 
 export const frequencies = [
-  { value: "unique", label: "Une fois (ponctuel)" },
-  { value: "hebdomadaire", label: "Hebdomadaire" },
-  { value: "mensuel", label: "Mensuel" },
-  { value: "autre", label: "Autre" },
+  { value: "oneshot", label: "Une fois (ponctuel)" },
+  { value: "subscription", label: "Abonnement" },
 ];
 
-export const durationUnits = [
-  { value: "heures", label: "Heures" },
-  { value: "jours", label: "Jours" },
-  { value: "semaines", label: "Semaines" },
-  { value: "mois", label: "Mois" },
+export const subFrequencies = [
+  { value: "1foisParSemaine", label: "1 fois par semaine" },
+  { value: "2foisParSemaine", label: "2 fois par semaine" },
+  { value: "3foisParSemaine", label: "3 fois par semaine" },
+  { value: "4foisParSemaine", label: "4 fois par semaine" },
+  { value: "5foisParSemaine", label: "5 fois par semaine" },
+  { value: "6foisParSemaine", label: "6 fois par semaine" },
+  { value: "7foisParSemaine", label: "7 fois par semaine" },
+  { value: "1foisParMois", label: "1 fois par mois" },
+  { value: "2foisParMois", label: "2 fois par mois" },
+  { value: "3foisParMois", label: "3 fois par mois" },
+  { value: "4foisParMois", label: "4 fois par mois" },
 ];
 
 export const defaultOptions = [

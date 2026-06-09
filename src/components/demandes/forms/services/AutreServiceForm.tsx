@@ -134,44 +134,65 @@ export const AutreServiceForm: React.FC<FormBlockProps> = ({ formData, setFormDa
       {/* 3. Planification et intervenants */}
       <div className="ws-form-block">
         <div className="ws-section-header">Planification et intervenants</div>
-        <div className="grid grid-cols-1 md:grid-cols-4" style={{ gap: '1rem', padding: '0.5rem' }}>
+        <div className="grid grid-cols-1 md:grid-cols-3" style={{ gap: '1rem', padding: '0.5rem' }}>
           <div className="form-group">
             <label className="label-teal">Fréquence</label>
             <select
               className="ws-select"
-              value={formData.frequence || 'une fois'}
-              onChange={e => setFormData({ ...formData, frequence: e.target.value })}
+              value={formData.frequency === 'subscription' || formData.frequence === 'abonnement' ? 'subscription' : 'oneshot'}
+              onChange={e => {
+                const isSub = e.target.value === 'subscription';
+                setFormData({
+                  ...formData,
+                  frequency: isSub ? 'subscription' : 'oneshot',
+                  frequence: isSub ? '1foisParSemaine' : 'une fois',
+                  subFrequency: isSub ? '1foisParSemaine' : undefined
+                });
+              }}
             >
-              <option value="une fois">Une fois (ponctuel)</option>
-              <option value="hebdomadaire">Hebdomadaire</option>
-              <option value="mensuel">Mensuel</option>
-              <option value="autre">Autre</option>
+              <option value="oneshot">Une fois (ponctuel)</option>
+              <option value="subscription">Abonnement</option>
             </select>
           </div>
+
+          {(formData.frequency === 'subscription' || formData.frequence === 'abonnement') && (
+            <div className="form-group">
+              <label className="label-teal">Cadence d'abonnement</label>
+              <select
+                className="ws-select"
+                value={formData.subFrequency || '1foisParSemaine'}
+                onChange={e => setFormData({
+                  ...formData,
+                  subFrequency: e.target.value,
+                  frequence: e.target.value
+                })}
+              >
+                <option value="1foisParSemaine">1 fois par semaine</option>
+                <option value="2foisParSemaine">2 fois par semaine</option>
+                <option value="3foisParSemaine">3 fois par semaine</option>
+                <option value="4foisParSemaine">4 fois par semaine</option>
+                <option value="5foisParSemaine">5 fois par semaine</option>
+                <option value="6foisParSemaine">6 fois par semaine</option>
+                <option value="7foisParSemaine">7 fois par semaine</option>
+                <option value="1foisParMois">1 fois par mois</option>
+                <option value="2foisParMois">2 fois par mois</option>
+                <option value="3foisParMois">3 fois par mois</option>
+                <option value="4foisParMois">4 fois par mois</option>
+              </select>
+            </div>
+          )}
+
           <div className="form-group">
-            <label className="label-teal">Durée</label>
+            <label className="label-teal">Durée (heures)</label>
             <input
               type="number"
               min="0"
               step="0.5"
               placeholder="0"
               value={formData.duree !== undefined && formData.duree !== null ? formData.duree : ''}
-              onChange={e => setFormData({ ...formData, duree: e.target.value === '' ? '' : (parseFloat(e.target.value) || 0) })}
+              onChange={e => setFormData({ ...formData, duree: e.target.value === '' ? '' : (parseFloat(e.target.value) || 0), duration_unit: 'heures' })}
               style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }}
             />
-          </div>
-          <div className="form-group">
-            <label className="label-teal">Unité de durée</label>
-            <select
-              className="ws-select"
-              value={formData.duration_unit || 'heures'}
-              onChange={e => setFormData({ ...formData, duration_unit: e.target.value })}
-            >
-              <option value="heures">Heures</option>
-              <option value="jours">Jours</option>
-              <option value="semaines">Semaines</option>
-              <option value="mois">Mois</option>
-            </select>
           </div>
           <div className="form-group">
             <label className="label-teal">Nombre d'intervenants</label>
@@ -184,22 +205,6 @@ export const AutreServiceForm: React.FC<FormBlockProps> = ({ formData, setFormDa
             />
           </div>
         </div>
-
-        {formData.frequence === 'autre' && (
-          <div style={{ padding: '0.5rem' }}>
-            <div className="form-group">
-              <label className="label-teal">Préciser la fréquence *</label>
-              <input
-                type="text"
-                required
-                placeholder="Ex: 3 fois par quinzaine..."
-                value={formData.frequency_custom || ''}
-                onChange={e => setFormData({ ...formData, frequency_custom: e.target.value })}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 4. Planning de l'intervention */}

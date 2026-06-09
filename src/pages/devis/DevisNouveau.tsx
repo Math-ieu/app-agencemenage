@@ -16,7 +16,7 @@ import {
   propertyCategories,
   logementSubtypes,
   frequencies,
-  durationUnits,
+  subFrequencies,
   defaultOptions,
   computeTotals,
   formatCurrency,
@@ -35,7 +35,8 @@ export default function DevisNouveau() {
       property_category: "logement",
       property_subtype: "Appartement",
       surface: undefined,
-      frequency: "unique",
+      frequency: "oneshot",
+      sub_frequency: "1foisParSemaine",
       frequency_custom: "",
       duration_value: undefined,
       duration_unit: "heures",
@@ -84,6 +85,24 @@ export default function DevisNouveau() {
     try {
       const finalPhone = formatPhone(data.client_phone);
 
+      const dbSubFreqMap: Record<string, string> = {
+        "1foisParSemaine": "1/sem",
+        "2foisParSemaine": "2/sem",
+        "3foisParSemaine": "3/sem",
+        "4foisParSemaine": "4/sem",
+        "5foisParSemaine": "5/sem",
+        "6foisParSemaine": "6/sem",
+        "7foisParSemaine": "7/sem",
+        "1foisParMois": "1/mois",
+        "2foisParMois": "2/mois",
+        "3foisParMois": "3/mois",
+        "4foisParMois": "4/mois",
+      };
+
+      const frequenceVal = data.frequency === "subscription"
+        ? (dbSubFreqMap[data.sub_frequency || "1foisParSemaine"] || "1/sem")
+        : "une fois";
+
       const payload = {
         client_name: data.client_name,
         client_phone: finalPhone,
@@ -96,8 +115,8 @@ export default function DevisNouveau() {
         is_devis: true,
         mode_paiement: "virement",
         statut_paiement: "non_paye",
-        frequency: data.frequency === "unique" ? "oneshot" : "abonnement",
-        frequency_label: data.frequency,
+        frequency: data.frequency === "oneshot" ? "oneshot" : "abonnement",
+        frequency_label: data.frequency === "oneshot" ? "une fois" : "abonnement",
         formulaire_data: {
           ...data,
           total: totals.amount_ttc,
@@ -108,7 +127,8 @@ export default function DevisNouveau() {
           avance_type: data.advance_mode === "percent" ? "pourcentage" : "fixe",
           avance_pourcentage: data.advance_percent,
           avance_fixe: data.advance_amount,
-          frequence: data.frequency,
+          frequence: frequenceVal,
+          subFrequency: data.sub_frequency,
         }
       };
 
@@ -225,32 +245,29 @@ export default function DevisNouveau() {
               />
             </div>
 
-            {values.frequency === "autre" && (
+            {values.frequency === "subscription" && (
               <div>
-                <Label>Préciser la fréquence</Label>
-                <Input {...form.register("frequency_custom")} />
-              </div>
-            )}
-
-            <div>
-              <Label>Durée</Label>
-              <div className="flex gap-2">
-                <Input type="number" min="0" step="0.5" {...form.register("duration_value")} />
+                <Label>Cadence d'abonnement</Label>
                 <Controller
                   control={form.control}
-                  name="duration_unit"
+                  name="sub_frequency"
                   render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                    <Select value={field.value || "1foisParSemaine"} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {durationUnits.map((u) => (
-                          <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                        {subFrequencies.map((sf) => (
+                          <SelectItem key={sf.value} value={sf.value}>{sf.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   )}
                 />
               </div>
+            )}
+
+            <div>
+              <Label>Durée (heures)</Label>
+              <Input type="number" min="0" step="0.5" {...form.register("duration_value")} />
             </div>
 
             <div>
