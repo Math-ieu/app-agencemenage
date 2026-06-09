@@ -737,6 +737,11 @@ export default function Dashboard() {
       let finalStatutPaiementUi = paymentUiValue;
       let triggerSatisfactionWhatsApp = false;
 
+      if (finalStatutPaiementUi === 'paye' && editFormData.statut !== 'pres_terminee') {
+        addToast("Le statut 'Payé' ne peut être sélectionné que si la prestation est terminée.", "error");
+        return;
+      }
+
       if (editFormData.statut === 'termine' && selectedDemande.statut !== 'termine') {
         finalStatutPaiementUi = 'paiement_en_attente';
         triggerSatisfactionWhatsApp = true;
@@ -2443,34 +2448,52 @@ export default function Dashboard() {
                                 }
                                 return true;
                               });
-                              return (
-                                <select 
-                                  value={currentPaymentStatutUi} 
-                                  disabled={isInterventionGratuiteActive}
-                                  onChange={e => {
-                                    const v = e.target.value;
-                                    const updates: any = { ...editFormData, statut_paiement_ui: v, facturation_annulee: v === 'facturation_annulee' || v === 'intervention_gratuite' };
-                                    // Auto-set encaisse_par based on payment status
-                                    if (v === 'agence_payee_client' || v === 'paye') updates.encaisse_par = 'agence';
-                                    else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
-                                    
-                                    if (v === 'facturation_annulee' || v === 'intervention_gratuite') {
-                                      updates.montant_ht = 0;
-                                      updates.tva_active = false;
-                                      updates.profil_sera_paye = true;
-                                      updates.part_agence = 0;
-                                    } else {
-                                      updates.montant_ht = editFormData.ca_initial;
-                                    }
-                                    
-                                    setEditFormData(updates);
-                                  }} 
-                                  className="edit-input"
-                                >
-                                  {optionsToRender.map(o => (<option key={o.value} value={o.value}>{o.label}</option>))}
-                                </select>
-                              );
-                            })()}
+                                return (
+                                  <>
+                                    <select 
+                                      value={currentPaymentStatutUi} 
+                                      disabled={isInterventionGratuiteActive}
+                                      onChange={e => {
+                                        const v = e.target.value;
+                                        const updates: any = { ...editFormData, statut_paiement_ui: v, facturation_annulee: v === 'facturation_annulee' || v === 'intervention_gratuite' };
+                                        // Auto-set encaisse_par based on payment status
+                                        if (v === 'agence_payee_client' || v === 'paye') updates.encaisse_par = 'agence';
+                                        else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
+                                        
+                                        if (v === 'facturation_annulee' || v === 'intervention_gratuite') {
+                                          updates.montant_ht = 0;
+                                          updates.tva_active = false;
+                                          updates.profil_sera_paye = true;
+                                          updates.part_agence = 0;
+                                        } else {
+                                          updates.montant_ht = editFormData.ca_initial;
+                                        }
+                                        
+                                        setEditFormData(updates);
+                                      }} 
+                                      className="edit-input"
+                                    >
+                                      {optionsToRender.map(o => {
+                                        const isPayeDisabled = o.value === 'paye' && editFormData.statut !== 'pres_terminee';
+                                        return (
+                                          <option 
+                                            key={o.value} 
+                                            value={o.value}
+                                            disabled={isPayeDisabled}
+                                          >
+                                            {isPayeDisabled ? `${o.label} (requiert prestation terminée)` : o.label}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                    {editFormData.statut !== 'pres_terminee' && (
+                                      <p style={{ fontSize: '11px', color: '#DC2626', fontWeight: 500, marginTop: '4px' }}>
+                                        ⚠️ Le statut "Payé" n'est accessible que si la prestation est au statut "Prestation terminée".
+                                      </p>
+                                    )}
+                                  </>
+                                );
+                              })()}
                           </div>
                           <div className="form-group">
                             <label>Montant versé (MAD)</label>
