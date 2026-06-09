@@ -1608,15 +1608,15 @@ body {
 }
 
 .tab {
-  padding: 0.75rem 0;
+  padding: 0.85rem 0.5rem;
   background: none;
   border: none;
-  font-weight: 500;
-  font-size: 0.875rem;
+  font-weight: 700;
+  font-size: 1.05rem;
   color: var(--text-muted);
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1.5px;
 }
 
 .tab:hover {
