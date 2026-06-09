@@ -26,6 +26,8 @@ import ProfilDetails from './pages/ProfilDetails.tsx';
 import Blog from './pages/seo/Blog';
 import ArticleForm from './components/blog/ArticleForm';
 import MoteurDevis from './pages/MoteurDevis';
+import DevisList from './pages/devis/DevisList';
+import DevisNouveau from './pages/devis/DevisNouveau';
 
 
 // Navigation guard function
@@ -89,7 +91,9 @@ export default function App() {
           </Route>
           <Route path="qualite" element={<PermissionRoute permission="consulter_retours_qualite"><Qualite /></PermissionRoute>} />
           <Route path="marketing" element={<PermissionRoute permission="consulter_marketing"><Marketing /></PermissionRoute>} />
-          <Route path="devis" element={<MoteurDevis />} />
+          <Route path="devis" element={<DevisList />} />
+          <Route path="devis/nouveau" element={<DevisNouveau />} />
+          <Route path="devis/calculateur" element={<MoteurDevis />} />
           <Route path="parametres">
             <Route path="profil" element={<ParametresProfil />} />
             <Route path="utilisateurs" element={<PermissionRoute permission="parametres_globaux"><ParametresUtilisateurs /></PermissionRoute>} />
