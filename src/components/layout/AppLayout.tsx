@@ -213,13 +213,26 @@ export default function AppLayout() {
         </nav>
 
         <div className="sidebar-footer">
-          {!collapsed && user && (
-            <div className="user-info">
-              <div className="user-avatar">{user.first_name?.[0]}{user.last_name?.[0]}</div>
-              <div>
-                <p className="user-name">{user.full_name}</p>
-                <p className="user-role">{user.role}</p>
+          {user && (
+            <div 
+              className={`user-info ${collapsed ? 'user-info-collapsed' : ''}`}
+              onClick={() => navigate('/parametres/profil')}
+              title={collapsed ? user.full_name : "Voir mon profil"}
+            >
+              <div className="avatar-wrapper">
+                <div className="user-avatar">
+                  {user.first_name?.[0]}{user.last_name?.[0]}
+                </div>
+                <span className="status-dot"></span>
               </div>
+              {!collapsed && (
+                <div className="user-details">
+                  <p className="user-name">{user.full_name}</p>
+                  <span className={`user-role-badge ${user.role?.toLowerCase() || ''}`}>
+                    {user.role}
+                  </span>
+                </div>
+              )}
             </div>
           )}
           <button className="logout-btn" onClick={handleLogout} title="Déconnexion">

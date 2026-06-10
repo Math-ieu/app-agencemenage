@@ -119,6 +119,12 @@ export const updateMe = (data: { first_name?: string; last_name?: string }) =>
 export const changePassword = (data: { old_password?: string; new_password?: string }) =>
   apiClient.post('/api/auth/change-password/', data);
 
+export const forgotPassword = (loginVal: string) =>
+  apiClient.post('/api/auth/forgot-password/', { login: loginVal });
+
+export const resetPassword = (data: { new_password?: string; uid?: string; token?: string; login?: string; code?: string }) =>
+  apiClient.post('/api/auth/reset-password/', data);
+
 export const getRolesPermissions = () =>
   apiClient.get('/api/auth/roles-permissions/');
 

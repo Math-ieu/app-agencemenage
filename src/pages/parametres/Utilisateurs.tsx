@@ -512,6 +512,11 @@ const mapApiToLocalUser = (apiUser: any): User => {
 };
 
 /* ─── User Form Dialog ──────────────────────────────────────────────────────── */
+const generateUsernameFromEmail = (email: string): string => {
+  const base = email.split('@')[0] || "";
+  return base.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
+};
+
 function UserFormDialog({ open, onClose, initial, onSubmit }: {
   open: boolean;
   onClose: () => void;
@@ -538,6 +543,17 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
 
   const set = (key: keyof UserFormValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setValues((v) => ({ ...v, [key]: e.target.value }));
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const email = e.target.value;
+    setValues((v) => {
+      const username = isEdit ? v.username : generateUsernameFromEmail(email);
+      return { ...v, email, username };
+    });
+    if (errors.email || errors.username) {
+      setErrors((prev) => ({ ...prev, email: undefined, username: undefined }));
+    }
+  };
 
   const validate = () => {
     const e: Partial<UserFormValues> = {};
@@ -646,10 +662,10 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
               <label style={labelStyle}>Nom d'utilisateur <span style={{ color: "#E24B4A" }}>*</span></label>
               <input
                 autoComplete="username"
-                style={inputStyle(errors.username)}
+                style={{ ...inputStyle(errors.username), opacity: 0.65, cursor: "not-allowed" }}
                 value={values.username}
-                onChange={set("username")}
-                placeholder="Ex: selamrani"
+                disabled={true}
+                placeholder="Généré automatiquement"
               />
               {errors.username && <p style={errStyle}>{errors.username}</p>}
             </div>
@@ -660,7 +676,7 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
                 autoComplete="email"
                 style={inputStyle(errors.email)}
                 value={values.email}
-                onChange={set("email")}
+                onChange={handleEmailChange}
                 placeholder="sofia@example.ma"
               />
               {errors.email && <p style={errStyle}>{errors.email}</p>}

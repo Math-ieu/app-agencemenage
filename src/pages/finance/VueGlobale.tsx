@@ -1319,8 +1319,8 @@ export default function VueGlobale() {
   }, [facturationData, globalTableDateFrom, globalTableDateTo, globalTableSearch]);
 
   const suiviBaseRows = useMemo(() => {
-    return periodFilteredRows;
-  }, [periodFilteredRows]);
+    return facturationData;
+  }, [facturationData]);
 
   const filteredSuiviRows = useMemo(() => {
     return suiviBaseRows.filter((row) => {

@@ -1,16 +1,29 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
-import { login } from '../api/client';
-import { Eye, EyeOff, Loader2, Mail, Lock, ArrowRight } from 'lucide-react';
+import { login, forgotPassword, resetPassword } from '../api/client';
+import { Eye, EyeOff, Loader2, Mail, User, Lock, ArrowRight, X } from 'lucide-react';
 import logoUrl from '../assets/LOGO-AGENCE-MENAGE.png';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [loginVal, setLoginVal] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Forgot password flow states
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotLogin, setForgotLogin] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
 
@@ -19,13 +32,50 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const { data } = await login(email, password);
+      const { data } = await login(loginVal, password);
       setAuth(data.user);
       navigate('/');
     } catch {
-      setError('Email ou mot de passe incorrect.');
+      setError('Identifiants incorrects.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotLoading(true);
+    try {
+      await forgotPassword(forgotLogin);
+      setForgotSuccess(true);
+    } catch (err: any) {
+      setForgotError(err.response?.data?.detail || 'Une erreur est survenue.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotLoading(true);
+    try {
+      await resetPassword({
+        login: forgotLogin,
+        code: otpCode,
+        new_password: newPassword
+      });
+      setShowForgot(false);
+      setForgotSuccess(false);
+      setForgotLogin('');
+      setOtpCode('');
+      setNewPassword('');
+      setError('Mot de passe réinitialisé avec succès. Connectez-vous.');
+    } catch (err: any) {
+      setForgotError(err.response?.data?.error || 'Code de validation incorrect ou expiré.');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -335,6 +385,101 @@ export default function LoginPage() {
           opacity: 0.8;
           z-index: 1;
         }
+
+        /* Recovery Modal */
+        .lp-modal-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 100;
+          background: rgba(9, 10, 15, 0.85);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+        }
+
+        .lp-modal-card {
+          width: 100%;
+          max-width: 440px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 24px;
+          padding: 40px 36px;
+          box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+          position: relative;
+          color: #ffffff;
+        }
+
+        .lp-modal-close {
+          position: absolute;
+          top: 24px;
+          right: 24px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #94a3b8;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: color 0.15s;
+        }
+
+        .lp-modal-close:hover {
+          color: #ffffff;
+        }
+
+        .lp-modal-title {
+          font-family: 'DM Serif Display', Georgia, serif;
+          font-size: 26px;
+          font-weight: 400;
+          margin-bottom: 8px;
+          letter-spacing: 0.02em;
+        }
+
+        .lp-modal-desc {
+          font-size: 14px;
+          color: #cbd5e1;
+          margin-bottom: 24px;
+          line-height: 1.5;
+        }
+
+        .lp-otp-group {
+          display: flex;
+          justify-content: center;
+          gap: 8px !important;
+          width: 100%;
+        }
+
+        .otp-slot {
+          width: 46px !important;
+          height: 52px !important;
+          background: rgba(255, 255, 255, 0.03) !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          border-radius: 10px !important;
+          color: #ffffff !important;
+          font-size: 20px !important;
+          font-weight: 600 !important;
+          transition: all 0.2s !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          margin: 0 !important;
+          outline: none !important;
+        }
+
+        .otp-slot.ring-2 {
+          border-color: #037265 !important;
+          --tw-ring-color: #037265 !important;
+          box-shadow: 0 0 0 4px rgba(3, 114, 101, 0.25) !important;
+          background: rgba(255, 255, 255, 0.08) !important;
+        }
+
+        .animate-caret-blink {
+          background-color: #037265 !important;
+          width: 2px !important;
+          height: 20px !important;
+        }
       `}</style>
 
       <div className="lp-root">
@@ -357,15 +502,17 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="lp-form">
             <div className="lp-field">
-              <label htmlFor="email">Adresse email</label>
+              <label htmlFor="loginVal">Adresse e-mail ou Nom d'utilisateur</label>
               <div className="lp-input-wrap">
-                <span className="lp-input-icon"><Mail size={16} /></span>
+                <span className="lp-input-icon">
+                  {loginVal.includes('@') ? <Mail size={16} /> : <User size={16} />}
+                </span>
                 <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="admin@agencemenage.ma"
+                  id="loginVal"
+                  type="text"
+                  value={loginVal}
+                  onChange={e => setLoginVal(e.target.value)}
+                  placeholder="Ex: sofia@example.ma ou sofia"
                   required
                   autoFocus
                 />
@@ -395,7 +542,7 @@ export default function LoginPage() {
                 <input type="checkbox" id="remember" />
                 Se souvenir de moi
               </label>
-              <a href="#" className="lp-forgot">Mot de passe oublié ?</a>
+              <a href="#" onClick={(e) => { e.preventDefault(); setShowForgot(true); }} className="lp-forgot">Mot de passe oublié ?</a>
             </div>
 
             {error && <p className="lp-error">{error}</p>}
@@ -417,6 +564,117 @@ export default function LoginPage() {
         <div className="lp-footer">
           © {new Date().getFullYear()} Agence Ménage — Tous droits réservés
         </div>
+
+        {showForgot && (
+          <div className="lp-modal-overlay" onClick={() => { setShowForgot(false); setForgotSuccess(false); }}>
+            <div className="lp-modal-card" onClick={(e) => e.stopPropagation()}>
+              <button className="lp-modal-close" onClick={() => { setShowForgot(false); setForgotSuccess(false); }}>
+                <X size={20} />
+              </button>
+
+              {!forgotSuccess ? (
+                <form onSubmit={handleForgotSubmit} className="lp-form">
+                  <h2 className="lp-modal-title">Mot de passe oublié</h2>
+                  <p className="lp-modal-desc">
+                    Entrez votre adresse e-mail ou votre nom d'utilisateur. Nous vous enverrons un code de réinitialisation à 6 chiffres par e-mail.
+                  </p>
+
+                  <div className="lp-field">
+                    <label htmlFor="forgotLogin">Identifiant (Email ou Nom d'utilisateur)</label>
+                    <div className="lp-input-wrap">
+                      <span className="lp-input-icon">
+                        {forgotLogin.includes('@') ? <Mail size={16} /> : <User size={16} />}
+                      </span>
+                      <input
+                        id="forgotLogin"
+                        type="text"
+                        value={forgotLogin}
+                        onChange={e => setForgotLogin(e.target.value)}
+                        placeholder="sofia@example.ma ou sofia"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  {forgotError && <p className="lp-error">{forgotError}</p>}
+
+                  <button type="submit" className="lp-submit" disabled={forgotLoading}>
+                    {forgotLoading ? (
+                      <Loader2 size={18} className="lp-spin" />
+                    ) : (
+                      <>
+                        <span>Envoyer les instructions</span>
+                        <ArrowRight size={16} />
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleResetSubmit} className="lp-form">
+                  <h2 className="lp-modal-title">Nouveau mot de passe</h2>
+                  <p className="lp-modal-desc">
+                    Un e-mail a été envoyé à l'adresse associée à votre compte. Saisissez le code à 6 chiffres reçu et votre nouveau mot de passe.
+                  </p>
+
+                  <div className="lp-field" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#f1f5f9', marginBottom: '12px', letterSpacing: '0.02em', alignSelf: 'flex-start' }}>
+                      Code de validation (6 chiffres)
+                    </label>
+                    <div className="flex justify-center mb-4">
+                      <InputOTP
+                        maxLength={6}
+                        value={otpCode}
+                        onChange={setOtpCode}
+                        autoFocus
+                      >
+                        <InputOTPGroup className="lp-otp-group">
+                          <InputOTPSlot index={0} className="otp-slot" />
+                          <InputOTPSlot index={1} className="otp-slot" />
+                          <InputOTPSlot index={2} className="otp-slot" />
+                          <InputOTPSlot index={3} className="otp-slot" />
+                          <InputOTPSlot index={4} className="otp-slot" />
+                          <InputOTPSlot index={5} className="otp-slot" />
+                        </InputOTPGroup>
+                      </InputOTP>
+                    </div>
+                  </div>
+
+                  <div className="lp-field">
+                    <label htmlFor="newPassword">Nouveau mot de passe</label>
+                    <div className="lp-input-wrap">
+                      <span className="lp-input-icon"><Lock size={16} /></span>
+                      <input
+                        id="newPassword"
+                        type={showNewPwd ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        placeholder="Min. 8 caractères, 1 majuscule, 1 chiffre"
+                        required
+                      />
+                      <button type="button" className="lp-pwd-toggle" onClick={() => setShowNewPwd(v => !v)}>
+                        {showNewPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {forgotError && <p className="lp-error">{forgotError}</p>}
+
+                  <button type="submit" className="lp-submit" disabled={forgotLoading}>
+                    {forgotLoading ? (
+                      <Loader2 size={18} className="lp-spin" />
+                    ) : (
+                      <>
+                        <span>Valider le mot de passe</span>
+                        <ArrowRight size={16} />
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
