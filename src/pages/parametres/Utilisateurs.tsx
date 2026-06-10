@@ -36,115 +36,115 @@ interface UserFormValues {
 /* ─── Données & Config ─────────────────────────────────────────────────────── */
 const PERMISSIONS = [
   // Tableau de bord
-  { key: "consulter_dashboard",           label: "Accéder / consulter au tableau de bord", group: "Tableau de bord" },
+  { key: "consulter_dashboard", label: "Accéder / consulter au tableau de bord", group: "Tableau de bord" },
   { key: "consulter_compte_client_dashboard", label: "Consulter le compte client", group: "Tableau de bord" },
-  { key: "editer_besoin",                 label: "Éditer le besoin (formulaire de la demande, espace agence)", group: "Tableau de bord" },
-  { key: "confirmation_avant_operation",  label: "Confirmation avant opération", group: "Tableau de bord" },
-  { key: "supprimer_demande_dashboard",   label: "Supprimer une demande", group: "Tableau de bord" },
-  { key: "facturation_annulee",           label: "Facturation annulée", group: "Tableau de bord" },
-  { key: "annulation_demande",            label: "Annulation de la demande", group: "Tableau de bord" },
+  { key: "editer_besoin", label: "Éditer le besoin (formulaire de la demande, espace agence)", group: "Tableau de bord" },
+  { key: "confirmation_avant_operation", label: "Confirmation avant opération", group: "Tableau de bord" },
+  { key: "supprimer_demande_dashboard", label: "Supprimer une demande", group: "Tableau de bord" },
+  { key: "facturation_annulee", label: "Facturation annulée", group: "Tableau de bord" },
+  { key: "annulation_demande", label: "Annulation de la demande", group: "Tableau de bord" },
   { key: "note_operationnelle_dashboard", label: "Note opérationnelle", group: "Tableau de bord" },
-  { key: "note_commerciale_dashboard",    label: "Note commercial", group: "Tableau de bord" },
-  { key: "assigner_charge_operation",     label: "Assigner à un chargé opération", group: "Tableau de bord" },
+  { key: "note_commerciale_dashboard", label: "Note commercial", group: "Tableau de bord" },
+  { key: "assigner_charge_operation", label: "Assigner à un chargé opération", group: "Tableau de bord" },
   { key: "application_taux_horaire_standard", label: "Application de taux horaire standard", group: "Tableau de bord" },
-  { key: "taux_horaire_exceptionnel",     label: "Taux horaire exceptionnel", group: "Tableau de bord" },
-  { key: "taux_forfaitaire",              label: "Taux forfaitaire", group: "Tableau de bord" },
+  { key: "taux_horaire_exceptionnel", label: "Taux horaire exceptionnel", group: "Tableau de bord" },
+  { key: "taux_forfaitaire", label: "Taux forfaitaire", group: "Tableau de bord" },
 
   // Demandes en attente
-  { key: "creer_demande",                 label: "Créer une nouvelle demande", group: "Demandes en attente" },
-  { key: "creer_devis",                   label: "Créer un devis", group: "Demandes en attente" },
-  { key: "modifier_demande",              label: "Modifier une demande", group: "Demandes en attente" },
-  { key: "consulter_demandes",            label: "Consulter les demandes en attente", group: "Demandes en attente" },
-  { key: "affecter_commercial",           label: "Assigner à un commercial", group: "Demandes en attente" },
-  { key: "valider_demandes",              label: "Valider & convertir en mission", group: "Demandes en attente" },
-  { key: "refuser_demande",               label: "Refuser / annuler une demande", group: "Demandes en attente" },
+  { key: "creer_demande", label: "Créer une nouvelle demande", group: "Demandes en attente" },
+  { key: "creer_devis", label: "Créer un devis", group: "Demandes en attente" },
+  { key: "modifier_demande", label: "Modifier une demande", group: "Demandes en attente" },
+  { key: "consulter_demandes", label: "Consulter les demandes en attente", group: "Demandes en attente" },
+  { key: "affecter_commercial", label: "Assigner à un commercial", group: "Demandes en attente" },
+  { key: "valider_demandes", label: "Valider & convertir en mission", group: "Demandes en attente" },
+  { key: "refuser_demande", label: "Refuser / annuler une demande", group: "Demandes en attente" },
 
   // Listing profils
-  { key: "consulter_agents",              label: "Consulter le listing des profils (agents)", group: "Listing profils" },
-  { key: "consulter_docs_confidentiels",  label: "Ouvrir la fiche profil & pièces jointes", group: "Listing profils" },
-  { key: "creer_agents",                  label: "Créer un nouveau profil", group: "Listing profils" },
-  { key: "modifier_agents",               label: "Modifier / mettre à jour un profil", group: "Listing profils" },
-  { key: "desactiver_profil",             label: "Désactiver / archiver un profil", group: "Listing profils" },
-  { key: "blacklister_agents",            label: "Blacklister un profil", group: "Listing profils" },
-  { key: "supprimer_profil",              label: "Supprimer un profil", group: "Listing profils" },
+  { key: "consulter_agents", label: "Consulter le listing des profils (agents)", group: "Listing profils" },
+  { key: "consulter_docs_confidentiels", label: "Ouvrir la fiche profil & pièces jointes", group: "Listing profils" },
+  { key: "creer_agents", label: "Créer un nouveau profil", group: "Listing profils" },
+  { key: "modifier_agents", label: "Modifier / mettre à jour un profil", group: "Listing profils" },
+  { key: "desactiver_profil", label: "Désactiver / archiver un profil", group: "Listing profils" },
+  { key: "blacklister_agents", label: "Blacklister un profil", group: "Listing profils" },
+  { key: "supprimer_profil", label: "Supprimer un profil", group: "Listing profils" },
 
   // Listing clients
-  { key: "consulter_clients",             label: "Consulter le listing clients", group: "Listing clients" },
-  { key: "consulter_compte_client",       label: "Consulter compte client", group: "Listing clients" },
-  { key: "affectation_client",            label: "Affectation client", group: "Listing clients" },
-  { key: "note_operationnelle",           label: "Note opérationnel", group: "Listing clients" },
-  { key: "note_commerciale",              label: "Note commercial", group: "Listing clients" },
-  { key: "geste_commercial",              label: "Geste commercial", group: "Listing clients" },
-  { key: "modifier_clients",              label: "Editer compte client", group: "Listing clients" },
-  { key: "blacklister_clients",           label: "Blacklister / archiver un client", group: "Listing clients" },
-  { key: "delete_client",                 label: "Supprimer définitivement", group: "Listing clients" },
+  { key: "consulter_clients", label: "Consulter le listing clients", group: "Listing clients" },
+  { key: "consulter_compte_client", label: "Consulter compte client", group: "Listing clients" },
+  { key: "affectation_client", label: "Affectation client", group: "Listing clients" },
+  { key: "note_operationnelle", label: "Note opérationnel", group: "Listing clients" },
+  { key: "note_commerciale", label: "Note commercial", group: "Listing clients" },
+  { key: "geste_commercial", label: "Geste commercial", group: "Listing clients" },
+  { key: "modifier_clients", label: "Editer compte client", group: "Listing clients" },
+  { key: "blacklister_clients", label: "Blacklister / archiver un client", group: "Listing clients" },
+  { key: "delete_client", label: "Supprimer définitivement", group: "Listing clients" },
 
   // Historique
-  { key: "consulter_historique_global",   label: "Consulter l'historique des interventions", group: "Historique" },
-  { key: "filtrer_historique",            label: "Filtrer & rechercher dans l'historique", group: "Historique" },
-  { key: "exporter_historique_csv",       label: "Exporter l'historique", group: "Historique" },
+  { key: "consulter_historique_global", label: "Consulter l'historique des interventions", group: "Historique" },
+  { key: "filtrer_historique", label: "Filtrer & rechercher dans l'historique", group: "Historique" },
+  { key: "exporter_historique_csv", label: "Exporter l'historique", group: "Historique" },
 
   // Vue globale
-  { key: "voir_la_caisse",                label: "Consulter la vue financière globale", group: "Gestion financière — Vue globale", subgroup: "VUE GLOBALE" },
-  { key: "consulter_debit",               label: "Consulter (profil doit à l'agence)", group: "Gestion financière — Vue globale", subgroup: "DÉBIT" },
-  { key: "valider_paiement_debit",        label: "Valider le paiement", group: "Gestion financière — Vue globale", subgroup: "DÉBIT" },
-  { key: "filtrer_debit",                 label: "Filtrer", group: "Gestion financière — Vue globale", subgroup: "DÉBIT" },
-  { key: "consulter_credit",              label: "Consulter (agence doit au profil)", group: "Gestion financière — Vue globale", subgroup: "CRÉDIT" },
-  { key: "valider_paiement_credit",       label: "Valider le paiement", group: "Gestion financière — Vue globale", subgroup: "CRÉDIT" },
-  { key: "filtrer_credit",                label: "Filtrer", group: "Gestion financière — Vue globale", subgroup: "CRÉDIT" },
-  { key: "consulter_factures",            label: "Consulter les factures", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
-  { key: "exporter_pdf_excel_facture",    label: "Exporter en PDF ou Excel", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
-  { key: "editer_facture",                label: "Éditer facture", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
-  { key: "modifier_facture",              label: "Modifier", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
-  { key: "editer_besoin_facture",         label: "Éditer le besoin", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
-  { key: "generer_facture",               label: "Générer facture", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
-  { key: "envoi_facture_client",          label: "Envoi de facture au client", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
-  { key: "consulter_comptes_profil",      label: "Consulter les comptes profil", group: "Gestion financière — Vue globale", subgroup: "COMPTE PROFIL" },
+  { key: "voir_la_caisse", label: "Consulter la vue financière globale", group: "Gestion financière — Vue globale", subgroup: "VUE GLOBALE" },
+  { key: "consulter_debit", label: "Consulter (profil doit à l'agence)", group: "Gestion financière — Vue globale", subgroup: "DÉBIT" },
+  { key: "valider_paiement_debit", label: "Valider le paiement", group: "Gestion financière — Vue globale", subgroup: "DÉBIT" },
+  { key: "filtrer_debit", label: "Filtrer", group: "Gestion financière — Vue globale", subgroup: "DÉBIT" },
+  { key: "consulter_credit", label: "Consulter (agence doit au profil)", group: "Gestion financière — Vue globale", subgroup: "CRÉDIT" },
+  { key: "valider_paiement_credit", label: "Valider le paiement", group: "Gestion financière — Vue globale", subgroup: "CRÉDIT" },
+  { key: "filtrer_credit", label: "Filtrer", group: "Gestion financière — Vue globale", subgroup: "CRÉDIT" },
+  { key: "consulter_factures", label: "Consulter les factures", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "exporter_pdf_excel_facture", label: "Exporter en PDF ou Excel", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "editer_facture", label: "Éditer facture", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "modifier_facture", label: "Modifier", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "editer_besoin_facture", label: "Éditer le besoin", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "generer_facture", label: "Générer facture", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "envoi_facture_client", label: "Envoi de facture au client", group: "Gestion financière — Vue globale", subgroup: "SUIVI FACTURATION" },
+  { key: "consulter_comptes_profil", label: "Consulter les comptes profil", group: "Gestion financière — Vue globale", subgroup: "COMPTE PROFIL" },
 
   // La caisse
-  { key: "consulter_solde_caisse",        label: "Consulter le solde de caisse", group: "Gestion financière — La caisse" },
-  { key: "mouvements_caisse",             label: "Encaisser un paiement client", group: "Gestion financière — La caisse" },
-  { key: "sorties_caisse",                label: "Saisir une sortie / dépense", group: "Gestion financière — La caisse" },
-  { key: "cloturer_caisse_journaliere",   label: "Clôturer la caisse journalière", group: "Gestion financière — La caisse" },
+  { key: "consulter_solde_caisse", label: "Consulter le solde de caisse", group: "Gestion financière — La caisse" },
+  { key: "mouvements_caisse", label: "Encaisser un paiement client", group: "Gestion financière — La caisse" },
+  { key: "sorties_caisse", label: "Saisir une sortie / dépense", group: "Gestion financière — La caisse" },
+  { key: "cloturer_caisse_journaliere", label: "Clôturer la caisse journalière", group: "Gestion financière — La caisse" },
 
   // Marketing
-  { key: "consulter_marketing",           label: "Consulter toutes les pages", group: "Marketing" },
-  { key: "creer_code_promo",              label: "Créer un code promo", group: "Marketing" },
-  { key: "creer_geste_commercial",        label: "Créer un geste commercial", group: "Marketing" },
-  { key: "creer_campagne",                label: "Créer une campagne", group: "Marketing" },
+  { key: "consulter_marketing", label: "Consulter toutes les pages", group: "Marketing" },
+  { key: "creer_code_promo", label: "Créer un code promo", group: "Marketing" },
+  { key: "creer_geste_commercial", label: "Créer un geste commercial", group: "Marketing" },
+  { key: "creer_campagne", label: "Créer une campagne", group: "Marketing" },
 
   // Qualité
-  { key: "consulter_retours_qualite",     label: "Consulter les avis & feedbacks clients", group: "Qualité & Feedback" },
-  { key: "repondre_avis_clients",         label: "Répondre aux avis clients", group: "Qualité & Feedback" },
-  { key: "moderer_masquer_avis",          label: "Modérer / masquer un avis", group: "Qualité & Feedback" },
-  { key: "generer_rapports_qualite",      label: "Générer les rapports qualité", group: "Qualité & Feedback" },
+  { key: "consulter_retours_qualite", label: "Consulter les avis & feedbacks clients", group: "Qualité & Feedback" },
+  { key: "repondre_avis_clients", label: "Répondre aux avis clients", group: "Qualité & Feedback" },
+  { key: "moderer_masquer_avis", label: "Modérer / masquer un avis", group: "Qualité & Feedback" },
+  { key: "generer_rapports_qualite", label: "Générer les rapports qualité", group: "Qualité & Feedback" },
 
   // SEO - Blog
-  { key: "rediger_blog",                  label: "Consulter les articles du blog", group: "SEO — Blog" },
-  { key: "modifier_articles_blog",        label: "Rédiger & modifier les articles", group: "SEO — Blog" },
-  { key: "publier_articles_blog",         label: "Publier / dépublier un article", group: "SEO — Blog" },
+  { key: "rediger_blog", label: "Consulter les articles du blog", group: "SEO — Blog" },
+  { key: "modifier_articles_blog", label: "Rédiger & modifier les articles", group: "SEO — Blog" },
+  { key: "publier_articles_blog", label: "Publier / dépublier un article", group: "SEO — Blog" },
 
   // Paramètres - Mon profil
-  { key: "consulter_infos_profil",        label: "Consulter mon profil", group: "Paramètres — Mon profil" },
-  { key: "modifier_infos_profil",         label: "Modifier mes informations", group: "Paramètres — Mon profil" },
-  { key: "modifier_mot_de_passe",         label: "Changer mon mot de passe", group: "Paramètres — Mon profil" },
-  { key: "activer_mfa",                   label: "Activer la double authentification", group: "Paramètres — Mon profil" },
+  { key: "consulter_infos_profil", label: "Consulter mon profil", group: "Paramètres — Mon profil" },
+  { key: "modifier_infos_profil", label: "Modifier mes informations", group: "Paramètres — Mon profil" },
+  { key: "modifier_mot_de_passe", label: "Changer mon mot de passe", group: "Paramètres — Mon profil" },
+  { key: "activer_mfa", label: "Activer la double authentification", group: "Paramètres — Mon profil" },
 
   // Paramètres - Utilisateurs & Rôles
-  { key: "consulter_utilisateurs",        label: "Consulter les utilisateurs back-office", group: "Paramètres — Utilisateurs & Rôles" },
-  { key: "creer_utilisateurs",            label: "Inviter / créer un utilisateur", group: "Paramètres — Utilisateurs & Rôles" },
-  { key: "parametres_globaux",            label: "Gérer les rôles & permissions", group: "Paramètres — Utilisateurs & Rôles" },
+  { key: "consulter_utilisateurs", label: "Consulter les utilisateurs back-office", group: "Paramètres — Utilisateurs & Rôles" },
+  { key: "creer_utilisateurs", label: "Inviter / créer un utilisateur", group: "Paramètres — Utilisateurs & Rôles" },
+  { key: "parametres_globaux", label: "Gérer les rôles & permissions", group: "Paramètres — Utilisateurs & Rôles" },
   { key: "activer_desactiver_utilisateurs", label: "Désactiver / réinitialiser un compte", group: "Paramètres — Utilisateurs & Rôles" }
 ];
 
 const ROLES = [
-  { key: "Admin",                      label: "Admin" },
-  { key: "Moderateur",                 label: "Modérateur" },
-  { key: "Responsable commercial",     label: "Resp. Commercial" },
-  { key: "commercial",                 label: "Commercial" },
+  { key: "Admin", label: "Admin" },
+  { key: "Moderateur", label: "Modérateur" },
+  { key: "Responsable commercial", label: "Resp. Commercial" },
+  { key: "commercial", label: "Commercial" },
   { key: "Responsable des Opérations", label: "Resp. Opérations" },
-  { key: "Chargée des Opérations",     label: "Chargée Opérations" },
-  { key: "Opérationnel",               label: "Opérationnel" },
+  { key: "Chargée des Opérations", label: "Chargée Opérations" },
+  { key: "Opérationnel", label: "Opérationnel" },
 ];
 
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
@@ -271,7 +271,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
 
 
 
-const CITIES = ["Casablanca","Rabat","Marrakech","Fès","Tanger","Agadir","Meknès","Oujda","Kénitra","Tétouan"];
+const CITIES = ["Casablanca", "Rabat", "Marrakech", "Fès", "Tanger", "Agadir", "Meknès", "Oujda", "Kénitra", "Tétouan"];
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
 function getInitials(name: string) {
@@ -308,7 +308,7 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
       animation: "slideUp 0.2s ease",
     }}>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="20 6 9 17 4 12"/>
+        <polyline points="20 6 9 17 4 12" />
       </svg>
       {message}
     </div>
@@ -640,7 +640,7 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
             </div>
           </div>
           <button type="button" onClick={onClose} style={{ width: 34, height: 34, borderRadius: 8, border: "0.5px solid #e4e4e7", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#71717a" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         </div>
 
@@ -775,7 +775,7 @@ function DeleteDialog({ user, onClose, onConfirm }: { user: User | null; onClose
       <div style={{ background: "#fff", borderRadius: 16, border: "0.5px solid #e4e4e7", width: "100%", maxWidth: 460, padding: 32 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ width: 48, height: 48, borderRadius: 12, background: "#FCEBEB", border: "0.5px solid #F7C1C1", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 18, color: "#A32D2D" }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
           </svg>
         </div>
         <p style={{ fontSize: 18, fontWeight: 600, margin: "0 0 8px", color: "#18181b" }}>Supprimer ce collaborateur ?</p>
@@ -808,7 +808,7 @@ function Pagination({ page, totalPages, total, start, end, onChange }: {
       </p>
       <div style={{ display: "flex", gap: 6 }}>
         <button style={{ ...btnBase, color: page <= 1 ? "#d1d5db" : "#71717a" }} disabled={page <= 1} onClick={() => onChange(page - 1)}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
         </button>
         {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
           <button key={n} onClick={() => onChange(n)} style={{ ...btnBase, background: n === page ? "#0F6E56" : "transparent", color: n === page ? "#9FE1CB" : "#71717a", borderColor: n === page ? "#0F6E56" : "#e4e4e7", fontWeight: n === page ? 500 : 400 }}>
@@ -816,7 +816,7 @@ function Pagination({ page, totalPages, total, start, end, onChange }: {
           </button>
         ))}
         <button style={{ ...btnBase, color: page >= totalPages ? "#d1d5db" : "#71717a" }} disabled={page >= totalPages} onClick={() => onChange(page + 1)}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6" /></svg>
         </button>
       </div>
     </div>
@@ -826,25 +826,25 @@ function Pagination({ page, totalPages, total, start, end, onChange }: {
 /* ─── Main Component ────────────────────────────────────────────────────────── */
 export default function Utilisateurs() {
   const { user } = useAuthStore();
-  const isSystemAdmin = user?.role?.toLowerCase() === 'admin';
+  const isSystemAdmin = user?.role?.toLowerCase() === 'admin' || checkPermission(user, 'manage_users').allowed;
   const [activeTab, setActiveTab] = useState<'users' | 'rights'>('users');
-  
+
   // Collaborateurs (Users) State
-  const [users, setUsers]         = useState<User[]>([]);
-  const [search, setSearch]       = useState("");
-  const [pageSize, setPageSize]   = useState(10);
-  const [page, setPage]           = useState(1);
-  const [formOpen, setFormOpen]   = useState(false);
-  const [editing, setEditing]     = useState<User | null>(null);
-  const [toDelete, setToDelete]   = useState<User | null>(null);
-  
+  const [users, setUsers] = useState<User[]>([]);
+  const [search, setSearch] = useState("");
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<User | null>(null);
+  const [toDelete, setToDelete] = useState<User | null>(null);
+
   // Droits d'accès (Permissions) State
   const [privileges, setPrivileges] = useState<Record<string, string[]>>({});
   const [draftPrivileges, setDraftPrivileges] = useState<Record<string, string[]>>({});
   const [privilegeSearch, setPrivilegeSearch] = useState("");
   const [selectedModule, setSelectedModule] = useState("all");
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
-  
+
   // Popover State
   const [activeRolePopover, setActiveRolePopover] = useState<string | null>(null);
   const [activeRowPopover, setActiveRowPopover] = useState<string | null>(null);
@@ -864,7 +864,7 @@ export default function Utilisateurs() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [activeRolePopover, activeRowPopover]);
 
-  const [toast, setToast]         = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => setToast(msg);
 
   const fetchUsers = async () => {
@@ -919,7 +919,7 @@ export default function Utilisateurs() {
         phone: values.phone || '',
         city: values.city || 'Casablanca',
       };
-      
+
       await createUser(apiPayload);
       showToast("Collaborateur créé avec succès");
       setFormOpen(false);
@@ -946,7 +946,7 @@ export default function Utilisateurs() {
         phone: values.phone || '',
         city: values.city || 'Casablanca',
       };
-      
+
       await updateUser(editing.id, apiPayload);
       showToast("Collaborateur mis à jour avec succès");
       setFormOpen(false);
@@ -1083,19 +1083,19 @@ export default function Utilisateurs() {
   const filteredModules = useMemo(() => {
     const q = privilegeSearch.trim().toLowerCase();
     const list: { group: string; perms: typeof PERMISSIONS }[] = [];
-    
+
     moduleGroups.forEach((group) => {
       if (selectedModule !== "all" && group !== selectedModule) return;
-      
+
       const matched = PERMISSIONS.filter(
         (p) => p.group === group && (!q || p.label.toLowerCase().includes(q))
       );
-      
+
       if (matched.length > 0) {
         list.push({ group, perms: matched });
       }
     });
-    
+
     return list;
   }, [privilegeSearch, selectedModule, moduleGroups]);
 
@@ -1120,11 +1120,11 @@ export default function Utilisateurs() {
     return q ? users.filter((u) => [u.fullName, u.email, u.username, u.position, u.city].join(" ").toLowerCase().includes(q)) : users;
   }, [users, search]);
 
-  const totalPages  = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
-  const curPage     = Math.min(page, totalPages);
-  const paged       = filteredUsers.slice((curPage - 1) * pageSize, curPage * pageSize);
-  const start       = filteredUsers.length === 0 ? 0 : (curPage - 1) * pageSize + 1;
-  const end         = Math.min(curPage * pageSize, filteredUsers.length);
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const curPage = Math.min(page, totalPages);
+  const paged = filteredUsers.slice((curPage - 1) * pageSize, curPage * pageSize);
+  const start = filteredUsers.length === 0 ? 0 : (curPage - 1) * pageSize + 1;
+  const end = Math.min(curPage * pageSize, filteredUsers.length);
 
   // Colors for accordion headers
   const getAccordionColor = (index: number) => {
@@ -1217,20 +1217,20 @@ export default function Utilisateurs() {
               margin: "0 auto 18px",
             }}>
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0110 0v4"/>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0110 0v4" />
               </svg>
             </div>
-            <h2 style={{ fontSize: 19, fontWeight: 600, margin: "0 0 8px", color: "#18181b" }}>Accès Administrateur Requis</h2>
+            <h2 style={{ fontSize: 19, fontWeight: 600, margin: "0 0 8px", color: "#18181b" }}>Accès Requis</h2>
             <p style={{ fontSize: 14.5, color: "#71717a", margin: 0, lineHeight: 1.6 }}>
-              Seul le compte Administrateur dispose des privilèges requis pour consulter et gérer les collaborateurs ou modifier les matrices de droits d'accès au backoffice.
+              Vous n'etes pas autorisé à accéder à cette page.
             </p>
           </div>
         </div>
       )}
 
       <div style={!isSystemAdmin ? { filter: "grayscale(100%)", opacity: 0.45, pointerEvents: "none" } : undefined}>
-        
+
         {/* Dynamic Header Section */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div>
@@ -1245,24 +1245,24 @@ export default function Utilisateurs() {
                   {activeTab === 'users' ? "Gestion des collaborateurs" : "Droits d'accès & Privilèges par rôle"}
                 </h1>
                 <p style={{ fontSize: 14.5, color: "#71717a", margin: "4px 0 0" }}>
-                  {activeTab === 'users' 
-                    ? "Gérez les comptes d'utilisateurs et leurs droits d'accès au backoffice" 
+                  {activeTab === 'users'
+                    ? "Gérez les comptes d'utilisateurs et leurs droits d'accès au backoffice"
                     : "Configurez les autorisations pour chaque rôle de l'agence."}
                 </p>
               </div>
             </div>
           </div>
-          
+
           {activeTab === 'rights' && (
             <div style={{ display: "flex", gap: 10 }}>
-              <button 
-                onClick={handleResetChanges} 
+              <button
+                onClick={handleResetChanges}
                 style={{ padding: "10px 20px", fontSize: 14.5, borderRadius: 10, border: "0.5px solid #e4e4e7", background: "#ffffff", color: "#3f3f46", cursor: "pointer", fontWeight: 500 }}
               >
                 Annuler
               </button>
-              <button 
-                onClick={handleSaveChanges} 
+              <button
+                onClick={handleSaveChanges}
                 style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 14.5, fontWeight: 500, borderRadius: 10, border: "none", background: "#0F6E56", color: "#ffffff", cursor: "pointer" }}
               >
                 <Check size={16} />
@@ -1285,14 +1285,14 @@ export default function Utilisateurs() {
         {/* ── Tab Content: Collaborateurs (Users CRUD) ── */}
         {activeTab === 'users' && (
           <CardSection
-            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>}
+            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>}
             title="Gestion des collaborateurs"
             description="Créez, modifiez, désactivez ou supprimez les comptes de l'agence"
           >
             {/* Toolbar */}
             <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
               <div style={{ flex: 1, position: "relative" }}>
-                <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#a1a1aa", pointerEvents: "none" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#a1a1aa", pointerEvents: "none" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                 <input
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -1363,7 +1363,7 @@ export default function Utilisateurs() {
                             setEditing(u);
                             setFormOpen(true);
                           }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                           </IconButton>
                           <IconButton title="Supprimer" danger onClick={() => {
                             const perm = checkPermission(user, 'manage_users');
@@ -1374,7 +1374,7 @@ export default function Utilisateurs() {
                             }
                             setToDelete(u);
                           }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
                           </IconButton>
                         </div>
                       </td>
@@ -1391,7 +1391,7 @@ export default function Utilisateurs() {
         {/* ── Tab Content: Droits d'accès & Privilèges par rôle ── */}
         {activeTab === 'rights' && (
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            
+
             {/* Horizontal Cards Row */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
               {CONFIGURABLE_ROLES.map((role) => {
@@ -1406,7 +1406,7 @@ export default function Utilisateurs() {
                       </span>
                     </div>
                     <div style={{ fontSize: 13, color: "#a1a1aa", marginTop: 2 }}>{role.description}</div>
-                    
+
                     {/* Progress Bar */}
                     <div style={{ width: "100%", height: 5, background: "#f4f4f5", borderRadius: 10, overflow: "hidden", marginTop: 12 }}>
                       <div style={{ width: `${percentage}%`, height: "100%", background: "#0F6E56", borderRadius: 10, transition: "width 0.2s" }} />
@@ -1468,7 +1468,7 @@ export default function Utilisateurs() {
                           {/* Column Bulk Actions Popover */}
                           {activeRolePopover === role.key && (
                             <div style={{ position: "absolute", top: "85%", left: "50%", transform: "translateX(-50%)", zIndex: 1000, background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, boxShadow: "0 10px 25px rgba(0,0,0,0.08)", minWidth: 170, padding: "8px 0", textAlign: "left", animation: "slideUp 0.15s ease-out" }}>
-                              
+
                               <div style={{ padding: "6px 16px 4px", fontSize: 11.5, fontWeight: 650, color: "#71717a", textTransform: "uppercase" }}>
                                 {role.label}
                               </div>
@@ -1478,9 +1478,9 @@ export default function Utilisateurs() {
                               <button onClick={() => handleBulkDeactivateRole(role.key)} className="popover-item" style={popoverItemStyle}>
                                 Tout désactiver
                               </button>
-                              
+
                               <div style={{ height: 0.5, background: "#e4e4e7", margin: "6px 0" }} />
-                              
+
                               <div style={{ padding: "4px 16px 4px", fontSize: 11.5, fontWeight: 600, color: "#a1a1aa" }}>
                                 Copier depuis...
                               </div>
@@ -1497,16 +1497,16 @@ export default function Utilisateurs() {
                       <th style={{ width: "5%", borderBottom: "1px solid #f0f0f0", background: "#ffffff" }}></th>
                     </tr>
                   </thead>
-                  
+
                   <tbody>
                     {filteredModules.map(({ group, perms }, idx) => {
                       const isExpanded = effectiveExpanded.includes(group);
                       const headerColors = getAccordionColor(idx);
                       return (
                         <React.Fragment key={group}>
-                          
+
                           {/* Collapsible Section Header (Accordion) */}
-                          <tr 
+                          <tr
                             onClick={() => toggleGroupExpand(group)}
                             style={{ background: headerColors.bg, color: headerColors.text, cursor: "pointer", userSelect: "none" }}
                           >
@@ -1519,7 +1519,7 @@ export default function Utilisateurs() {
                               </div>
                             </td>
                           </tr>
-                          
+
                           {/* Expanded Child Rows */}
                           {isExpanded && perms.map((p, pIdx) => {
                             // Compute count of active roles for this permission
@@ -1535,48 +1535,48 @@ export default function Utilisateurs() {
                                   </tr>
                                 )}
                                 <tr className="row-hover" style={{ borderBottom: "0.5px solid #e4e4e7" }}>
-                                <td style={{ padding: "14px 20px", borderBottom: "0.5px solid #e4e4e7" }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                    <span style={{ fontSize: "14px", color: "#3f3f46", fontWeight: 500 }}>{p.label}</span>
-                                    <span style={{ fontSize: "11px", color: "#71717a", background: "#f4f4f5", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
-                                      {enabledRolesCount}/5
-                                    </span>
-                                  </div>
-                                </td>
-                                
-                                {CONFIGURABLE_ROLES.map((role) => (
-                                  <td key={role.key} style={{ padding: "10px", textAlign: "center", borderBottom: "0.5px solid #e4e4e7" }}>
-                                    <Toggle 
-                                      checked={(draftPrivileges[role.key] || []).includes(p.key)} 
-                                      onChange={() => handleTogglePermission(role.key, p.key)} 
-                                      tooltip={role.label} 
-                                    />
-                                  </td>
-                                ))}
-                                
-                                {/* Row bulk actions (...) */}
-                                <td className="row-popover-wrapper" style={{ position: "relative", padding: "14px 18px", textAlign: "right", borderBottom: "0.5px solid #e4e4e7", overflow: "visible" }}>
-                                  <button
-                                    onClick={() => setActiveRowPopover(activeRowPopover === p.key ? null : p.key)}
-                                    style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", fontSize: 18, padding: "2px 8px", outline: "none" }}
-                                  >
-                                    ...
-                                  </button>
-                                  
-                                  {activeRowPopover === p.key && (
-                                    <div style={{ position: "absolute", top: "85%", right: 18, zIndex: 1000, background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, boxShadow: "0 10px 25px rgba(0,0,0,0.08)", minWidth: 160, padding: "8px 0", textAlign: "left", animation: "slideUp 0.15s ease-out" }}>
-                                      
-                                      <button onClick={() => handleBulkActivatePermission(p.key)} className="popover-item" style={popoverItemStyle}>
-                                        Activer pour tous
-                                      </button>
-                                      <button onClick={() => handleBulkDeactivatePermission(p.key)} className="popover-item" style={popoverItemStyle}>
-                                        Désactiver pour tous
-                                      </button>
+                                  <td style={{ padding: "14px 20px", borderBottom: "0.5px solid #e4e4e7" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                      <span style={{ fontSize: "14px", color: "#3f3f46", fontWeight: 500 }}>{p.label}</span>
+                                      <span style={{ fontSize: "11px", color: "#71717a", background: "#f4f4f5", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
+                                        {enabledRolesCount}/5
+                                      </span>
                                     </div>
-                                  )}
-                                </td>
-                              </tr>
-                            </React.Fragment>
+                                  </td>
+
+                                  {CONFIGURABLE_ROLES.map((role) => (
+                                    <td key={role.key} style={{ padding: "10px", textAlign: "center", borderBottom: "0.5px solid #e4e4e7" }}>
+                                      <Toggle
+                                        checked={(draftPrivileges[role.key] || []).includes(p.key)}
+                                        onChange={() => handleTogglePermission(role.key, p.key)}
+                                        tooltip={role.label}
+                                      />
+                                    </td>
+                                  ))}
+
+                                  {/* Row bulk actions (...) */}
+                                  <td className="row-popover-wrapper" style={{ position: "relative", padding: "14px 18px", textAlign: "right", borderBottom: "0.5px solid #e4e4e7", overflow: "visible" }}>
+                                    <button
+                                      onClick={() => setActiveRowPopover(activeRowPopover === p.key ? null : p.key)}
+                                      style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", fontSize: 18, padding: "2px 8px", outline: "none" }}
+                                    >
+                                      ...
+                                    </button>
+
+                                    {activeRowPopover === p.key && (
+                                      <div style={{ position: "absolute", top: "85%", right: 18, zIndex: 1000, background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, boxShadow: "0 10px 25px rgba(0,0,0,0.08)", minWidth: 160, padding: "8px 0", textAlign: "left", animation: "slideUp 0.15s ease-out" }}>
+
+                                        <button onClick={() => handleBulkActivatePermission(p.key)} className="popover-item" style={popoverItemStyle}>
+                                          Activer pour tous
+                                        </button>
+                                        <button onClick={() => handleBulkDeactivatePermission(p.key)} className="popover-item" style={popoverItemStyle}>
+                                          Désactiver pour tous
+                                        </button>
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              </React.Fragment>
                             );
                           })}
                         </React.Fragment>
@@ -1590,11 +1590,11 @@ export default function Utilisateurs() {
             {/* Info Banner */}
             <div style={{ padding: "14px 18px", background: "#E1F5EE", borderLeft: "4px solid #0F6E56", borderRadius: "0 8px 8px 0", display: "flex", gap: 10, alignItems: "flex-start", fontSize: 14, color: "#085041", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
               <span><strong>Sécurité :</strong> Seul le bouton <strong>Enregistrer</strong> applique les modifications de manière permanente sur le serveur. Les administrateurs conservent automatiquement tous les privilèges.</span>
             </div>
-            
+
           </div>
         )}
 
@@ -1612,9 +1612,9 @@ export default function Utilisateurs() {
 
 // Configuration helper structure for visual matching
 const CONFIGURABLE_ROLES = [
-  { key: "Moderateur",                 label: "Modérateur",                 description: "Supervision globale" },
-  { key: "Responsable commercial",     label: "Resp. Commercial",           description: "Pilotage commercial" },
-  { key: "commercial",                 label: "Commercial",                 description: "Terrain commercial" },
-  { key: "Responsable des Opérations", label: "Resp. Opérations",           description: "Pilotage opérations" },
-  { key: "Chargée des Opérations",     label: "Chargée Opérations",         description: "Suivi opérations" },
+  { key: "Moderateur", label: "Modérateur", description: "Supervision globale" },
+  { key: "Responsable commercial", label: "Resp. Commercial", description: "Pilotage commercial" },
+  { key: "commercial", label: "Commercial", description: "Terrain commercial" },
+  { key: "Responsable des Opérations", label: "Resp. Opérations", description: "Pilotage opérations" },
+  { key: "Chargée des Opérations", label: "Chargée Opérations", description: "Suivi opérations" },
 ];

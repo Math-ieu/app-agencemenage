@@ -810,9 +810,8 @@ body {
   display: inline-block;
   align-self: flex-start;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .user-role-badge.admin {
@@ -821,13 +820,16 @@ body {
   border-color: rgba(251, 191, 36, 0.15);
 }
 
-.user-role-badge.commercial {
+.user-role-badge.commercial,
+.user-role-badge.responsable_commercial {
   color: #38bdf8;
   background: rgba(56, 189, 248, 0.08);
   border-color: rgba(56, 189, 248, 0.15);
 }
 
-.user-role-badge.operations {
+.user-role-badge.operations,
+.user-role-badge.responsable_operations,
+.user-role-badge.charge_operations {
   color: #c084fc;
   background: rgba(192, 132, 252, 0.08);
   border-color: rgba(192, 132, 252, 0.15);

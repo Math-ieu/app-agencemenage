@@ -297,7 +297,7 @@ export const mapRoleToStorageKey = (role: string): string => {
   if (r === 'responsable des opérations' || r === 'responsable_operations') return 'Responsable des Opérations';
   if (r === 'chargée des opérations' || r === 'charge_operations') return 'Chargée des Opérations';
   if (r === 'opérationnel' || r === 'operationnel') return 'Opérationnel';
-  
+
   if (role === 'Admin') return 'Admin';
   if (role === 'Moderateur') return 'Moderateur';
   if (role === 'Responsable commercial') return 'Responsable commercial';
@@ -305,7 +305,7 @@ export const mapRoleToStorageKey = (role: string): string => {
   if (role === 'Responsable des Opérations') return 'Responsable des Opérations';
   if (role === 'Chargée des Opérations') return 'Chargée des Opérations';
   if (role === 'Opérationnel') return 'Opérationnel';
-  
+
   return 'commercial';
 };
 
@@ -346,14 +346,13 @@ export const hasPermission = (user: User | null, permissionKey: string): boolean
 export const checkPermission = (
   user: User | null,
   action: UserAction,
-  context?: { targetOwnerId?: number }
+  _context?: { targetOwnerId?: number }
 ): { allowed: boolean; message?: string } => {
   if (!user) {
     return { allowed: false, message: "Vous devez être connecté pour effectuer cette action." };
   }
 
   const role = user.role || '';
-  const isRole = (r: string) => role.toLowerCase() === r.toLowerCase();
 
   // Admin a tous les accès par défaut
   if (role.toLowerCase() === 'admin') {
@@ -370,29 +369,6 @@ export const checkPermission = (
       allowed: false,
       message: `Action non autorisée. Votre rôle ne dispose pas de cette permission.`
     };
-  }
-
-  // Contextual ownership checks for commercial role
-  if (isRole('commercial') && context && context.targetOwnerId !== undefined && context.targetOwnerId !== user.id) {
-    // Commercial editing/modifying items not assigned to them
-    if (['edit_client', 'modifier_clients', 'edit_demande', 'modifier_demande'].includes(action)) {
-      return {
-        allowed: false,
-        message: "Action non autorisée. Les commerciaux peuvent uniquement modifier leurs propres éléments attribués."
-      };
-    }
-  }
-
-  // Contextual check for feedback on Chargée des Opérations
-  if (action === 'consulter_feedback' || action === 'consulter_retours_qualite') {
-    if (isRole('chargée des opérations') || isRole('charge_operations')) {
-      if (context && context.targetOwnerId !== undefined && context.targetOwnerId !== user.id) {
-        return {
-          allowed: false,
-          message: "Action non autorisée. Les chargées des opérations ont accès uniquement aux retours qualité de leurs propres clients."
-        };
-      }
-    }
   }
 
   return { allowed: true };

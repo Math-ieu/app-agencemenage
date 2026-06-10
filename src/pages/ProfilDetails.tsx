@@ -217,8 +217,14 @@ export default function ProfilDetails() {
     try {
       const [agentRes, feedbackRes, historyRes] = await Promise.all([
         getAgent(realId),
-        getFeedbacks({ mission__agent: realId }),
-        getAgentHistory(realId)
+        getFeedbacks({ mission__agent: realId }).catch(err => {
+          console.warn('Error fetching agent feedbacks:', err);
+          return { data: [] };
+        }),
+        getAgentHistory(realId).catch(err => {
+          console.warn('Error fetching agent history:', err);
+          return { data: [] };
+        })
       ]);
 
       setAgent(agentRes.data);
@@ -228,12 +234,17 @@ export default function ProfilDetails() {
         const rows: any[] = [];
         let page = 1;
         while (true) {
-          const response = await getMissions({ ...params, page });
-          const data = response.data;
-          const pageRows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
-          rows.push(...pageRows);
-          if (!data?.next || pageRows.length === 0) break;
-          page += 1;
+          try {
+            const response = await getMissions({ ...params, page });
+            const data = response.data;
+            const pageRows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+            rows.push(...pageRows);
+            if (!data?.next || pageRows.length === 0) break;
+            page += 1;
+          } catch (err) {
+            console.warn('Error fetching missions page:', err);
+            break;
+          }
         }
         return rows;
       };
@@ -256,10 +267,10 @@ export default function ProfilDetails() {
       };
 
       const [agentMissions, delegueMissions, intervenantMissions, allDemandsRaw, dashDemandsRes] = await Promise.all([
-        fetchAllMissions({ agent: realId }),
-        fetchAllMissions({ delegue: realId }),
-        fetchAllMissions({ intervenants: realId }),
-        fetchAllDemands(),
+        fetchAllMissions({ agent: realId }).catch(() => []),
+        fetchAllMissions({ delegue: realId }).catch(() => []),
+        fetchAllMissions({ intervenants: realId }).catch(() => []),
+        fetchAllDemands().catch(() => []),
         getDemandes({ no_page: 'true' }).catch(() => ({ data: [] }))
       ]);
 

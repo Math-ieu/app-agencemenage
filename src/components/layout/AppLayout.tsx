@@ -229,7 +229,13 @@ export default function AppLayout() {
                 <div className="user-details">
                   <p className="user-name">{user.full_name}</p>
                   <span className={`user-role-badge ${user.role?.toLowerCase() || ''}`}>
-                    {user.role}
+                    {(() => {
+                      const r = user.role?.toLowerCase().trim() || '';
+                      if (r === 'responsable_commercial') return 'responsable commercial';
+                      if (r === 'responsable_operations') return 'responsable opération';
+                      if (r === 'charge_operations') return 'chargée des opérations';
+                      return user.role?.replace(/_/g, ' ') || '';
+                    })()}
                   </span>
                 </div>
               )}

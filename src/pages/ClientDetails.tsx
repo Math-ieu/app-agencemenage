@@ -431,9 +431,18 @@ export default function ClientDetails() {
     try {
       const [clientRes, demandesRes, feedbacksRes, actionLogsRes] = await Promise.all([
         getClient(realId),
-        getDemandes({ client: realId.toString() }),
-        getFeedbacks({ client: realId.toString() }),
-        getClientActionLogs(realId),
+        getDemandes({ client: realId.toString() }).catch(err => {
+          console.warn('Error fetching client demands:', err);
+          return { data: [] };
+        }),
+        getFeedbacks({ client: realId.toString() }).catch(err => {
+          console.warn('Error fetching client feedbacks:', err);
+          return { data: [] };
+        }),
+        getClientActionLogs(realId).catch(err => {
+          console.warn('Error fetching client action logs:', err);
+          return { data: [] };
+        }),
       ]);
       setClient(clientRes.data);
       const list = Array.isArray(demandesRes.data?.results) ? demandesRes.data.results : (Array.isArray(demandesRes.data) ? demandesRes.data : []);
