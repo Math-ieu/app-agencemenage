@@ -137,6 +137,37 @@ export interface Demande {
   potential_duplicate_detail?: Client;
   documents?: Document[];
   geste_commercial?: CommercialGestureShort | null;
+  planning?: SubscriptionPlanning | null;
+  parent_demande?: number | null;
+  created_at: string;
+}
+
+export interface SubscriptionPlanning {
+  id?: number;
+  demande: number;
+  jours_intervention: string[];
+  semaines?: any[];
+  heure_debut: string | null;
+  heure_fin: string | null;
+  date_debut: string;
+  date_fin?: string | null;
+  statut: 'en_cours' | 'termine';
+  notes?: string;
+  notification_sent_dates?: string[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AppNotification {
+  id: number;
+  type: 'rappel_intervention' | 'info';
+  title: string;
+  message: string;
+  demande?: number | null;
+  demande_service?: string;
+  demande_client_name?: string;
+  is_read: boolean;
+  target_roles: string[];
   created_at: string;
 }
 

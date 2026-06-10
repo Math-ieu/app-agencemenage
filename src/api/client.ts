@@ -371,3 +371,20 @@ export const updateCampaign = (id: number, data: Record<string, unknown>) => api
 export const deleteCampaign = (id: number) => apiClient.delete(`/api/marketing/campagnes/${id}/`);
 
 export const getClientActionLogs = (id: number) => apiClient.get(`/api/clients/${id}/action_logs/`);
+
+// ─── Subscription Planning ───────────────────────────────────────────────────
+export const getPlanning = (demandeId: number) =>
+  apiClient.get(`/api/demandes/${demandeId}/planning/`);
+
+export const savePlanning = (demandeId: number, data: Record<string, unknown>) =>
+  apiClient.post(`/api/demandes/${demandeId}/planning/`, data);
+
+export const updatePlanning = (demandeId: number, data: Record<string, unknown>) =>
+  apiClient.patch(`/api/demandes/${demandeId}/planning/`, data);
+
+// ─── App Notifications ────────────────────────────────────────────────────────
+export const getAppNotifications = () =>
+  apiClient.get('/api/notifications/');
+
+export const markNotificationRead = (id: number) =>
+  apiClient.patch(`/api/notifications/${id}/`, { is_read: true });

@@ -50,6 +50,8 @@ interface PartRepartitionItem {
   hours?: number;
   days?: number;
   rate_value?: number;
+  created_at?: string;
+  created_by_name?: string;
 }
 
 
@@ -664,6 +666,55 @@ export default function Dashboard() {
     }
   };
 
+  const updatePartsAndAgency = (newParts: PartRepartitionItem[], overrideTvaActive?: boolean) => {
+    setEditFormData((prev: any) => {
+      const isFreeOrCancelled = prev.statut_paiement_ui === 'intervention_gratuite' || prev.statut_paiement_ui === 'facturation_annulee' || Boolean(prev.facturation_annulee);
+      const montantHT = isFreeOrCancelled ? 0 : toNumber(prev.montant_ht ?? prev.prix);
+      const tvaActive = overrideTvaActive !== undefined ? overrideTvaActive : (isFreeOrCancelled ? false : Boolean(prev.tva_active));
+      const currentMontantTTC = isFreeOrCancelled ? 0 : roundMoney(tvaActive ? montantHT * 1.2 : montantHT);
+
+      const count = newParts.length;
+      let adjustedParts = [...newParts];
+      if (count > 0) {
+        let amountToDistribute = currentMontantTTC;
+        if (isFreeOrCancelled) {
+          amountToDistribute = prev.profil_sera_paye ? toNumber(prev.montant_profil_annulation) : 0;
+        }
+        const amountPerProfile = roundMoney(amountToDistribute / count);
+        adjustedParts = adjustedParts.map((p, i) => ({
+          ...p,
+          amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
+        }));
+      }
+
+      const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+      const nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(currentMontantTTC - totalParts);
+
+      const updates: any = {
+        ...prev,
+        parts_repartition: adjustedParts,
+        part_agence: nextPartAgence,
+      };
+
+      if (overrideTvaActive !== undefined) {
+        updates.tva_active = overrideTvaActive;
+      }
+
+      if (prev.statut_paiement_ui === 'profil_paye_client') {
+        updates.montant_profil_doit_agence = nextPartAgence;
+        updates.montant_agence_doit_profil = 0;
+      } else if (prev.statut_paiement_ui === 'agence_payee_client') {
+        updates.montant_agence_doit_profil = totalParts;
+        updates.montant_profil_doit_agence = 0;
+      } else {
+        updates.montant_profil_doit_agence = 0;
+        updates.montant_agence_doit_profil = 0;
+      }
+
+      return updates;
+    });
+  };
+
   const handleUpdate = async () => {
     if (!selectedDemande) return;
     
@@ -700,6 +751,8 @@ export default function Dashboard() {
           hours: item.hours,
           days: item.days,
           rate_value: item.rate_value,
+          created_at: item.created_at,
+          created_by_name: item.created_by_name,
         }))
         .filter((item) => item.profile_id !== '');
 
@@ -2395,29 +2448,7 @@ export default function Dashboard() {
                           <div className="form-group">
                             <label>TVA (20%)</label>
                             <label className="switch-inline"><label className="switch"><input type="checkbox" checked={Boolean(editFormData.tva_active)} onChange={e => {
-                              const isChecked = e.target.checked;
-                              const nextTTC = roundMoney(isChecked ? montantHT * 1.2 : montantHT);
-                              const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
-                              const nextPartAgence = roundMoney(nextTTC - totalParts);
-
-                              setEditFormData((prev: any) => {
-                                const updates: any = {
-                                  ...prev,
-                                  tva_active: isChecked,
-                                  part_agence: nextPartAgence,
-                                };
-                                if (prev.statut_paiement_ui === 'profil_paye_client') {
-                                  updates.montant_profil_doit_agence = nextPartAgence;
-                                  updates.montant_agence_doit_profil = 0;
-                                } else if (prev.statut_paiement_ui === 'agence_payee_client') {
-                                  updates.montant_agence_doit_profil = totalParts;
-                                  updates.montant_profil_doit_agence = 0;
-                                } else {
-                                  updates.montant_profil_doit_agence = 0;
-                                  updates.montant_agence_doit_profil = 0;
-                                }
-                                return updates;
-                              });
+                              updatePartsAndAgency(partsRepartition, e.target.checked);
                             }} /><span className="slider round" /></label><span>{editFormData.tva_active ? 'Oui' : 'Non'}</span></label>
                             {!editFormData.tva_active && <p style={{ fontSize: '11px', color: '#DC2626', fontWeight: 600, marginTop: '4px' }}>Montant sans TVA</p>}
                           </div>
@@ -2455,18 +2486,54 @@ export default function Dashboard() {
                                       disabled={isInterventionGratuiteActive}
                                       onChange={e => {
                                         const v = e.target.value;
-                                        const updates: any = { ...editFormData, statut_paiement_ui: v, facturation_annulee: v === 'facturation_annulee' || v === 'intervention_gratuite' };
+                                        const isFreeOrCancelled = v === 'facturation_annulee' || v === 'intervention_gratuite';
+                                        const newMontantHT = isFreeOrCancelled ? 0 : toNumber(editFormData.ca_initial);
+                                        const newTvaActive = isFreeOrCancelled ? false : Boolean(editFormData.tva_active);
+                                        const currentMontantTTC = isFreeOrCancelled ? 0 : roundMoney(newTvaActive ? newMontantHT * 1.2 : newMontantHT);
+                                        
+                                        const parts = editFormData.parts_repartition || [];
+                                        const count = parts.length;
+                                        let adjustedParts = [...parts];
+                                        if (count > 0) {
+                                          let amountToDistribute = currentMontantTTC;
+                                          if (isFreeOrCancelled) {
+                                            amountToDistribute = editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0;
+                                          }
+                                          const amountPerProfile = roundMoney(amountToDistribute / count);
+                                          adjustedParts = adjustedParts.map((p: any, i: number) => ({
+                                            ...p,
+                                            amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
+                                          }));
+                                        }
+                                        const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                                        const nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(currentMontantTTC - totalParts);
+
+                                        const updates: any = { 
+                                          ...editFormData, 
+                                          statut_paiement_ui: v, 
+                                          facturation_annulee: isFreeOrCancelled,
+                                          montant_ht: newMontantHT,
+                                          tva_active: newTvaActive,
+                                          parts_repartition: adjustedParts,
+                                          part_agence: nextPartAgence,
+                                        };
                                         // Auto-set encaisse_par based on payment status
                                         if (v === 'agence_payee_client' || v === 'paye') updates.encaisse_par = 'agence';
                                         else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
                                         
-                                        if (v === 'facturation_annulee' || v === 'intervention_gratuite') {
-                                          updates.montant_ht = 0;
-                                          updates.tva_active = false;
+                                        if (isFreeOrCancelled) {
                                           updates.profil_sera_paye = true;
-                                          updates.part_agence = 0;
+                                        }
+
+                                        if (updates.statut_paiement_ui === 'profil_paye_client') {
+                                          updates.montant_profil_doit_agence = nextPartAgence;
+                                          updates.montant_agence_doit_profil = 0;
+                                        } else if (updates.statut_paiement_ui === 'agence_payee_client') {
+                                          updates.montant_agence_doit_profil = totalParts;
+                                          updates.montant_profil_doit_agence = 0;
                                         } else {
-                                          updates.montant_ht = editFormData.ca_initial;
+                                          updates.montant_profil_doit_agence = 0;
+                                          updates.montant_agence_doit_profil = 0;
                                         }
                                         
                                         setEditFormData(updates);
@@ -2691,21 +2758,19 @@ export default function Dashboard() {
                                     ? roundMoney((defaultRateType === 'taux_forfaitaire' ? defaultDays! : defaultHours!) * defaultRateVal)
                                     : 0;
 
-                                  setEditFormData({
-                                    ...editFormData,
-                                    parts_repartition: [
-                                      ...partsRepartition,
-                                      {
-                                        profile_id: '',
-                                        rate_type: defaultRateType,
-                                        hours: defaultHours,
-                                        days: defaultDays,
-                                        rate_value: defaultRateVal,
-                                        amount: defaultAmount,
-                                        is_delegate: false
-                                      }
-                                    ]
-                                  });
+                                  const nextParts: PartRepartitionItem[] = [
+                                    ...partsRepartition,
+                                    {
+                                      profile_id: '',
+                                      rate_type: defaultRateType,
+                                      hours: defaultHours,
+                                      days: defaultDays,
+                                      rate_value: defaultRateVal,
+                                      amount: defaultAmount,
+                                      is_delegate: false
+                                    }
+                                  ];
+                                  updatePartsAndAgency(nextParts);
                                 }}
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'white', fontSize: '12px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
                               >
@@ -2731,7 +2796,7 @@ export default function Dashboard() {
                                       onChange={e => {
                                         const next = [...partsRepartition];
                                         next[idx] = { ...line, profile_id: e.target.value ? parseInt(e.target.value, 10) : '' };
-                                        setEditFormData({ ...editFormData, parts_repartition: next });
+                                        updatePartsAndAgency(next);
                                       }}
                                       className="edit-input"
                                       style={{ width: '100%' }}
@@ -2772,7 +2837,7 @@ export default function Dashboard() {
                                         }
 
                                         next[idx] = updatedLine;
-                                        setEditFormData({ ...editFormData, parts_repartition: next });
+                                        updatePartsAndAgency(next);
                                       }}
                                       className="edit-input"
                                       style={{ width: '100%' }}
@@ -2795,7 +2860,7 @@ export default function Dashboard() {
                                         type="button"
                                         onClick={() => {
                                           const next = partsRepartition.map((p, i) => ({ ...p, is_delegate: i === idx ? !p.is_delegate : false }));
-                                          setEditFormData({ ...editFormData, parts_repartition: next });
+                                          updatePartsAndAgency(next);
                                         }}
                                         style={{
                                           height: '38px',
@@ -2824,7 +2889,7 @@ export default function Dashboard() {
                                         onClick={() => {
                                           const f = partsRepartition.filter((_, i) => i !== idx);
                                           if (!f.some(p => p.is_delegate) && f.length > 0) f[0] = { ...f[0], is_delegate: true };
-                                          setEditFormData({ ...editFormData, parts_repartition: f });
+                                          updatePartsAndAgency(f);
                                         }}
                                         style={{
                                           height: '38px',
@@ -2862,7 +2927,7 @@ export default function Dashboard() {
                                             const updatedLine = { ...line, days: val };
                                             updatedLine.amount = roundMoney(val * (updatedLine.rate_value || 0));
                                             next[idx] = updatedLine;
-                                            setEditFormData({ ...editFormData, parts_repartition: next });
+                                            updatePartsAndAgency(next);
                                           }}
                                           className="edit-input"
                                           style={{ width: '100%' }}
@@ -2879,7 +2944,7 @@ export default function Dashboard() {
                                             const updatedLine = { ...line, rate_value: val };
                                             updatedLine.amount = roundMoney((updatedLine.days || 1) * val);
                                             next[idx] = updatedLine;
-                                            setEditFormData({ ...editFormData, parts_repartition: next });
+                                            updatePartsAndAgency(next);
                                           }}
                                           className="edit-input"
                                           style={{ width: '100%' }}
@@ -2907,7 +2972,7 @@ export default function Dashboard() {
 
                                             updatedLine.amount = roundMoney(val * (updatedLine.rate_value || 0));
                                             next[idx] = updatedLine;
-                                            setEditFormData({ ...editFormData, parts_repartition: next });
+                                            updatePartsAndAgency(next);
                                           }}
                                           className="edit-input"
                                           style={{ width: '100%' }}
@@ -2926,7 +2991,7 @@ export default function Dashboard() {
                                             const updatedLine = { ...line, rate_value: val };
                                             updatedLine.amount = roundMoney((updatedLine.hours || 0) * val);
                                             next[idx] = updatedLine;
-                                            setEditFormData({ ...editFormData, parts_repartition: next });
+                                            updatePartsAndAgency(next);
                                           }}
                                           disabled={line.rate_type === 'taux_horaire_standard'}
                                           className="edit-input"
@@ -2946,6 +3011,11 @@ export default function Dashboard() {
                                     </div>
                                   </div>
                                 </div>
+                                {line.created_at && (
+                                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B', paddingTop: '8px', borderTop: '1px dashed #E2E8F0' }}>
+                                    Part ajoutée le <strong>{line.created_at}</strong> par <strong>{line.created_by_name || 'Système'}</strong>
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>

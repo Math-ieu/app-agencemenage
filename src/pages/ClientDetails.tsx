@@ -1,15 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   getClient, getDemandes, getFeedbacks, getClientActionLogs,
-  updateDemande, fetchSecureDocBlob, updateClient
+  updateDemande, fetchSecureDocBlob, updateClient, savePlanning
 } from '../api/client';
 import { decodeId, encodeId } from '../utils/obfuscation';
 import {
-  ChevronDown, User, Calendar, FileText,
+  ChevronDown, User, FileText,
   MessageSquare, History, ArrowLeft, RefreshCw, Slash,
   Eye, Star, Clock, Heart, AlertCircle, FileDown,
-  XCircle, Send, Download, CheckCircle, X
+  XCircle, Send, Download, CheckCircle, X, Check, Trash2, Plus
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { checkPermission, hasPermission } from '../utils/permissions';
@@ -221,8 +221,7 @@ export default function ClientDetails() {
     avisComm: true, avisOp: true,
   });
 
-  const dateInputRef = useRef<HTMLInputElement>(null);
-  const [selectedDate, setSelectedDate] = useState('');
+  const latest = demandes.find(d => !d.parent_demande) || demandes[0] || null;
 
   const [avisComm, setAvisComm] = useState('');
   const [avisOp, setAvisOp] = useState('');
@@ -234,11 +233,191 @@ export default function ClientDetails() {
   const [showBlacklistConfirm, setShowBlacklistConfirm] = useState(false);
   const addToast = useToastStore(state => state.addToast);
 
+  // Subscription Planning States
+  const [joursIntervention, setJoursIntervention] = useState<string[]>([]);
+  const [heureDebut, setHeureDebut] = useState('');
+  const [heureFin, setHeureFin] = useState('');
+  const [dateDebut, setDateDebut] = useState('');
+  const [dateFin, setDateFin] = useState('');
+  const [planningStatut, setPlanningStatut] = useState<'en_cours' | 'termine'>('en_cours');
+  const [planningNotes, setPlanningNotes] = useState('');
+  const [savingPlanning, setSavingPlanning] = useState(false);
+  const [semaines, setSemaines] = useState<any[]>([]);
+  const [openWeekIds, setOpenWeekIds] = useState<string[]>([]);
+  const [frequencyLabel, setFrequencyLabel] = useState('2 fois / semaine');
+
+  useEffect(() => {
+    if (latest && latest.planning) {
+      setJoursIntervention(latest.planning.jours_intervention || []);
+      setHeureDebut(latest.planning.heure_debut ? latest.planning.heure_debut.slice(0, 5) : '');
+      setHeureFin(latest.planning.heure_fin ? latest.planning.heure_fin.slice(0, 5) : '');
+      setDateDebut(latest.planning.date_debut || '');
+      setDateFin(latest.planning.date_fin || '');
+      setPlanningStatut(latest.planning.statut || 'en_cours');
+      setPlanningNotes(latest.planning.notes || '');
+      setSemaines(latest.planning.semaines || []);
+    } else {
+      setJoursIntervention([]);
+      setHeureDebut('');
+      setHeureFin('');
+      setDateDebut('');
+      setDateFin('');
+      setPlanningStatut('en_cours');
+      setPlanningNotes('');
+      setSemaines([]);
+    }
+    if (latest) {
+      setFrequencyLabel(latest.frequency_label || '2 fois / semaine');
+    } else {
+      setFrequencyLabel('2 fois / semaine');
+    }
+  }, [latest]);
+
+  const handleSavePlanning = async () => {
+    if (!latest) return;
+    if (!dateDebut) {
+      addToast('La date de début est obligatoire.', 'error');
+      return;
+    }
+    setSavingPlanning(true);
+    try {
+      // Aggregate jours_intervention for legacy compatibility
+      const allSelectedDays = new Set<string>();
+      let fallbackHeureDebut = heureDebut;
+      let fallbackHeureFin = heureFin;
+      
+      if (semaines && semaines.length > 0) {
+        semaines.forEach(w => {
+          if (w.jours) {
+            Object.keys(w.jours).forEach(d => {
+              if (w.jours[d]?.selected) {
+                allSelectedDays.add(d);
+              }
+            });
+          }
+        });
+        
+        const firstWeek = semaines[0];
+        const daysOrder = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+        const selectedDay = daysOrder.find(d => firstWeek.jours?.[d]?.selected);
+        if (selectedDay) {
+          fallbackHeureDebut = firstWeek.jours[selectedDay].heure_debut || fallbackHeureDebut;
+          fallbackHeureFin = firstWeek.jours[selectedDay].heure_fin || fallbackHeureFin;
+        }
+      }
+      
+      const joursInterventionFallback = allSelectedDays.size > 0 
+        ? Array.from(allSelectedDays) 
+        : joursIntervention;
+
+      const data = {
+        jours_intervention: joursInterventionFallback,
+        heure_debut: fallbackHeureDebut ? (fallbackHeureDebut.length === 5 ? `${fallbackHeureDebut}:00` : fallbackHeureDebut) : null,
+        heure_fin: fallbackHeureFin ? (fallbackHeureFin.length === 5 ? `${fallbackHeureFin}:00` : fallbackHeureFin) : null,
+        date_debut: dateDebut,
+        date_fin: dateFin || null,
+        statut: planningStatut,
+        notes: planningNotes,
+        semaines: semaines,
+      };
+      
+      await Promise.all([
+        savePlanning(latest.id, data),
+        updateDemande(latest.id, { frequency_label: frequencyLabel })
+      ]);
+      
+      addToast("Planning d'abonnement mis à jour avec succès", 'success');
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast("Erreur lors de l'enregistrement du planning", 'error');
+    } finally {
+      setSavingPlanning(false);
+    }
+  };
+
   const renderPaymentStatus = (demande: any) => {
     const facturation = demande.formulaire_data?.facturation || {};
     const rawStatutPaiementUi = facturation.statut_paiement_ui || (demande.statut_paiement === 'integral' ? 'paye' : demande.statut_paiement === 'acompte' ? 'paiement_en_attente' : demande.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
     
     return renderPaymentStatusBadge(rawStatutPaiementUi);
+  };
+
+  const getSelectedDaysSummary = (week: any) => {
+    const daysOrder = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+    const labelMap: Record<string, string> = {
+      lundi: 'Lundi',
+      mardi: 'Mardi',
+      mercredi: 'Mercredi',
+      jeudi: 'Jeudi',
+      vendredi: 'Vendredi',
+      samedi: 'Samedi',
+      dimanche: 'Dimanche'
+    };
+    const selected = daysOrder.filter(d => week.jours?.[d]?.selected);
+    if (selected.length === 0) return 'aucun jour';
+    return selected.map(d => labelMap[d]).join(', ');
+  };
+
+  const toggleWeekOpen = (weekId: string) => {
+    if (openWeekIds.includes(weekId)) {
+      setOpenWeekIds(openWeekIds.filter(id => id !== weekId));
+    } else {
+      setOpenWeekIds([...openWeekIds, weekId]);
+    }
+  };
+
+  const handleAddWeek = () => {
+    const nextIndex = semaines.length + 1;
+    const newId = Math.random().toString(36).substr(2, 9);
+    const newWeek = {
+      id: newId,
+      label: `Semaine ${nextIndex}`,
+      date_debut: '',
+      date_fin: '',
+      termine: false,
+      jours: {
+        lundi: { selected: false, heure_debut: '', heure_fin: '' },
+        mardi: { selected: false, heure_debut: '', heure_fin: '' },
+        mercredi: { selected: false, heure_debut: '', heure_fin: '' },
+        jeudi: { selected: false, heure_debut: '', heure_fin: '' },
+        vendredi: { selected: false, heure_debut: '', heure_fin: '' },
+        samedi: { selected: false, heure_debut: '', heure_fin: '' },
+        dimanche: { selected: false, heure_debut: '', heure_fin: '' },
+      }
+    };
+    setSemaines([...semaines, newWeek]);
+    setOpenWeekIds([...openWeekIds, newId]);
+  };
+
+  const handleDeleteWeek = (weekId: string) => {
+    const filtered = semaines.filter(w => w.id !== weekId);
+    const reindexed = filtered.map((w, idx) => ({
+      ...w,
+      label: `Semaine ${idx + 1}`
+    }));
+    setSemaines(reindexed);
+    setOpenWeekIds(openWeekIds.filter(id => id !== weekId));
+  };
+
+  const updateWeekField = (weekId: string, field: string, value: any) => {
+    setSemaines(semaines.map(w => {
+      if (w.id === weekId) {
+        return { ...w, [field]: value };
+      }
+      return w;
+    }));
+  };
+
+  const updateWeekDayField = (weekId: string, day: string, field: string, value: any) => {
+    setSemaines(semaines.map(w => {
+      if (w.id === weekId) {
+        const joursCopy = { ...w.jours };
+        joursCopy[day] = { ...joursCopy[day], [field]: value };
+        return { ...w, jours: joursCopy };
+      }
+      return w;
+    }));
   };
 
   const fetchData = async () => {
@@ -452,8 +631,6 @@ export default function ClientDetails() {
       Client introuvable.
     </div>
   );
-
-  const latest = demandes[0] || null;
 
   /* ═══ Render ═══ */
   return (
@@ -786,50 +963,458 @@ export default function ClientDetails() {
         {/* ── 4. Type de Fréquence ── */}
         <Accordion title="Type de Fréquence" icon={<Clock size={18} />} isOpen={openSections.frequence} onToggle={() => toggle('frequence')} color={C.sage}>
           {latest ? (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-                <span style={{ padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: 14, fontWeight: 700, color: '#475569', background: 'white' }}>
-                  {latest.frequency_label || latest.frequency || 'Non défini'}
-                </span>
-                <span style={{ fontSize: 14, fontWeight: 500, color: '#94a3b8' }}>
-                  Prestation — {latest.nb_heures ? `${latest.nb_heures}h` : '—'}
-                </span>
+            latest.frequency === 'oneshot' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <span style={{ padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: 14, fontWeight: 700, color: '#475569', background: 'white' }}>
+                    {latest.frequency_label || latest.frequency || 'Une fois'}
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: '#94a3b8' }}>
+                    Prestation Unique — {latest.nb_heures ? `${latest.nb_heures}h` : '—'}
+                  </span>
+                </div>
+                <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #f1f5f9' }}>
+                  <p style={{ margin: 0, fontSize: 14, color: '#64748b', fontWeight: 500 }}>
+                    Cette demande est configurée comme une prestation ponctuelle (Une fois).
+                  </p>
+                  {latest.date_intervention && (
+                    <p style={{ margin: '8px 0 0 0', fontSize: 14, color: '#334155', fontWeight: 600 }}>
+                      Date d'intervention prévue : {new Date(latest.date_intervention).toLocaleDateString('fr-FR')} {latest.heure_intervention ? `à ${latest.heure_intervention}` : ''}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div>
-                <p style={{ fontSize: 14, fontWeight: 700, color: '#475569', marginBottom: 8 }}>Programmer les interventions</p>
-                <div style={{ position: 'relative' }}>
-                  <textarea
-                    style={{ width: '100%', height: 96, padding: 16, border: '1px solid #e2e8f0', borderRadius: 10, background: 'white', color: '#334155', fontSize: 14, fontWeight: 500, resize: 'none', fontFamily: 'inherit', outline: 'none' }}
-                    placeholder="Détails planning (ex : Lundi et Jeudi, 9h-12h)..."
-                    value={selectedDate ? `${selectedDate} : ` : (latest.preference_horaire || latest.formulaire_data?.planning_details || '')}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                  />
-                  <input
-                    type="date"
-                    ref={dateInputRef}
-                    style={{ position: 'absolute', right: 12, bottom: 12, opacity: 0, width: 1, height: 1, pointerEvents: 'none' }}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                  />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* Status indicator and monthly label */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: 13, fontWeight: 700, color: C.teal, background: '#e6f7f5' }}>
+                      mensuel
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: '#64748b' }}>
+                      Abonnement — {latest.service || 'Ménage'}
+                    </span>
+                  </div>
+                  
+                  {/* Status indicator */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>Statut planning :</span>
+                    <span style={{
+                      padding: '4px 12px',
+                      borderRadius: 99,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      backgroundColor: planningStatut === 'en_cours' ? '#e0f2fe' : '#dcfce7',
+                      color: planningStatut === 'en_cours' ? '#0369a1' : '#15803d',
+                    }}>
+                      {planningStatut === 'en_cours' ? 'En cours' : 'Terminé'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Section Title & Save Button */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, borderBottom: '1px solid #f1f5f9', paddingBottom: 12 }}>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#1e293b' }}>
+                    Planning de l'abonnement
+                  </h3>
                   <button
-                    onClick={() => {
-                      if (dateInputRef.current?.showPicker) {
-                        dateInputRef.current.showPicker();
-                      } else {
-                        dateInputRef.current?.click();
-                      }
-                    }}
+                    type="button"
+                    onClick={handleSavePlanning}
+                    disabled={savingPlanning}
                     style={{
-                      position: 'absolute', right: 12, bottom: 12,
-                      padding: '6px 12px', background: 'white', border: '1px solid #e2e8f0',
-                      borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#475569',
-                      display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                      padding: '8px 18px',
+                      background: C.teal,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      transition: 'opacity 0.2s',
+                      opacity: savingPlanning ? 0.7 : 1,
+                      boxShadow: '0 2px 4px rgba(3, 114, 101, 0.15)'
                     }}
                   >
-                    <Calendar size={15} color={C.teal} /> Date
+                    {savingPlanning ? 'Enregistrement...' : (
+                      <>
+                        <FileText size={15} />
+                        Enregistrer le planning
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Core planning fields */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 6 }}>
+                      Fréquence de l'abonnement
+                    </label>
+                    <select
+                      value={frequencyLabel}
+                      onChange={(e) => setFrequencyLabel(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 8,
+                        fontSize: 14,
+                        fontWeight: 500,
+                        outline: 'none',
+                        background: 'white',
+                        color: '#334155'
+                      }}
+                    >
+                      <option value="1 fois / semaine">1 fois / semaine</option>
+                      <option value="2 fois / semaine">2 fois / semaine</option>
+                      <option value="3 fois / semaine">3 fois / semaine</option>
+                      <option value="4 fois / semaine">4 fois / semaine</option>
+                      <option value="5 fois / semaine">5 fois / semaine</option>
+                      <option value="6 fois / semaine">6 fois / semaine</option>
+                      <option value="7 fois / semaine">7 fois / semaine</option>
+                      <option value="1 fois / mois">1 fois / mois</option>
+                      <option value="2 fois / mois">2 fois / mois</option>
+                      <option value="3 fois / mois">3 fois / mois</option>
+                      <option value="4 fois / mois">4 fois / mois</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 6 }}>
+                      Date de début de l'abonnement *
+                    </label>
+                    <input
+                      type="date"
+                      value={dateDebut}
+                      onChange={(e) => setDateDebut(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 8,
+                        fontSize: 14,
+                        fontWeight: 500,
+                        outline: 'none',
+                        color: '#334155',
+                        background: 'white'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 6 }}>
+                      Date de fin (optionnel)
+                    </label>
+                    <input
+                      type="date"
+                      value={dateFin}
+                      onChange={(e) => setDateFin(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 8,
+                        fontSize: 14,
+                        fontWeight: 500,
+                        outline: 'none',
+                        color: '#334155',
+                        background: 'white'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Semaines & jours d'intervention header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>
+                    Semaines & jours d'intervention
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddWeek}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '6px 14px', border: '1px solid #cbd5e1', borderRadius: 8,
+                      background: 'white', color: C.teal, fontSize: 13, fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Plus size={15} /> Ajouter une semaine
+                  </button>
+                </div>
+
+                {/* Weeks configurations list */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {semaines.map((week) => {
+                    const isOpen = openWeekIds.includes(week.id);
+                    return (
+                      <div key={week.id} style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', background: '#fafbfc' }}>
+                        {/* Week Header */}
+                        <div 
+                          onClick={() => toggleWeekOpen(week.id)}
+                          style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '12px 18px', background: '#f8fafc', borderBottom: isOpen ? '1px solid #e2e8f0' : 'none',
+                            cursor: 'pointer', userSelect: 'none'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <ChevronDown 
+                              size={16} 
+                              style={{ 
+                                color: '#64748b', 
+                                transition: 'transform 0.2s', 
+                                transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' 
+                              }} 
+                            />
+                            <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>
+                              {week.label} <span style={{ fontWeight: 500, color: '#64748b', marginLeft: 6 }}>— {getSelectedDaysSummary(week)}</span>
+                            </span>
+                          </div>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} onClick={e => e.stopPropagation()}>
+                            {/* Status Checkbox Badge */}
+                            <label 
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 6,
+                                backgroundColor: week.termine ? '#dcfce7' : 'white',
+                                border: week.termine ? '1px solid #10b981' : '1px solid #cbd5e1',
+                                borderRadius: 8, padding: '4px 10px', cursor: 'pointer',
+                                fontSize: 12, fontWeight: 700, color: week.termine ? '#15803d' : '#475569',
+                                userSelect: 'none',
+                                transition: 'all 0.15s'
+                              }}
+                            >
+                              <input 
+                                type="checkbox"
+                                checked={week.termine || false}
+                                onChange={(e) => updateWeekField(week.id, 'termine', e.target.checked)}
+                                style={{ width: 14, height: 14, cursor: 'pointer', accentColor: week.termine ? '#10b981' : '#475569' }}
+                              />
+                              {week.termine ? 'Terminé' : 'En cours'}
+                            </label>
+                            
+                            {/* Delete Button */}
+                            <button 
+                              type="button"
+                              onClick={() => handleDeleteWeek(week.id)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: 4 }}
+                              title="Supprimer cette semaine"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Week Content */}
+                        {isOpen && (
+                          <div style={{ padding: '20px 24px', background: 'white' }}>
+                            {/* Date range inputs */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                              <div>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Du</span>
+                                <input
+                                  type="date"
+                                  value={week.date_debut || ''}
+                                  onChange={(e) => updateWeekField(week.id, 'date_debut', e.target.value)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: 8,
+                                    fontSize: 13,
+                                    fontWeight: 500,
+                                    outline: 'none',
+                                    color: '#334155'
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Au</span>
+                                <input
+                                  type="date"
+                                  value={week.date_fin || ''}
+                                  onChange={(e) => updateWeekField(week.id, 'date_fin', e.target.value)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: 8,
+                                    fontSize: 13,
+                                    fontWeight: 500,
+                                    outline: 'none',
+                                    color: '#334155'
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            
+                            {/* Days checklist */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                              {[
+                                { label: 'Lundi', key: 'lundi' },
+                                { label: 'Mardi', key: 'mardi' },
+                                { label: 'Mercredi', key: 'mercredi' },
+                                { label: 'Jeudi', key: 'jeudi' },
+                                { label: 'Vendredi', key: 'vendredi' },
+                                { label: 'Samedi', key: 'samedi' },
+                                { label: 'Dimanche', key: 'dimanche' }
+                              ].map(day => {
+                                const dayConfig = week.jours?.[day.key] || { selected: false, heure_debut: '', heure_fin: '' };
+                                return (
+                                  <div key={day.key} style={{ display: 'grid', gridTemplateColumns: '2fr 3fr 3fr', gap: 16, alignItems: 'center' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={dayConfig.selected || false}
+                                        onChange={(e) => updateWeekDayField(week.id, day.key, 'selected', e.target.checked)}
+                                        style={{
+                                          width: 16, height: 16, accentColor: C.teal, cursor: 'pointer'
+                                        }}
+                                      />
+                                      <span style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>
+                                        {day.label}
+                                      </span>
+                                    </label>
+                                    
+                                    <div>
+                                      <input
+                                        type="time"
+                                        disabled={!dayConfig.selected}
+                                        value={dayConfig.heure_debut ? dayConfig.heure_debut.slice(0, 5) : ''}
+                                        onChange={(e) => updateWeekDayField(week.id, day.key, 'heure_debut', e.target.value)}
+                                        placeholder="--:--"
+                                        style={{
+                                          width: '100%',
+                                          padding: '6px 10px',
+                                          border: '1px solid #cbd5e1',
+                                          borderRadius: 6,
+                                          fontSize: 13,
+                                          outline: 'none',
+                                          color: '#334155',
+                                          opacity: dayConfig.selected ? 1 : 0.4,
+                                          background: dayConfig.selected ? 'white' : '#f8fafc'
+                                        }}
+                                      />
+                                    </div>
+                                    
+                                    <div>
+                                      <input
+                                        type="time"
+                                        disabled={!dayConfig.selected}
+                                        value={dayConfig.heure_fin ? dayConfig.heure_fin.slice(0, 5) : ''}
+                                        onChange={(e) => updateWeekDayField(week.id, day.key, 'heure_fin', e.target.value)}
+                                        placeholder="--:--"
+                                        style={{
+                                          width: '100%',
+                                          padding: '6px 10px',
+                                          border: '1px solid #cbd5e1',
+                                          borderRadius: 6,
+                                          fontSize: 13,
+                                          outline: 'none',
+                                          color: '#334155',
+                                          opacity: dayConfig.selected ? 1 : 0.4,
+                                          background: dayConfig.selected ? 'white' : '#f8fafc'
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {semaines.length === 0 && (
+                    <div style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 12, color: '#64748b', fontSize: 14 }}>
+                      Aucune semaine d'intervention ajoutée. Cliquez sur le bouton "Ajouter une semaine" ci-dessus pour commencer à planifier.
+                    </div>
+                  )}
+                </div>
+
+                {/* Notes de planification */}
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 6 }}>
+                    Notes complémentaires (optionnel)
+                  </label>
+                  <textarea
+                    value={planningNotes}
+                    onChange={(e) => setPlanningNotes(e.target.value)}
+                    placeholder="Précisions sur le planning..."
+                    style={{
+                      width: '100%',
+                      height: 70,
+                      padding: '10px 14px',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 500,
+                      outline: 'none',
+                      color: '#334155',
+                      resize: 'none',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                </div>
+
+                {/* Status and Action Buttons */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f1f5f9', paddingTop: 16, marginTop: 8 }}>
+                  {/* Checkbox "En cours" / "Terminé" */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+                    <input
+                      type="checkbox"
+                      checked={planningStatut === 'termine'}
+                      onChange={(e) => setPlanningStatut(e.target.checked ? 'termine' : 'en_cours')}
+                      style={{
+                        width: 18,
+                        height: 18,
+                        accentColor: C.teal,
+                        cursor: 'pointer'
+                      }}
+                    />
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#475569' }}>
+                      Abonnement Terminé
+                    </span>
+                  </label>
+
+                  {/* Save button */}
+                  <button
+                    type="button"
+                    onClick={handleSavePlanning}
+                    disabled={savingPlanning}
+                    style={{
+                      padding: '10px 24px',
+                      background: C.teal,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      transition: 'opacity 0.2s',
+                      opacity: savingPlanning ? 0.7 : 1,
+                      boxShadow: '0 2px 4px rgba(3, 114, 101, 0.15)'
+                    }}
+                  >
+                    {savingPlanning ? 'Enregistrement...' : (
+                      <>
+                        <Check size={16} />
+                        Enregistrer le planning
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
-            </div>
+            )
           ) : <EmptyState text="Aucune donnée de fréquence" />}
         </Accordion>
 
