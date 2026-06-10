@@ -675,16 +675,24 @@ export default function Dashboard() {
 
       const count = newParts.length;
       let adjustedParts = [...newParts];
-      if (count > 0) {
-        let amountToDistribute = currentMontantTTC;
-        if (isFreeOrCancelled) {
-          amountToDistribute = prev.profil_sera_paye ? toNumber(prev.montant_profil_annulation) : 0;
+      let nextMontantProfilAnnulation = prev.montant_profil_annulation;
+      let nextProfilSeraPaye = prev.profil_sera_paye;
+
+      if (isFreeOrCancelled) {
+        // Do not redistribute the amountToDistribute. The parts amounts are calculated from hours/rates.
+        // We sum them up to update the montant_profil_annulation automatically.
+        const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+        nextMontantProfilAnnulation = totalParts;
+        nextProfilSeraPaye = totalParts > 0;
+      } else {
+        if (count > 0) {
+          const amountToDistribute = currentMontantTTC;
+          const amountPerProfile = roundMoney(amountToDistribute / count);
+          adjustedParts = adjustedParts.map((p, i) => ({
+            ...p,
+            amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
+          }));
         }
-        const amountPerProfile = roundMoney(amountToDistribute / count);
-        adjustedParts = adjustedParts.map((p, i) => ({
-          ...p,
-          amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
-        }));
       }
 
       const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
@@ -700,15 +708,22 @@ export default function Dashboard() {
         updates.tva_active = overrideTvaActive;
       }
 
-      if (prev.statut_paiement_ui === 'profil_paye_client') {
-        updates.montant_profil_doit_agence = nextPartAgence;
-        updates.montant_agence_doit_profil = 0;
-      } else if (prev.statut_paiement_ui === 'agence_payee_client') {
-        updates.montant_agence_doit_profil = totalParts;
+      if (isFreeOrCancelled) {
+        updates.montant_profil_annulation = nextMontantProfilAnnulation;
+        updates.profil_sera_paye = nextProfilSeraPaye;
+        updates.montant_agence_doit_profil = nextProfilSeraPaye ? nextMontantProfilAnnulation : 0;
         updates.montant_profil_doit_agence = 0;
       } else {
-        updates.montant_profil_doit_agence = 0;
-        updates.montant_agence_doit_profil = 0;
+        if (prev.statut_paiement_ui === 'profil_paye_client') {
+          updates.montant_profil_doit_agence = nextPartAgence;
+          updates.montant_agence_doit_profil = 0;
+        } else if (prev.statut_paiement_ui === 'agence_payee_client') {
+          updates.montant_agence_doit_profil = totalParts;
+          updates.montant_profil_doit_agence = 0;
+        } else {
+          updates.montant_profil_doit_agence = 0;
+          updates.montant_agence_doit_profil = 0;
+        }
       }
 
       return updates;
@@ -758,12 +773,15 @@ export default function Dashboard() {
 
       if (isFreeOrCancelled) {
         const amountToDistribute = editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0;
-        const count = partsRepartition.length || 1;
-        const amountPerProfile = roundMoney(amountToDistribute / count);
-        partsRepartition = partsRepartition.map((p, i) => ({
-          ...p,
-          amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
-        }));
+        const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
+        if (Math.abs(totalParts - amountToDistribute) > 0.01 && partsRepartition.length > 0) {
+          const count = partsRepartition.length;
+          const amountPerProfile = roundMoney(amountToDistribute / count);
+          partsRepartition = partsRepartition.map((p, i) => ({
+            ...p,
+            amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
+          }));
+        }
       }
 
       const updateData: any = {
@@ -1652,8 +1670,11 @@ export default function Dashboard() {
 
                             {hasPermission(user, 'facturation_annulee') && (
                               <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
+                                const parts = (d.formulaire_data?.facturation?.parts_repartition || d.formulaire_data?.parts_repartition || []) as any[];
+                                const totalParts = parts.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
                                 setFacturationAnnuleeReason('');
-                                setFacturationAnnuleeProfilPaye(false);
+                                setFacturationAnnuleeProfilPaye(totalParts > 0);
+                                setFacturationAnnuleeAmount(totalParts > 0 ? totalParts : '');
                                 setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
                                 setActiveMoreMenu(null);
                               }}>
@@ -1821,8 +1842,11 @@ export default function Dashboard() {
 
                             {hasPermission(user, 'facturation_annulee') && (
                               <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
+                                const parts = (d.formulaire_data?.facturation?.parts_repartition || d.formulaire_data?.parts_repartition || []) as any[];
+                                const totalParts = parts.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
                                 setFacturationAnnuleeReason('');
-                                setFacturationAnnuleeProfilPaye(false);
+                                setFacturationAnnuleeProfilPaye(totalParts > 0);
+                                setFacturationAnnuleeAmount(totalParts > 0 ? totalParts : '');
                                 setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
                                 setActiveMoreMenu(null);
                               }}>
@@ -2492,19 +2516,25 @@ export default function Dashboard() {
                                         const currentMontantTTC = isFreeOrCancelled ? 0 : roundMoney(newTvaActive ? newMontantHT * 1.2 : newMontantHT);
                                         
                                         const parts = editFormData.parts_repartition || [];
-                                        const count = parts.length;
                                         let adjustedParts = [...parts];
-                                        if (count > 0) {
-                                          let amountToDistribute = currentMontantTTC;
-                                          if (isFreeOrCancelled) {
-                                            amountToDistribute = editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0;
+                                        let nextMontantProfilAnnulation = editFormData.montant_profil_annulation;
+                                        let nextProfilSeraPaye = editFormData.profil_sera_paye;
+
+                                        if (isFreeOrCancelled) {
+                                          const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                                          nextMontantProfilAnnulation = totalParts;
+                                          nextProfilSeraPaye = totalParts > 0;
+                                        } else {
+                                          const count = parts.length;
+                                          if (count > 0) {
+                                            const amountPerProfile = roundMoney(currentMontantTTC / count);
+                                            adjustedParts = adjustedParts.map((p: any, i: number) => ({
+                                              ...p,
+                                              amount: i === count - 1 ? roundMoney(currentMontantTTC - (amountPerProfile * (count - 1))) : amountPerProfile
+                                            }));
                                           }
-                                          const amountPerProfile = roundMoney(amountToDistribute / count);
-                                          adjustedParts = adjustedParts.map((p: any, i: number) => ({
-                                            ...p,
-                                            amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
-                                          }));
                                         }
+
                                         const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
                                         const nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(currentMontantTTC - totalParts);
 
@@ -2522,18 +2552,21 @@ export default function Dashboard() {
                                         else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
                                         
                                         if (isFreeOrCancelled) {
-                                          updates.profil_sera_paye = true;
-                                        }
-
-                                        if (updates.statut_paiement_ui === 'profil_paye_client') {
-                                          updates.montant_profil_doit_agence = nextPartAgence;
-                                          updates.montant_agence_doit_profil = 0;
-                                        } else if (updates.statut_paiement_ui === 'agence_payee_client') {
-                                          updates.montant_agence_doit_profil = totalParts;
+                                          updates.profil_sera_paye = nextProfilSeraPaye;
+                                          updates.montant_profil_annulation = nextMontantProfilAnnulation;
+                                          updates.montant_agence_doit_profil = nextProfilSeraPaye ? nextMontantProfilAnnulation : 0;
                                           updates.montant_profil_doit_agence = 0;
                                         } else {
-                                          updates.montant_profil_doit_agence = 0;
-                                          updates.montant_agence_doit_profil = 0;
+                                          if (updates.statut_paiement_ui === 'profil_paye_client') {
+                                            updates.montant_profil_doit_agence = nextPartAgence;
+                                            updates.montant_agence_doit_profil = 0;
+                                          } else if (updates.statut_paiement_ui === 'agence_payee_client') {
+                                            updates.montant_agence_doit_profil = totalParts;
+                                            updates.montant_profil_doit_agence = 0;
+                                          } else {
+                                            updates.montant_profil_doit_agence = 0;
+                                            updates.montant_agence_doit_profil = 0;
+                                          }
                                         }
                                         
                                         setEditFormData(updates);
@@ -2595,14 +2628,18 @@ export default function Dashboard() {
                         {editFormData.statut_paiement_ui !== 'facturation_annulee' && editFormData.statut_paiement_ui !== 'intervention_gratuite' && (
                           <div style={{ marginTop: '16px', display: 'flex', gap: '12px' }}>
                             <button type="button" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', border: '1px solid #FDA4AF', color: '#BE123C', background: 'white', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }} onClick={() => {
+                              const parts = editFormData.parts_repartition || [];
+                              const totalParts = parts.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
                               setEditFormData({
                                 ...editFormData,
                                 facturation_annulee: true,
                                 statut_paiement_ui: 'facturation_annulee',
                                 montant_ht: 0,
                                 tva_active: false,
-                                profil_sera_paye: false,
-                                montant_profil_annulation: '',
+                                profil_sera_paye: totalParts > 0,
+                                montant_profil_annulation: totalParts > 0 ? totalParts : 0,
+                                montant_agence_doit_profil: totalParts > 0 ? totalParts : 0,
+                                montant_profil_doit_agence: 0,
                                 annulation_raison: ''
                               });
                             }}>
@@ -2641,8 +2678,9 @@ export default function Dashboard() {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const val = toNumber(editFormData.montant_profil_annulation) || 0;
                                       const parts = editFormData.parts_repartition || [];
+                                      const totalParts = parts.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
+                                      const val = totalParts > 0 ? totalParts : (toNumber(editFormData.montant_profil_annulation) || 0);
                                       const count = parts.length || 1;
                                       const amountPerProfile = roundMoney(val / count);
                                       const newParts = parts.map((p: any, i: number) => ({
@@ -2652,6 +2690,8 @@ export default function Dashboard() {
                                       setEditFormData({
                                         ...editFormData,
                                         profil_sera_paye: true,
+                                        montant_profil_annulation: val,
+                                        montant_agence_doit_profil: val,
                                         parts_repartition: newParts
                                       });
                                     }}
@@ -2674,6 +2714,7 @@ export default function Dashboard() {
                                         ...editFormData,
                                         profil_sera_paye: false,
                                         montant_profil_annulation: 0,
+                                        montant_agence_doit_profil: 0,
                                         parts_repartition: newParts
                                       });
                                     }}
@@ -2709,6 +2750,7 @@ export default function Dashboard() {
                                       setEditFormData({
                                         ...editFormData,
                                         montant_profil_annulation: e.target.value === '' ? '' : val,
+                                        montant_agence_doit_profil: val,
                                         parts_repartition: newParts
                                       });
                                     }}
@@ -3964,7 +4006,15 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={() => setFacturationAnnuleeProfilPaye(true)}
+                    onClick={() => {
+                      const d = demandes.find(x => x.id === showFacturationAnnuleeModal?.demandeId);
+                      const parts = (d?.formulaire_data?.facturation?.parts_repartition || d?.formulaire_data?.parts_repartition || []) as any[];
+                      const totalParts = parts.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
+                      setFacturationAnnuleeProfilPaye(true);
+                      if (totalParts > 0) {
+                        setFacturationAnnuleeAmount(totalParts);
+                      }
+                    }}
                     style={{
                       padding: '6px 16px', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
                       background: facturationAnnuleeProfilPaye ? '#0d9488' : '#ffffff',
@@ -3977,7 +4027,10 @@ export default function Dashboard() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFacturationAnnuleeProfilPaye(false)}
+                    onClick={() => {
+                      setFacturationAnnuleeProfilPaye(false);
+                      setFacturationAnnuleeAmount(0);
+                    }}
                     style={{
                       padding: '6px 16px', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
                       background: !facturationAnnuleeProfilPaye ? '#0d9488' : '#ffffff',
