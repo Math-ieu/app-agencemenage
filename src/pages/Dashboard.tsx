@@ -285,20 +285,20 @@ export default function Dashboard() {
 
   // Nouveaux flags pour le formulaire complet
   const exactEditService = (editFormData.service || selectedDemande?.service || '').toString();
-  const exactEditServiceLower = exactEditService.toLowerCase();
-  const isCleaningService = exactEditServiceLower.includes('ménage') || exactEditServiceLower.includes('menage') || exactEditServiceLower.includes('nettoyage') || exactEditServiceLower.includes('chantier') || exactEditServiceLower.includes('sinistre') || exactEditServiceLower.includes('déménagement');
+  const exactEditServiceNormalized = exactEditService.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const isCleaningService = exactEditServiceNormalized.includes('menage') || exactEditServiceNormalized.includes('nettoyage') || exactEditServiceNormalized.includes('chantier') || exactEditServiceNormalized.includes('sinistre') || exactEditServiceNormalized.includes('demenagement');
   // @ts-ignore
-  const isMenageStandardService = exactEditService === 'Ménage Standard';
-  const isMenageAirBnBService = exactEditService === 'Ménage AirBnB';
-  const isGrandMenageService = exactEditService === 'Grand Ménage';
-  const isFinChantierService = exactEditService === 'Ménage fin de chantier';
-  const isMenageBureauxService = exactEditService === 'Ménage Bureaux';
-  const isPostDemenagementService = exactEditService === 'Ménage post-déménagement';
+  const isMenageStandardService = exactEditServiceNormalized.includes('menage standard');
+  const isMenageAirBnBService = exactEditServiceNormalized.includes('air bnb') || exactEditServiceNormalized.includes('airbnb');
+  const isGrandMenageService = exactEditServiceNormalized.includes('grand menage') || exactEditServiceNormalized.includes('grand');
+  const isFinChantierService = exactEditServiceNormalized.includes('fin de chantier') || exactEditServiceNormalized.includes('fin chantier');
+  const isMenageBureauxService = exactEditServiceNormalized.includes('menage bureaux') || exactEditServiceNormalized.includes('bureaux');
+  const isPostDemenagementService = exactEditServiceNormalized.includes('post-demenagement') || exactEditServiceNormalized.includes('post demenagement') || exactEditServiceNormalized.includes('demenagement');
   // @ts-ignore
-  const isPostSinistreService = exactEditService === 'Ménage post-sinistre';
-  const isAuxiliaireService = exactEditService.includes('Auxiliaire de vie');
+  const isPostSinistreService = exactEditServiceNormalized.includes('post-sinistre') || exactEditServiceNormalized.includes('post sinistre') || exactEditServiceNormalized.includes('sinistre');
+  const isAuxiliaireService = exactEditServiceNormalized.includes('auxiliaire de vie') || exactEditServiceNormalized.includes('auxiliaire');
   // @ts-ignore
-  const isPlacementGestionService = exactEditService === 'Placement & Gestion';
+  const isPlacementGestionService = exactEditServiceNormalized.includes('placement & gestion') || exactEditServiceNormalized.includes('placement et gestion') || exactEditServiceNormalized.includes('placement');
   const minDuree = (isGrandMenageService || isPostDemenagementService || isFinChantierService) ? 4 : isMenageBureauxService ? (editFormData.frequence === 'une fois' ? 4 : 2) : isMenageAirBnBService ? 2 : 3;
 
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png' | 'facture', name: string, demandeId: number } | null>(null);
@@ -783,12 +783,22 @@ export default function Dashboard() {
         }
       }
 
+      const formatPhone = (p: string) => {
+        if (!p) return "";
+        let cleaned = p.replace(/\s+/g, '');
+        if (cleaned.startsWith('0')) cleaned = cleaned.substring(1);
+        if (!cleaned.startsWith('+')) return `+212${cleaned}`;
+        return cleaned;
+      };
+
       const updateData: any = {
         service: editFormData.service,
         segment: editFormData.segment,
         statut: editFormData.statut,
         prix: montantTTC,
         nb_heures: parseInt(editFormData.duree || editFormData.nb_heures) || 0,
+        nb_intervenants: parseInt(editFormData.nb_intervenants) || 1,
+        avec_produit: Boolean(editFormData.produits || editFormData.avec_produit),
         frequency,
         frequency_label: editFormData.frequence || selectedDemande.frequency_label || '',
         mode_paiement: editFormData.mode_paiement || '',
@@ -799,6 +809,12 @@ export default function Dashboard() {
         note_commercial: editFormData.note_commercial || '',
         note_operationnel: editFormData.note_operationnel || '',
         preference_horaire: editFormData.preference_horaire || '',
+        client_name: editFormData.client_name || '',
+        client_phone: formatPhone(editFormData.client_phone || ''),
+        client_whatsapp: formatPhone(editFormData.client_whatsapp || editFormData.client_phone || ''),
+        client_city: editFormData.ville || '',
+        client_neighborhood: editFormData.quartier || '',
+        client_address: editFormData.adresse || '',
       };
 
       const paymentUiValue = editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee));
@@ -829,7 +845,7 @@ export default function Dashboard() {
       updateData.formulaire_data = {
         ...(selectedDemande.formulaire_data || {}),
         nom: editFormData.client_name || previousFormData.nom || '',
-        whatsapp_phone: editFormData.client_whatsapp || editFormData.client_phone || previousFormData.whatsapp_phone || '',
+        whatsapp_phone: formatPhone(editFormData.client_whatsapp || editFormData.client_phone || '') || previousFormData.whatsapp_phone || '',
         ville: editFormData.ville || '',
         quartier: editFormData.quartier || '',
         adresse: editFormData.adresse || '',
@@ -1111,10 +1127,10 @@ export default function Dashboard() {
       segment: d.segment,
       frequency: d.frequency,
       frequence: normalizeFrequence(formData.frequence || d.frequency_label || (d.frequency === 'oneshot' ? 'une fois' : '1/sem')),
-      client_name: d.client_name || formData.nom || '',
-      client_phone: d.client_phone || formData.whatsapp_phone || '',
-      client_whatsapp: d.client_whatsapp || formData.whatsapp_phone || '',
-      client_email: d.client_detail?.email || '',
+      client_name: d.client_name || formData.nom || formData.fullName || '',
+      client_phone: d.client_phone || formData.phone || formData.whatsapp_phone || '',
+      client_whatsapp: d.client_whatsapp || formData.whatsapp_phone || formData.whatsapp || '',
+      client_email: d.client_detail?.email || formData.email || '',
       neighborhood: d.neighborhood_city || 'Casablanca',
       is_devis: d.is_devis,
       statut: d.statut,
@@ -1128,11 +1144,11 @@ export default function Dashboard() {
       nb_personnel: formData.nb_personnel || 1,
       surface: formData.surface || formData.surfaceArea || 0,
       details_pieces: formData.details_pieces || '',
-      ville: formData.ville || '',
-      quartier: normalizeQuartier(formData.quartier || ''),
-      adresse: formData.adresse || '',
+      ville: formData.ville || d.client_city || 'Casablanca',
+      quartier: normalizeQuartier(formData.quartier || d.client_neighborhood || ''),
+      adresse: formData.adresse || d.client_address || '',
       preference_horaire: normalizeTimePref(formData.preference_horaire || ''),
-      nb_intervenants: formData.nb_intervenants || formData.numberOfPeople || ((d.nb_heures || 0) > 0 ? 1 : 0),
+      nb_intervenants: formData.nb_intervenants || formData.numberOfPeople || d.nb_intervenants || ((d.nb_heures || 0) > 0 ? 1 : 0),
       rooms: formData.rooms || {
         cuisine: 0,
         suiteAvecBain: 0,

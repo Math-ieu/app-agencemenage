@@ -196,7 +196,7 @@ export interface DurationBlockProps extends FormBlockProps {
     estimatedResources?: { duration: number; people: number } | null;
 }
 
-export const DurationBlock: React.FC<DurationBlockProps> = ({ formData, setFormData, minDuree, estimatedResources }) => (
+export const DurationBlock: React.FC<DurationBlockProps> = ({ formData, setFormData, minDuree }) => (
     <div className="ws-form-block">
         <div className="ws-section-header">Précisez le temps qui vous convient</div>
         <p style={{ color: '#ef4444', fontSize: '0.65rem', textAlign: 'center', marginBottom: '0.5rem' }}>
@@ -208,20 +208,11 @@ export const DurationBlock: React.FC<DurationBlockProps> = ({ formData, setFormD
                 <span className="ws-counter-value">{formData.duree || minDuree} h</span>
                 <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: (formData.duree || minDuree) + 1 })}>+</button>
             </div>
-            {estimatedResources && formData.duree !== estimatedResources.duration && (
-                <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, duree: estimatedResources.duration })}
-                    className="text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded-full border border-teal-200 hover:bg-teal-200"
-                >
-                    Suggéré: {estimatedResources.duration}h
-                </button>
-            )}
         </div>
     </div>
 );
 
-export const PeopleBlock: React.FC<DurationBlockProps> = ({ formData, setFormData, estimatedResources }) => (
+export const PeopleBlock: React.FC<DurationBlockProps> = ({ formData, setFormData }) => (
     <div className="ws-form-block">
         <div className="ws-section-header">Nombre de personne</div>
         <div className="flex items-center justify-center gap-4">
@@ -230,15 +221,7 @@ export const PeopleBlock: React.FC<DurationBlockProps> = ({ formData, setFormDat
                 <span className="ws-counter-value">{formData.nb_intervenants || 1}</span>
                 <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: (formData.nb_intervenants || 1) + 1 })}>+</button>
             </div>
-            {estimatedResources && formData.nb_intervenants !== estimatedResources.people && (
-                <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, nb_intervenants: estimatedResources.people })}
-                    className="text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded-full border border-teal-200 hover:bg-teal-200"
-                >
-                    Suggéré: {estimatedResources.people}
-                </button>
-            )}
+        
         </div>
     </div>
 );

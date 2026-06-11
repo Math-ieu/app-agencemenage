@@ -18,7 +18,11 @@ interface DynamicServiceFormProps {
 }
 
 export const DynamicServiceForm: React.FC<DynamicServiceFormProps> = (props) => {
-  const sk = props.serviceKey.toLowerCase();
+  const sk = (props.serviceKey || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
   
   if (sk.includes('menage standard')) return <MenageStandardForm {...props} />;
   if (sk.includes('grand') || sk.includes('approfondi')) return <GrandMenageForm {...props} />;
