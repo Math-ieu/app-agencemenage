@@ -388,6 +388,9 @@ export const savePlanning = (demandeId: number, data: Record<string, unknown>) =
 export const updatePlanning = (demandeId: number, data: Record<string, unknown>) =>
   apiClient.patch(`/api/demandes/${demandeId}/planning/`, data);
 
+export const createPlanningIntervention = (demandeId: number, data: { date: string; time: string; week_id: string; day_key: string }) =>
+  apiClient.post(`/api/demandes/${demandeId}/create_planning_intervention/`, data);
+
 // ─── App Notifications ────────────────────────────────────────────────────────
 export const getAppNotifications = () =>
   apiClient.get('/api/notifications/');

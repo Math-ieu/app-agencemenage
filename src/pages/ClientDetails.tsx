@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   getClient, getDemandes, getFeedbacks, getClientActionLogs,
-  updateDemande, fetchSecureDocBlob, updateClient, savePlanning
+  updateDemande, fetchSecureDocBlob, updateClient, savePlanning,
+  createPlanningIntervention
 } from '../api/client';
 import { decodeId, encodeId } from '../utils/obfuscation';
 import {
@@ -16,6 +17,7 @@ import { checkPermission, hasPermission } from '../utils/permissions';
 import { useAuthStore } from '../store/auth';
 import { Client, Demande } from '../types';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
+import { normalizeFrequence } from '../utils/formNormalizers';
 import ClientEditModal from './ClientEditModal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 
@@ -201,6 +203,184 @@ function EmptyState({ text, colSpan }: { text: string; colSpan?: number }) {
   );
 }
 
+const formatFrequencyLabel = (val?: string): string => {
+  if (!val) return '';
+  const s = val.toLowerCase().trim();
+  const mapping: Record<string, string> = {
+    '1/sem': '1 fois / semaine',
+    '2/sem': '2 fois / semaine',
+    '3/sem': '3 fois / semaine',
+    '4/sem': '4 fois / semaine',
+    '5/sem': '5 fois / semaine',
+    '6/sem': '6 fois / semaine',
+    '7/sem': '7 fois / semaine',
+    '1/mois': '1 fois / mois',
+    '2/mois': '2 fois / mois',
+    '3/mois': '3 fois / mois',
+    '4/mois': '4 fois / mois',
+    'quotidien': 'Quotidien',
+    'une fois': 'Une fois',
+  };
+  return mapping[s] || val;
+};
+
+const getOneMonthLater = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  date.setMonth(date.getMonth() + 1);
+  return date.toISOString().split('T')[0];
+};
+
+const getMonday = (d: Date): Date => {
+  const date = new Date(d.getTime());
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  return date;
+};
+
+const getDayOfWeekKey = (dayIndex: number): string => {
+  const keys = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  return keys[dayIndex];
+};
+
+const getDayDate = (weekStartDateStr: string, dayKey: string): string => {
+  if (!weekStartDateStr) return '';
+  const date = new Date(weekStartDateStr);
+  const offsets: Record<string, number> = {
+    lundi: 0,
+    mardi: 1,
+    mercredi: 2,
+    jeudi: 3,
+    vendredi: 4,
+    samedi: 5,
+    dimanche: 6
+  };
+  const offset = offsets[dayKey] !== undefined ? offsets[dayKey] : 0;
+  date.setDate(date.getDate() + offset);
+  return date.toISOString().split('T')[0];
+};
+
+const getFrequencyCount = (freqLabel: string): number => {
+  if (!freqLabel) return 1;
+  const match = freqLabel.match(/^(\d+)\/sem/i);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  if (freqLabel.toLowerCase().trim() === 'quotidien') {
+    return 7;
+  }
+  return 1;
+};
+
+const getSelectedDaysForFrequency = (
+  joursIntervention: string[],
+  freqCount: number,
+  startDayKey: string
+): string[] => {
+  const daysOrder = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+  let selected = [...joursIntervention].filter(d => daysOrder.includes(d));
+  
+  if (selected.length >= freqCount) {
+    return selected.slice(0, freqCount);
+  }
+  
+  let startIndex = daysOrder.indexOf(startDayKey);
+  if (startIndex === -1) startIndex = 0;
+  
+  for (let i = 0; i < 7; i++) {
+    const idx = (startIndex + i) % 7;
+    const day = daysOrder[idx];
+    if (!selected.includes(day)) {
+      selected.push(day);
+    }
+    if (selected.length === freqCount) {
+      break;
+    }
+  }
+  return selected;
+};
+
+const calculateEndTime = (start: string, durationHours: number): string => {
+  if (!start) return '';
+  const [h, m] = start.split(':').map(Number);
+  let endH = h + Math.floor(durationHours);
+  let endM = m + Math.round((durationHours % 1) * 60);
+  if (endM >= 60) {
+    endH += Math.floor(endM / 60);
+    endM = endM % 60;
+  }
+  endH = endH % 24;
+  return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+};
+
+const generateDefaultWeeks = (
+  startDateStr: string,
+  endDateStr: string,
+  joursIntervention: string[],
+  heureDebut: string,
+  nbHeures: number,
+  frequencyLabel: string,
+  parentDemandeId?: number
+): any[] => {
+  if (!startDateStr || !endDateStr) return [];
+  const start = new Date(startDateStr);
+  const end = new Date(endDateStr);
+  
+  const startDayIndex = start.getDay();
+  const startDayKey = getDayOfWeekKey(startDayIndex);
+  
+  const freqCount = getFrequencyCount(frequencyLabel);
+  const selectedDays = getSelectedDaysForFrequency(joursIntervention, freqCount, startDayKey);
+  
+  const duration = nbHeures || 2;
+  const startHour = heureDebut || '09:00';
+  const endHour = calculateEndTime(startHour, duration);
+
+  const weeks: any[] = [];
+  let currentMonday = getMonday(start);
+  let weekIndex = 1;
+
+  while (currentMonday <= end) {
+    const weekDebut = currentMonday.toISOString().split('T')[0];
+    const sunday = new Date(currentMonday.getTime());
+    sunday.setDate(sunday.getDate() + 6);
+    const weekFin = sunday.toISOString().split('T')[0];
+
+    const jours: Record<string, any> = {};
+    const daysOrder = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+    
+    daysOrder.forEach(dayKey => {
+      const dayDateStr = getDayDate(weekDebut, dayKey);
+      const dayDate = new Date(dayDateStr);
+      
+      const isParentDemandDay = parentDemandeId && dayDateStr === startDateStr;
+      const isSelected = isParentDemandDay || (selectedDays.includes(dayKey) && dayDate >= start && dayDate <= end);
+      
+      jours[dayKey] = {
+        selected: isSelected,
+        heure_debut: isSelected ? startHour : '',
+        heure_fin: isSelected ? endHour : '',
+        demande_id: isParentDemandDay ? parentDemandeId : null
+      };
+    });
+
+    weeks.push({
+      id: Math.random().toString(36).substr(2, 9),
+      label: `Semaine ${weekIndex}`,
+      date_debut: weekDebut,
+      date_fin: weekFin,
+      termine: false,
+      jours
+    });
+
+    weekIndex++;
+    currentMonday.setDate(currentMonday.getDate() + 7);
+  }
+
+  return weeks;
+};
+
 /* ═══════════════════════════════════════════════════════════
    Main Component
    ═══════════════════════════════════════════════════════════ */
@@ -244,18 +424,38 @@ export default function ClientDetails() {
   const [savingPlanning, setSavingPlanning] = useState(false);
   const [semaines, setSemaines] = useState<any[]>([]);
   const [openWeekIds, setOpenWeekIds] = useState<string[]>([]);
-  const [frequencyLabel, setFrequencyLabel] = useState('2 fois / semaine');
+  const [frequencyLabel, setFrequencyLabel] = useState('2/sem');
 
   useEffect(() => {
-    if (latest && latest.planning) {
-      setJoursIntervention(latest.planning.jours_intervention || []);
-      setHeureDebut(latest.planning.heure_debut ? latest.planning.heure_debut.slice(0, 5) : '');
-      setHeureFin(latest.planning.heure_fin ? latest.planning.heure_fin.slice(0, 5) : '');
-      setDateDebut(latest.planning.date_debut || '');
-      setDateFin(latest.planning.date_fin || '');
-      setPlanningStatut(latest.planning.statut || 'en_cours');
-      setPlanningNotes(latest.planning.notes || '');
-      setSemaines(latest.planning.semaines || []);
+    if (latest) {
+      const ji = latest.planning?.jours_intervention || [];
+      const hd = latest.planning?.heure_debut ? latest.planning.heure_debut.slice(0, 5) : (latest.heure_intervention ? latest.heure_intervention.slice(0, 5) : '09:00');
+      const hf = latest.planning?.heure_fin ? latest.planning.heure_fin.slice(0, 5) : '11:00';
+      const db = latest.planning?.date_debut || latest.date_intervention || '';
+      const df = latest.planning?.date_fin || (db ? getOneMonthLater(db) : '');
+      const statut = latest.planning?.statut || 'en_cours';
+      const notes = latest.planning?.notes || '';
+      const s = latest.planning?.semaines || [];
+
+      setJoursIntervention(ji);
+      setHeureDebut(hd);
+      setHeureFin(hf);
+      setDateDebut(db);
+      setDateFin(df);
+      setPlanningStatut(statut);
+      setPlanningNotes(notes);
+
+      if (s && s.length > 0) {
+        setSemaines(s);
+      } else if (db && df) {
+        const dur = Number(latest.nb_heures || latest.formulaire_data?.duree || 2);
+        const fl = normalizeFrequence(latest.frequency_label) || '2/sem';
+        setSemaines(generateDefaultWeeks(db, df, ji, hd, dur, fl, latest.id));
+      } else {
+        setSemaines([]);
+      }
+      
+      setFrequencyLabel(normalizeFrequence(latest.frequency_label) || '2/sem');
     } else {
       setJoursIntervention([]);
       setHeureDebut('');
@@ -265,11 +465,7 @@ export default function ClientDetails() {
       setPlanningStatut('en_cours');
       setPlanningNotes('');
       setSemaines([]);
-    }
-    if (latest) {
-      setFrequencyLabel(latest.frequency_label || '2 fois / semaine');
-    } else {
-      setFrequencyLabel('2 fois / semaine');
+      setFrequencyLabel('2/sem');
     }
   }, [latest]);
 
@@ -330,9 +526,34 @@ export default function ClientDetails() {
       await fetchData();
     } catch (err) {
       console.error(err);
-      addToast("Erreur lors de l'enregistrement du planning", 'error');
+      addToast("Erreur lors de l'enregistrement", 'error');
     } finally {
       setSavingPlanning(false);
+    }
+  };
+
+  const handleCreatePlanningIntervention = async (
+    weekId: string,
+    dayKey: string,
+    dayDateStr: string,
+    timeStr: string
+  ) => {
+    if (!latest) return;
+    try {
+      const res = await createPlanningIntervention(latest.id, {
+        date: dayDateStr,
+        time: timeStr || '09:00',
+        week_id: weekId,
+        day_key: dayKey
+      });
+      addToast("Intervention créée avec succès.", "success");
+      if (res.data && res.data.planning && res.data.planning.semaines) {
+        setSemaines(res.data.planning.semaines);
+      }
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+      addToast("Erreur lors de la création de l'intervention.", "error");
     }
   };
 
@@ -413,7 +634,34 @@ export default function ClientDetails() {
     setSemaines(semaines.map(w => {
       if (w.id === weekId) {
         const joursCopy = { ...w.jours };
-        joursCopy[day] = { ...joursCopy[day], [field]: value };
+        if (field === 'selected' && value === false) {
+          joursCopy[day] = {
+            selected: false,
+            heure_debut: '',
+            heure_fin: '',
+            demande_id: null
+          };
+        } else if (field === 'selected' && value === true) {
+          const duration = Number(latest?.nb_heures || latest?.formulaire_data?.duree || 2);
+          const startH = heureDebut || '09:00';
+          const endH = calculateEndTime(startH, duration);
+          joursCopy[day] = {
+            ...joursCopy[day],
+            selected: true,
+            heure_debut: joursCopy[day]?.heure_debut || startH,
+            heure_fin: joursCopy[day]?.heure_fin || endH
+          };
+        } else if (field === 'heure_debut') {
+          const duration = Number(latest?.nb_heures || latest?.formulaire_data?.duree || 2);
+          const endH = calculateEndTime(value, duration);
+          joursCopy[day] = {
+            ...joursCopy[day],
+            heure_debut: value,
+            heure_fin: endH
+          };
+        } else {
+          joursCopy[day] = { ...joursCopy[day], [field]: value };
+        }
         return { ...w, jours: joursCopy };
       }
       return w;
@@ -976,7 +1224,7 @@ export default function ClientDetails() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <span style={{ padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: 14, fontWeight: 700, color: '#475569', background: 'white' }}>
-                    {latest.frequency_label || latest.frequency || 'Une fois'}
+                    {formatFrequencyLabel(latest.frequency_label) || latest.frequency || 'Une fois'}
                   </span>
                   <span style={{ fontSize: 14, fontWeight: 500, color: '#94a3b8' }}>
                     Prestation Unique — {latest.nb_heures ? `${latest.nb_heures}h` : '—'}
@@ -999,7 +1247,7 @@ export default function ClientDetails() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <span style={{ padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: 13, fontWeight: 700, color: C.teal, background: '#e6f7f5' }}>
-                      mensuel
+                      {formatFrequencyLabel(frequencyLabel) || 'mensuel'}
                     </span>
                     <span style={{ fontSize: 14, fontWeight: 600, color: '#64748b' }}>
                       Abonnement — {latest.service || 'Ménage'}
@@ -1065,7 +1313,14 @@ export default function ClientDetails() {
                     </label>
                     <select
                       value={frequencyLabel}
-                      onChange={(e) => setFrequencyLabel(e.target.value)}
+                      onChange={(e) => {
+                        const newFreq = e.target.value;
+                        setFrequencyLabel(newFreq);
+                        if (dateDebut && dateFin) {
+                          const dur = Number(latest?.nb_heures || latest?.formulaire_data?.duree || 2);
+                          setSemaines(generateDefaultWeeks(dateDebut, dateFin, joursIntervention, heureDebut, dur, newFreq, latest.id));
+                        }
+                      }}
                       style={{
                         width: '100%',
                         padding: '10px 14px',
@@ -1078,17 +1333,18 @@ export default function ClientDetails() {
                         color: '#334155'
                       }}
                     >
-                      <option value="1 fois / semaine">1 fois / semaine</option>
-                      <option value="2 fois / semaine">2 fois / semaine</option>
-                      <option value="3 fois / semaine">3 fois / semaine</option>
-                      <option value="4 fois / semaine">4 fois / semaine</option>
-                      <option value="5 fois / semaine">5 fois / semaine</option>
-                      <option value="6 fois / semaine">6 fois / semaine</option>
-                      <option value="7 fois / semaine">7 fois / semaine</option>
-                      <option value="1 fois / mois">1 fois / mois</option>
-                      <option value="2 fois / mois">2 fois / mois</option>
-                      <option value="3 fois / mois">3 fois / mois</option>
-                      <option value="4 fois / mois">4 fois / mois</option>
+                      <option value="1/sem">1 fois / semaine</option>
+                      <option value="2/sem">2 fois / semaine</option>
+                      <option value="3/sem">3 fois / semaine</option>
+                      <option value="4/sem">4 fois / semaine</option>
+                      <option value="5/sem">5 fois / semaine</option>
+                      <option value="6/sem">6 fois / semaine</option>
+                      <option value="7/sem">7 fois / semaine</option>
+                      <option value="1/mois">1 fois / mois</option>
+                      <option value="2/mois">2 fois / mois</option>
+                      <option value="3/mois">3 fois / mois</option>
+                      <option value="4/mois">4 fois / mois</option>
+                      <option value="quotidien">Quotidien</option>
                     </select>
                   </div>
                   
@@ -1099,7 +1355,16 @@ export default function ClientDetails() {
                     <input
                       type="date"
                       value={dateDebut}
-                      onChange={(e) => setDateDebut(e.target.value)}
+                      onChange={(e) => {
+                        const newStart = e.target.value;
+                        setDateDebut(newStart);
+                        if (newStart) {
+                          const newEnd = getOneMonthLater(newStart);
+                          setDateFin(newEnd);
+                          const dur = Number(latest?.nb_heures || latest?.formulaire_data?.duree || 2);
+                          setSemaines(generateDefaultWeeks(newStart, newEnd, joursIntervention, heureDebut, dur, frequencyLabel, latest.id));
+                        }
+                      }}
                       style={{
                         width: '100%',
                         padding: '10px 14px',
@@ -1121,7 +1386,14 @@ export default function ClientDetails() {
                     <input
                       type="date"
                       value={dateFin}
-                      onChange={(e) => setDateFin(e.target.value)}
+                      onChange={(e) => {
+                        const newEnd = e.target.value;
+                        setDateFin(newEnd);
+                        if (dateDebut && newEnd) {
+                          const dur = Number(latest?.nb_heures || latest?.formulaire_data?.duree || 2);
+                          setSemaines(generateDefaultWeeks(dateDebut, newEnd, joursIntervention, heureDebut, dur, frequencyLabel, latest.id));
+                        }
+                      }}
                       style={{
                         width: '100%',
                         padding: '10px 14px',
@@ -1273,10 +1545,14 @@ export default function ClientDetails() {
                                 { label: 'Samedi', key: 'samedi' },
                                 { label: 'Dimanche', key: 'dimanche' }
                               ].map(day => {
-                                const dayConfig = week.jours?.[day.key] || { selected: false, heure_debut: '', heure_fin: '' };
+                                const dayConfig = week.jours?.[day.key] || { selected: false, heure_debut: '', heure_fin: '', demande_id: null };
+                                const dayDateStr = getDayDate(week.date_debut, day.key);
+                                const assocDemand = dayConfig.demande_id 
+                                  ? demandes.find(d => d.id === dayConfig.demande_id)
+                                  : (latest ? demandes.find(d => d.parent_demande === latest.id && d.date_intervention === dayDateStr) : null);
                                 return (
-                                  <div key={day.key} style={{ display: 'grid', gridTemplateColumns: '2fr 3fr 3fr', gap: 16, alignItems: 'center' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+                                  <div key={day.key} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.3fr 1.3fr 2.2fr', gap: 12, alignItems: 'center' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
                                       <input
                                         type="checkbox"
                                         checked={dayConfig.selected || false}
@@ -1330,6 +1606,73 @@ export default function ClientDetails() {
                                           background: dayConfig.selected ? 'white' : '#f8fafc'
                                         }}
                                       />
+                                    </div>
+
+                                    {/* Action button & status column */}
+                                    <div>
+                                      {dayConfig.selected && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                          {assocDemand ? (
+                                            <>
+                                              {/* Status Badge */}
+                                              {['pres_terminee', 'termine'].includes(assocDemand.statut) ? (
+                                                <span style={{
+                                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                  backgroundColor: '#dcfce7', border: '1px solid #10b981',
+                                                  borderRadius: 8, padding: '4px 10px',
+                                                  fontSize: 12, fontWeight: 700, color: '#15803d'
+                                                }}>
+                                                  ✓ Terminée
+                                                </span>
+                                              ) : (
+                                                <span style={{
+                                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                  backgroundColor: '#fef3c7', border: '1px solid #d97706',
+                                                  borderRadius: 8, padding: '4px 10px',
+                                                  fontSize: 12, fontWeight: 700, color: '#b45309'
+                                                }}>
+                                                  En cours
+                                                </span>
+                                              )}
+                                              {/* Demand created notice */}
+                                              <span style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8', opacity: 0.7 }}>
+                                                Demande créée
+                                              </span>
+                                            </>
+                                          ) : (
+                                            /* Create demand button */
+                                            <button
+                                              type="button"
+                                              onClick={() => handleCreatePlanningIntervention(
+                                                week.id,
+                                                day.key,
+                                                dayDateStr,
+                                                dayConfig.heure_debut
+                                              )}
+                                              style={{
+                                                padding: '4px 10px',
+                                                border: `1px solid ${C.teal}`,
+                                                borderRadius: 8,
+                                                background: 'white',
+                                                color: C.teal,
+                                                fontSize: 12,
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s',
+                                                outline: 'none',
+                                              }}
+                                              onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = `${C.teal}10`;
+                                              }}
+                                              onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor = 'white';
+                                              }}
+                                            >
+                                              Créer la demande
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 );
