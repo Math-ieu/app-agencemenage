@@ -251,6 +251,7 @@ const getGesteMessage = (geste: any) => {
 export default function Dashboard() {
 
   const [demandes, setDemandes] = useState<Demande[]>([]);
+  const [allDemandes, setAllDemandes] = useState<Demande[]>([]);
   const [stats, setStats] = useState<DashboardStats>({ en_cours: 0, en_cours_particulier: 0, en_cours_entreprise: 0, en_cours_nouveau: 0, en_attente: 0 });
   const [clientDemandeCounts, setClientDemandeCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -461,6 +462,7 @@ export default function Dashboard() {
         return true;
       });
       setDemandes(results);
+      setAllDemandes(allResults);
 
       const enCours = results.filter(d => !!d);
       const enCoursParticulier = enCours.filter(d => d.segment === 'particulier').length;
@@ -665,6 +667,23 @@ export default function Dashboard() {
     }
   };
 
+  const getSubscriptionDemandes = (parentId: number | string) => {
+    const list = allDemandes.length > 0 ? allDemandes : demandes;
+    const pId = Number(parentId);
+    const filtered = list.filter(d => Number(d.id) === pId || (d.parent_demande && Number(d.parent_demande) === pId));
+    console.log(`[getSubscriptionDemandes] parentId: ${parentId}, pId: ${pId}`);
+    console.log(`[getSubscriptionDemandes] list length: ${list.length}, filtered length: ${filtered.length}`);
+    console.log(`[getSubscriptionDemandes] list is allDemandes: ${allDemandes.length > 0}`);
+    console.log(`[getSubscriptionDemandes] filtered items:`, filtered.map(x => ({ id: x.id, parent_demande: x.parent_demande, parts: x.parts_repartition })));
+    return filtered;
+  };
+  
+  const getParentDemande = (parentId: number | string, fallback: Demande) => {
+    const list = allDemandes.length > 0 ? allDemandes : demandes;
+    const pId = Number(parentId);
+    return list.find(d => Number(d.id) === pId) || fallback;
+  };
+
   const updatePartsAndAgency = (newParts: PartRepartitionItem[], overrideTvaActive?: boolean) => {
     setEditFormData((prev: any) => {
       const isFreeOrCancelled = prev.statut_paiement_ui === 'intervention_gratuite' || prev.statut_paiement_ui === 'facturation_annulee' || Boolean(prev.facturation_annulee);
@@ -672,7 +691,6 @@ export default function Dashboard() {
       const tvaActive = overrideTvaActive !== undefined ? overrideTvaActive : (isFreeOrCancelled ? false : Boolean(prev.tva_active));
       const currentMontantTTC = isFreeOrCancelled ? 0 : roundMoney(tvaActive ? montantHT * 1.2 : montantHT);
 
-      const count = newParts.length;
       let adjustedParts = [...newParts];
       let nextMontantProfilAnnulation = prev.montant_profil_annulation;
       let nextProfilSeraPaye = prev.profil_sera_paye;
@@ -683,19 +701,38 @@ export default function Dashboard() {
         const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
         nextMontantProfilAnnulation = totalParts;
         nextProfilSeraPaye = totalParts > 0;
-      } else {
-        if (count > 0) {
-          const amountToDistribute = currentMontantTTC;
-          const amountPerProfile = roundMoney(amountToDistribute / count);
-          adjustedParts = adjustedParts.map((p, i) => ({
-            ...p,
-            amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
-          }));
-        }
       }
 
       const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
-      const nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(currentMontantTTC - totalParts);
+      
+      let nextPartAgence = 0;
+      const isAbonnement = prev.frequency === 'abonnement' || !!prev.parent_demande || !!selectedDemande?.parent_demande;
+
+      if (isAbonnement) {
+        const parentId = prev.parent_demande || selectedDemande?.parent_demande || selectedDemande?.id;
+        const parentDemande = getParentDemande(parentId, selectedDemande!);
+        const parentPrice = (selectedDemande?.id && Number(selectedDemande.id) === Number(parentId))
+          ? currentMontantTTC
+          : (parentDemande ? toNumber(parentDemande.prix) : 0);
+          
+        const subscriptionDemandes = getSubscriptionDemandes(parentId);
+        const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande?.id)).reduce((sum, d) => {
+          const parts = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
+          return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+        }, 0);
+        
+        const remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
+        
+        if (prev.parent_demande) {
+          // Child demand: Agency share is frozen to 0
+          nextPartAgence = 0;
+        } else {
+          // Parent demand: Agency share is the remaining agency share
+          nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(remainingAgencyShare);
+        }
+      } else {
+        nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(currentMontantTTC - totalParts);
+      }
 
       const updates: any = {
         ...prev,
@@ -769,6 +806,31 @@ export default function Dashboard() {
           created_by_name: item.created_by_name,
         }))
         .filter((item) => item.profile_id !== '');
+
+      const isAbonnement = frequency === 'abonnement' || !!editFormData.parent_demande || !!selectedDemande.parent_demande;
+      let finalPartAgence = partAgence;
+      if (isAbonnement) {
+        const parentId = editFormData.parent_demande || selectedDemande.parent_demande || selectedDemande.id;
+        const parentDemande = getParentDemande(parentId, selectedDemande!);
+        const parentPrice = (Number(selectedDemande.id) === Number(parentId))
+          ? montantTTC
+          : (parentDemande ? toNumber(parentDemande.prix) : 0);
+          
+        const subscriptionDemandes = getSubscriptionDemandes(parentId);
+        const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
+        const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande.id)).reduce((sum, d) => {
+          const parts = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
+          return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+        }, 0);
+        
+        const remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
+        
+        if (editFormData.parent_demande) {
+          finalPartAgence = 0;
+        } else {
+          finalPartAgence = isFreeOrCancelled ? 0 : roundMoney(remainingAgencyShare);
+        }
+      }
 
       if (isFreeOrCancelled) {
         const amountToDistribute = editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0;
@@ -896,7 +958,7 @@ export default function Dashboard() {
           statut_paiement_ui: finalStatutPaiementUi,
           mode_paiement: editFormData.mode_paiement || '',
           encaisse_par: editFormData.encaisse_par || '',
-          part_agence: partAgence,
+          part_agence: finalPartAgence,
           parts_repartition: partsRepartition,
           annulation_raison: editFormData.annulation_raison || '',
           profil_sera_paye: Boolean(editFormData.profil_sera_paye),
@@ -905,18 +967,54 @@ export default function Dashboard() {
             ? partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0)
             : (editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0),
           montant_profil_doit_agence: finalStatutPaiementUi === 'profil_paye_client'
-            ? partAgence
+            ? finalPartAgence
             : 0,
           ca_initial: toNumber(editFormData.ca_initial),
         },
-        part_agence: partAgence,
+        part_agence: finalPartAgence,
         parts_repartition: partsRepartition,
         notes: editFormData.note_client || '',
       };
 
       updateData.avec_produit = Boolean(editFormData.produits || editFormData.avec_produit);
+      updateData.part_agence = finalPartAgence;
 
       const response = await updateDemande(selectedDemande.id, updateData);
+
+      // If child subscription demand, update parent demand's part_agence in the DB
+      const parentId = editFormData.parent_demande || selectedDemande.parent_demande;
+      if (isAbonnement && parentId) {
+        const parentDem = getParentDemande(parentId, selectedDemande!);
+        if (parentDem) {
+          const parentPrevForm = parentDem.formulaire_data || {};
+          const parentPrevFact = parentPrevForm.facturation || {};
+          const parentStatutPaiementUi = parentPrevFact.statut_paiement_ui;
+          
+          const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
+          const subscriptionDemandes = getSubscriptionDemandes(parentId);
+          const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande.id)).reduce((sum, d) => {
+            const parts = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
+            return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+          }, 0);
+          
+          const parentPrice = toNumber(parentDem.prix);
+          const newParentPartAgence = roundMoney(parentPrice - (totalParts + otherDemandsProfilesTotal));
+          
+          const parentUpdateData: any = {
+            part_agence: newParentPartAgence,
+            formulaire_data: {
+              ...parentPrevForm,
+              facturation: {
+                ...parentPrevFact,
+                part_agence: newParentPartAgence,
+                montant_profil_doit_agence: parentStatutPaiementUi === 'profil_paye_client' ? newParentPartAgence : 0,
+              },
+              part_agence: newParentPartAgence
+            }
+          };
+          await updateDemande(parentId, parentUpdateData);
+        }
+      }
 
       // Automated Action: Satisfaction WhatsApp
       if (triggerSatisfactionWhatsApp || (editFormData.statut === 'pres_terminee' && selectedDemande.statut !== 'pres_terminee')) {
@@ -1090,9 +1188,37 @@ export default function Dashboard() {
       };
     });
 
+    let initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
+      ? 0
+      : toNumber(facturationData.part_agence || formData.part_agence);
+
+    if (d.frequency === 'abonnement' || !!d.parent_demande) {
+      const parentId = d.parent_demande || d.id;
+      const parentDemande = getParentDemande(parentId, d);
+      const parentPrice = toNumber(parentDemande.prix);
+      
+      const subscriptionDemandes = getSubscriptionDemandes(parentId);
+      const otherDemandsProfilesTotal = subscriptionDemandes.filter(x => Number(x.id) !== Number(d.id)).reduce((sum, x) => {
+        const parts = x.parts_repartition || x.formulaire_data?.facturation?.parts_repartition || [];
+        return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+      }, 0);
+      const currentDemandProfilesTotal = savedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+      
+      const remainingAgencyShare = parentPrice - (currentDemandProfilesTotal + otherDemandsProfilesTotal);
+      
+      if (d.parent_demande) {
+        initialPartAgence = 0;
+      } else {
+        initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
+          ? 0
+          : roundMoney(remainingAgencyShare);
+      }
+    }
+
     setSelectedDemande(d);
     setIsEditing(true);
     setEditFormData({
+      parent_demande: d.parent_demande || null,
       prix: prixValue,
       montant_ht: montantHT,
       ca_initial: caInitial,
@@ -1101,9 +1227,7 @@ export default function Dashboard() {
       montant_verse: toNumber(facturationData.montant_verse),
       montant_profil_doit: toNumber(facturationData.montant_profil_doit),
       facturation_annulee: Boolean(facturationData.facturation_annulee),
-      part_agence: (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
-        ? 0
-        : toNumber(facturationData.part_agence || formData.part_agence),
+      part_agence: initialPartAgence,
       parts_repartition: savedParts,
       mode_paiement: facturationData.mode_paiement || d.mode_paiement || '',
       statut_paiement: d.statut_paiement,
@@ -1125,8 +1249,8 @@ export default function Dashboard() {
       note_client: formData.notes || formData.message || '',
       service: d.service,
       segment: d.segment,
-      frequency: d.frequency,
-      frequence: normalizeFrequence(formData.frequence || d.frequency_label || (d.frequency === 'oneshot' ? 'une fois' : '1/sem')),
+      frequency: (d.parent_demande || d.frequency === 'abonnement') ? 'abonnement' : 'oneshot',
+      frequence: normalizeFrequence(formData.frequence || d.frequency_label || ((d.frequency === 'oneshot' && !d.parent_demande) ? 'une fois' : '1/sem')),
       client_name: d.client_name || formData.nom || formData.fullName || '',
       client_phone: d.client_phone || formData.phone || formData.whatsapp_phone || '',
       client_whatsapp: d.client_whatsapp || formData.whatsapp_phone || formData.whatsapp || '',
@@ -1248,8 +1372,9 @@ export default function Dashboard() {
   const filtered = useMemo(() => {
     return demandes.filter((d) => {
       // Filtre Onglet (Besoins vs Abonnements)
-      if (activeTab === 'abonnements' && d.frequency !== 'abonnement') return false;
-      if (activeTab === 'besoins' && d.frequency === 'abonnement') return false;
+      const isAbonn = d.frequency === 'abonnement' || !!d.parent_demande;
+      if (activeTab === 'abonnements' && !isAbonn) return false;
+      if (activeTab === 'besoins' && isAbonn) return false;
       
       // Exclure les missions payées du tableau de bord
       const facturation = d.formulaire_data?.facturation || {};
@@ -1292,10 +1417,51 @@ export default function Dashboard() {
     });
   }, [demandes, activeTab, search, serviceFilter, prestationFilter, dateRange]);
 
+  const busyAgentIds = useMemo(() => {
+    const activeIds = new Set<number>();
+    const list = allDemandes.length > 0 ? allDemandes : demandes;
+    for (const d of list) {
+      if (selectedDemande && Number(d.id) === Number(selectedDemande.id)) continue;
+      if (d.statut === 'en_attente' || d.statut === 'pres_terminee' || d.statut === 'termine') continue;
 
+      const factDataDef = d.formulaire_data?.facturation || {};
+      const statutUi = factDataDef.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(factDataDef.facturation_annulee));
 
+      if (statutUi === 'paye') continue;
 
+      const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || factDataDef.facturation_annulee;
+      if (isAnnule) {
+        const profilSeraPaye = (d as any).profil_sera_paye !== undefined ? Boolean((d as any).profil_sera_paye) : Boolean(factDataDef.profil_sera_paye);
+        if (profilSeraPaye) {
+          let allProfilesPaid = false;
+          const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
+          if (Array.isArray(parts) && parts.length > 0) {
+            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+          } else {
+            allProfilesPaid = Boolean(factDataDef.part_profil_versee);
+          }
+          if (allProfilesPaid) continue;
+        } else {
+          continue;
+        }
+      }
 
+      if (Array.isArray(d.profils_envoyes)) {
+        for (const p of d.profils_envoyes) {
+          if (p.id) activeIds.add(Number(p.id));
+        }
+      }
+
+      const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
+      if (Array.isArray(parts)) {
+        for (const part of parts) {
+          const pid = Number(part.profile_id);
+          if (pid) activeIds.add(pid);
+        }
+      }
+    }
+    return activeIds;
+  }, [allDemandes, demandes, selectedDemande]);
 
   const montantHT = toNumber(editFormData.montant_ht ?? editFormData.prix);
   const montantTTC = roundMoney(editFormData.tva_active ? montantHT * 1.2 : montantHT);
@@ -1303,6 +1469,25 @@ export default function Dashboard() {
   // const montantProfilDoit = toNumber(editFormData.montant_profil_doit);
 
   const partsRepartition: PartRepartitionItem[] = asArray<PartRepartitionItem>(editFormData.parts_repartition, []);
+
+  // Subscription remaining agency share calculation
+  let remainingAgencyShare = 0;
+  if (editFormData.frequency === 'abonnement' && selectedDemande) {
+    const parentId = editFormData.parent_demande || selectedDemande.parent_demande || selectedDemande.id;
+    const parentDemande = getParentDemande(parentId, selectedDemande);
+    const parentPrice = (Number(selectedDemande.id) === Number(parentId))
+      ? montantTTC
+      : (parentDemande ? toNumber(parentDemande.prix) : 0);
+      
+    const subscriptionDemandes = getSubscriptionDemandes(parentId);
+    const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
+    const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande.id)).reduce((sum, d) => {
+      const parts = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
+      return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+    }, 0);
+    
+    remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
+  }
 
   return (
     <div className="page">
@@ -1425,13 +1610,13 @@ export default function Dashboard() {
           className={`tab ${activeTab === 'besoins' ? 'tab-active' : ''}`}
           onClick={() => setActiveTab('besoins')}
         >
-          Besoins ({demandes.filter(d => d.frequency !== 'abonnement').length})
+          Besoins ({demandes.filter(d => d.frequency !== 'abonnement' && !d.parent_demande).length})
         </button>
         <button
           className={`tab ${activeTab === 'abonnements' ? 'tab-active' : ''}`}
           onClick={() => setActiveTab('abonnements')}
         >
-          Abonnements ({demandes.filter(d => d.frequency === 'abonnement').length})
+          Abonnements ({demandes.filter(d => d.frequency === 'abonnement' || !!d.parent_demande).length})
         </button>
       </div>
 
@@ -2537,15 +2722,6 @@ export default function Dashboard() {
                                           const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
                                           nextMontantProfilAnnulation = totalParts;
                                           nextProfilSeraPaye = totalParts > 0;
-                                        } else {
-                                          const count = parts.length;
-                                          if (count > 0) {
-                                            const amountPerProfile = roundMoney(currentMontantTTC / count);
-                                            adjustedParts = adjustedParts.map((p: any, i: number) => ({
-                                              ...p,
-                                              amount: i === count - 1 ? roundMoney(currentMontantTTC - (amountPerProfile * (count - 1))) : amountPerProfile
-                                            }));
-                                          }
                                         }
 
                                         const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
@@ -2763,11 +2939,36 @@ export default function Dashboard() {
                               <label>Part de l'agence (MAD)</label>
                               <input 
                                 type="number" 
-                                value={(editFormData.statut_paiement_ui === 'intervention_gratuite' || editFormData.statut_paiement_ui === 'facturation_annulee' || Boolean(editFormData.facturation_annulee)) ? 0 : editFormData.part_agence} 
+                                value={
+                                  (editFormData.statut_paiement_ui === 'intervention_gratuite' || 
+                                   editFormData.statut_paiement_ui === 'facturation_annulee' || 
+                                   Boolean(editFormData.facturation_annulee)) 
+                                    ? 0 
+                                    : editFormData.frequency === 'abonnement'
+                                      ? roundMoney(remainingAgencyShare)
+                                      : editFormData.part_agence
+                                } 
                                 onChange={e => setEditFormData({ ...editFormData, part_agence: e.target.value })} 
                                 className="edit-input" 
-                                disabled={editFormData.statut_paiement_ui === 'intervention_gratuite' || editFormData.statut_paiement_ui === 'facturation_annulee' || Boolean(editFormData.facturation_annulee)}
+                                disabled={
+                                  editFormData.statut_paiement_ui === 'intervention_gratuite' || 
+                                  editFormData.statut_paiement_ui === 'facturation_annulee' || 
+                                  Boolean(editFormData.facturation_annulee) ||
+                                  editFormData.frequency === 'abonnement'
+                                }
+                                style={
+                                  editFormData.frequency === 'abonnement'
+                                    ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', fontWeight: 600 }
+                                    : {}
+                                }
                               />
+                              {editFormData.frequency === 'abonnement' && (
+                                <span style={{ fontSize: '11px', color: '#0d9488', marginTop: '4px', display: 'block' }}>
+                                  {editFormData.parent_demande 
+                                    ? "🔒 Part de l'agence restante sur cet abonnement (affichée à titre informatif, la commission réelle est enregistrée sur la demande parente)."
+                                    : "🔒 Part agence calculée automatiquement sur la commission restante."}
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div>
@@ -2830,11 +3031,13 @@ export default function Dashboard() {
                                       style={{ width: '100%' }}
                                     >
                                       <option value="">Sélectionner un profil...</option>
-                                      {allProfils.map(p => (
-                                        <option key={p.id} value={p.id}>
-                                          {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`}
-                                        </option>
-                                      ))}
+                                      {allProfils
+                                        .filter(p => p.id === line.profile_id || (p.statut === 'disponible' && !busyAgentIds.has(p.id) && !p.is_blacklisted))
+                                        .map(p => (
+                                          <option key={p.id} value={p.id}>
+                                            {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`}
+                                          </option>
+                                        ))}
                                     </select>
                                   </div>
 
@@ -3069,6 +3272,71 @@ export default function Dashboard() {
                           {(() => {
                             const isFreeOrCancelled = editFormData.statut_paiement_ui === 'intervention_gratuite' || editFormData.statut_paiement_ui === 'facturation_annulee' || Boolean(editFormData.facturation_annulee);
                             const tp = partsRepartition.reduce((a, p) => a + toNumber(p.amount), 0);
+                            
+                            const isAbonnement = editFormData.frequency === 'abonnement';
+                            if (isAbonnement) {
+                              const parentId = editFormData.parent_demande || selectedDemande.parent_demande || selectedDemande.id;
+                              const parentDemande = getParentDemande(parentId, selectedDemande!);
+                              const parentPrice = (Number(selectedDemande.id) === Number(parentId))
+                                ? montantTTC
+                                : (parentDemande ? toNumber(parentDemande.prix) : 0);
+                                
+                              const subscriptionDemandes = getSubscriptionDemandes(parentId);
+                              const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande.id)).reduce((sum, d) => {
+                                const parts = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
+                                return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+                              }, 0);
+                              
+                              const currentDemandProfilesTotal = tp;
+                              const totalProfilesTotal = currentDemandProfilesTotal + otherDemandsProfilesTotal;
+                              const remainingAgencyShare = parentPrice - totalProfilesTotal;
+                              
+                              const ok = remainingAgencyShare >= -0.01;
+                              
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', borderRadius: '12px', border: `1px solid ${ok ? '#A7F3D0' : '#FECACA'}`, background: ok ? '#ECFDF5' : '#FEF2F2' }}>
+                                  <div style={{ fontSize: '14px', fontWeight: 700, color: ok ? '#065f46' : '#991b1b', borderBottom: `1px dashed ${ok ? '#A7F3D0' : '#FCA5A5'}`, paddingBottom: '8px', marginBottom: '4px' }}>
+                                    Abonnement — Suivi de la part de l'agence
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px', color: '#374151' }}>
+                                    <div>Commission initiale (TTC 1ère prest.) : <strong>{parentPrice.toFixed(2)} MAD</strong></div>
+                                    <div>Parts profils (autres sessions) : <strong>{otherDemandsProfilesTotal.toFixed(2)} MAD</strong></div>
+                                    <div>Parts profils (cette session) : <strong>{currentDemandProfilesTotal.toFixed(2)} MAD</strong></div>
+                                    <div>Part agence restante (mise à jour) : <strong style={{ color: ok ? '#059669' : '#DC2626', fontSize: '14px' }}>{remainingAgencyShare.toFixed(2)} MAD</strong></div>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 600, color: ok ? '#059669' : '#DC2626' }}>
+                                      {ok ? '✓ Répartition correcte' : '⚠ Répartition incorrecte : les parts des profils dépassent la commission initiale !'}
+                                    </span>
+                                    {!editFormData.parent_demande && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditFormData((prev: any) => ({
+                                            ...prev,
+                                            part_agence: roundMoney(remainingAgencyShare),
+                                          }));
+                                        }}
+                                        style={{
+                                          padding: '6px 14px',
+                                          borderRadius: '8px',
+                                          backgroundColor: '#059669',
+                                          color: 'white',
+                                          border: 'none',
+                                          fontSize: '12px',
+                                          fontWeight: 600,
+                                          cursor: 'pointer',
+                                          transition: 'background 0.2s',
+                                        }}
+                                      >
+                                        Mettre à jour la part agence
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            }
+
                             const target = isFreeOrCancelled
                               ? (editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0)
                               : toNumber(montantTTC);

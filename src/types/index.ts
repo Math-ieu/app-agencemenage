@@ -139,6 +139,8 @@ export interface Demande {
   geste_commercial?: CommercialGestureShort | null;
   planning?: SubscriptionPlanning | null;
   parent_demande?: number | null;
+  part_agence?: number;
+  parts_repartition?: any[];
   created_at: string;
 }
 
