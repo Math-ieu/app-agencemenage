@@ -181,6 +181,7 @@ export default function ProfilDetails() {
   const [saving, setSaving] = useState(false);
   const [operatorNotes, setOperatorNotes] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
+  const [activeSubscriptionCounts, setActiveSubscriptionCounts] = useState<Map<number, number>>(new Map());
 
   // Postuler modal state
   const [showPostulerModal, setShowPostulerModal] = useState(false);
@@ -328,6 +329,38 @@ export default function ProfilDetails() {
       setHistoryDemandes(filteredDemands);
       setFeedbacks(feedbacksProcessed);
       setHistory(Array.isArray(historyRes.data) ? historyRes.data : []);
+
+      // Calculate activeSubscriptionCounts for profiles' CA total allocation
+      const subCounts = new Map<number, number>();
+      const subscriptionGroups = new Map<number, any[]>();
+      for (const d of allDemandsRaw) {
+        const subId = d.parent_demande || d.parent_demande_id || (d.frequency === 'abonnement' ? d.id : null);
+        if (subId) {
+          if (!subscriptionGroups.has(subId)) {
+            subscriptionGroups.set(subId, []);
+          }
+          subscriptionGroups.get(subId)!.push(d);
+        }
+      }
+
+      for (const [subId, groupDemands] of subscriptionGroups.entries()) {
+        const activeCount = groupDemands.filter(d => {
+          const fact = d.formulaire_data?.facturation || {};
+          const isAnn = d.statut === 'annule' ||
+                        fact.facturation_annulee === true ||
+                        fact.statut_paiement_ui === 'facturation_annulee' ||
+                        fact.statut_paiement_ui === 'intervention_gratuite';
+          if (isAnn) return false;
+
+          const parts = fact.parts_repartition || d.parts_repartition || [];
+          const hasProfile = fact.profil_id || 
+                             parts.length > 0 || 
+                             (d.profil_name && d.profil_name !== '—' && d.profil_name !== 'Profil inconnu');
+          return hasProfile;
+        }).length;
+        subCounts.set(subId, activeCount || 1);
+      }
+      setActiveSubscriptionCounts(subCounts);
     } catch (err) {
       console.error('Error fetching agent details:', err);
       addToast('Erreur lors du chargement des données.', 'error');
@@ -710,7 +743,12 @@ export default function ProfilDetails() {
 
       nombreMissions += 1;
       // Partage équitable du CA total généré entre tous les profils affectés
-      const demandPrice = Number(demande.prix ?? 0);
+      let demandPrice = Number(demande.prix ?? 0);
+      const subId = demande.parent_demande || demande.parent_demande_id || (demande.frequency === 'abonnement' ? demande.id : null);
+      if (subId) {
+        const activeCount = activeSubscriptionCounts.get(subId) || 1;
+        demandPrice = demandPrice / activeCount;
+      }
       const sharedCa = demandPrice / (partsRep.length || 1);
       totalCa += sharedCa;
       if (isConfirmed && hasExplicitParts) {
@@ -736,7 +774,7 @@ export default function ProfilDetails() {
     });
 
     return { totalCa, cumulProfil, nombreMissions, profilDoitAgence, agenceDoitProfil, totalPerte, nbAnnulees };
-  }, [agent, missions, historyDemandes]);
+  }, [agent, missions, historyDemandes, activeSubscriptionCounts]);
 
   const formatMissionStatus = (status?: string): string => {
     const map: Record<string, string> = {

@@ -190,93 +190,253 @@ export default function LaCaisse() {
       const missionDemandeIds = new Set(missions.map((m: any) => m.demande_detail?.id).filter(Boolean));
       const uniqueDemands = demands.filter((d: any) => !missionDemandeIds.has(d.id));
 
-      // Map and compute commission matching VueGlobale logic
-      let totalCommission = 0;
-      let totalCA = 0;
       const now = new Date();
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-      const processRow = (rawStatutPaiementUi: string, partAgence: number, montantPaye: number, montantProfilDoitAgence: number, reglementInterne: string, dateStr: string, statut: string, profilSeraPaye: boolean, montantProfilAnnulation: number) => {
-        // Period filter: current month
-        if (dateStr) {
-          const parts = dateStr.includes('/') ? dateStr.split('/') : null;
-          const isoDate = parts && parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : dateStr;
-          const rowMonth = isoDate.slice(0, 7);
-          if (rowMonth !== currentMonth) return;
-        } else return;
 
-        const paiement = ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatutPaiementUi) ? 'paye' : ['paiement_partiel', 'paiement_en_attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi) ? 'partiellement_paye' : 'non_paye';
 
-        if (statut === 'Facturation annulée' || rawStatutPaiementUi === 'facturation_annulee' || statut === 'Intervention gratuite' || rawStatutPaiementUi === 'intervention_gratuite') {
-          if (profilSeraPaye) totalCommission -= montantProfilAnnulation;
-          return;
-        }
-
-        if (paiement !== 'non_paye') totalCA += montantPaye;
-
-        if (paiement !== 'paye') return;
-        if (rawStatutPaiementUi === 'agence_payee_client') {
-          totalCommission += partAgence;
-        } else if (rawStatutPaiementUi === 'profil_paye_client') {
-          if (reglementInterne === 'Réglé') totalCommission += (montantProfilDoitAgence || partAgence);
-        } else {
-          totalCommission += partAgence;
-        }
+      const formatDateFR = (value?: string): string => {
+        if (!value) return '—';
+        if (value.includes('/')) return value;
+        const cleanValue = value.includes('T') ? value.split('T')[0] : value.split(' ')[0];
+        const [year, month, day] = cleanValue.split('-');
+        if (!year || !month || !day) return value;
+        return `${day}/${month}/${year}`;
       };
 
-      // Process missions
-      for (const m of missions) {
-        const dem = m.demande_detail || {};
-        const fact = dem?.formulaire_data?.facturation || {};
-        const rawStatus = fact.statut_paiement_ui || m.paiement_client_statut || (dem?.statut_paiement === 'integral' ? 'paye' : dem?.statut_paiement === 'acompte' ? 'paiement_en_attente' : dem?.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
-        const montant = Number(dem?.prix ?? 0);
+      const mappedRows = [
+        ...missions.map(m => {
+          const dem = m.demande_detail || {};
+          const fact = dem?.formulaire_data?.facturation || {};
+          const rawStatus = fact.statut_paiement_ui || m.paiement_client_statut || (dem?.statut_paiement === 'integral' ? 'paye' : dem?.statut_paiement === 'acompte' ? 'paiement_en_attente' : dem?.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
+          const isGratuit = rawStatus === 'intervention_gratuite';
+          const isInterventionAnnulee = m.statut === 'annulee' || dem?.statut === 'annule';
+          const isFacturationAnnulee = !isInterventionAnnulee && !isGratuit && (fact.facturation_annulee === true || rawStatus === 'facturation_annulee');
+          const statut = isGratuit ? 'Intervention gratuite' : isInterventionAnnulee ? 'Intervention annulée' : isFacturationAnnulee ? 'Facturation annulée' : 'Confirmée';
+          const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
+          const partProfilVersee = encaissePar === 'Agence' ? Boolean(m.part_profil_versee) : Boolean(m.part_agence_reversee);
+          const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
+          
+          const parts = dem?.parts_repartition || fact.parts_repartition || [];
+          const numMissions = Math.max(1, parts.length);
+          const profilId = m.agent_detail?.id;
+          const partInfo = parts.find((p: any) => p.profile_id == profilId);
+          const montantProfile = Number(partInfo?.amount || 0);
+          const totalProfilsAmount = parts.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
+          const ratio = totalProfilsAmount > 0 && montantProfile > 0 ? (montantProfile / totalProfilsAmount) : (1 / numMissions);
 
-        const parts = dem?.parts_repartition || fact.parts_repartition || [];
-        const numMissions = Math.max(1, parts.length);
-        const profilId = m.agent_detail?.id;
-        const partInfo = parts.find((p: any) => p.profile_id == profilId);
-        const montantProfile = Number(partInfo?.amount || 0);
-        const totalProfilsAmount = parts.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
-        const ratio = totalProfilsAmount > 0 && montantProfile > 0 ? (montantProfile / totalProfilsAmount) : (1 / numMissions);
+          const partAgence = Number(fact.part_agence ?? 0) * ratio;
+          const partProfil = Number(fact.part_profil ?? 0) * ratio;
+          const montant = Number(dem?.prix ?? 0) * ratio;
+          const rawMontantPaye = m.montant_paye !== undefined ? Number(m.montant_paye) : 0;
+          const montantPaye = (rawMontantPaye || (['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? Number(dem?.prix ?? 0) : 0)) * ratio;
+          const montantProfilAnnulation = Number(dem?.montant_profil_annulation || m.montant_profil_annulation || fact.montant_profil_annulation || 0) * ratio;
 
-        const partAgence = Number(fact.part_agence ?? 0) * ratio;
-        const baseMontantPaye = Number(m.montant_paye) || (['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? montant : 0);
-        const montantPaye = baseMontantPaye * ratio;
+          return {
+            demandeId: dem.id,
+            parentDemandeId: dem.parent_demande || dem.parent_demande_id || null,
+            frequency: dem.frequency || null,
+            date: dem.date_intervention ? formatDateFR(dem.date_intervention) : '',
+            statut,
+            statutPaiementUi: rawStatus,
+            paiement: ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? 'paye' : ['paiement_partiel', 'paiement_en_attente', 'partiel', 'acompte'].includes(rawStatus) ? 'partiellement_paye' : 'non_paye',
+            partAgence,
+            partProfil,
+            montant,
+            montantPaye,
+            montantProfilAnnulation,
+            profilSeraPaye: dem.profil_sera_paye !== undefined ? Boolean(dem.profil_sera_paye) : Boolean(m.profil_sera_paye !== undefined ? m.profil_sera_paye : fact.profil_sera_paye),
+            encaissePar,
+            reglementInterne,
+            montantProfilDoitAgence: Number(fact.montant_profil_doit_agence || 0) * ratio,
+            montantAgenceDoitProfil: Number(fact.montant_agence_doit_profil || 0) * ratio,
+            isSubscriptionPrimary: false,
+            isSubscriptionSecondary: false,
+            profilId,
+            profil: m.agent_detail ? (m.agent_detail.full_name || `${m.agent_detail.first_name || ''} ${m.agent_detail.last_name || ''}`).trim() : '—',
+            parts_repartition: parts,
+          };
+        }),
+        ...uniqueDemands.map(d => {
+          const fact = d?.formulaire_data?.facturation || {};
+          const rawStatus = fact.statut_paiement_ui || d.statut_paiement_ui || (d.statut_paiement === 'integral' ? 'paye' : d.statut_paiement === 'acompte' ? 'paiement_en_attente' : d.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_confirme');
+          const isGratuit = rawStatus === 'intervention_gratuite';
+          const isInterventionAnnulee = d.statut === 'annule';
+          const isFacturationAnnulee = !isInterventionAnnulee && !isGratuit && (fact.facturation_annulee === true || rawStatus === 'facturation_annulee');
+          const statut = isGratuit ? 'Intervention gratuite' : isInterventionAnnulee ? 'Intervention annulée' : isFacturationAnnulee ? 'Facturation annulée' : 'Confirmée';
+          const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
+          const partProfilVersee = encaissePar === 'Agence' ? Boolean(fact.part_profil_versee) : Boolean(fact.part_agence_reversee);
+          const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
 
-        const montantProfilDoitAgence = Number(fact.montant_profil_doit_agence || 0) * ratio;
-        const montantProfilAnnulation = (Number(dem?.montant_profil_annulation || m.montant_profil_annulation || fact.montant_profil_annulation || 0) * ratio);
+          const partAgence = (fact.part_agence !== null && fact.part_agence !== undefined)
+            ? Number(fact.part_agence)
+            : (d?.part_agence !== null && d?.part_agence !== undefined)
+              ? Number(d.part_agence)
+              : 0;
 
-        const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
-        const partProfilVersee = encaissePar === 'Agence' ? Boolean(m.part_profil_versee) : Boolean(m.part_agence_reversee);
-        const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
-        const dateStr = dem?.date_intervention ? toDisplayDate(dem.date_intervention) : '';
-        const statut = rawStatus === 'intervention_gratuite' ? 'Intervention gratuite' : (m.statut === 'annulee' ? 'Facturation annulée' : 'Confirmée');
-        const profilSeraPaye = dem?.profil_sera_paye !== undefined ? Boolean(dem.profil_sera_paye) : Boolean(m.profil_sera_paye !== undefined ? m.profil_sera_paye : fact.profil_sera_paye);
+          const partProfil = Number(fact.part_profil ?? (fact.montant_agence_doit_profil || (Number(d?.prix ?? 0) - partAgence)));
+          const montant = Number(d?.prix ?? 0);
+          const paiement = ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? 'paye' : 'non_paye';
+          const montantPaye = paiement === 'paye' ? (Number(fact.montant_verse) || montant) : 0;
+          const montantProfilAnnulation = Number(d.montant_profil_annulation || fact.montant_profil_annulation || 0);
 
-        processRow(rawStatus, partAgence, montantPaye, montantProfilDoitAgence, reglementInterne, dateStr, statut, profilSeraPaye, montantProfilAnnulation);
+          return {
+            demandeId: d.id,
+            parentDemandeId: d.parent_demande || d.parent_demande_id || null,
+            frequency: d.frequency || null,
+            date: d.date_intervention ? formatDateFR(d.date_intervention) : '',
+            statut,
+            statutPaiementUi: rawStatus,
+            paiement,
+            partAgence,
+            partProfil,
+            montant,
+            montantPaye,
+            montantProfilAnnulation,
+            profilSeraPaye: d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(fact.profil_sera_paye),
+            encaissePar,
+            reglementInterne,
+            montantProfilDoitAgence: Number(fact.montant_profil_doit_agence || 0),
+            montantAgenceDoitProfil: Number(fact.montant_agence_doit_profil || 0),
+            isSubscriptionPrimary: false,
+            isSubscriptionSecondary: false,
+            profilId: d.profil_id || null,
+            profil: d.profil_name || '—',
+            parts_repartition: fact.parts_repartition || d.parts_repartition || [],
+          };
+        })
+      ];
+
+      // Group by subscription and identify primary vs secondary rows
+      const subscriptionGroups = new Map<number, any[]>();
+      for (const row of mappedRows) {
+        const subId = row.parentDemandeId || (row.frequency === 'abonnement' ? row.demandeId : null);
+        if (subId) {
+          if (!subscriptionGroups.has(subId)) {
+            subscriptionGroups.set(subId, []);
+          }
+          subscriptionGroups.get(subId)!.push(row);
+        }
       }
 
-      // Process demands without missions
-      for (const d of uniqueDemands) {
-        const fact = d?.formulaire_data?.facturation || {};
-        const rawStatus = fact.statut_paiement_ui || d.statut_paiement_ui || (d.statut_paiement === 'integral' ? 'paye' : d.statut_paiement === 'acompte' ? 'paiement_en_attente' : d.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_confirme');
-        const montant = Number(d?.prix ?? 0);
-        const partAgence = (fact.part_agence !== null && fact.part_agence !== undefined)
-          ? Number(fact.part_agence)
-          : (d?.part_agence !== null && d?.part_agence !== undefined)
-            ? Number(d.part_agence)
-            : 0;
-        const paiement = ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? 'paye' : 'non_paye';
-        const montantPaye = paiement === 'paye' ? (Number(fact.montant_verse) || montant) : 0;
-        const montantProfilDoitAgence = Number(fact.montant_profil_doit_agence || 0);
-        const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
-        const partProfilVersee = encaissePar === 'Agence' ? Boolean(fact.part_profil_versee) : Boolean(fact.part_agence_reversee);
-        const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
-        const dateStr = d?.date_intervention ? toDisplayDate(d.date_intervention) : '';
-        const statut = rawStatus === 'intervention_gratuite' ? 'Intervention gratuite' : (d.statut === 'annule' ? 'Facturation annulée' : 'Confirmée');
-        const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(fact.profil_sera_paye);
-        const montantProfilAnnulation = Number(d.montant_profil_annulation || fact.montant_profil_annulation || 0);
-        processRow(rawStatus, partAgence, montantPaye, montantProfilDoitAgence, reglementInterne, dateStr, statut, profilSeraPaye, montantProfilAnnulation);
+      for (const groupRows of subscriptionGroups.values()) {
+        for (const row of groupRows) {
+          const isRoot = !row.parentDemandeId;
+          row.isSubscriptionPrimary = isRoot;
+          row.isSubscriptionSecondary = !isRoot;
+        }
+      }
+
+      const getPartProfilDueFromAgence = (row: any): number => {
+        if (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client') {
+          return Number(row.montantAgenceDoitProfil || 0);
+        }
+
+        const isInterventionGratuite = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite';
+
+        if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || isInterventionGratuite) {
+          return row.profilSeraPaye ? Number(row.montantProfilAnnulation || 0) : 0;
+        }
+
+        if (row.encaissePar !== 'Agence') return 0;
+
+        if (row.montantAgenceDoitProfil !== undefined && row.montantAgenceDoitProfil > 0) {
+          return row.montantAgenceDoitProfil;
+        }
+
+        if (row.montant > 0) {
+          const due = Number((row.montantPaye * (row.partProfil / row.montant)).toFixed(2));
+          if (due > 0) return Math.min(row.partProfil, due);
+        }
+
+        return row.partProfil;
+      };
+
+      const getPartAgenceDueFromProfil = (row: any): number => {
+        if (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client') {
+          return Number(row.montantProfilDoitAgence || 0);
+        }
+
+        if (row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite') {
+          return 0;
+        }
+
+        if (row.encaissePar !== 'Profil') return 0;
+
+        if (row.reglementInterne === 'Réglé') {
+          return Number(row.montantProfilDoitAgence || row.partAgence || 0);
+        }
+
+        if (row.montantProfilDoitAgence !== undefined && row.montantProfilDoitAgence > 0) {
+          return row.montantProfilDoitAgence;
+        }
+
+        if (row.montant > 0) {
+          const due = Number((row.montantPaye * (row.partAgence / row.montant)).toFixed(2));
+          if (due > 0) return Math.min(row.partAgence, due);
+        }
+
+        return row.partAgence;
+      };
+
+      const getCommissionAgenceEncaissee = (row: any): number => {
+        if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite') {
+          return row.profilSeraPaye ? -(Number(row.montantProfilAnnulation) || 0) : 0;
+        }
+
+        if (row.isSubscriptionSecondary) {
+          const hasProfile = row.profilId || 
+                             (row.parts_repartition && row.parts_repartition.length > 0) || 
+                             (row.profil && row.profil !== '—' && row.profil !== 'Profil inconnu');
+          return hasProfile ? -row.partProfil : 0;
+        }
+
+        // If this is a primary subscription intervention, we compute the commission dynamically
+        // based on the total subscription price minus this row's profile part (our share for this run).
+        if (row.isSubscriptionPrimary) {
+          const isPaid = row.paiement === 'paye' ||
+                         row.paiement === 'partiellement_paye' ||
+                         ['paye', 'Payé', 'agence_payee_client', 'Agence payée / Client', 'profil_paye_client', 'Profil payé / Client'].includes(row.statutPaiementUi);
+          if (!isPaid) return 0;
+          return Math.max(0, row.montant - row.partProfil);
+        }
+
+        if (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client') {
+          return row.partAgence;
+        }
+
+        if (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client') {
+          return Number(row.montantProfilDoitAgence || row.partAgence || 0);
+        }
+
+        if (row.statutPaiementUi === 'paye' || row.statutPaiementUi === 'Payé') {
+          return row.partAgence;
+        }
+
+        if (row.paiement !== 'paye') return 0;
+
+        if (row.encaissePar === 'Agence') {
+          const partProfilDue = getPartProfilDueFromAgence(row);
+          return Math.max(row.montant - partProfilDue, 0);
+        }
+
+        if (row.reglementInterne === 'Réglé') {
+          return getPartAgenceDueFromProfil(row);
+        }
+
+        return 0;
+      };
+
+      let totalCommission = 0;
+      for (const row of mappedRows) {
+        if (row.date) {
+          const parts = row.date.split('/');
+          const isoDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : row.date;
+          const rowMonth = isoDate.slice(0, 7);
+          if (rowMonth !== currentMonth) continue;
+        } else continue;
+
+        totalCommission += getCommissionAgenceEncaissee(row);
       }
 
       setCommissionAgence(totalCommission);

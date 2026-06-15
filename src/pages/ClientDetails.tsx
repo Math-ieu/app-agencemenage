@@ -413,6 +413,29 @@ export default function ClientDetails() {
   const [showBlacklistConfirm, setShowBlacklistConfirm] = useState(false);
   const addToast = useToastStore(state => state.addToast);
 
+  const renderNeedStatusBadge = (label: string) => {
+    let bg = '#e2e8f0';
+    let color = '#475569';
+    const cleanLabel = (label || '').toLowerCase().trim();
+    if (cleanLabel === 'nouveau besoin') {
+      bg = '#e0f2fe';
+      color = '#0369a1';
+    } else if (cleanLabel === 'confirmé' || cleanLabel === 'confirme') {
+      bg = '#dcfce7';
+      color = '#15803d';
+    } else if (cleanLabel === 'en attente') {
+      bg = '#fef3c7';
+      color = '#d97706';
+    } else if (cleanLabel === 'paye' || cleanLabel === 'payé') {
+      bg = '#e6f7f5';
+      color = '#037265';
+    } else if (cleanLabel === 'annule' || cleanLabel === 'annulé') {
+      bg = '#fee2e2';
+      color = '#b91c1c';
+    }
+    return <Badge bg={bg} color={color}>{label}</Badge>;
+  };
+
   // Subscription Planning States
   const [joursIntervention, setJoursIntervention] = useState<string[]>([]);
   const [heureDebut, setHeureDebut] = useState('');
@@ -942,7 +965,8 @@ export default function ClientDetails() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#a0aec0' }}>#{client.id}</span>
                   <Badge bg={C.lime} color="white">{client.segment}</Badge>
-                  {latest && renderStatusBadge(latest.statut, latest.cao)}
+                  {demandes[0] && renderStatusBadge(demandes[0].statut, demandes[0].cao)}
+                  {demandes[0] && demandes[0].statut_besoin_label && renderNeedStatusBadge(demandes[0].statut_besoin_label)}
                 </div>
               </div>
             </div>

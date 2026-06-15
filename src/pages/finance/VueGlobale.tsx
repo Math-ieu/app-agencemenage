@@ -82,7 +82,7 @@ interface FacturationRow {
   partProfil: number;
   encaissePar: 'Agence' | 'Profil';
   paiement: 'non_paye' | 'partiellement_paye' | 'paye';
-  statut: 'Facturation annulée' | 'Intervention gratuite' | 'Confirmée' | 'Terminée' | 'Payé' | 'En attente';
+  statut: 'Facturation annulée' | 'Intervention annulée' | 'Intervention gratuite' | 'Confirmée' | 'Terminée' | 'Payé' | 'En attente';
   reglementInterne: string;
   montantPaye?: number;
   montantEncaisseProfil?: number;
@@ -93,6 +93,10 @@ interface FacturationRow {
   dateVersementProfil?: string;
   partAgenceReversee?: boolean;
   dateRemiseAgence?: string;
+  parentDemandeId?: number | null;
+  frequency?: string | null;
+  isSubscriptionPrimary?: boolean;
+  isSubscriptionSecondary?: boolean;
   // New fields from Dashboard
   annulationRaison?: string;
   profilSeraPaye?: boolean;
@@ -287,7 +291,7 @@ const debitPaymentLabel = (row: FacturationRow | any): 'Payé' | 'Non payé' => 
 const missionFinanceLabel = (row: FacturationRow): 'Facturation annulée' | 'Intervention gratuite' | 'Facturée' => (
   row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite'
     ? 'Intervention gratuite'
-    : row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee'
+    : row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Intervention annulée'
       ? 'Facturation annulée'
       : 'Facturée'
 );
@@ -306,7 +310,7 @@ const getPartProfilDueFromAgence = (row: FacturationRow): number => {
 
   const isInterventionGratuite = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite';
 
-  if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée' || isInterventionGratuite) {
+  if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || isInterventionGratuite) {
     return row.profilSeraPaye ? Number(row.montantProfilAnnulation || 0) : 0;
   }
 
@@ -329,7 +333,7 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
     return Number(row.montantProfilDoitAgence || 0);
   }
 
-  if (row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite') {
+  if (row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite') {
     return 0;
   }
 
@@ -354,8 +358,27 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
 };
 
 const getCommissionAgenceEncaissee = (row: FacturationRow, _forKpi = false): number => {
-  if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite') {
+  if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite') {
     return row.profilSeraPaye ? -(Number(row.montantProfilAnnulation) || 0) : 0;
+  }
+
+  // If this is a secondary intervention of an subscription, client paid 0.
+  // The commission is simply the negative of the amount due to the profile (our cost).
+  if (row.isSubscriptionSecondary) {
+    const hasProfile = row.profilId || 
+                       (row.parts_repartition && row.parts_repartition.length > 0) || 
+                       (row.profil && row.profil !== '—' && row.profil !== 'Profil inconnu');
+    return hasProfile ? -row.partProfil : 0;
+  }
+
+  // If this is a primary subscription intervention, we compute the commission dynamically
+  // based on the total subscription price minus this row's profile part (our share for this run).
+  if (row.isSubscriptionPrimary) {
+    const isPaid = row.paiement === 'paye' ||
+                   row.paiement === 'partiellement_paye' ||
+                   ['paye', 'Payé', 'agence_payee_client', 'Agence payée / Client', 'profil_paye_client', 'Profil payé / Client'].includes(row.statutPaiementUi || '');
+    if (!isPaid) return 0;
+    return Math.max(0, row.montant - row.partProfil);
   }
 
   // Agence payée / Client : l'agence a déjà l'argent → commission = partAgence (immédiat)
@@ -490,7 +513,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   const demande = item.demande_detail;
   const agent = item.agent_detail;
   const facturationData = (demande as any)?.formulaire_data?.facturation || {};
-  const montant = Number(demande?.prix) || Number(facturationData?.montant_ht) || 0;
+  const rawMontant = Number(demande?.prix) || Number(facturationData?.montant_ht) || 0;
   const rawMontantPaye = item.montant_paye !== undefined ? Number(item.montant_paye) : 0;
 
   // Source de vérité : formulaire_data.facturation.statut_paiement_ui (défini par le Dashboard)
@@ -551,37 +574,51 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 
   const missionStatus = item.statut;
   const isGratuit = rawStatutPaiementUi === 'intervention_gratuite';
-  const isAnnule = !isGratuit && (missionStatus === 'annulee' ||
-    (demande as any)?.statut === 'annule' ||
+  const isInterventionAnnulee = missionStatus === 'annulee' || (demande as any)?.statut === 'annule';
+  const isFacturationAnnulee = !isInterventionAnnulee && !isGratuit && (
     facturationData.facturation_annulee === true ||
-    rawStatutPaiementUi === 'facturation_annulee');
+    rawStatutPaiementUi === 'facturation_annulee'
+  );
 
   const statut: FacturationRow['statut'] =
     isGratuit
       ? 'Intervention gratuite'
-      : isAnnule
-        ? 'Facturation annulée'
-        : paiement === 'paye'
-          ? 'Payé'
-          : paiement === 'partiellement_paye'
-            ? 'Confirmée' // Un paiement partiel implique que ce n'est plus en attente
-            : missionStatus === 'terminee'
-              ? 'Terminée'
-              : missionStatus === 'en_attente'
-                ? 'En attente'
-                : 'Confirmée';
+      : isInterventionAnnulee
+        ? 'Intervention annulée'
+        : isFacturationAnnulee
+          ? 'Facturation annulée'
+          : paiement === 'paye'
+            ? 'Payé'
+            : paiement === 'partiellement_paye'
+              ? 'Confirmée' // Un paiement partiel implique que ce n'est plus en attente
+              : missionStatus === 'terminee'
+                ? 'Terminée'
+                : missionStatus === 'en_attente'
+                  ? 'En attente'
+                  : 'Confirmée';
   const partProfilVersee = encaissePar === 'Agence'
     ? (item.part_profil_versee ?? false)
     : (item.part_agence_reversee ?? false);
 
+  // Calcule du ratio pour multi-profils
+  const numMissions = Math.max(1, parts.length);
+  const profilId = agent?.id;
+  const partInfo = parts.find((p: any) => Number(p.profile_id) === Number(profilId));
+  const montantProfile = Number(partInfo?.amount || 0);
+  const totalProfilsAmount = parts.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
+  const ratio = totalProfilsAmount > 0 && montantProfile > 0 ? (montantProfile / totalProfilsAmount) : (1 / numMissions);
+
+  const montant = rawMontant * ratio;
+
   // Rétrocompatibilité montant : si la BDD renvoie 0.00 mais que le statut est "payé", on calcule le dû réel
-  let montantPaye = rawMontantPaye;
+  let montantPaye = rawMontantPaye * ratio;
   if (montantPaye === 0) {
     if (paiement === 'paye') montantPaye = montant;
     else if (paiement === 'partiellement_paye') montantPaye = 0;
   }
 
   let montantEncaisseProfil = item.montant_encaisse_profil !== undefined ? Number(item.montant_encaisse_profil) : 0;
+  montantEncaisseProfil = montantEncaisseProfil * ratio;
   if (encaissePar === 'Profil' && montantEncaisseProfil === 0 && montantPaye > 0) {
     montantEncaisseProfil = montantPaye;
   }
@@ -592,15 +629,18 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
   const d_part_agence = (demande as any)?.part_agence;
   const d_parts_repartition = (demande as any)?.parts_repartition;
 
-  const partAgence = (facturationData.part_agence !== null && facturationData.part_agence !== undefined)
+  const rawPartAgence = (facturationData.part_agence !== null && facturationData.part_agence !== undefined)
     ? Number(facturationData.part_agence)
     : (d_part_agence !== null && d_part_agence !== undefined)
       ? Number(d_part_agence)
       : 0;
 
-  const partProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
+  const rawPartProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
     ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
-    : Number(facturationData.part_profil ?? (facturationData.montant_agence_doit_profil || (montant - partAgence)));
+    : Number(facturationData.part_profil ?? (facturationData.montant_agence_doit_profil || (rawMontant - rawPartAgence)));
+
+  const partAgence = rawPartAgence * ratio;
+  const partProfil = rawPartProfil * ratio;
 
   return {
     missionId: item.id,
@@ -624,7 +664,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     reglementInterne,
     montantPaye,
     montantEncaisseProfil,
-    datePaiement: item.date_paiement ? formatDateFR(item.date_paiement) : (paiement === 'non_paye' ? '—' : formatDateFR(demande?.date_intervention)),
+    datePaiement: item.date_paiement ? formatDateFR(item.date_paiement) : (paiement === 'non_paye' ? '—' : (demande?.date_intervention ? formatDateFR(demande.date_intervention) : formatDateFR((demande as any)?.created_at))),
     modePaiementReel: modeLabelFromCode(item.mode_paiement_reel) || demande?.mode_paiement_label || modeLabelFromCode(demande?.mode_paiement) || '—',
     commercialName: commercialNameFallback,
     phone: agent?.phone || demande?.client_phone || '—',
@@ -632,12 +672,14 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     dateVersementProfil: item.date_versement_profil || '—',
     partAgenceReversee: item.part_agence_reversee,
     dateRemiseAgence: item.date_remise_agence || '—',
+    parentDemandeId: (demande as any)?.parent_demande || (demande as any)?.parent_demande_id || null,
+    frequency: (demande as any)?.frequency || null,
     // New fields
     annulationRaison: (demande as any)?.annulation_raison || item.annulation_raison || facturationData.annulation_raison,
     profilSeraPaye: (demande as any)?.profil_sera_paye !== undefined ? (demande as any).profil_sera_paye : item.profil_sera_paye,
-    montantProfilAnnulation: Number((demande as any)?.montant_profil_annulation || item.montant_profil_annulation || facturationData.montant_profil_annulation || 0),
-    montantAgenceDoitProfil: Number((demande as any)?.montant_agence_doit_profil || item.montant_agence_doit_profil || facturationData.montant_agence_doit_profil || 0),
-    montantProfilDoitAgence: Number((demande as any)?.montant_profil_doit_agence || item.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0),
+    montantProfilAnnulation: Number((demande as any)?.montant_profil_annulation || item.montant_profil_annulation || facturationData.montant_profil_annulation || 0) * ratio,
+    montantAgenceDoitProfil: Number((demande as any)?.montant_agence_doit_profil || item.montant_agence_doit_profil || facturationData.montant_agence_doit_profil || 0) * ratio,
+    montantProfilDoitAgence: Number((demande as any)?.montant_profil_doit_agence || item.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0) * ratio,
     statutPaiementUi: rawStatutPaiementUi,
     tvaActive: Boolean(facturationData.tva_active ?? (demande as any)?.tva_active),
     originalDemande: demande,
@@ -713,16 +755,19 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
         : 'non_paye';
 
   const isGratuit = rawStatutPaiementUi === 'intervention_gratuite';
-  const isAnnule = !isGratuit && (demande.statut === 'annule' ||
+  const isInterventionAnnulee = demande.statut === 'annule';
+  const isFacturationAnnulee = !isInterventionAnnulee && !isGratuit && (
     facturationData.facturation_annulee === true ||
-    rawStatutPaiementUi === 'facturation_annulee');
+    rawStatutPaiementUi === 'facturation_annulee'
+  );
 
   const statut: FacturationRow['statut'] =
     isGratuit ? 'Intervention gratuite' :
-      isAnnule ? 'Facturation annulée' :
-        paiement === 'paye' ? 'Payé' :
-          paiement === 'partiellement_paye' ? 'Confirmée' :
-            demande.statut === 'en_attente' ? 'En attente' : 'Confirmée';
+      isInterventionAnnulee ? 'Intervention annulée' :
+        isFacturationAnnulee ? 'Facturation annulée' :
+          paiement === 'paye' ? 'Payé' :
+            paiement === 'partiellement_paye' ? 'Confirmée' :
+              demande.statut === 'en_attente' ? 'En attente' : 'Confirmée';
 
   // For demands without missions, we check if payment was marked in formulaire_data
   const partProfilVersee = Boolean(facturationData.part_profil_versee);
@@ -752,7 +797,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
       ? (Number(facturationData.montant_verse) || montant)
       : (paiement === 'partiellement_paye' ? (Number(facturationData.montant_verse) || 0) : 0),
     montantEncaisseProfil: Number(facturationData.montant_encaisse_profil || 0),
-    datePaiement: facturationData.date_paiement ? formatDateFR(facturationData.date_paiement) : '—',
+    datePaiement: facturationData.date_paiement ? formatDateFR(facturationData.date_paiement) : (paiement === 'non_paye' ? '—' : (demande?.date_intervention ? formatDateFR(demande.date_intervention) : formatDateFR(demande?.created_at))),
     modePaiementReel: demande?.mode_paiement_label || modeLabelFromCode(demande?.mode_paiement) || '—',
     commercialName: (demande as any)?.assigned_to_name || (demande as any)?.commercial_name || (demande?.formulaire_data?.facturation?.commercial_name) || '—',
     phone: demande?.client_phone || '—',
@@ -760,6 +805,8 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     dateVersementProfil: facturationData.date_versement_profil || '—',
     partAgenceReversee,
     dateRemiseAgence: facturationData.date_remise_agence || '—',
+    parentDemandeId: demande?.parent_demande || demande?.parent_demande_id || null,
+    frequency: demande?.frequency || null,
     annulationRaison: demande.annulation_raison || demande.motif || facturationData.annulation_raison,
     profilSeraPaye: demande.profil_sera_paye !== undefined ? demande.profil_sera_paye : facturationData.profil_sera_paye,
     montantProfilAnnulation: Number(demande.montant_profil_annulation || facturationData.montant_profil_annulation || 0),
@@ -1047,6 +1094,44 @@ export default function VueGlobale() {
         return dateB - dateA;
       });
 
+    // Group by subscription and identify primary vs secondary rows
+    const subscriptionGroups = new Map<number, FacturationRow[]>();
+    for (const row of allRows) {
+      const subId = row.parentDemandeId || (row.frequency === 'abonnement' ? row.demandeId : null);
+      if (subId) {
+        if (!subscriptionGroups.has(subId)) {
+          subscriptionGroups.set(subId, []);
+        }
+        subscriptionGroups.get(subId)!.push(row);
+      }
+    }
+
+    for (const groupRows of subscriptionGroups.values()) {
+      for (const row of groupRows) {
+        const isRoot = !row.parentDemandeId;
+        row.isSubscriptionPrimary = isRoot;
+        row.isSubscriptionSecondary = !isRoot;
+      }
+    }
+
+    const activeSubscriptionCounts = new Map<number, number>();
+    for (const [subId, groupRows] of subscriptionGroups.entries()) {
+      const activeCount = groupRows.filter(row => {
+        const isAnn = row.statut === 'Facturation annulée' ||
+                      row.statut === 'Intervention annulée' ||
+                      row.statutPaiementUi === 'facturation_annulee' ||
+                      row.statut === 'Intervention gratuite' ||
+                      row.statutPaiementUi === 'intervention_gratuite';
+        if (isAnn) return false;
+
+        const hasProfile = row.profilId || 
+                           (row.parts_repartition && row.parts_repartition.length > 0) || 
+                           (row.profil && row.profil !== '—' && row.profil !== 'Profil inconnu');
+        return hasProfile;
+      }).length;
+      activeSubscriptionCounts.set(subId, activeCount || 1);
+    }
+
     setFacturationData(allRows);
 
 
@@ -1140,7 +1225,7 @@ export default function VueGlobale() {
           const profile = grouped.get(accountKey)!;
 
           profile.missions += 1;
-          const isAnnule = item.statut === 'Facturation annulée' || item.statutPaiementUi === 'facturation_annulee' || item.statut === 'Intervention gratuite' || item.statutPaiementUi === 'intervention_gratuite';
+          const isAnnule = item.statut === 'Facturation annulée' || item.statut === 'Intervention annulée' || item.statutPaiementUi === 'facturation_annulee' || item.statut === 'Intervention gratuite' || item.statutPaiementUi === 'intervention_gratuite';
 
           if (isAnnule) {
             if (item.profilSeraPaye) {
@@ -1158,7 +1243,13 @@ export default function VueGlobale() {
             }
           } else {
             // Partage équitable du CA total généré (item.montant) entre tous les profils affectés
-            const sharedCa = item.montant / partsRep.length;
+            let baseMontant = item.montant;
+            const subId = item.parentDemandeId || (item.frequency === 'abonnement' ? item.demandeId : null);
+            if (subId) {
+              const activeCount = activeSubscriptionCounts.get(subId) || 1;
+              baseMontant = baseMontant / activeCount;
+            }
+            const sharedCa = baseMontant / partsRep.length;
             profile.caTotal += sharedCa;
 
             const isConfirmed = item.statut !== 'En attente';
@@ -1216,7 +1307,7 @@ export default function VueGlobale() {
 
         const profile = grouped.get(accountKey)!;
         profile.missions += 1;
-        const isAnnule = item.statut === 'Facturation annulée' || item.statutPaiementUi === 'facturation_annulee' || item.statut === 'Intervention gratuite' || item.statutPaiementUi === 'intervention_gratuite';
+        const isAnnule = item.statut === 'Facturation annulée' || item.statut === 'Intervention annulée' || item.statutPaiementUi === 'facturation_annulee' || item.statut === 'Intervention gratuite' || item.statutPaiementUi === 'intervention_gratuite';
 
         if (isAnnule) {
           if (item.profilSeraPaye) {
@@ -1233,7 +1324,13 @@ export default function VueGlobale() {
             }
           }
         } else {
-          profile.caTotal += (partProfil + partAgence);
+          let baseMontant = partProfil + partAgence;
+          const subId = item.parentDemandeId || (item.frequency === 'abonnement' ? item.demandeId : null);
+          if (subId) {
+            const activeCount = activeSubscriptionCounts.get(subId) || 1;
+            baseMontant = baseMontant / activeCount;
+          }
+          profile.caTotal += baseMontant;
 
           const isConfirmed = item.statut !== 'En attente';
           if (isConfirmed) {
@@ -1392,6 +1489,7 @@ export default function VueGlobale() {
         (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
         (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) ||
         (row.statut === 'Facturation annulée' && row.profilSeraPaye) ||
+        (row.statut === 'Intervention annulée' && row.profilSeraPaye) ||
         row.statutPaiementUi === 'intervention_gratuite' ||
         row.statut === 'Intervention gratuite' ||
         (!row.statutPaiementUi && row.encaissePar === 'Agence');
@@ -1417,7 +1515,7 @@ export default function VueGlobale() {
           if (!isPaid) {
             let portion = totalPartsAmount > 0 ? Number(part.amount || 0) : (totalDue / partsRep.length);
             const isGratuit = row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite';
-            const isAnnule = row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee';
+            const isAnnule = row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'facturation_annulee';
             if (isAnnule || isGratuit) {
               const ratio = portion / (totalPartsAmount || 1);
               portion = Number(row.montantProfilAnnulation || 0) * ratio;
@@ -1473,19 +1571,21 @@ export default function VueGlobale() {
     const totalFacture = filteredSuiviRows.length;
     const activeRows = filteredSuiviRows.filter((row) => 
       row.statut !== 'Facturation annulée' && 
+      row.statut !== 'Intervention annulée' && 
       row.statut !== 'Intervention gratuite' && 
       row.statutPaiementUi !== 'facturation_annulee' && 
       row.statutPaiementUi !== 'intervention_gratuite'
     );
     const cancelledRows = filteredSuiviRows.filter((row) => 
       row.statut === 'Facturation annulée' || 
+      row.statut === 'Intervention annulée' || 
       row.statut === 'Intervention gratuite' || 
       row.statutPaiementUi === 'facturation_annulee' || 
       row.statutPaiementUi === 'intervention_gratuite'
     );
 
     const chiffreAffaires = activeRows
-      .filter((row) => row.paiement !== 'non_paye')
+      .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
       .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
 
     const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row, true), 0);
@@ -1543,12 +1643,14 @@ export default function VueGlobale() {
   const globalKpis = useMemo(() => {
     const activeRows = periodFilteredRows.filter((row) => 
       row.statut !== 'Facturation annulée' && 
+      row.statut !== 'Intervention annulée' && 
       row.statut !== 'Intervention gratuite' && 
       row.statutPaiementUi !== 'facturation_annulee' && 
       row.statutPaiementUi !== 'intervention_gratuite'
     );
     const cancelledRows = periodFilteredRows.filter((row) => 
       row.statut === 'Facturation annulée' || 
+      row.statut === 'Intervention annulée' || 
       row.statut === 'Intervention gratuite' || 
       row.statutPaiementUi === 'facturation_annulee' || 
       row.statutPaiementUi === 'intervention_gratuite'
@@ -1556,7 +1658,7 @@ export default function VueGlobale() {
 
     const missions = missionsEnCours.length;
     const chiffreAffaires = activeRows
-      .filter((row) => row.paiement !== 'non_paye')
+      .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
       .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
 
     // Commission brute (hors annulations)
@@ -1579,6 +1681,7 @@ export default function VueGlobale() {
     () => facturationData.filter((row) =>
       row.reglementInterne !== 'Réglé' &&
       row.statut !== 'Facturation annulée' &&
+      row.statut !== 'Intervention annulée' &&
       row.statutPaiementUi !== 'facturation_annulee' &&
       row.statut !== 'Intervention gratuite' &&
       row.statutPaiementUi !== 'intervention_gratuite' &&
@@ -1624,6 +1727,7 @@ export default function VueGlobale() {
         (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
         (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) ||
         (row.statut === 'Facturation annulée' && row.profilSeraPaye) ||
+        (row.statut === 'Intervention annulée' && row.profilSeraPaye) ||
         row.statutPaiementUi === 'intervention_gratuite' ||
         row.statut === 'Intervention gratuite' ||
         (!row.statutPaiementUi && row.encaissePar === 'Agence'))
@@ -1739,7 +1843,7 @@ export default function VueGlobale() {
           const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
           let portion = Number(part.amount || 0);
           const isGratuit = row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite';
-          const isAnnule = !isGratuit && (row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
+          const isAnnule = !isGratuit && (row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'facturation_annulee');
           if (isAnnule) {
             const totalProfilsAmount = partsRep.reduce((s: number, p: any) => s + Number(p.amount || 0), 0) || 1;
             const ratio = portion / totalProfilsAmount;
@@ -1818,6 +1922,7 @@ export default function VueGlobale() {
         (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
         (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) ||
         (row.statut === 'Facturation annulée' && row.profilSeraPaye) ||
+        (row.statut === 'Intervention annulée' && row.profilSeraPaye) ||
         row.statutPaiementUi === 'intervention_gratuite' ||
         row.statut === 'Intervention gratuite' ||
         (!row.statutPaiementUi && row.encaissePar === 'Agence');
@@ -1846,7 +1951,7 @@ export default function VueGlobale() {
           const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
           let portion = totalPartsAmount > 0 ? Number(part.amount || 0) : (totalDue / partsRep.length);
           const isGratuit = row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite';
-          const isAnnule = !isGratuit && (row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee');
+          const isAnnule = !isGratuit && (row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'facturation_annulee');
           if (isAnnule) {
             const ratio = portion / (totalPartsAmount || 1);
             portion = Number(row.montantProfilAnnulation || 0) * ratio;
@@ -3322,14 +3427,16 @@ export default function VueGlobale() {
               </thead>
               <tbody>
                 {filteredSuiviRows.map((row) => {
-                  const isCancelledAndProfilSeraPaye = (row.statut === 'Facturation annulée' || row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'intervention_gratuite') && row.profilSeraPaye;
+                  const isCancelledAndProfilSeraPaye = (row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'intervention_gratuite') && row.profilSeraPaye;
                   const ttc = isCancelledAndProfilSeraPaye
                     ? -Number(row.montantProfilAnnulation || 0)
-                    : row.montant;
-                  const tva = row.tvaActive && !isCancelledAndProfilSeraPaye ? Math.round((ttc - Math.round((ttc / 1.20) * 100) / 100) * 100) / 100 : 0;
-                  const ht = row.tvaActive && !isCancelledAndProfilSeraPaye ? Math.round((ttc / 1.20) * 100) / 100 : ttc;
-                  const paye = isCancelledAndProfilSeraPaye ? (row.reglementInterne === 'Réglé' || row.partProfilVersee ? ttc : 0) : (row.montantPaye ?? 0);
-                  const ecart = Number((ttc - paye).toFixed(2));
+                    : row.isSubscriptionSecondary
+                      ? 0
+                      : row.montant;
+                  const tva = row.tvaActive && !isCancelledAndProfilSeraPaye && !row.isSubscriptionSecondary ? Math.round((ttc - Math.round((ttc / 1.20) * 100) / 100) * 100) / 100 : 0;
+                  const ht = row.tvaActive && !isCancelledAndProfilSeraPaye && !row.isSubscriptionSecondary ? Math.round((ttc / 1.20) * 100) / 100 : ttc;
+                  const paye = isCancelledAndProfilSeraPaye ? (row.reglementInterne === 'Réglé' || row.partProfilVersee ? ttc : 0) : row.isSubscriptionSecondary ? 0 : (row.montantPaye ?? 0);
+                  const ecart = row.isSubscriptionSecondary ? 0 : Number((ttc - paye).toFixed(2));
 
                   const renderMoney = (val: number) => {
                     const formatted = money(val);
@@ -3343,13 +3450,13 @@ export default function VueGlobale() {
                   let statusContent: React.ReactNode = getPaymentUiLabel(row.statutPaiementUi);
                   let statusPillClass = 'fg-pill-pale-orange';
 
-                  if (row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite') {
+                  if (row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite') {
                     if (row.profilSeraPaye && (row.reglementInterne === 'Réglé' || row.partProfilVersee === true)) {
                       statusPillClass = 'fg-pill-pale-green';
                       statusContent = 'Payé';
                     } else {
                       statusPillClass = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'fg-pill-pale-green' : 'fg-pill-pale-red';
-                      statusContent = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'Intervention gratuite' : 'Facturation annulée';
+                      statusContent = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'Intervention gratuite' : (row.statut === 'Intervention annulée' ? 'Intervention annulée' : 'Facturation annulée');
                     }
                   } else if (row.statutPaiementUi === 'paye' || row.paiement === 'paye') {
                     statusPillClass = 'fg-pill-pale-green';
@@ -3369,7 +3476,7 @@ export default function VueGlobale() {
                   }
 
                   const isGratuit = row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite';
-                  const isCancelled = row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee';
+                  const isCancelled = row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'facturation_annulee';
                   const rowBgColor = isGratuit ? '#f0fdf4' : (isCancelled ? '#fef2f2' : undefined);
                   return (
                     <tr key={row.missionNo} style={{ backgroundColor: rowBgColor }}>
@@ -3382,7 +3489,19 @@ export default function VueGlobale() {
                         ) : <strong style={{ fontWeight: 800, color: '#0f5f5b' }}>{row.client}</strong>}
                         <small style={{ color: '#94a3b8', fontSize: '0.85rem', display: 'block' }}>{row.ville}</small>
                       </td>
-                      <td style={{ color: '#64748b' }}>{row.service}</td>
+                      <td style={{ color: '#64748b', lineHeight: '1.3' }}>
+                        {row.service}
+                        {row.isSubscriptionSecondary && (
+                          <span style={{ fontSize: '0.75rem', color: '#0f5f5b', display: 'block', fontWeight: 600 }}>
+                            Inclus dans l'abonnement
+                          </span>
+                        )}
+                        {row.isSubscriptionPrimary && (
+                          <span style={{ fontSize: '0.75rem', color: '#d97706', display: 'block', fontWeight: 600 }}>
+                            Facturation globale abonnement
+                          </span>
+                        )}
+                      </td>
                       <td><span className={`fg-pill ${row.segment === 'Particulier' ? 'fg-pill-outline-sky' : 'fg-pill-violet'}`}>{row.segment}</span></td>
                       <td className="fw-bold" style={{ color: ht < 0 ? '#dc2626' : '#0f5f5b' }}>{renderMoney(ht)}</td>
                       <td style={{ color: '#0f5f5b' }}>{renderMoney(tva)}</td>

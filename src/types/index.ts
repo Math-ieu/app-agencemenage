@@ -99,6 +99,7 @@ export interface Demande {
   segment: 'particulier' | 'entreprise';
   statut: string;
   statut_besoin?: string;
+  statut_besoin_label?: string;
   date_intervention: string;
   heure_intervention?: string;
   nb_heures?: number;
