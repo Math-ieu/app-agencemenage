@@ -284,7 +284,8 @@ const PERMISSIONS = [
   { key: "creer_clients", label: "Clients : Créer & éditer" },
   { key: "blacklister_clients", label: "Clients : Blacklister & archiver" },
   { key: "consulter_demandes", label: "Demandes : Consulter le listing" },
-  { key: "valider_demandes", label: "Demandes : Valider & planifier (CAO)" },
+  { key: "traiter_demandes_affectees", label: "Traiter les demandes affectées" },
+  { key: "creer_valider_demande", label: "Créer et valider une demande" },
   { key: "annuler_demandes", label: "Demandes : Annuler la facturation" },
   { key: "voir_la_caisse", label: "Finances : Consulter le solde de caisse" },
   { key: "mouvements_caisse", label: "Finances : Saisir des entrées/sorties" },
@@ -307,9 +308,9 @@ const ROLES = [
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   "Admin": PERMISSIONS.map(p => p.key),
   "Moderateur": ["consulter_clients", "creer_clients", "consulter_demandes", "consulter_agents", "rediger_blog"],
-  "Responsable commercial": ["consulter_clients", "creer_clients", "consulter_demandes", "valider_demandes", "consulter_agents"],
+  "Responsable commercial": ["consulter_clients", "creer_clients", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande", "consulter_agents"],
   "commercial": ["consulter_clients", "creer_clients", "consulter_demandes"],
-  "Responsable des Opérations": ["consulter_clients", "consulter_demandes", "valider_demandes", "voir_la_caisse", "consulter_agents", "creer_agents", "documents_agents"],
+  "Responsable des Opérations": ["consulter_clients", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande", "voir_la_caisse", "consulter_agents", "creer_agents", "documents_agents"],
   "Chargée des Opérations": ["consulter_clients", "consulter_demandes", "consulter_agents"],
 };
 

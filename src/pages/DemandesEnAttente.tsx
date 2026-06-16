@@ -61,8 +61,19 @@ const strip212 = (p: string) => {
 const canValidateDemande = (user: any, d: Demande) => {
   if (!user) return false;
   if (user.role?.toLowerCase() === 'admin') return true;
-  return d.created_by === user.id || d.assigned_to === user.id || d.assigned_to_operations === user.id;
+  if (d.created_by === user.id) {
+    return hasPermission(user, 'creer_valider_demande');
+  }
+  if (d.assigned_to === user.id || d.assigned_to_operations === user.id) {
+    return hasPermission(user, 'traiter_demandes_affectees');
+  }
+  return false;
 };
+
+const canModifyDemande = (user: any, d: Demande) => {
+  return canValidateDemande(user, d);
+};
+
 
 export default function DemandesEnAttente() {
   const location = useLocation();
@@ -1055,7 +1066,7 @@ export default function DemandesEnAttente() {
             <RefreshCw size={18} />
           </button>
 
-          {hasPermission(user, 'creer_demande') && (
+          {(hasPermission(user, 'creer_demande') || hasPermission(user, 'creer_valider_demande')) && (
             <div className="dropdown-container" onClick={e => e.stopPropagation()}>
               <button className="btn btn-primary" onClick={() => setShowNewMenu(!showNewMenu)}>
                 <Plus size={18} /> Nouveau
@@ -1358,16 +1369,23 @@ export default function DemandesEnAttente() {
                     </div>
                   )}
 
-                  <div className="pending-footer">
-                    <div className="detail-item">
-                      <span className="detail-label">Montant :</span>
-                      <span className="detail-value text-main-teal fw-bold" style={{ fontSize: '0.9rem' }}>
-                        {d.is_devis ? (d.prix ? `${d.prix} MAD` : 'Sur devis') : (d.prix ? `${d.prix} MAD (Réservation)` : '— (Réservation)')}
-                      </span>
+                  <div className="pending-footer" style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div className="detail-item">
+                        <span className="detail-label">Montant :</span>
+                        <span className="detail-value text-main-teal fw-bold" style={{ fontSize: '0.9rem' }}>
+                          {d.is_devis ? (d.prix ? `${d.prix} MAD` : 'Sur devis') : (d.prix ? `${d.prix} MAD (Réservation)` : '— (Réservation)')}
+                        </span>
+                      </div>
+                      <div className="detail-item">
+                        <span className="detail-label">Mode :</span>
+                        <span className="detail-value">{d.mode_paiement || '—'}</span>
+                      </div>
                     </div>
-                    <div className="detail-item">
-                      <span className="detail-label">Mode :</span>
-                      <span className="detail-value">{d.mode_paiement || '—'}</span>
+                    <div className="self-end" style={{ paddingBottom: '2px' }}>
+                      <span className="text-[13px] font-bold text-slate-800">
+                        {d.assigned_to_name ? `Affecté à commercial(${d.assigned_to_name})` : 'Non affecté'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1382,7 +1400,7 @@ export default function DemandesEnAttente() {
                   {canValidateDemande(user, d) && (
                     <button className="btn btn-validate flex-[1.5] leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
                   )}
-                  {hasPermission(user, 'modifier_demande') && (
+                  {canModifyDemande(user, d) && (
                     <button className="btn btn-edit flex-1 flex justify-center items-center px-1 py-2 text-[13px] text-center" title="Modifier" onClick={() => openEditModal(d)}>
                       Modifier
                     </button>
@@ -1507,7 +1525,7 @@ export default function DemandesEnAttente() {
                     {hasPermission(user, 'refuser_demande') && (
                       <button className="btn btn-cancel flex-1" onClick={() => handleAction(d.id, 'annuler')}>Annuler</button>
                     )}
-                    {hasPermission(user, 'modifier_demande') && (
+                    {canModifyDemande(user, d) && (
                       <button className="btn btn-edit flex-none px-3" title="Modifier" onClick={() => openEditModal(d)}>
                         <Edit size={16} />
                       </button>

@@ -56,7 +56,8 @@ const PERMISSIONS = [
   { key: "modifier_demande", label: "Modifier une demande", group: "Demandes en attente" },
   { key: "consulter_demandes", label: "Consulter les demandes en attente", group: "Demandes en attente" },
   { key: "affecter_commercial", label: "Assigner à un commercial", group: "Demandes en attente" },
-  { key: "valider_demandes", label: "Valider & convertir en mission", group: "Demandes en attente" },
+  { key: "traiter_demandes_affectees", label: "Traiter les demandes affectées", group: "Demandes en attente" },
+  { key: "creer_valider_demande", label: "Créer et valider une demande", group: "Demandes en attente" },
   { key: "refuser_demande", label: "Refuser / annuler une demande", group: "Demandes en attente" },
 
   // Listing profils
@@ -153,7 +154,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Tableau de bord
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
-    "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
+    "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
     // Listing profils
     "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil",
     // Listing clients
@@ -179,7 +180,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Tableau de bord
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
-    "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
+    "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
     // Listing profils
     "consulter_agents",
     // Listing clients
@@ -203,7 +204,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Tableau de bord
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
     // Demandes en attente
-    "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "valider_demandes", "refuser_demande",
+    "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
     // Listing profils
     "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil",
     // Listing clients
@@ -225,7 +226,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Tableau de bord
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard",
     // Demandes en attente
-    "creer_demande", "consulter_demandes", "valider_demandes",
+    "creer_demande", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande",
     // Listing profils
     "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents",
     // Listing clients
