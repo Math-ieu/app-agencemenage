@@ -226,7 +226,11 @@ export default function LaCaisse() {
           const ratio = totalProfilsAmount > 0 && montantProfile > 0 ? (montantProfile / totalProfilsAmount) : (1 / numMissions);
 
           const partAgence = Number(fact.part_agence ?? 0) * ratio;
-          const partProfil = Number(fact.part_profil ?? 0) * ratio;
+          const partsSum = parts.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
+          const rawPartProfil = partsSum > 0
+            ? partsSum
+            : Number(fact.part_profil ?? (fact.montant_agence_doit_profil || (Number(dem?.prix ?? 0) - Number(fact.part_agence ?? 0))));
+          const partProfil = rawPartProfil * ratio;
           const montant = Number(dem?.prix ?? 0) * ratio;
           const rawMontantPaye = m.montant_paye !== undefined ? Number(m.montant_paye) : 0;
           const montantPaye = (rawMontantPaye || (['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? Number(dem?.prix ?? 0) : 0)) * ratio;
@@ -274,7 +278,11 @@ export default function LaCaisse() {
               ? Number(d.part_agence)
               : 0;
 
-          const partProfil = Number(fact.part_profil ?? (fact.montant_agence_doit_profil || (Number(d?.prix ?? 0) - partAgence)));
+          const parts = fact.parts_repartition || d.parts_repartition || [];
+          const partsSum = parts.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0);
+          const partProfil = partsSum > 0
+            ? partsSum
+            : Number(fact.part_profil ?? (fact.montant_agence_doit_profil || (Number(d?.prix ?? 0) - partAgence)));
           const montant = Number(d?.prix ?? 0);
           const paiement = ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? 'paye' : 'non_paye';
           const montantPaye = paiement === 'paye' ? (Number(fact.montant_verse) || montant) : 0;
@@ -329,7 +337,9 @@ export default function LaCaisse() {
 
       const getPartProfilDueFromAgence = (row: any): number => {
         if (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client') {
-          return Number(row.montantAgenceDoitProfil || 0);
+          if (Number(row.montantAgenceDoitProfil || 0) > 0) {
+            return Number(row.montantAgenceDoitProfil);
+          }
         }
 
         const isInterventionGratuite = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite';

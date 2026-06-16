@@ -58,8 +58,9 @@ interface PartRepartitionItem {
 const PAYMENT_STATUS_OPTIONS = [
   { value: 'non_confirme', apiValue: 'non_paye', label: 'Non confirmé' },
   { value: 'paiement_en_attente', apiValue: 'acompte', label: 'Paiement en attente' },
-  { value: 'agence_payee_client', apiValue: 'partiel', label: 'Agence payé / Client' },
+  { value: 'agence_payee_client', apiValue: 'partiel', label: 'Agence payée / Client' },
   { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
+  { value: 'commercial_paye_client', apiValue: 'partiel', label: 'Commercial payé / client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
   { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Annulé' },
@@ -1481,15 +1482,12 @@ export default function Dashboard() {
     }
     return activeIds;
   }, [allDemandes, demandes, selectedDemande]);
-
   const montantHT = toNumber(editFormData.montant_ht ?? editFormData.prix);
   const montantTTC = roundMoney(editFormData.tva_active ? montantHT * 1.2 : montantHT);
-  // const montantVerse = toNumber(editFormData.montant_verse);
-  // const montantProfilDoit = toNumber(editFormData.montant_profil_doit);
-
   const partsRepartition: PartRepartitionItem[] = asArray<PartRepartitionItem>(editFormData.parts_repartition, []);
-
-  // Subscription remaining agency share calculation
+  
+  const currentPaymentStatutUi = editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee));
+  const isPartsLocked = currentPaymentStatutUi === 'commercial_paye_client';  // Subscription remaining agency share calculation
   let remainingAgencyShare = 0;
   if (editFormData.frequency === 'abonnement' && selectedDemande) {
     const parentId = editFormData.parent_demande || selectedDemande.parent_demande || selectedDemande.id;
@@ -2776,7 +2774,7 @@ export default function Dashboard() {
                                           part_agence: nextPartAgence,
                                         };
                                         // Auto-set encaisse_par based on payment status
-                                        if (v === 'agence_payee_client' || v === 'paye') updates.encaisse_par = 'agence';
+                                        if (v === 'agence_payee_client' || v === 'paye' || v === 'commercial_paye_client') updates.encaisse_par = 'agence';
                                         else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
                                         
                                         if (isFreeOrCancelled) {
@@ -2822,8 +2820,7 @@ export default function Dashboard() {
                                   </>
                                 );
                               })()}
-                          </div>
-                          <div className="form-group">
+                          </div>                          <div className="form-group">
                             <label>Montant versé (MAD)</label>
                             <input type="number" value={editFormData.montant_verse} onChange={e => setEditFormData({ ...editFormData, montant_verse: e.target.value })} className="edit-input" />
                             {toNumber(montantTTC) > 0 && toNumber(editFormData.montant_verse) > 0 && (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) > 0 && (
@@ -2832,6 +2829,110 @@ export default function Dashboard() {
                           </div>
                         </div>
 
+                        {currentPaymentStatutUi === 'commercial_paye_client' && (
+                          <div style={{
+                            marginTop: '16px',
+                            padding: '16px',
+                            borderRadius: '10px',
+                            border: '1px solid #FDE047',
+                            background: '#FEFCE8',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '12px'
+                          }}>
+                            <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#92400E' }}>
+                              Confirmation du versement du commercial à l'agence
+                            </h4>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#B45309' }}>
+                              Le commercial a-t-il déposé le montant encaissé auprès de l'agence ?
+                            </p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: '#78350F' }}>
+                                Dépôt commercial effectué :
+                              </span>
+                              <div style={{ display: 'inline-flex', gap: '8px' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const v = 'agence_payee_client';
+                                    const isFreeOrCancelled = false;
+                                    const newMontantHT = toNumber(editFormData.ca_initial);
+                                    const newTvaActive = Boolean(editFormData.tva_active);
+                                    const currentMontantTTC = roundMoney(newTvaActive ? newMontantHT * 1.2 : newMontantHT);
+                                    
+                                    const parts = editFormData.parts_repartition || [];
+                                    let adjustedParts = [...parts];
+                                    
+                                    const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                                    const nextPartAgence = roundMoney(currentMontantTTC - totalParts);
+
+                                    const updates: any = { 
+                                      ...editFormData, 
+                                      statut_paiement_ui: v, 
+                                      facturation_annulee: isFreeOrCancelled,
+                                      montant_ht: newMontantHT,
+                                      tva_active: newTvaActive,
+                                      parts_repartition: adjustedParts,
+                                      part_agence: nextPartAgence,
+                                      encaisse_par: 'agence'
+                                    };
+                                    
+                                    updates.montant_agence_doit_profil = totalParts;
+                                    updates.montant_profil_doit_agence = 0;
+                                    
+                                    setEditFormData(updates);
+                                    addToast("Statut de paiement modifié en 'Agence payée / Client'", "success");
+                                  }}
+                                  style={{
+                                    padding: '6px 16px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    border: '1px solid #cbd5e1',
+                                    background: 'white',
+                                    color: '#334155',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseEnter={e => {
+                                    e.currentTarget.style.borderColor = '#059669';
+                                    e.currentTarget.style.color = '#059669';
+                                    e.currentTarget.style.backgroundColor = '#ECFDF5';
+                                  }}
+                                  onMouseLeave={e => {
+                                    e.currentTarget.style.borderColor = '#cbd5e1';
+                                    e.currentTarget.style.color = '#334155';
+                                    e.currentTarget.style.backgroundColor = 'white';
+                                  }}
+                                >
+                                  Oui
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    addToast("Dépôt non effectué. La gestion des parts reste verrouillée.", "warning");
+                                  }}
+                                  style={{
+                                    padding: '6px 16px',
+                                    borderRadius: '8px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    border: 'none',
+                                    background: '#DC2626',
+                                    color: 'white',
+                                    transition: 'all 0.2s'
+                                  }}
+                                >
+                                  Non
+                                </button>
+                              </div>
+                            </div>
+                            <p style={{ margin: 0, fontSize: '11px', color: '#B45309', fontWeight: 500, fontStyle: 'italic' }}>
+                              ⚠️ Le module Gestion des parts reste indisponible tant que le paiement n'a pas été confirmé comme remis à l'agence.
+                            </p>
+                          </div>
+                        )}
 
                         {editFormData.statut_paiement_ui === 'paye' && (() => {
                           let allProfilesPaid = false;
@@ -2971,8 +3072,22 @@ export default function Dashboard() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><UserCheck size={18} style={{ color: '#059669' }} /><span style={{ fontSize: '16px', fontWeight: 700, color: '#047857' }}>Gestion des parts</span></div>
                           {showPartsSection ? <ChevronUp size={16} style={{ color: '#059669' }} /> : <ChevronDown size={16} style={{ color: '#059669' }} />}
                         </button>
-                        {showPartsSection && (<div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                          <div className="form-grid-2 gap-4">
+                        
+                        {showPartsSection && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            {isPartsLocked && (
+                              <div style={{ padding: '16px', borderRadius: '10px', border: '1px solid #FDE047', background: '#FEFCE8', color: '#B45309', fontSize: '13px', lineHeight: '1.5', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+                                  <span>🔒</span>
+                                  <span>Gestion des parts indisponible.</span>
+                                </div>
+                                <p style={{ margin: 0 }}>
+                                  Le partage des parts entre l'agence et le profil intervenant ne peut être effectué que lorsque le statut de paiement est « Agence payée par le client ». Confirmez d'abord le dépôt du commercial à l'agence.
+                                </p>
+                              </div>
+                            )}
+                            <div style={isPartsLocked ? { opacity: 0.5, pointerEvents: 'none', display: 'flex', flexDirection: 'column', gap: '16px' } : { display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                              <div className="form-grid-2 gap-4">
                             <div className="form-group"><label>Montant total TTC (MAD)</label><div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 600 }}>{montantTTC.toFixed(2)}</div></div>
                             <div className="form-group">
                               <label>Part de l'agence (MAD)</label>
@@ -3437,7 +3552,9 @@ export default function Dashboard() {
                             );
                           })()}
 
-                        </div>)}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* ── Notes ── */}

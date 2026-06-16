@@ -38,6 +38,7 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'paiement_en_attente', apiValue: 'acompte', label: 'Paiement en attente' },
   { value: 'agence_payee_client', apiValue: 'partiel', label: 'Agence payée / Client' },
   { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
+  { value: 'commercial_paye_client', apiValue: 'partiel', label: 'Commercial payé / client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
   { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Annulé' },

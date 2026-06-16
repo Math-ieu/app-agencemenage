@@ -94,11 +94,14 @@ export const getPaymentStatusInfo = (statutUi: string | undefined, legacyStatut?
   if (s === 'paye' || s === 'integral' || s === 'effectue') {
     return { label: 'Payé', badgeClass: 'badge-green' };
   }
-  if (s === 'agence_payee_client' || s === 'agence payé / client') {
-    return { label: 'Agence payé / Client', badgeClass: 'badge-orange' };
+  if (s === 'agence_payee_client' || s === 'agence payé / client' || s === 'agence payée / client') {
+    return { label: 'Agence payée / Client', badgeClass: 'badge-orange' };
   }
   if (s === 'profil_paye_client' || s === 'profil payé / client') {
     return { label: 'Profil payé / Client', badgeClass: 'badge-orange' };
+  }
+  if (s === 'commercial_paye_client' || s === 'commercial payé / client' || s === 'commercial payé /client') {
+    return { label: 'Commercial payé / client', badgeClass: 'badge-orange' };
   }
   if (s === 'paiement_partiel' || s === 'partiel' || s === 'paiement partiel') {
     return { label: 'Paiement partiel', badgeClass: 'badge-orange' };

@@ -230,6 +230,7 @@ const paymentStatusOptions = [
   'Paiement en attente',
   'Agence payée / Client',
   'Profil payé / Client',
+  'Commercial payé / client',
   'Payé',
   'Paiement partiel',
   'Annulé'
@@ -259,6 +260,7 @@ const getPaymentUiLabel = (uiCode: string | undefined): string => {
     paye: 'Payé',
     agence_payee_client: 'Agence payée / Client',
     profil_paye_client: 'Profil payé / Client',
+    commercial_paye_client: 'Commercial payé / client',
     paiement_partiel: 'Paiement partiel',
     paiement_en_attente: 'Paiement en attente',
     non_confirme: 'Non confirmé',
@@ -305,7 +307,9 @@ const getMontantEncaisseProfil = (row: FacturationRow): number => {
 
 const getPartProfilDueFromAgence = (row: FacturationRow): number => {
   if (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client') {
-    return Number(row.montantAgenceDoitProfil || 0);
+    if (Number(row.montantAgenceDoitProfil || 0) > 0) {
+      return Number(row.montantAgenceDoitProfil);
+    }
   }
 
   const isInterventionGratuite = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite';
@@ -503,6 +507,7 @@ const paiementStatusCodeFromLabel = (value: string): string => {
   if (value === 'Payé') return 'paye';
   if (value === 'Agence payée / Client') return 'agence_payee_client';
   if (value === 'Profil payé / Client') return 'profil_paye_client';
+  if (value === 'Commercial payé / client') return 'commercial_paye_client';
   if (value === 'Paiement partiel') return 'paiement_partiel';
   if (value === 'Paiement en attente') return 'paiement_en_attente';
   if (value === 'Facturation annulée' || value === 'Annulé') return 'facturation_annulee';
@@ -635,8 +640,12 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
       ? Number(d_part_agence)
       : 0;
 
-  const rawPartProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
+  const partsSum = (d_parts_repartition && Array.isArray(d_parts_repartition))
     ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+    : 0;
+
+  const rawPartProfil = partsSum > 0
+    ? partsSum
     : Number(facturationData.part_profil ?? (facturationData.montant_agence_doit_profil || (rawMontant - rawPartAgence)));
 
   const partAgence = rawPartAgence * ratio;
@@ -702,8 +711,12 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
       ? Number(d_part_agence)
       : 0;
 
-  const partProfil = (d_parts_repartition && Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0)
+  const partsSum = (d_parts_repartition && Array.isArray(d_parts_repartition))
     ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+    : 0;
+
+  const partProfil = partsSum > 0
+    ? partsSum
     : Number(facturationData.part_profil ?? (facturationData.montant_agence_doit_profil || (montant - partAgence)));
 
   // Source de vérité : formulaire_data.facturation.statut_paiement_ui (défini par le Dashboard)
@@ -1605,6 +1618,7 @@ export default function VueGlobale() {
         { value: 'paiement_en_attente', apiValue: 'paiement_en_attente', label: 'Paiement en attente' },
         { value: 'agence_payee_client', apiValue: 'agence_payee_client', label: 'Agence payée / Client' },
         { value: 'profil_paye_client', apiValue: 'profil_paye_client', label: 'Profil payé / Client' },
+        { value: 'commercial_paye_client', apiValue: 'commercial_paye_client', label: 'Commercial payé / client' },
         { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
         { value: 'paye', apiValue: 'integral', label: 'Payé' },
         { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Annulé' },
@@ -1909,8 +1923,7 @@ export default function VueGlobale() {
     return Array.from(map.entries())
       .map(([name, amount]) => ({ name: name || '—', amount }))
       .filter((item) => item.amount >= 0.01)
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
+      .sort((a, b) => b.amount - a.amount);
   }, [facturationData, profileAccountsData]);
 
   const profilNonPayeByProfile = useMemo(() => {
@@ -1966,8 +1979,7 @@ export default function VueGlobale() {
     return Array.from(map.entries())
       .map(([name, amount]) => ({ name: name || '—', amount }))
       .filter((item) => item.amount >= 0.01)
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
+      .sort((a, b) => b.amount - a.amount);
   }, [facturationData, profileAccountsData]);
 
 
@@ -2796,11 +2808,11 @@ export default function VueGlobale() {
   const isProfilPayeClient = selectedMission ? (selectedMission.statutPaiementUi === 'profil_paye_client' || selectedMission.statutPaiementUi === 'Profil payé / Client') : false;
   const isAgencePayeeClient = selectedMission ? (selectedMission.statutPaiementUi === 'agence_payee_client' || selectedMission.statutPaiementUi === 'Agence payée / Client') : false;
 
-  const modalPartProfil = selectedMission ? (
-    (selectedMission.parts_repartition && selectedMission.parts_repartition.length > 0)
-      ? selectedMission.parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
-      : selectedMission.partProfil
-  ) : 0;
+  const modalPartProfil = selectedMission ? (() => {
+    const partsRep = selectedMission.parts_repartition;
+    const partsSum = partsRep ? partsRep.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0) : 0;
+    return partsSum > 0 ? partsSum : selectedMission.partProfil;
+  })() : 0;
 
   let modalStatusContent: React.ReactNode = '';
   let modalStatusPillClass = 'fg-pill-pale-orange';
@@ -4191,12 +4203,15 @@ export default function VueGlobale() {
                           const partProfilStatusColor = isPartProfilPaid ? '#10b981' : '#f43f5e';
                           const isPartAgencePaid = p.part_agence_reversee ?? selectedMission.partAgenceReversee;
 
+                          const totalPartsAmount = selectedMission.parts_repartition ? selectedMission.parts_repartition.reduce((s: number, partItem: any) => s + Number(partItem.amount || 0), 0) : 0;
+                          const partAmount = totalPartsAmount > 0 ? Number(p.amount || 0) : (modalPartProfil / (selectedMission.parts_repartition?.length || 1));
+
                           return (
                             <div key={idx} style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
                                   <p style={{ margin: 0, fontWeight: 'bold' }}>{agentName}</p>
-                                  <p style={{ margin: 0, fontSize: '0.85em', color: '#94a3b8' }}>Montant: {money(p.amount)}</p>
+                                  <p style={{ margin: 0, fontSize: '0.85em', color: '#94a3b8' }}>Montant: {money(partAmount)}</p>
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                   <p style={{ margin: 0, fontSize: '0.85em', color: partProfilStatusColor }}>
@@ -4217,7 +4232,7 @@ export default function VueGlobale() {
                               )}
                               {isAgencePayeeClient && (
                                 <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <span style={{ fontSize: '0.85em', color: '#94a3b8' }}>Part profil à verser par l'agence : <strong>{money(p.amount)}</strong></span>
+                                  <span style={{ fontSize: '0.85em', color: '#94a3b8' }}>Part profil à verser par l'agence : <strong>{money(partAmount)}</strong></span>
                                   <span style={{ fontSize: '0.85em', color: isPartProfilPaid ? '#10b981' : '#f43f5e', fontWeight: 'bold' }}>
                                     {isPartProfilPaid ? 'Versée' : 'Non versée'}
                                   </span>
