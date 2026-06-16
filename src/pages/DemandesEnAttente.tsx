@@ -40,7 +40,7 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
-  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Facturation annulée' },
+  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Annulé' },
   { value: 'intervention_gratuite', apiValue: 'intervention_gratuite', label: 'Intervention gratuite' },
 ];
 
@@ -56,6 +56,12 @@ const strip212 = (p: string) => {
     cleaned = cleaned.substring(1);
   }
   return cleaned;
+};
+
+const canValidateDemande = (user: any, d: Demande) => {
+  if (!user) return false;
+  if (user.role?.toLowerCase() === 'admin') return true;
+  return d.created_by === user.id || d.assigned_to === user.id || d.assigned_to_operations === user.id;
 };
 
 export default function DemandesEnAttente() {
@@ -492,9 +498,9 @@ export default function DemandesEnAttente() {
 
   const handleAction = async (id: number, action: 'valider' | 'nrp' | 'annuler') => {
     if (action === 'valider') {
-      const perm = checkPermission(user, 'valider_demande');
-      if (!perm.allowed) {
-        addToast(perm.message || 'Action non autorisée', 'error');
+      const d = demandes.find(x => x.id === id);
+      if (!d || !canValidateDemande(user, d)) {
+        addToast("Action non autorisée. Vous n'êtes ni le créateur de cette demande ni son commercial assigné.", 'error');
         return;
       }
     } else if (action === 'annuler') {
@@ -1167,6 +1173,15 @@ export default function DemandesEnAttente() {
                       <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>
                         {d.segment === 'particulier' ? 'PARTICULIER' : 'ENTREPRISE'}
                       </span>
+                      {d.assigned_to_name ? (
+                        <span className="badge bg-purple-50 text-purple-700 border border-purple-200 font-medium text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                          👤 {d.assigned_to_name}
+                        </span>
+                      ) : (
+                        <span className="badge bg-slate-50 text-slate-500 border border-slate-200 font-medium text-[10px] px-2 py-0.5 rounded-full">
+                          Non affecté
+                        </span>
+                      )}
                       {d.identification_statut === 'nouvelle' && <span className="badge badge-green" style={{ fontSize: '10px' }}>Nouvelle</span>}
                       {d.identification_statut === 'existant_valide' && <span className="badge badge-teal" style={{ fontSize: '10px' }}>Client existe déjà</span>}
                       {d.identification_statut === 'verification_requise' && <span className="badge badge-orange" style={{ fontSize: '10px' }}>Vérification requise</span>}
@@ -1364,7 +1379,7 @@ export default function DemandesEnAttente() {
                   {hasPermission(user, 'refuser_demande') && (
                     <button className="btn btn-cancel flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
                   )}
-                  {hasPermission(user, 'valider_demandes') && (
+                  {canValidateDemande(user, d) && (
                     <button className="btn btn-validate flex-[1.5] leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'valider')}>Valider demande</button>
                   )}
                   {hasPermission(user, 'modifier_demande') && (
@@ -1387,10 +1402,19 @@ export default function DemandesEnAttente() {
               <div className="pending-card mobile-card">
                 <div className="mobile-card-header">
                   <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>
                         {d.segment === 'particulier' ? 'PARTICULIER' : 'ENTREPRISE'}
                       </span>
+                      {d.assigned_to_name ? (
+                        <span className="badge bg-purple-50 text-purple-700 border border-purple-200 font-medium text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                          👤 {d.assigned_to_name}
+                        </span>
+                      ) : (
+                        <span className="badge bg-slate-50 text-slate-500 border border-slate-200 font-medium text-[9px] px-2 py-0.5 rounded-full">
+                          Non affecté
+                        </span>
+                      )}
                       <span className="text-muted text-xs">#{d.id}</span>
                     </div>
                     {d.created_at && (
@@ -1471,7 +1495,7 @@ export default function DemandesEnAttente() {
                 </div>
 
                 <div className="mobile-card-actions">
-                  {hasPermission(user, 'valider_demandes') && (
+                  {canValidateDemande(user, d) && (
                     <button className="btn btn-validate btn-full mb-2" onClick={() => handleAction(d.id, 'valider')}>
                       <CheckCircle size={18} /> Valider
                     </button>

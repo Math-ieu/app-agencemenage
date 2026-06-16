@@ -170,6 +170,9 @@ export const nrpDemande = (id: number, notes?: string) =>
 export const affecterDemande = (id: number, commercial_id: number) =>
   apiClient.post(`/api/demandes/${id}/affecter/`, { commercial_id });
 
+export const affecterOperations = (id: number, operations_id: number) =>
+  apiClient.post(`/api/demandes/${id}/affecter_operations/`, { operations_id });
+
 export const sendProfilToDemande = (demandeId: number, agentId: number) =>
   apiClient.post(`/api/demandes/${demandeId}/envoyer_profil/`, { agent_id: agentId });
 

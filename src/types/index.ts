@@ -90,7 +90,11 @@ export interface Demande {
   client_address?: string;
   client_detail?: Client;
   assigned_to_name: string;
+  assigned_to?: number | null;
   assigned_to_id?: number;
+  assigned_to_operations?: number | null;
+  assigned_to_operations_name?: string;
+  created_by?: number | null;
   commercial_name?: string;
   nrp_count?: number;
   service: string;

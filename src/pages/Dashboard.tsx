@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, removeProfilFromDemande, uploadDocument, getDemande } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, affecterOperations, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, removeProfilFromDemande, uploadDocument, getDemande } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
@@ -62,7 +62,7 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
-  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Facturation annulée' },
+  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Annulé' },
   { value: 'intervention_gratuite', apiValue: 'intervention_gratuite', label: 'Intervention gratuite' },
 ];
 
@@ -313,10 +313,18 @@ export default function Dashboard() {
   const { user } = useAuthStore();
   const [commerciaux, setCommerciaux] = useState<User[]>([]);
   const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
+  const [showOpsAssignmentModal, setShowOpsAssignmentModal] = useState<number | null>(null);
+  const [operationsOfficers, setOperationsOfficers] = useState<User[]>([]);
 
   useEffect(() => {
     if (checkPermission(user, 'affecter_commercial').allowed) {
       getUsers({ role: 'commercial' }).then(res => setCommerciaux(res.data?.results || res.data)).catch(console.error);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (hasPermission(user, 'assigner_charge_operation')) {
+      getUsers({ role: 'charge_operations' }).then(res => setOperationsOfficers(res.data?.results || res.data)).catch(console.error);
     }
   }, [user]);
 
@@ -326,6 +334,17 @@ export default function Dashboard() {
       addToast('Demande affectée avec succès', 'success');
       fetchData();
       setShowAssignmentModal(null);
+    } catch (err) {
+      addToast('Erreur lors de l\'affectation', 'error');
+    }
+  };
+
+  const handleAffecterOperations = async (demandeId: number, opsId: number) => {
+    try {
+      await affecterOperations(demandeId, opsId);
+      addToast('Demande affectée au chargé d\'opération avec succès', 'success');
+      fetchData();
+      setShowOpsAssignmentModal(null);
     } catch (err) {
       addToast('Erreur lors de l\'affectation', 'error');
     }
@@ -1812,7 +1831,16 @@ export default function Dashboard() {
                               </button>
                             )}
 
-                            {(hasPermission(user, 'editer_besoin') || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
+                            {hasPermission(user, 'assigner_charge_operation') && (
+                              <button className="menu-item" style={{ color: '#0f766e' }} onClick={() => {
+                                setShowOpsAssignmentModal(d.id);
+                                setActiveMoreMenu(null);
+                              }}>
+                                <UserPlus size={16} /> Assigner au chargé d'opération
+                              </button>
+                            )}
+
+                            {(hasPermission(user, 'editer_besoin') || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
 
                             {hasPermission(user, 'editer_besoin') && (
                               <>
@@ -1983,7 +2011,16 @@ export default function Dashboard() {
                               </button>
                             )}
 
-                            {(hasPermission(user, 'editer_besoin') || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
+                            {hasPermission(user, 'assigner_charge_operation') && (
+                              <button className="menu-item" style={{ color: '#0f766e' }} onClick={() => {
+                                setShowOpsAssignmentModal(d.id);
+                                setActiveMoreMenu(null);
+                              }}>
+                                <UserPlus size={16} /> Assigner au chargé d'opération
+                              </button>
+                            )}
+
+                            {(hasPermission(user, 'editer_besoin') || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
 
                             {hasPermission(user, 'editer_besoin') && (
                               <>
@@ -2330,7 +2367,8 @@ export default function Dashboard() {
                     </div>
 
                     {isFormExpanded && (
-                      <div className="form-section-content">
+                      <fieldset disabled={user?.role === 'charge_operations'} style={{ border: 'none', padding: 0, margin: 0, width: '100%' }}>
+                        <div className="form-section-content">
                         {/* ====== CONDITIONAL SERVICE SECTIONS ====== */}
                         {isAuxiliaireService ? (
                           /* Auxiliaire de vie - Service sur mesure */
@@ -2590,7 +2628,8 @@ export default function Dashboard() {
                           />
                         </div>
                       </div>
-                    )}
+                    </fieldset>
+                  )}
                   </div>
 
                   <div className="form-collapsible-section espace-agence-container">
@@ -3737,6 +3776,64 @@ export default function Dashboard() {
               <button
                 className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
                 onClick={() => setShowAssignmentModal(null)}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Operations Officer Assignment Modal */}
+      {showOpsAssignmentModal && (
+        <div className="modal-overlay z-[110]" onClick={() => setShowOpsAssignmentModal(null)}>
+          <div className="modal-content max-w-[500px]" onClick={e => e.stopPropagation()} style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800">Affectation Opérations</h2>
+                <p className="text-slate-500 text-sm mt-1">Sélectionnez le chargé d'opération pour cette demande</p>
+              </div>
+              <button className="p-2 hover:bg-slate-100 rounded-full transition-colors" onClick={() => setShowOpsAssignmentModal(null)}>
+                <XCircle size={24} className="text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {operationsOfficers && operationsOfficers.length > 0 ? (
+                operationsOfficers.map(ops => {
+                  const initials = (ops.full_name || `${ops.first_name} ${ops.last_name}`).split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                  return (
+                    <button
+                      key={ops.id}
+                      onClick={() => handleAffecterOperations(showOpsAssignmentModal, ops.id)}
+                      className="w-full flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50 transition-all text-left group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-lg group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                        {initials}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold text-slate-700 group-hover:text-teal-900">{ops.full_name || `${ops.first_name} ${ops.last_name}`}</div>
+                        <div className="text-xs text-slate-400">Chargé des Opérations</div>
+                      </div>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="bg-teal-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Choisir</div>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <UserPlus size={40} className="mx-auto text-slate-300 mb-3" />
+                  <p className="text-slate-500 font-medium">Aucun chargé d'opération trouvé</p>
+                  <p className="text-slate-400 text-xs mt-1">Veuillez d'abord créer des chargés d'opérations dans le système.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-8 flex justify-end">
+              <button
+                className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors"
+                onClick={() => setShowOpsAssignmentModal(null)}
               >
                 Annuler
               </button>

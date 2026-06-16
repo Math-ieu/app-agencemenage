@@ -51,7 +51,7 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'profil_paye_client', apiValue: 'partiel', label: 'Profil payé / Client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
-  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Facturation annulée' },
+  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Annulé' },
   { value: 'intervention_gratuite', apiValue: 'intervention_gratuite', label: 'Intervention gratuite' },
 ];
 
@@ -66,7 +66,7 @@ const TABS = [
   { id: 'paye', label: 'Payé' },
   { id: 'facturation_encours', label: 'Facturation en cours' },
   { id: 'facturation_partielle', label: 'Facturation partielle' },
-  { id: 'facturation_annulee', label: 'Facturation annulée' }
+  { id: 'facturation_annulee', label: 'Annulé' }
 ];
 
 const SERVICES_LIST = {

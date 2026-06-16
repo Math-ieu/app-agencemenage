@@ -82,7 +82,7 @@ interface FacturationRow {
   partProfil: number;
   encaissePar: 'Agence' | 'Profil';
   paiement: 'non_paye' | 'partiellement_paye' | 'paye';
-  statut: 'Facturation annulée' | 'Intervention annulée' | 'Intervention gratuite' | 'Confirmée' | 'Terminée' | 'Payé' | 'En attente';
+  statut: 'Annulé' | 'Facturation annulée' | 'Intervention annulée' | 'Intervention gratuite' | 'Confirmée' | 'Terminée' | 'Payé' | 'En attente';
   reglementInterne: string;
   montantPaye?: number;
   montantEncaisseProfil?: number;
@@ -223,7 +223,7 @@ const servicesBySegment: Record<'Particulier' | 'Entreprise', string[]> = {
 };
 
 const missionPaymentModes = ['Choisir', 'Virement', 'Chèque', "Espèces à l'agence", 'Sur place'];
-const missionStatusOptions = ['Confirmée', 'Terminée', 'Payé', 'Facturation annulée'];
+const missionStatusOptions = ['Confirmée', 'Terminée', 'Payé', 'Annulé'];
 const encaissementOptions: Array<'L\'Agence' | 'Le Profil'> = ["L'Agence", 'Le Profil'];
 const paymentStatusOptions = [
   'Non confirmé',
@@ -232,7 +232,7 @@ const paymentStatusOptions = [
   'Profil payé / Client',
   'Payé',
   'Paiement partiel',
-  'Facturation annulée'
+  'Annulé'
 ];
 
 const paiementClass = (value: FacturationRow['paiement']): string => {
@@ -262,7 +262,7 @@ const getPaymentUiLabel = (uiCode: string | undefined): string => {
     paiement_partiel: 'Paiement partiel',
     paiement_en_attente: 'Paiement en attente',
     non_confirme: 'Non confirmé',
-    facturation_annulee: 'Facturation annulée',
+    facturation_annulee: 'Annulé',
     intervention_gratuite: 'Intervention gratuite',
   };
   return labels[uiCode] || uiCode.replace(/_/g, ' ');
@@ -492,7 +492,7 @@ const modeCodeFromLabel = (value?: string): string => {
 };
 
 const statutMissionCodeFromLabel = (value: FacturationRow['statut']): string => {
-  if (value === 'Facturation annulée') return 'annulee';
+  if (value === 'Facturation annulée' || value === 'Annulé') return 'annulee';
   if (value === 'Confirmée') return 'confirmee';
   if (value === 'Terminée') return 'terminee';
   if (value === 'Payé') return 'terminee';
@@ -505,7 +505,7 @@ const paiementStatusCodeFromLabel = (value: string): string => {
   if (value === 'Profil payé / Client') return 'profil_paye_client';
   if (value === 'Paiement partiel') return 'paiement_partiel';
   if (value === 'Paiement en attente') return 'paiement_en_attente';
-  if (value === 'Facturation annulée') return 'facturation_annulee';
+  if (value === 'Facturation annulée' || value === 'Annulé') return 'facturation_annulee';
   return 'non_confirme';
 };
 
@@ -1607,7 +1607,7 @@ export default function VueGlobale() {
         { value: 'profil_paye_client', apiValue: 'profil_paye_client', label: 'Profil payé / Client' },
         { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
         { value: 'paye', apiValue: 'integral', label: 'Payé' },
-        { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Facturation annulée' },
+        { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Annulé' },
       ];
       if (fallback && options.some((option) => option.value === fallback)) return fallback;
       if (facturationAnnulee) return 'facturation_annulee';
@@ -3456,7 +3456,7 @@ export default function VueGlobale() {
                       statusContent = 'Payé';
                     } else {
                       statusPillClass = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'fg-pill-pale-green' : 'fg-pill-pale-red';
-                      statusContent = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'Intervention gratuite' : (row.statut === 'Intervention annulée' ? 'Intervention annulée' : 'Facturation annulée');
+                      statusContent = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'Intervention gratuite' : (row.statut === 'Intervention annulée' ? 'Intervention annulée' : 'Annulé');
                     }
                   } else if (row.statutPaiementUi === 'paye' || row.paiement === 'paye') {
                     statusPillClass = 'fg-pill-pale-green';

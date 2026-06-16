@@ -106,8 +106,8 @@ export const getPaymentStatusInfo = (statutUi: string | undefined, legacyStatut?
   if (s === 'paiement_en_attente' || s === 'acompte' || s === 'paiement en attente') {
     return { label: 'Paiement en attente', badgeClass: 'badge-orange' };
   }
-  if (s === 'facturation_annulee') {
-    return { label: 'Facturation annulée', badgeClass: 'badge-red' };
+  if (s === 'facturation_annulee' || s === 'facturation annulée' || s === 'facturation annulee' || s === 'annule' || s === 'annulée') {
+    return { label: 'Annulé', badgeClass: 'badge-red' };
   }
   if (s === 'intervention_gratuite') {
     return { label: 'Intervention gratuite', badgeClass: 'badge-green' };

@@ -1083,26 +1083,55 @@ export default function ClientDetails() {
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
                             <button 
                               onClick={() => navigate('/demandes', { state: { renewDemandeId: d.id, returnToClient: id } })}
-                              style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}
+                              disabled={d.frequency === 'abonnement'}
+                              style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 6, 
+                                color: d.frequency === 'abonnement' ? '#cbd5e1' : '#475569', 
+                                fontWeight: 600, 
+                                fontSize: 13, 
+                                background: 'none', 
+                                border: 'none', 
+                                cursor: d.frequency === 'abonnement' ? 'not-allowed' : 'pointer' 
+                              }}
                             >
-                              <RefreshCw size={15} color={C.teal} /> Renouveler
+                              <RefreshCw size={15} color={d.frequency === 'abonnement' ? '#cbd5e1' : C.teal} /> Renouveler
                             </button>
                             {d.frequency === 'abonnement' && (
                               <button 
                                 onClick={() => navigate('/demandes', { state: { renewDemandeId: d.id, returnToClient: id } })}
-                                style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}
+                                disabled
+                                style={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  gap: 6, 
+                                  color: '#cbd5e1', 
+                                  fontWeight: 600, 
+                                  fontSize: 13, 
+                                  background: 'none', 
+                                  border: 'none', 
+                                  cursor: 'not-allowed' 
+                                }}
                               >
-                                <RefreshCw size={15} color={C.teal} /> Abonnement
+                                <RefreshCw size={15} color="#cbd5e1" /> Abonnement
                               </button>
                             )}
                             {(() => {
                               const devisDoc = d.documents?.find(doc => doc.type_document === 'devis') || null;
+                              const isAbonnement = d.frequency === 'abonnement';
                               return (
                                 <>
                                   <button 
                                     onClick={() => setShowDemandDetails(d)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
-                                    title="Détails du besoin actuel"
+                                    disabled={isAbonnement}
+                                    style={{ 
+                                      background: 'none', 
+                                      border: 'none', 
+                                      cursor: isAbonnement ? 'not-allowed' : 'pointer', 
+                                      color: isAbonnement ? '#cbd5e1' : '#64748b' 
+                                    }}
+                                    title={isAbonnement ? "Non disponible pour les abonnements" : "Détails du besoin actuel"}
                                   >
                                     <Eye size={17} />
                                   </button>
@@ -1115,8 +1144,15 @@ export default function ClientDetails() {
                                         addToast("Aucun devis disponible pour cette demande", "info");
                                       }
                                     }}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: devisDoc ? '#64748b' : '#cbd5e1', opacity: devisDoc ? 1 : 0.4 }}
-                                    title={devisDoc ? "Télécharger le devis" : "Aucun devis disponible"}
+                                    disabled={isAbonnement || !devisDoc}
+                                    style={{ 
+                                      background: 'none', 
+                                      border: 'none', 
+                                      cursor: (isAbonnement || !devisDoc) ? 'not-allowed' : 'pointer', 
+                                      color: (isAbonnement || !devisDoc) ? '#cbd5e1' : '#64748b', 
+                                      opacity: devisDoc ? 1 : 0.4 
+                                    }}
+                                    title={isAbonnement ? "Non disponible pour les abonnements" : (devisDoc ? "Télécharger le devis" : "Aucun devis disponible")}
                                   >
                                     <FileText size={17} />
                                   </button>
