@@ -16,6 +16,7 @@ import Clients from './pages/Clients';
 import Profils from './pages/Profils';
 import Historique from './pages/Historique';
 import VueGlobale from './pages/finance/VueGlobale';
+import LesSuivis from './pages/finance/LesSuivis';
 import LaCaisse from './pages/finance/LaCaisse';
 import Qualite from './pages/Qualite';
 import Marketing from './pages/Marketing';
@@ -87,6 +88,7 @@ export default function App() {
           <Route path="historique" element={<PermissionRoute permission="consulter_historique_global"><Historique /></PermissionRoute>} />
           <Route path="finance">
             <Route path="vue-globale" element={<PermissionRoute permission="voir_la_caisse"><VueGlobale /></PermissionRoute>} />
+            <Route path="les-suivis" element={<PermissionRoute permission="voir_la_caisse"><LesSuivis /></PermissionRoute>} />
             <Route path="la-caisse" element={<PermissionRoute permission="voir_la_caisse"><LaCaisse /></PermissionRoute>} />
           </Route>
           <Route path="qualite" element={<PermissionRoute permission="consulter_retours_qualite"><Qualite /></PermissionRoute>} />

@@ -21,6 +21,7 @@ const navItems = [
     label: 'Gestion Financière',
     children: [
       { to: '/finance/vue-globale', label: 'Vue Globale' },
+      { to: '/finance/les-suivis', label: 'Les suivis' },
       { to: '/finance/la-caisse', label: 'Trésorerie et Caisse' }
     ]
   },
@@ -57,7 +58,7 @@ export default function AppLayout() {
     // If item has children, filter children
     if ('children' in item && item.children) {
       const filteredChildren = item.children.filter(child => {
-        if (child.to === '/finance/vue-globale' || child.to === '/finance/la-caisse') {
+        if (child.to === '/finance/vue-globale' || child.to === '/finance/les-suivis' || child.to === '/finance/la-caisse') {
           return hasPermission(user, 'voir_la_caisse');
         }
         if (child.to === '/seo/blog') {
