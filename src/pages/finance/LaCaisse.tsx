@@ -1395,59 +1395,6 @@ export default function LaCaisse() {
                     </div>
                   </div>
 
-                  {/* Catégorie */}
-                  <div className="lc-modal-field">
-                    <label>Catégorie</label>
-                    <div className="lc-modal-custom-select">
-                      <button
-                        type="button"
-                        className="lc-modal-custom-trigger"
-                        onClick={() => {
-                          setIsCategoryMenuOpen((prev) => !prev);
-                          setIsOperationMenuOpen(false);
-                          setIsPaymentMenuOpen(false);
-                        }}
-                      >
-                        <span>{selectedCategory || 'Choisir une catégorie'}</span>
-                        <ChevronDown size={15} />
-                      </button>
-
-                      {isCategoryMenuOpen && (
-                        <div className="lc-modal-custom-menu" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                          <button
-                            type="button"
-                            className={`lc-modal-custom-item ${selectedCategory === '' ? 'selected' : ''}`}
-                            onClick={() => {
-                              setSelectedCategory('');
-                              setIsCategoryMenuOpen(false);
-                            }}
-                          >
-                            <span className="lc-check-wrap">
-                              {selectedCategory === '' ? <Check size={14} /> : null}
-                            </span>
-                            <span>Choisir une catégorie</span>
-                          </button>
-                          {categories.map((cat) => (
-                            <button
-                              key={cat}
-                              type="button"
-                              className={`lc-modal-custom-item ${selectedCategory === cat ? 'selected' : ''}`}
-                              onClick={() => {
-                                setSelectedCategory(cat);
-                                setIsCategoryMenuOpen(false);
-                              }}
-                            >
-                              <span className="lc-check-wrap">
-                                {selectedCategory === cat ? <Check size={14} /> : null}
-                              </span>
-                              <span>{cat}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
                   <div className="lc-modal-field">
                     <label>Libellé / Motif *</label>
                     <textarea
