@@ -21,7 +21,7 @@ const navItems = [
     label: 'Gestion Financière',
     children: [
       { to: '/finance/vue-globale', label: 'Vue Globale' },
-      { to: '/finance/la-caisse', label: 'La Caisse' }
+      { to: '/finance/la-caisse', label: 'Trésorerie et Caisse' }
     ]
   },
   { to: '/qualite', icon: Star, label: 'Qualité & Feedback' },

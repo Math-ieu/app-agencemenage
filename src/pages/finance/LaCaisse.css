@@ -594,3 +594,552 @@
     font-size: 1.35rem;
   }
 }
+
+/* Custom additions for Trésorerie et Caisse tab */
+.lc-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #e8f0ef;
+  border: 1px solid #d4e2e0;
+  border-radius: 10px;
+  padding: 0.25rem;
+  width: fit-content;
+  margin: 0 auto 0.5rem auto;
+}
+
+.lc-tab {
+  border: none;
+  background: transparent;
+  color: #496564;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.42rem 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+
+.lc-tab.active {
+  background: white;
+  color: #114746;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.lc-stats-group-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #5d7674;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #d4e2e0;
+  padding-bottom: 0.25rem;
+  margin-top: 0.5rem;
+  grid-column: span 1;
+  display: flex;
+  align-items: center;
+}
+
+.lc-stats-group-container {
+  display: contents;
+}
+
+.lc-action-auto {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid #cbd5e1;
+}
+
+.lc-delete-btn {
+  color: #ef4444 !important;
+}
+.lc-delete-btn:hover {
+  background: #fee2e2 !important;
+  border-radius: 4px;
+}
+
+/* Pagination Styles */
+.lc-pagination-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem;
+  background: transparent;
+  border-top: 1px solid #dce7e6;
+  font-size: 0.88rem;
+}
+
+.lc-pagination-info {
+  color: #5f7978;
+}
+
+.lc-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.lc-pagination-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #c8d6d5;
+  border-radius: 6px;
+  background: #f7f9f9;
+  color: #2a4d4d;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.lc-pagination-btn:hover:not(:disabled) {
+  background: #edf3f2;
+  border-color: #76a9a7;
+}
+
+.lc-pagination-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.lc-pagination-text {
+  font-weight: 600;
+  color: #0d3f46;
+}
+
+.lc-stats-banner {
+  display: flex;
+  gap: 1rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.85rem;
+  width: 100%;
+}
+
+.lc-stats-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lc-stats-group.commercial {
+  flex: 2;
+}
+
+.lc-stats-group.treasury {
+  flex: 3;
+}
+
+.lc-stats-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.lc-group-icon {
+  color: #64748b;
+}
+
+.lc-header-line {
+  flex-grow: 1;
+  height: 1px;
+  background: #e2e8f0;
+  margin-left: 0.35rem;
+}
+
+.lc-stats-group-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.lc-stats-group-row .lc-stat-card {
+  flex: 1;
+  height: 94px;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.lc-stat-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lc-card-icon {
+  color: #94a3b8;
+}
+
+.lc-info-trigger {
+  color: #94a3b8;
+  cursor: help;
+  font-size: 0.7rem;
+  margin-left: auto;
+}
+
+.lc-stats-group-row .lc-stat-card strong {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.lc-stats-group-row .lc-stat-card .lc-stat-subtitle {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: #64748b;
+  margin-top: 0;
+}
+
+/* Card 1: CA TOTAL */
+.card-ca-total {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.card-ca-total strong {
+  color: #0f172a;
+}
+
+/* Card 2: PART AGENCE */
+.card-part-agence {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.card-part-agence .lc-stat-card-title,
+.card-part-agence .lc-card-icon,
+.card-part-agence .lc-info-trigger {
+  color: #d97706;
+}
+
+.card-part-agence strong {
+  color: #d97706;
+}
+
+.card-part-agence .lc-stat-subtitle {
+  color: #b45309 !important;
+}
+
+/* Card 3: TOTAL ENTREES */
+.card-total-entrees {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.card-total-entrees .lc-stat-card-title,
+.card-total-entrees .lc-card-icon {
+  color: #16a34a;
+}
+
+.card-total-entrees strong {
+  color: #16a34a;
+}
+
+.card-total-entrees .lc-stat-subtitle {
+  color: #15803d !important;
+}
+
+/* Card 4: TOTAL SORTIES */
+.card-total-sorties {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.card-total-sorties .lc-stat-card-title,
+.card-total-sorties .lc-card-icon {
+  color: #dc2626;
+}
+
+.card-total-sorties strong {
+  color: #dc2626;
+}
+
+.card-total-sorties .lc-stat-subtitle {
+  color: #b91c1c !important;
+}
+
+/* Card 5: SOLDE NET */
+.card-solde-net {
+  background: #1e293b;
+  border: none !important;
+  padding: 0.5rem 0.75rem 0 0.75rem !important;
+}
+
+.card-solde-net .lc-stat-card-title {
+  color: #94a3b8;
+}
+
+.card-solde-net strong {
+  color: #10b981;
+}
+
+.lc-solde-net-chart {
+  width: calc(100% + 1.5rem);
+  margin-left: -0.75rem;
+  height: 20px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.lc-solde-net-chart svg {
+  width: 100%;
+  height: 100%;
+}
+
+.lc-stats-operator {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #64748b;
+  user-select: none;
+  flex-shrink: 0;
+  width: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Filters and Actions Bar */
+.lc-filters-actions-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  width: 100%;
+}
+
+.lc-filters-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-grow: 1;
+  flex-wrap: wrap;
+}
+
+.lc-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.lc-filter-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.lc-filter-group:not(.search-group) {
+  width: 120px;
+}
+
+.lc-filter-group.search-group {
+  flex-grow: 1;
+  min-width: 200px;
+}
+
+.lc-filter-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 38px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.lc-filter-input-wrapper input,
+.lc-filter-input-wrapper select {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.85rem;
+  color: #334155;
+  padding: 0 0.75rem;
+}
+
+.lc-filter-input-wrapper select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 2rem;
+  cursor: pointer;
+}
+
+.lc-filter-input-wrapper.date input {
+  padding-right: 2rem;
+}
+
+/* Make custom calendar trigger on click */
+.lc-filter-input-wrapper input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  height: auto;
+  color: transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.lc-filter-input-wrapper.search {
+  padding-left: 2rem;
+}
+
+.lc-filter-input-wrapper.search input {
+  padding-left: 0.25rem;
+}
+
+.lc-input-icon-right {
+  position: absolute;
+  right: 0.75rem;
+  pointer-events: none;
+  color: #64748b;
+}
+
+.lc-input-icon-left {
+  position: absolute;
+  left: 0.75rem;
+  pointer-events: none;
+  color: #64748b;
+}
+
+.lc-actions-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.lc-action-btn-white {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 38px;
+  padding: 0 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.lc-action-btn-white:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.lc-action-btn-green {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 38px;
+  padding: 0 1rem;
+  border: none;
+  border-radius: 6px;
+  background: #0d9488;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.lc-action-btn-green:hover {
+  background: #0f766e;
+}
+
+@media (max-width: 1200px) {
+  .lc-stats-banner {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .lc-stats-group.commercial,
+  .lc-stats-group.treasury {
+    flex: unset;
+    width: 100%;
+  }
+
+  .lc-filters-actions-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .lc-filters-inputs {
+    width: 100%;
+  }
+
+  .lc-actions-buttons {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 600px) {
+  .lc-stats-group-row {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .lc-stats-group-row .lc-stat-card {
+    flex: unset;
+    width: 100%;
+  }
+
+  .lc-stats-operator {
+    display: none;
+  }
+
+  .lc-filter-group:not(.search-group) {
+    width: 100%;
+  }
+
+  .lc-actions-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lc-action-btn-white,
+  .lc-action-btn-green {
+    width: 100%;
+  }
+}

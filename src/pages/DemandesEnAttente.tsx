@@ -1375,7 +1375,7 @@ export default function DemandesEnAttente() {
                       <div className="detail-item">
                         <span className="detail-label">Montant :</span>
                         <span className="detail-value text-main-teal fw-bold" style={{ fontSize: '0.9rem' }}>
-                          {d.is_devis ? (d.prix ? `${d.prix} MAD` : 'Sur devis') : (d.prix ? `${d.prix} MAD (Réservation)` : '— (Réservation)')}
+                          {d.is_devis ? (d.prix ? `${d.prix} MAD` : 'Sur devis') : (d.prix ? `${d.prix} MAD` : '—')}
                         </span>
                       </div>
                       <div className="detail-item">

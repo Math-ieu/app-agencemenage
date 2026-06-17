@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X, Slash } from 'lucide-react';
-import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement, getMissions, getDemandesHistorique } from '../../api/client';
+import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X, Slash, Trash2, Info } from 'lucide-react';
+import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement, getMissions, getDemandesHistorique, deleteCaisseMouvement } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
 import { checkPermission, hasPermission } from '../../utils/permissions';
 import './LaCaisse.css';
@@ -10,6 +10,7 @@ interface CashRow {
   date: string;
   type: 'Entrée' | 'Sortie' | 'Alimentation de la caisse';
   typeCode: 'entree' | 'sortie' | 'alimentation';
+  categorie: string;
   libelle: string;
   client: string;
   modePaiement: string;
@@ -18,10 +19,24 @@ interface CashRow {
   montantNumber: number;
   utilisateur: string;
   document: string;
+  notes: string;
 }
 
 const paymentModes = ['Espèces', 'Virement', 'Chèque', 'Paiement agence'];
 const operationTypes = ['Entrée', 'Sortie', 'Alimentation de la caisse'];
+const categories = [
+  'Encaissement client (auto)',
+  'Remise FM — espèces',
+  'Dépôt commercial — espèces',
+  'Virement client reçu',
+  'Autre entrée',
+  'Salaires (équipe agence)',
+  'Paiement femmes de ménage',
+  'Achat produits ménagers',
+  'Achat matériel / équipement',
+  'Loyer & charges bureaux',
+  'Publicité & Marketin'
+];
 
 const todayInputDate = (): string => new Date().toISOString().slice(0, 10);
 const moneyFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -74,14 +89,20 @@ const extractAmount = (value: string): string => {
 
 export default function LaCaisse() {
   const user = useAuthStore(state => state.user);
+  const [activeTab, setActiveTab] = useState<'tresorerie' | 'caisse'>('tresorerie');
+  const [currentPage, setCurrentPage] = useState(1);
   const [rows, setRows] = useState<CashRow[]>([]);
   const [operationsCount, setOperationsCount] = useState(0);
   const [stats, setStats] = useState({ total_entrees: 0, total_sorties: 0, solde: 0, solde_jour: 0 });
   const [loadingRows, setLoadingRows] = useState(true);
   const [commissionAgence, setCommissionAgence] = useState(0);
+  const [caTotal, setCaTotal] = useState(0);
+  const [partAgence, setPartAgence] = useState(0);
 
   const [typeFilter, setTypeFilter] = useState('all');
   const [modeFilter, setModeFilter] = useState('all');
+  const [userFilter, setUserFilter] = useState('all');
+  const [uniqueUsers, setUniqueUsers] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,6 +117,8 @@ export default function LaCaisse() {
   const [isOperationMenuOpen, setIsOperationMenuOpen] = useState(false);
   const [selectedPaymentMode, setSelectedPaymentMode] = useState('Espèces');
   const [isPaymentMenuOpen, setIsPaymentMenuOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [movementDate, setMovementDate] = useState(todayInputDate());
   const [movementAmount, setMovementAmount] = useState('0.00');
   const [movementLabel, setMovementLabel] = useState('');
@@ -106,7 +129,7 @@ export default function LaCaisse() {
   const [movementDocumentFile, setMovementDocumentFile] = useState<File | null>(null);
 
   const fetchStats = async () => {
-    const response = await getCaisseSolde();
+    const response = await getCaisseSolde({ caisse_type: activeTab });
     setStats({
       total_entrees: Number(response.data.total_entrees || 0),
       total_sorties: Number(response.data.total_sorties || 0),
@@ -118,12 +141,22 @@ export default function LaCaisse() {
   const fetchRows = async () => {
     setLoadingRows(true);
     try {
-      const params: Record<string, string> = {};
-      if (typeFilter !== 'all') params.type_mouvement = typeFilter;
-      if (modeFilter !== 'all') params.mode_paiement = modeFilter;
-      if (dateFrom) params.date_from = dateFrom;
-      if (dateTo) params.date_to = dateTo;
-      if (searchTerm.trim()) params.search = searchTerm.trim();
+      const params: Record<string, string | number> = {};
+      params.caisse_type = activeTab;
+      if (activeTab === 'tresorerie') {
+        if (typeFilter !== 'all') params.type_mouvement = typeFilter;
+        if (dateFrom) params.date_from = dateFrom;
+        if (dateTo) params.date_to = dateTo;
+        if (userFilter !== 'all') params.utilisateur = userFilter;
+        if (searchTerm.trim()) params.search = searchTerm.trim();
+        params.page = currentPage;
+      } else {
+        if (typeFilter !== 'all') params.type_mouvement = typeFilter;
+        if (modeFilter !== 'all') params.mode_paiement = modeFilter;
+        if (dateFrom) params.date_from = dateFrom;
+        if (dateTo) params.date_to = dateTo;
+        if (searchTerm.trim()) params.search = searchTerm.trim();
+      }
 
       const response = await getCaisse(params);
       const payload = response.data.results ?? response.data;
@@ -131,7 +164,7 @@ export default function LaCaisse() {
 
       const mappedRows: CashRow[] = payload.map((item: Record<string, unknown>) => {
         const montant = Number(item.montant ?? 0);
-        const typeCode = String(item.type_mouvement || 'entree') as 'entree' | 'sortie';
+        const typeCode = String(item.type_mouvement || 'entree') as 'entree' | 'sortie' | 'alimentation';
         const modeCode = String(item.mode_paiement || 'especes') as 'especes' | 'virement' | 'cheque' | 'paiement_agence';
 
         return {
@@ -139,6 +172,7 @@ export default function LaCaisse() {
           date: toDisplayDate(String(item.date || '')),
           type: typeCodeToLabel(typeCode),
           typeCode,
+          categorie: String(item.categorie || 'Non catégorisé'),
           libelle: String(item.description || ''),
           client: String(item.client_display || item.client_nom || '—'),
           modePaiement: paymentCodeToLabel(modeCode),
@@ -147,6 +181,7 @@ export default function LaCaisse() {
           montantNumber: montant,
           utilisateur: String(item.utilisateur || '—'),
           document: item.document_file ? 'Fichier' : '—',
+          notes: String(item.notes || '—'),
         };
       });
 
@@ -216,7 +251,7 @@ export default function LaCaisse() {
           const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
           const partProfilVersee = encaissePar === 'Agence' ? Boolean(m.part_profil_versee) : Boolean(m.part_agence_reversee);
           const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
-          
+
           const parts = dem?.parts_repartition || fact.parts_repartition || [];
           const numMissions = Math.max(1, parts.length);
           const profilId = m.agent_detail?.id;
@@ -395,9 +430,9 @@ export default function LaCaisse() {
         }
 
         if (row.isSubscriptionSecondary) {
-          const hasProfile = row.profilId || 
-                             (row.parts_repartition && row.parts_repartition.length > 0) || 
-                             (row.profil && row.profil !== '—' && row.profil !== 'Profil inconnu');
+          const hasProfile = row.profilId ||
+            (row.parts_repartition && row.parts_repartition.length > 0) ||
+            (row.profil && row.profil !== '—' && row.profil !== 'Profil inconnu');
           return hasProfile ? -row.partProfil : 0;
         }
 
@@ -405,8 +440,8 @@ export default function LaCaisse() {
         // based on the total subscription price minus this row's profile part (our share for this run).
         if (row.isSubscriptionPrimary) {
           const isPaid = row.paiement === 'paye' ||
-                         row.paiement === 'partiellement_paye' ||
-                         ['paye', 'Payé', 'agence_payee_client', 'Agence payée / Client', 'profil_paye_client', 'Profil payé / Client'].includes(row.statutPaiementUi);
+            row.paiement === 'partiellement_paye' ||
+            ['paye', 'Payé', 'agence_payee_client', 'Agence payée / Client', 'profil_paye_client', 'Profil payé / Client'].includes(row.statutPaiementUi);
           if (!isPaid) return 0;
           return Math.max(0, row.montant - row.partProfil);
         }
@@ -438,6 +473,8 @@ export default function LaCaisse() {
       };
 
       let totalCommission = 0;
+      let totalCA = 0;
+      let totalPartAgence = 0;
       for (const row of mappedRows) {
         if (row.date) {
           const parts = row.date.split('/');
@@ -447,9 +484,19 @@ export default function LaCaisse() {
         } else continue;
 
         totalCommission += getCommissionAgenceEncaissee(row);
+
+        const isCancelled = row.statut === 'Intervention annulée' || row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee';
+        const isGratuit = row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite';
+        if (isCancelled || isGratuit) continue;
+        if (row.isSubscriptionSecondary) continue;
+
+        totalCA += row.montant;
+        totalPartAgence += row.partAgence;
       }
 
       setCommissionAgence(totalCommission);
+      setCaTotal(totalCA);
+      setPartAgence(totalPartAgence);
     } catch { /* skip */ }
   };
 
@@ -459,13 +506,29 @@ export default function LaCaisse() {
   }, []);
 
   useEffect(() => {
+    setCurrentPage(1);
+    setTypeFilter('all');
+    setModeFilter('all');
+    setUserFilter('all');
+  }, [activeTab]);
+
+  useEffect(() => {
     void fetchRows();
-  }, [typeFilter, modeFilter, dateFrom, dateTo, searchTerm]);
+    void fetchStats();
+  }, [activeTab, typeFilter, modeFilter, dateFrom, dateTo, searchTerm, userFilter, currentPage]);
+
+  useEffect(() => {
+    if (userFilter === 'all') {
+      const users = Array.from(new Set(rows.map(r => r.utilisateur).filter((u) => u && u !== '—')));
+      setUniqueUsers(users);
+    }
+  }, [rows, userFilter]);
 
   const closeMovementModal = () => {
     setShowMovementModal(false);
     setIsOperationMenuOpen(false);
     setIsPaymentMenuOpen(false);
+    setIsCategoryMenuOpen(false);
   };
 
   const openAddMovementModal = () => {
@@ -473,6 +536,7 @@ export default function LaCaisse() {
     setEditingMovementId(null);
     setSelectedOperationType(hasPermission(user, 'mouvements_caisse') ? 'Entrée' : 'Sortie');
     setSelectedPaymentMode('Espèces');
+    setSelectedCategory('');
     setMovementDate(todayInputDate());
     setMovementAmount('0.00');
     setMovementLabel('');
@@ -489,12 +553,13 @@ export default function LaCaisse() {
     setEditingMovementId(row.id);
     setSelectedOperationType(row.type);
     setSelectedPaymentMode(row.modePaiement);
+    setSelectedCategory(row.categorie === 'Non catégorisé' ? '' : row.categorie);
     setMovementDate(toInputDate(row.date));
     setMovementAmount(extractAmount(row.montant));
     setMovementLabel(row.libelle);
     setMovementClient(row.client === '—' ? '' : row.client);
     setMovementUser(row.utilisateur === '—' ? '' : row.utilisateur);
-    setMovementNotes('');
+    setMovementNotes(row.notes === '—' ? '' : row.notes);
     setMovementDocumentName('Cliquer pour télécharger (facture, reçu...)');
     setMovementDocumentFile(null);
     setShowMovementModal(true);
@@ -522,6 +587,8 @@ export default function LaCaisse() {
     formData.append('client_nom', movementClient.trim());
     formData.append('utilisateur', movementUser.trim());
     formData.append('notes', movementNotes.trim());
+    formData.append('categorie', selectedCategory);
+    formData.append('caisse_type', activeTab);
     if (movementDocumentFile) formData.append('document_file', movementDocumentFile);
 
     setSavingMovement(true);
@@ -535,6 +602,16 @@ export default function LaCaisse() {
       closeMovementModal();
     } finally {
       setSavingMovement(false);
+    }
+  };
+
+  const handleDeleteMovement = async (id: number) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce mouvement ?")) return;
+    try {
+      await deleteCaisseMouvement(id);
+      await Promise.all([fetchRows(), fetchStats()]);
+    } catch (err) {
+      console.error("Erreur lors de la suppression:", err);
     }
   };
 
@@ -584,138 +661,417 @@ export default function LaCaisse() {
         <div className="lc-hero-title-wrap">
           <FileText size={20} />
           <div>
-            <h1>Gestion de Caisse</h1>
-            <p>Suivi des entrées et sorties de trésorerie</p>
+            <h1>Trésorerie et Caisse</h1>
+            <p>Vue trésorerie et gestion de la caisse</p>
           </div>
         </div>
       </section>
 
-      <section className="lc-actions-row">
-        {(hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse')) && (
-          <button type="button" className="btn btn-primary lc-add-btn" onClick={openAddMovementModal}>
-            <Plus size={18} /> Ajouter un mouvement
-          </button>
-        )}
-        <button type="button" className="btn btn-secondary lc-export-btn" onClick={handleExportCsv} disabled={exportingCsv}>
-          <Download size={16} /> Export CSV
+      {/* TABS SWITCHER */}
+      <div className="lc-tabs" style={{ marginBottom: '1.5rem' }}>
+        <button
+          type="button"
+          className={`lc-tab ${activeTab === 'tresorerie' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tresorerie')}
+        >
+          Trésorerie
         </button>
-      </section>
+        <button
+          type="button"
+          className={`lc-tab ${activeTab === 'caisse' ? 'active' : ''}`}
+          onClick={() => setActiveTab('caisse')}
+        >
+          La Caisse
+        </button>
+      </div>
 
-      <section className="lc-stats-grid">
-        <article className="lc-stat-card lc-stat-teal">
-          <p>SOLDE ACTUEL</p>
-          <strong>{hasPermission(user, 'consulter_solde_caisse') ? `${moneyFormatter.format(stats.solde)} DH` : '*** DH'}</strong>
-        </article>
-        <article className="lc-stat-card lc-stat-green">
-          <p>TOTAL ENTRÉES CAISSE</p>
-          <strong>{moneyFormatter.format(stats.total_entrees)} DH</strong>
-          <ArrowDownRight size={18} className="lc-stat-arrow lc-arrow-green" />
-        </article>
-        <article className="lc-stat-card lc-stat-red">
-          <p>TOTAL SORTIES CAISSE</p>
-          <strong>{moneyFormatter.format(stats.total_sorties)} DH</strong>
-          <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-red" />
-        </article>
-        <article className="lc-stat-card lc-stat-amber">
-          <p>COMMISSION AGENCE</p>
-          <strong>{moneyFormatter.format(commissionAgence)} DH</strong>
-          <span className="lc-stat-subtitle">mois en cours</span>
-          <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-green" />
-        </article>
-      </section>
+      {activeTab === 'tresorerie' ? (
+        <>
+          {/* TRESORERIE STATS GRID */}
+          <div className="lc-stats-banner" style={{ marginBottom: '1.5rem' }}>
+            {/* VISION COMMERCIALE */}
+            <div className="lc-stats-group commercial">
+              <div className="lc-stats-group-header">
+                <span>Vision Commerciale</span>
+                <div className="lc-header-line" />
+              </div>
+              <div className="lc-stats-group-row">
+                <div className="lc-stat-card card-ca-total">
+                  <div className="lc-stat-card-title">
+                    <span>CA Total</span>
+                  </div>
+                  <strong>{moneyFormatter.format(caTotal)} DH</strong>
+                  <span className="lc-stat-subtitle">Total encaissé clients</span>
+                </div>
+                <div className="lc-stats-operator">→</div>
+                <div className="lc-stat-card card-part-agence">
+                  <div className="lc-stat-card-title">
+                    <span>Part de l'agence</span>
+                    <span className="lc-info-trigger" title={`${caTotal > 0 ? Math.round((partAgence / caTotal) * 100) : 0}% du CA total`} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      <Info size={12} />
+                    </span>
+                  </div>
+                  <strong>{moneyFormatter.format(partAgence)} DH</strong>
+                  <span className="lc-stat-subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ padding: '2px 6px', background: '#fef3c7', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 600 }}>
+                      {caTotal > 0 ? Math.round((partAgence / caTotal) * 100) : 0}% du CA total
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
 
-      <section className="lc-filters-row">
-        <label className="lc-filter-field">
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-            <option value="all">Tous les types</option>
-            <option value="entree">Entrée</option>
-            <option value="sortie">Sortie</option>
-            <option value="alimentation">Alimentation de la caisse</option>
-          </select>
-        </label>
+            {/* VISION TRÉSORERIE */}
+            <div className="lc-stats-group treasury">
+              <div className="lc-stats-group-header">
+                <span>Vision Trésorerie</span>
+                <div className="lc-header-line" />
+              </div>
+              <div className="lc-stats-group-row">
+                <div className="lc-stat-card card-total-entrees">
+                  <div className="lc-stat-card-title">
+                    <span>Total Entrées</span>
+                  </div>
+                  <strong>+{moneyFormatter.format(rows.filter(r => r.typeCode === 'entree' || r.typeCode === 'alimentation').reduce((acc, r) => acc + r.montantNumber, 0))} DH</strong>
+                  <span className="lc-stat-subtitle">Flux entrants</span>
+                </div>
+                <div className="lc-stats-operator">-</div>
+                <div className="lc-stat-card card-total-sorties">
+                  <div className="lc-stat-card-title">
+                    <span>Total Sorties</span>
+                  </div>
+                  <strong>-{moneyFormatter.format(rows.filter(r => r.typeCode === 'sortie').reduce((acc, r) => acc + r.montantNumber, 0))} DH</strong>
+                  <span className="lc-stat-subtitle">Flux sortants</span>
+                </div>
+                <div className="lc-stats-operator">=</div>
+                <div className="lc-stat-card card-solde-net">
+                  <div className="lc-stat-card-title">
+                    <span>Solde Net</span>
+                    <span className="lc-info-trigger" title="Solde net sur la période" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      <Info size={12} />
+                    </span>
+                  </div>
+                  <strong>{moneyFormatter.format(
+                    rows.filter(r => r.typeCode === 'entree' || r.typeCode === 'alimentation').reduce((acc, r) => acc + r.montantNumber, 0) -
+                    rows.filter(r => r.typeCode === 'sortie').reduce((acc, r) => acc + r.montantNumber, 0)
+                  )} DH</strong>
+                  <div className="lc-solde-net-chart">
+                    <svg viewBox="0 0 100 20" preserveAspectRatio="none">
+                      <path d="M0,15 L20,13 L40,16 L60,11 L80,12 L100,5" fill="none" stroke="#10b981" strokeWidth="2" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-        <label className="lc-filter-field">
-          <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value)}>
-            <option value="all">Tous les modes</option>
-            <option value="especes">Espèces</option>
-            <option value="virement">Virement</option>
-            <option value="cheque">Chèque</option>
-            <option value="paiement_agence">Paiement agence</option>
-          </select>
-        </label>
+          {/* TRESORERIE FILTERS ACTIONS BAR */}
+          <section className="lc-filters-actions-bar" style={{ marginBottom: '1.5rem' }}>
+            <div className="lc-filters-inputs">
+              <div className="lc-filter-group">
+                <span className="lc-filter-label">Du</span>
+                <div className="lc-filter-input-wrapper date">
+                  <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                  <Calendar size={14} className="lc-input-icon-right" />
+                </div>
+              </div>
+              <div className="lc-filter-group">
+                <span className="lc-filter-label">Au</span>
+                <div className="lc-filter-input-wrapper date">
+                  <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                  <Calendar size={14} className="lc-input-icon-right" />
+                </div>
+              </div>
+              <div className="lc-filter-group">
+                <span className="lc-filter-label">Type</span>
+                <div className="lc-filter-input-wrapper">
+                  <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                    <option value="all">Tous</option>
+                    <option value="entree">Entrée</option>
+                    <option value="sortie">Sortie</option>
+                  </select>
+                  <ChevronDown size={14} className="lc-input-icon-right" />
+                </div>
+              </div>
+              <div className="lc-filter-group">
+                <span className="lc-filter-label">Saisi par</span>
+                <div className="lc-filter-input-wrapper">
+                  <select value={userFilter} onChange={(e) => setUserFilter(e.target.value)}>
+                    <option value="all">Tous</option>
+                    {uniqueUsers.map(u => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="lc-input-icon-right" />
+                </div>
+              </div>
+              <div className="lc-filter-group search-group">
+                <span className="lc-filter-label">Recherche</span>
+                <div className="lc-filter-input-wrapper search">
+                  <Search size={14} className="lc-input-icon-left" />
+                  <input
+                    type="text"
+                    placeholder="Libellé, catégorie, notes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
 
-        <label className="lc-filter-field lc-date-field">
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          <Calendar size={15} />
-        </label>
-
-        <label className="lc-filter-field lc-date-field">
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-          <Calendar size={15} />
-        </label>
-
-        <label className="lc-filter-field">
-          <input
-            type="text"
-            placeholder="Rechercher client..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </label>
-      </section>
-
-      <section className="lc-table-section">
-        <header className="lc-table-header">
-          <h2>Mouvements de caisse</h2>
-          <span>{operationsCount} opération(s)</span>
-        </header>
-
-        <div className="table-wrapper lc-table-wrap">
-          <table className="data-table lc-table">
-            <thead>
-              <tr>
-                <th>DATE</th>
-                <th>TYPE</th>
-                <th>LIBELLÉ</th>
-                <th>CLIENT</th>
-                <th>MODE PAIEMENT</th>
-                <th>MONTANT</th>
-                <th>UTILISATEUR</th>
-                <th>DOCUMENT</th>
-                <th>ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.date}</td>
-                  <td><span className={`lc-type-pill ${row.typeCode === 'sortie' ? 'lc-type-pill-sortie' : ''}`}>{row.type}</span></td>
-                  <td className="lc-libelle">{row.libelle}</td>
-                  <td>{row.client}</td>
-                  <td>{row.modePaiement}</td>
-                  <td className={`lc-amount ${row.typeCode === 'sortie' ? 'lc-amount-out' : ''}`}>{row.montant}</td>
-                  <td>{row.utilisateur}</td>
-                  <td>{row.document}</td>
-                  <td>
-                    {((row.typeCode === 'sortie' && hasPermission(user, 'sorties_caisse')) ||
-                      (row.typeCode !== 'sortie' && hasPermission(user, 'mouvements_caisse'))) && (
-                      <button type="button" className="icon-btn" title="Modifier" onClick={() => openEditMovementModal(row)}>
-                        <Pencil size={14} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {!loadingRows && rows.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="empty-row">Aucun mouvement trouvé.</td>
-                </tr>
+            <div className="lc-actions-buttons">
+              <button type="button" className="lc-action-btn-white" onClick={handleExportCsv} disabled={exportingCsv}>
+                <Download size={14} /> Excel
+              </button>
+              <button type="button" className="lc-action-btn-white" onClick={() => window.print()}>
+                <FileText size={14} /> PDF
+              </button>
+              {(hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse')) && (
+                <button type="button" className="lc-action-btn-green" onClick={openAddMovementModal}>
+                  <Plus size={14} /> + Ajouter un mouvement
+                </button>
               )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+            </div>
+          </section>
 
+          {/* TRESORERIE TABLE */}
+          <section className="lc-table-section">
+            <header className="lc-table-header">
+              <h2>Mouvements de trésorerie</h2>
+              <span>{operationsCount} opération(s)</span>
+            </header>
+
+            <div className="table-wrapper lc-table-wrap">
+              <table className="data-table lc-table">
+                <thead>
+                  <tr>
+                    <th>N°</th>
+                    <th>DATE</th>
+                    <th>TYPE</th>
+                    <th>CATÉGORIE</th>
+                    <th>LIBELLÉ</th>
+                    <th>MODE</th>
+                    <th>MONTANT (DH)</th>
+                    <th>SAISI PAR</th>
+                    <th>DOCUMENT</th>
+                    <th>NOTES</th>
+                    <th>ACTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, index) => {
+                    const rowNumber = operationsCount - ((currentPage - 1) * 20) - index;
+                    const isAuto = row.categorie.toLowerCase().includes('auto');
+                    return (
+                      <tr key={row.id}>
+                        <td>{rowNumber}</td>
+                        <td>{row.date}</td>
+                        <td>
+                          <span className={`lc-type-pill ${row.typeCode === 'sortie' ? 'lc-type-pill-sortie' : ''}`}>
+                            {row.type}
+                          </span>
+                        </td>
+                        <td>{row.categorie}</td>
+                        <td className="lc-libelle">{row.libelle}</td>
+                        <td>{row.modePaiementCode === 'especes' && !row.modePaiement ? '—' : (row.modePaiement || '—')}</td>
+                        <td className={`lc-amount ${row.typeCode === 'sortie' ? 'lc-amount-out' : ''}`}>
+                          {row.montant}
+                        </td>
+                        <td>{row.utilisateur}</td>
+                        <td>{row.document}</td>
+                        <td>{row.notes}</td>
+                        <td>
+                          {isAuto ? (
+                            <span className="lc-action-auto">Auto</span>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              {((row.typeCode === 'sortie' && hasPermission(user, 'sorties_caisse')) ||
+                                (row.typeCode !== 'sortie' && hasPermission(user, 'mouvements_caisse'))) && (
+                                <>
+                                  <button type="button" className="icon-btn" title="Modifier" onClick={() => openEditMovementModal(row)}>
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button type="button" className="icon-btn lc-delete-btn" title="Supprimer" onClick={() => handleDeleteMovement(row.id)}>
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!loadingRows && rows.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="empty-row">Aucun mouvement trouvé.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* PAGINATION */}
+            {operationsCount > 20 && (
+              <div className="lc-pagination-container">
+                <span className="lc-pagination-info">
+                  Affichage {((currentPage - 1) * 20) + 1} - {Math.min(currentPage * 20, operationsCount)} sur {operationsCount}
+                </span>
+                <div className="lc-pagination-controls">
+                  <button
+                    type="button"
+                    className="lc-pagination-btn"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  >
+                    &lt;
+                  </button>
+                  <span className="lc-pagination-text">Page {currentPage} sur {Math.ceil(operationsCount / 20)}</span>
+                  <button
+                    type="button"
+                    className="lc-pagination-btn"
+                    disabled={currentPage >= Math.ceil(operationsCount / 20)}
+                    onClick={() => setCurrentPage(prev => prev + 1)}
+                  >
+                    &gt;
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        </>
+      ) : (
+        <>
+          {/* ORIGINAL CAISSE TAB RENDER */}
+          <section className="lc-actions-row">
+            {(hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse')) && (
+              <button type="button" className="btn btn-primary lc-add-btn" onClick={openAddMovementModal}>
+                <Plus size={18} /> Ajouter un mouvement
+              </button>
+            )}
+            <button type="button" className="btn btn-secondary lc-export-btn" onClick={handleExportCsv} disabled={exportingCsv}>
+              <Download size={16} /> Export CSV
+            </button>
+          </section>
+
+          <section className="lc-stats-grid">
+            <article className="lc-stat-card lc-stat-teal">
+              <p>SOLDE ACTUEL</p>
+              <strong>{hasPermission(user, 'consulter_solde_caisse') ? `${moneyFormatter.format(stats.solde)} DH` : '*** DH'}</strong>
+            </article>
+            <article className="lc-stat-card lc-stat-green">
+              <p>TOTAL ENTRÉES CAISSE</p>
+              <strong>{moneyFormatter.format(stats.total_entrees)} DH</strong>
+              <ArrowDownRight size={18} className="lc-stat-arrow lc-arrow-green" />
+            </article>
+            <article className="lc-stat-card lc-stat-red">
+              <p>TOTAL SORTIES CAISSE</p>
+              <strong>{moneyFormatter.format(stats.total_sorties)} DH</strong>
+              <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-red" />
+            </article>
+            <article className="lc-stat-card lc-stat-amber">
+              <p>COMMISSION AGENCE</p>
+              <strong>{moneyFormatter.format(commissionAgence)} DH</strong>
+              <span className="lc-stat-subtitle">mois en cours</span>
+              <ArrowUpRight size={18} className="lc-stat-arrow lc-arrow-green" />
+            </article>
+          </section>
+
+          <section className="lc-filters-row">
+            <label className="lc-filter-field">
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                <option value="all">Tous les types</option>
+                <option value="entree">Entrée</option>
+                <option value="sortie">Sortie</option>
+                <option value="alimentation">Alimentation de la caisse</option>
+              </select>
+            </label>
+
+            <label className="lc-filter-field">
+              <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value)}>
+                <option value="all">Tous les modes</option>
+                <option value="especes">Espèces</option>
+                <option value="virement">Virement</option>
+                <option value="cheque">Chèque</option>
+                <option value="paiement_agence">Paiement agence</option>
+              </select>
+            </label>
+
+            <label className="lc-filter-field lc-date-field">
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+              <Calendar size={15} />
+            </label>
+
+            <label className="lc-filter-field lc-date-field">
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              <Calendar size={15} />
+            </label>
+
+            <label className="lc-filter-field">
+              <input
+                type="text"
+                placeholder="Rechercher client..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </label>
+          </section>
+
+          <section className="lc-table-section">
+            <header className="lc-table-header">
+              <h2>Mouvements de caisse</h2>
+              <span>{operationsCount} opération(s)</span>
+            </header>
+
+            <div className="table-wrapper lc-table-wrap">
+              <table className="data-table lc-table">
+                <thead>
+                  <tr>
+                    <th>DATE</th>
+                    <th>TYPE</th>
+                    <th>LIBELLÉ</th>
+                    <th>CLIENT</th>
+                    <th>MODE PAIEMENT</th>
+                    <th>MONTANT</th>
+                    <th>UTILISATEUR</th>
+                    <th>DOCUMENT</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.date}</td>
+                      <td><span className={`lc-type-pill ${row.typeCode === 'sortie' ? 'lc-type-pill-sortie' : ''}`}>{row.type}</span></td>
+                      <td className="lc-libelle">{row.libelle}</td>
+                      <td>{row.client}</td>
+                      <td>{row.modePaiement}</td>
+                      <td className={`lc-amount ${row.typeCode === 'sortie' ? 'lc-amount-out' : ''}`}>{row.montant}</td>
+                      <td>{row.utilisateur}</td>
+                      <td>{row.document}</td>
+                      <td>
+                        {((row.typeCode === 'sortie' && hasPermission(user, 'sorties_caisse')) ||
+                          (row.typeCode !== 'sortie' && hasPermission(user, 'mouvements_caisse'))) && (
+                            <button type="button" className="icon-btn" title="Modifier" onClick={() => openEditMovementModal(row)}>
+                              <Pencil size={14} />
+                            </button>
+                          )}
+                      </td>
+                    </tr>
+                  ))}
+                  {!loadingRows && rows.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="empty-row">Aucun mouvement trouvé.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* MOVEMENT DIALOG MODAL */}
       {showMovementModal && (
         <div className="lc-modal-overlay" onClick={closeMovementModal}>
           <div className="lc-modal" onClick={(e) => e.stopPropagation()}>
@@ -727,154 +1083,423 @@ export default function LaCaisse() {
             </header>
 
             <div className="lc-modal-body">
-              <div className="lc-modal-grid-two">
-                <div className="lc-modal-field">
-                  <label>Type d'opération</label>
-                  <div className="lc-modal-custom-select">
-                    <button
-                      type="button"
-                      className="lc-modal-custom-trigger"
-                      onClick={() => {
-                        setIsOperationMenuOpen((prev) => !prev);
-                        setIsPaymentMenuOpen(false);
-                      }}
-                    >
-                      <span>{selectedOperationType}</span>
-                      <ChevronDown size={15} />
-                    </button>
+              {activeTab === 'tresorerie' ? (
+                <>
+                  {/* Date & Montant (DH) */}
+                  <div className="lc-modal-grid-two">
+                    <div className="lc-modal-field">
+                      <label>Date</label>
+                      <div className="lc-modal-input-icon">
+                        <input type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} />
+                        <Calendar size={15} />
+                      </div>
+                    </div>
 
-                    {isOperationMenuOpen && (
-                      <div className="lc-modal-custom-menu">
-                        {operationTypes
-                          .filter((type) => {
-                            if (type === 'Sortie') return hasPermission(user, 'sorties_caisse');
-                            return hasPermission(user, 'mouvements_caisse');
-                          })
-                          .map((type) => (
+                    <div className="lc-modal-field">
+                      <label>Montant (DH) *</label>
+                      <input type="text" value={movementAmount} onChange={(e) => setMovementAmount(e.target.value)} />
+                    </div>
+                  </div>
+
+                  {/* Type de mouvement & Catégorie */}
+                  <div className="lc-modal-grid-two">
+                    <div className="lc-modal-field">
+                      <label>Type de mouvement</label>
+                      <div className="lc-modal-custom-select">
+                        <button
+                          type="button"
+                          className="lc-modal-custom-trigger"
+                          onClick={() => {
+                            setIsOperationMenuOpen((prev) => !prev);
+                            setIsPaymentMenuOpen(false);
+                            setIsCategoryMenuOpen(false);
+                          }}
+                        >
+                          <span>{selectedOperationType}</span>
+                          <ChevronDown size={15} />
+                        </button>
+
+                        {isOperationMenuOpen && (
+                          <div className="lc-modal-custom-menu">
+                            {operationTypes
+                              .filter((type) => {
+                                if (type === 'Sortie') return hasPermission(user, 'sorties_caisse');
+                                return hasPermission(user, 'mouvements_caisse');
+                              })
+                              .map((type) => (
+                                <button
+                                  key={type}
+                                  type="button"
+                                  className={`lc-modal-custom-item ${selectedOperationType === type ? 'selected' : ''}`}
+                                  onClick={() => {
+                                    setSelectedOperationType(type);
+                                    setIsOperationMenuOpen(false);
+                                  }}
+                                >
+                                  <span className="lc-check-wrap">
+                                    {selectedOperationType === type ? <Check size={14} /> : null}
+                                  </span>
+                                  <span>{type}</span>
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="lc-modal-field">
+                      <label>Catégorie</label>
+                      <div className="lc-modal-custom-select">
+                        <button
+                          type="button"
+                          className="lc-modal-custom-trigger"
+                          onClick={() => {
+                            setIsCategoryMenuOpen((prev) => !prev);
+                            setIsOperationMenuOpen(false);
+                            setIsPaymentMenuOpen(false);
+                          }}
+                        >
+                          <span>{selectedCategory || 'Choisir une catégorie'}</span>
+                          <ChevronDown size={15} />
+                        </button>
+
+                        {isCategoryMenuOpen && (
+                          <div className="lc-modal-custom-menu" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                             <button
-                              key={type}
                               type="button"
-                              className={`lc-modal-custom-item ${selectedOperationType === type ? 'selected' : ''}`}
+                              className={`lc-modal-custom-item ${selectedCategory === '' ? 'selected' : ''}`}
                               onClick={() => {
-                                setSelectedOperationType(type);
-                                setIsOperationMenuOpen(false);
+                                setSelectedCategory('');
+                                setIsCategoryMenuOpen(false);
                               }}
                             >
                               <span className="lc-check-wrap">
-                                {selectedOperationType === type ? <Check size={14} /> : null}
+                                {selectedCategory === '' ? <Check size={14} /> : null}
                               </span>
-                              <span>{type}</span>
+                              <span>Choisir une catégorie</span>
                             </button>
-                          ))}
+                            {categories.map((cat) => (
+                              <button
+                                key={cat}
+                                type="button"
+                                className={`lc-modal-custom-item ${selectedCategory === cat ? 'selected' : ''}`}
+                                onClick={() => {
+                                  setSelectedCategory(cat);
+                                  setIsCategoryMenuOpen(false);
+                                }}
+                              >
+                                <span className="lc-check-wrap">
+                                  {selectedCategory === cat ? <Check size={14} /> : null}
+                                </span>
+                                <span>{cat}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
 
-                <div className="lc-modal-field">
-                  <label>Date</label>
-                  <div className="lc-modal-input-icon">
-                    <input type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} />
-                    <Calendar size={15} />
+                  {/* Libellé / Description */}
+                  <div className="lc-modal-field">
+                    <label>Libellé / Description *</label>
+                    <input
+                      type="text"
+                      placeholder="Décrivez le motif de l'opération..."
+                      value={movementLabel}
+                      onChange={(e) => setMovementLabel(e.target.value)}
+                    />
                   </div>
-                </div>
-              </div>
 
-              <div className="lc-modal-grid-two">
-                <div className="lc-modal-field">
-                  <label>Montant (MAD) *</label>
-                  <input type="text" value={movementAmount} onChange={(e) => setMovementAmount(e.target.value)} />
-                </div>
+                  {/* Mode de paiement & Saisi par * */}
+                  <div className="lc-modal-grid-two">
+                    <div className="lc-modal-field">
+                      <label>Mode de paiement</label>
+                      <div className="lc-modal-custom-select">
+                        <button
+                          type="button"
+                          className="lc-modal-custom-trigger"
+                          onClick={() => {
+                            setIsPaymentMenuOpen((prev) => !prev);
+                            setIsOperationMenuOpen(false);
+                            setIsCategoryMenuOpen(false);
+                          }}
+                        >
+                          <span>{selectedPaymentMode}</span>
+                          <ChevronDown size={15} />
+                        </button>
 
-                <div className="lc-modal-field">
-                  <label>Mode de paiement</label>
-                  <div className="lc-modal-custom-select">
-                    <button
-                      type="button"
-                      className="lc-modal-custom-trigger"
-                      onClick={() => {
-                        setIsPaymentMenuOpen((prev) => !prev);
-                        setIsOperationMenuOpen(false);
-                      }}
-                    >
-                      <span>{selectedPaymentMode}</span>
-                      <ChevronDown size={15} />
-                    </button>
+                        {isPaymentMenuOpen && (
+                          <div className="lc-modal-custom-menu">
+                            {paymentModes.map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                className={`lc-modal-custom-item ${selectedPaymentMode === mode ? 'selected' : ''}`}
+                                onClick={() => {
+                                  setSelectedPaymentMode(mode);
+                                  setIsPaymentMenuOpen(false);
+                                }}
+                              >
+                                <span className="lc-check-wrap">
+                                  {selectedPaymentMode === mode ? <Check size={14} /> : null}
+                                </span>
+                                <span>{mode}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
-                    {isPaymentMenuOpen && (
-                      <div className="lc-modal-custom-menu">
-                        {paymentModes.map((mode) => (
+                    <div className="lc-modal-field">
+                      <label>Saisi par *</label>
+                      <input
+                        type="text"
+                        value={movementUser}
+                        readOnly
+                        disabled
+                        style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed', color: '#64748b' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Document justificatif (optionnel) */}
+                  <div className="lc-modal-field">
+                    <label>Document justificatif (optionnel)</label>
+                    <label className="lc-upload-box">
+                      <input
+                        type="file"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          setMovementDocumentFile(file);
+                          setMovementDocumentName(file?.name ?? 'Cliquer pour télécharger (facture, reçu...)');
+                        }}
+                      />
+                      <Upload size={16} />
+                      <span>{movementDocumentName}</span>
+                    </label>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="lc-modal-field">
+                    <label>Notes</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Remarques..."
+                      value={movementNotes}
+                      onChange={(e) => setMovementNotes(e.target.value)}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Original Caisse Fields with Categorie added */}
+                  <div className="lc-modal-grid-two">
+                    <div className="lc-modal-field">
+                      <label>Type d'opération</label>
+                      <div className="lc-modal-custom-select">
+                        <button
+                          type="button"
+                          className="lc-modal-custom-trigger"
+                          onClick={() => {
+                            setIsOperationMenuOpen((prev) => !prev);
+                            setIsPaymentMenuOpen(false);
+                            setIsCategoryMenuOpen(false);
+                          }}
+                        >
+                          <span>{selectedOperationType}</span>
+                          <ChevronDown size={15} />
+                        </button>
+
+                        {isOperationMenuOpen && (
+                          <div className="lc-modal-custom-menu">
+                            {operationTypes
+                              .filter((type) => {
+                                if (type === 'Sortie') return hasPermission(user, 'sorties_caisse');
+                                return hasPermission(user, 'mouvements_caisse');
+                              })
+                              .map((type) => (
+                                <button
+                                  key={type}
+                                  type="button"
+                                  className={`lc-modal-custom-item ${selectedOperationType === type ? 'selected' : ''}`}
+                                  onClick={() => {
+                                    setSelectedOperationType(type);
+                                    setIsOperationMenuOpen(false);
+                                  }}
+                                >
+                                  <span className="lc-check-wrap">
+                                    {selectedOperationType === type ? <Check size={14} /> : null}
+                                  </span>
+                                  <span>{type}</span>
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="lc-modal-field">
+                      <label>Date</label>
+                      <div className="lc-modal-input-icon">
+                        <input type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} />
+                        <Calendar size={15} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="lc-modal-grid-two">
+                    <div className="lc-modal-field">
+                      <label>Montant (MAD) *</label>
+                      <input type="text" value={movementAmount} onChange={(e) => setMovementAmount(e.target.value)} />
+                    </div>
+
+                    <div className="lc-modal-field">
+                      <label>Mode de paiement</label>
+                      <div className="lc-modal-custom-select">
+                        <button
+                          type="button"
+                          className="lc-modal-custom-trigger"
+                          onClick={() => {
+                            setIsPaymentMenuOpen((prev) => !prev);
+                            setIsOperationMenuOpen(false);
+                            setIsCategoryMenuOpen(false);
+                          }}
+                        >
+                          <span>{selectedPaymentMode}</span>
+                          <ChevronDown size={15} />
+                        </button>
+
+                        {isPaymentMenuOpen && (
+                          <div className="lc-modal-custom-menu">
+                            {paymentModes.map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                className={`lc-modal-custom-item ${selectedPaymentMode === mode ? 'selected' : ''}`}
+                                onClick={() => {
+                                  setSelectedPaymentMode(mode);
+                                  setIsPaymentMenuOpen(false);
+                                }}
+                              >
+                                <span className="lc-check-wrap">
+                                  {selectedPaymentMode === mode ? <Check size={14} /> : null}
+                                </span>
+                                <span>{mode}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Catégorie */}
+                  <div className="lc-modal-field">
+                    <label>Catégorie</label>
+                    <div className="lc-modal-custom-select">
+                      <button
+                        type="button"
+                        className="lc-modal-custom-trigger"
+                        onClick={() => {
+                          setIsCategoryMenuOpen((prev) => !prev);
+                          setIsOperationMenuOpen(false);
+                          setIsPaymentMenuOpen(false);
+                        }}
+                      >
+                        <span>{selectedCategory || 'Choisir une catégorie'}</span>
+                        <ChevronDown size={15} />
+                      </button>
+
+                      {isCategoryMenuOpen && (
+                        <div className="lc-modal-custom-menu" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                           <button
-                            key={mode}
                             type="button"
-                            className={`lc-modal-custom-item ${selectedPaymentMode === mode ? 'selected' : ''}`}
+                            className={`lc-modal-custom-item ${selectedCategory === '' ? 'selected' : ''}`}
                             onClick={() => {
-                              setSelectedPaymentMode(mode);
-                              setIsPaymentMenuOpen(false);
+                              setSelectedCategory('');
+                              setIsCategoryMenuOpen(false);
                             }}
                           >
                             <span className="lc-check-wrap">
-                              {selectedPaymentMode === mode ? <Check size={14} /> : null}
+                              {selectedCategory === '' ? <Check size={14} /> : null}
                             </span>
-                            <span>{mode}</span>
+                            <span>Choisir une catégorie</span>
                           </button>
-                        ))}
-                      </div>
-                    )}
+                          {categories.map((cat) => (
+                            <button
+                              key={cat}
+                              type="button"
+                              className={`lc-modal-custom-item ${selectedCategory === cat ? 'selected' : ''}`}
+                              onClick={() => {
+                                setSelectedCategory(cat);
+                                setIsCategoryMenuOpen(false);
+                              }}
+                            >
+                              <span className="lc-check-wrap">
+                                {selectedCategory === cat ? <Check size={14} /> : null}
+                              </span>
+                              <span>{cat}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="lc-modal-field">
-                <label>Libellé / Motif *</label>
-                <textarea
-                  rows={3}
-                  placeholder="Décrivez le motif de l'opération..."
-                  value={movementLabel}
-                  onChange={(e) => setMovementLabel(e.target.value)}
-                />
-              </div>
+                  <div className="lc-modal-field">
+                    <label>Libellé / Motif *</label>
+                    <textarea
+                      rows={3}
+                      placeholder="Décrivez le motif de l'opération..."
+                      value={movementLabel}
+                      onChange={(e) => setMovementLabel(e.target.value)}
+                    />
+                  </div>
 
-              <div className="lc-modal-field">
-                <label>Client associé (optionnel)</label>
-                <div className="lc-modal-search-wrap">
-                  <input
-                    type="text"
-                    placeholder="Nom du client"
-                    value={movementClient}
-                    onChange={(e) => setMovementClient(e.target.value)}
-                  />
-                  <button type="button" className="lc-modal-search-btn" title="Rechercher">
-                    <Search size={16} />
-                  </button>
-                </div>
-              </div>
+                  <div className="lc-modal-field">
+                    <label>Client associé (optionnel)</label>
+                    <div className="lc-modal-search-wrap">
+                      <input
+                        type="text"
+                        placeholder="Nom du client"
+                        value={movementClient}
+                        onChange={(e) => setMovementClient(e.target.value)}
+                      />
+                      <button type="button" className="lc-modal-search-btn" title="Rechercher">
+                        <Search size={16} />
+                      </button>
+                    </div>
+                  </div>
 
-              <div className="lc-modal-field">
-                <label>Utilisateur</label>
-                <input type="text" value={movementUser} onChange={(e) => setMovementUser(e.target.value)} />
-              </div>
+                  <div className="lc-modal-field">
+                    <label>Utilisateur</label>
+                    <input type="text" value={movementUser} onChange={(e) => setMovementUser(e.target.value)} />
+                  </div>
 
-              <div className="lc-modal-field">
-                <label>Document justificatif (optionnel)</label>
-                <label className="lc-upload-box">
-                  <input
-                    type="file"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      setMovementDocumentFile(file);
-                      setMovementDocumentName(file?.name ?? 'Cliquer pour télécharger (facture, reçu...)');
-                    }}
-                  />
-                  <Upload size={16} />
-                  <span>{movementDocumentName}</span>
-                </label>
-              </div>
+                  <div className="lc-modal-field">
+                    <label>Document justificatif (optionnel)</label>
+                    <label className="lc-upload-box">
+                      <input
+                        type="file"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] ?? null;
+                          setMovementDocumentFile(file);
+                          setMovementDocumentName(file?.name ?? 'Cliquer pour télécharger (facture, reçu...)');
+                        }}
+                      />
+                      <Upload size={16} />
+                      <span>{movementDocumentName}</span>
+                    </label>
+                  </div>
 
-              <div className="lc-modal-field">
-                <label>Notes (optionnel)</label>
-                <textarea rows={3} placeholder="Remarques..." value={movementNotes} onChange={(e) => setMovementNotes(e.target.value)} />
-              </div>
+                  <div className="lc-modal-field">
+                    <label>Notes (optionnel)</label>
+                    <textarea rows={3} placeholder="Remarques..." value={movementNotes} onChange={(e) => setMovementNotes(e.target.value)} />
+                  </div>
+                </>
+              )}
             </div>
 
             <footer className="lc-modal-footer">

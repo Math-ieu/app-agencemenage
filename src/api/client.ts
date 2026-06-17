@@ -273,8 +273,8 @@ export const getFactures = (params?: Record<string, string | number>) =>
 export const getCaisse = (params?: Record<string, string | number>) =>
   apiClient.get('/api/finance/caisse/', { params });
 
-export const getCaisseSolde = () =>
-  apiClient.get('/api/finance/caisse/solde/');
+export const getCaisseSolde = (params?: Record<string, string | number>) =>
+  apiClient.get('/api/finance/caisse/solde/', { params });
 
 export const exportCaisseCsv = (params?: Record<string, string | number>) =>
   apiClient.get('/api/finance/caisse/export_csv/', {
@@ -295,6 +295,9 @@ export const updateCaisseMouvement = (id: number, data: FormData | Record<string
     headers: isFormData ? { 'Content-Type': undefined } : {},
   });
 };
+
+export const deleteCaisseMouvement = (id: number) =>
+  apiClient.delete(`/api/finance/caisse/${id}/`);
 
 // ─── Feedback ────────────────────────────────────────────────────────────────
 export const getFeedbacks = (params?: Record<string, string | number>) =>
