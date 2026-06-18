@@ -48,9 +48,16 @@
 }
 
 .ls-tab-btn.active {
-  background-color: #ffffff;
-  color: #0f172a;
+  color: #ffffff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ls-tab-btn.tab-dus.active {
+  background-color: #0f766e;
+}
+
+.ls-tab-btn.tab-comm.active {
+  background-color: #4f46e5;
 }
 
 /* KPI Banner */

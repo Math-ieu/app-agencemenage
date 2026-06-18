@@ -1634,13 +1634,13 @@ export default function LesSuivis() {
       {/* Tabs Menu */}
       <div className="ls-tabs-container">
         <button
-          className={`ls-tab-btn ${activeTab === 'dus-profils' ? 'active' : ''}`}
+          className={`ls-tab-btn tab-dus ${activeTab === 'dus-profils' ? 'active' : ''}`}
           onClick={() => setActiveTab('dus-profils')}
         >
           Suivi des dus Agence-Profils
         </button>
         <button
-          className={`ls-tab-btn ${activeTab === 'commerciaux' ? 'active' : ''}`}
+          className={`ls-tab-btn tab-comm ${activeTab === 'commerciaux' ? 'active' : ''}`}
           onClick={() => setActiveTab('commerciaux')}
         >
           Suivi des commerciaux
