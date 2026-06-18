@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { encodeId } from '../../utils/obfuscation';
 import {
   Calendar,
   ChevronDown,
@@ -283,10 +284,10 @@ export default function LesSuivis() {
 
   // Navigation handlers
   const goToProfilDetails = (id?: number) => {
-    if (id) navigate(`/profils/${id}`);
+    if (id) navigate(`/profils/${encodeId(id)}`);
   };
   const goToClientDetails = (id?: number) => {
-    if (id) navigate(`/clients/${id}`);
+    if (id) navigate(`/clients/${encodeId(id)}`);
   };
 
   // State Management
