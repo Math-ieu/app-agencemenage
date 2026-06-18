@@ -143,13 +143,41 @@
 
 /* Colored indicator KPI items */
 .ls-kpi-item.indicator-green {
-  border-left: 3px solid #10b981;
-  padding-left: 0.75rem;
+  background-color: #dc2626;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  border-right: none;
+}
+
+.ls-kpi-item.indicator-green .ls-kpi-item-value {
+  color: #ffffff !important;
+}
+
+.ls-kpi-item.indicator-green .ls-kpi-item-label {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ls-kpi-item.indicator-green .ls-kpi-item-sub {
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .ls-kpi-item.indicator-red {
-  border-left: 3px solid #ef4444;
-  padding-left: 0.75rem;
+  background-color: #0d9488;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  border-right: none;
+}
+
+.ls-kpi-item.indicator-red .ls-kpi-item-value {
+  color: #ffffff !important;
+}
+
+.ls-kpi-item.indicator-red .ls-kpi-item-label {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ls-kpi-item.indicator-red .ls-kpi-item-sub {
+  color: rgba(255, 255, 255, 0.65);
 }
 
 /* Filters */
