@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X, Slash, Trash2, Info } from 'lucide-react';
 import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement, getMissions, getDemandesHistorique, deleteCaisseMouvement } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
@@ -127,6 +127,49 @@ export default function LaCaisse() {
   const [movementNotes, setMovementNotes] = useState('');
   const [movementDocumentName, setMovementDocumentName] = useState('Cliquer pour télécharger (facture, reçu...)');
   const [movementDocumentFile, setMovementDocumentFile] = useState<File | null>(null);
+
+  const soldeSparklineData = useMemo(() => {
+    if (rows.length === 0) {
+      return {
+        strokePath: 'M 0,10 L 100,10',
+        fillPath: 'M 0,10 L 100,10 L 100,20 L 0,20 Z'
+      };
+    }
+
+    const chronological = [...rows].reverse();
+    const balances: number[] = [];
+    let current = 0;
+    for (const r of chronological) {
+      if (r.typeCode === 'sortie') {
+        current -= r.montantNumber;
+      } else {
+        current += r.montantNumber;
+      }
+      balances.push(current);
+    }
+
+    if (balances.length === 1) {
+      return {
+        strokePath: 'M 0,10 L 100,10',
+        fillPath: 'M 0,10 L 100,10 L 100,20 L 0,20 Z'
+      };
+    }
+
+    const minVal = Math.min(...balances);
+    const maxVal = Math.max(...balances);
+    const range = maxVal - minVal;
+
+    const points = balances.map((val, idx) => {
+      const x = (idx / (balances.length - 1)) * 100;
+      const y = range === 0 ? 10 : 18 - ((val - minVal) / range) * 16;
+      return { x, y };
+    });
+
+    const strokePath = `M ${points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ')}`;
+    const fillPath = `${strokePath} L 100,20 L 0,20 Z`;
+
+    return { strokePath, fillPath };
+  }, [rows]);
 
   const fetchStats = async () => {
     const response = await getCaisseSolde({ caisse_type: activeTab });
@@ -757,7 +800,14 @@ export default function LaCaisse() {
                   )} DH</strong>
                   <div className="lc-solde-net-chart">
                     <svg viewBox="0 0 100 20" preserveAspectRatio="none">
-                      <path d="M0,15 L20,13 L40,16 L60,11 L80,12 L100,5" fill="none" stroke="#10b981" strokeWidth="2" />
+                      <defs>
+                        <linearGradient id="soldeGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.4" />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      <path d={soldeSparklineData.fillPath} fill="url(#soldeGrad)" stroke="none" />
+                      <path d={soldeSparklineData.strokePath} fill="none" stroke="#10b981" strokeWidth="1.5" />
                     </svg>
                   </div>
                 </div>
