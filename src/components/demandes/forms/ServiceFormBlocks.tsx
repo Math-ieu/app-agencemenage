@@ -3,21 +3,48 @@ import React from 'react';
 export interface FormBlockProps {
     formData: any;
     setFormData: (data: any) => void;
+    activeSegment?: 'particulier' | 'entreprise' | null;
 }
 
-export const HabitationTypeBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => (
-    <div className="ws-form-block">
-        <div className="ws-section-header">Type d'habitation</div>
-        <div className="ws-radio-pills">
-            {['Studio', 'Appartement', 'Duplex', 'Villa', 'Maison'].map(type => (
-                <label key={type} className="ws-radio-pill">
-                    <input type="radio" name="propertyType" value={type} checked={formData.type_habitation === type} onChange={e => setFormData({ ...formData, type_habitation: e.target.value })} />
-                    <span>{type}</span>
-                </label>
-            ))}
+export const HabitationTypeBlock: React.FC<FormBlockProps> = ({ formData, setFormData, activeSegment }) => {
+    const isEntreprise = activeSegment === 'entreprise';
+    const options = isEntreprise
+        ? [
+            "Bureaux",
+            "Usines",
+            "Entrepôts : stockage de marchandises et logistique.",
+            "Magasins / Boutiques/showrooms",
+            "Établissements de santé",
+            "Établissements d'enseignement",
+            "Restaurants",
+            "Hôtels / Hébergements",
+            "Laboratoires",
+            "Agences : banques, immobilières…"
+          ]
+        : ['Studio', 'Appartement', 'Duplex', 'Villa', 'Maison'];
+
+    return (
+        <div className="ws-form-block">
+            <div className="ws-section-header">
+                {isEntreprise ? "Type de locaux" : "Type d'habitation"}
+            </div>
+            <div className="ws-radio-pills" style={isEntreprise ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' } : undefined}>
+                {options.map(type => (
+                    <label key={type} className="ws-radio-pill" style={isEntreprise ? { justifyContent: 'flex-start', padding: '0.75rem' } : undefined}>
+                        <input 
+                            type="radio" 
+                            name="propertyType" 
+                            value={type} 
+                            checked={formData.type_habitation === type} 
+                            onChange={e => setFormData({ ...formData, type_habitation: e.target.value })} 
+                        />
+                        <span style={isEntreprise ? { textAlign: 'left', fontSize: '0.8rem' } : undefined}>{type}</span>
+                    </label>
+                ))}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 export const InterventionNatureBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => (
     <div className="ws-form-block">

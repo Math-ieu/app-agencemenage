@@ -15,6 +15,7 @@ interface DynamicServiceFormProps {
   setFormData: (data: any) => void;
   minDuree: number;
   estimatedResources?: { duration: number; people: number } | null;
+  activeSegment?: 'particulier' | 'entreprise' | null;
 }
 
 export const DynamicServiceForm: React.FC<DynamicServiceFormProps> = (props) => {

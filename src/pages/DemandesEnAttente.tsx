@@ -1738,6 +1738,7 @@ export default function DemandesEnAttente() {
                       setFormData={setFormData}
                       minDuree={minDuree}
                       estimatedResources={estimatedResources}
+                      activeSegment={activeSegment}
                     />
                   </>
                 )}

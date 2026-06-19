@@ -2538,6 +2538,7 @@ export default function Dashboard() {
                               formData={editFormData}
                               setFormData={setEditFormData}
                               minDuree={minDuree}
+                              activeSegment={editFormData.segment}
                             />
                           </>
                         )}
