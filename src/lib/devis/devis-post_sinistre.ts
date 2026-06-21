@@ -186,10 +186,10 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   doc.text(`Niveau : ${data.details.niveau}`, margin + 80, y);
   y += 6;
   doc.text(`Surface : ${data.details.surface} m²`, margin, y);
-  doc.text(`Coeff. majoration : x${data.details.coefficientMajoration}`, margin + 80, y);
-  y += 6;
-  doc.text(`Majoration : ${formatNumber(data.details.majorationMontant)} DH`, margin, y);
-  doc.text(`Désodorisation : ${formatNumber(data.details.desodorisation)} DH`, margin + 80, y);
+  // Pas de coefficient d'urgence (brief) : un seul tarif quelle que soit la date d'intervention.
+  if (data.details.desodorisation > 0) {
+    doc.text(`Désinfection / désodorisation : ${formatNumber(data.details.desodorisation)} DH`, margin + 80, y);
+  }
   y += 8;
 
   doc.setFont('helvetica', 'bold');
@@ -240,6 +240,27 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   doc.text('TOTAL HT', col1, y + 5.5);
   doc.text(`${formatNumber(totalHT)} DH`, right - 5, y + 5.5, { align: 'right' });
   y += rowHeight + 6;
+
+  const isEntreprise = data.client.segment === 'entreprise';
+
+  // TVA 20% + TOTAL TTC (entreprises uniquement)
+  if (isEntreprise) {
+    const tva = totalHT * 0.2;
+    const totalTTC = totalHT + tva;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    doc.text('TVA 20%', right - 45, y - 2, { align: 'right' });
+    doc.text(`${formatNumber(tva)} DH`, right - 5, y - 2, { align: 'right' });
+    y += 4;
+    doc.setFillColor(BLUE[0], BLUE[1], BLUE[2]);
+    doc.rect(margin, y, tableWidth, rowHeight, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL TTC', col1, y + 5.5);
+    doc.text(`${formatNumber(totalTTC)} DH`, right - 5, y + 5.5, { align: 'right' });
+    y += rowHeight + 6;
+  }
 
   if (data.avanceActive) {
     doc.setFillColor(239, 246, 255);
@@ -295,11 +316,20 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  doc.text('• Le rapport photographique est structuré zone par zone et livré en PDF sous en-tête Agence Ménage.', margin, y);
-  y += 6.5;
-  doc.text('• Ce document est directement utilisable pour votre déclaration auprès de votre assureur.', margin, y);
-  y += 6.5;
-  doc.text('• En cas d\'aggravation constatée lors de l\'intervention, un avenant de devis vous sera soumis avant poursuite.', margin, y);
+  const sinistreConditions = [
+    "• Le présent devis est une estimation basée sur les informations communiquées. Une visite sur site est effectuée avant le démarrage. Si l'état réel dépasse l'estimation, un devis révisé est soumis avant toute intervention.",
+    "• Notre équipe se déplace avec l'ensemble des produits et du matériel nécessaires. Le client n'a rien à préparer.",
+    "• Un acompte de 50% du montant total est exigé avant le début de la prestation.",
+    "• Le client doit être présent à la fin de la mission pour signer le PV de livraison. Le solde restant est payable sur place, en présence de l'équipe Agence Ménage.",
+    "• Seules les zones et tâches mentionnées dans le devis sont prises en charge. Toute extension fait l'objet d'un avenant validé par le client.",
+    "• La désinsectisation n'est pas incluse dans la prestation.",
+  ];
+  sinistreConditions.forEach((c, ci) => {
+    const wrapped = doc.splitTextToSize(`${ci + 1}. ${c.replace(/^•\s*/, '')}`, contentWidth);
+    if (y + wrapped.length * 5 > pageHeight - 28) { doc.addPage(); y = 24; }
+    doc.text(wrapped, margin, y);
+    y += wrapped.length * 5 + 1.5;
+  });
 
   if (y > pageHeight - 110) {
     doc.addPage();
@@ -318,17 +348,27 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  const msgParagraphs = [
-    `Bonjour ${data.client.nom},`,
-    '',
-    "Nous avons bien pris note de votre situation et nous vous assurons de notre entière mobilisation pour intervenir dans les meilleurs délais.",
-    '',
-    "Le devis ci-joint reprend l'ensemble des prestations nécessaires à la remise en état de votre bien. Nous avons intégré le rapport photographique complet, fortement recommandé dans le cadre d'un dossier assurance, afin de documenter précisément les dégâts avant et après intervention.",
-    '',
-    'Notre équipe peut se déplacer pour une visite préalable dans les 24h si vous le souhaitez.',
-    '',
-    "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
-  ];
+  const msgParagraphs = isEntreprise
+    ? [
+        "Madame, Monsieur,",
+        '',
+        "Merci pour votre demande d'intervention post-sinistre. Veuillez trouver ci-joint notre estimation pour la remise en état de vos locaux.",
+        '',
+        "Notre équipe prend en charge l'ensemble de la prestation et se déplace avec le matériel adapté. Une visite préalable gratuite sera planifiée pour valider les conditions d'intervention.",
+        '',
+        "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
+      ]
+    : [
+        `Bonjour ${data.client.nom},`,
+        '',
+        "Nous avons bien pris note de votre situation. Toute l'équipe Agence Ménage se mobilise pour intervenir dans les meilleurs délais.",
+        '',
+        "Vous trouverez ci-joint notre estimation pour la remise en état de votre bien. Une visite préalable sera organisée pour confirmer les conditions d'intervention. Notre équipe se déplace avec tout le matériel et les produits nécessaires : vous n'avez rien à préparer.",
+        '',
+        "Votre chargée de clientèle reste disponible à tout moment.",
+        '',
+        "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
+      ];
   for (const para of msgParagraphs) {
     if (para === '') { y += 3; continue; }
     const wrapped = doc.splitTextToSize(para, contentWidth);
@@ -375,7 +415,9 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
         { maxWidth: contentWidth, align: 'center' }
       );
       doc.text(
-        "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.",
+        isEntreprise
+          ? "Ce devis est établi en HT, TVA 20% applicable. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel."
+          : "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.",
         pageWidth / 2,
         footerY + 12,
         { maxWidth: contentWidth, align: 'center' }

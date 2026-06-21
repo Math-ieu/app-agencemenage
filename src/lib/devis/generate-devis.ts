@@ -9,6 +9,7 @@ import { genererDevisPlacementFlexible, type DevisPlacementFlexibleData } from '
 import { genererDevisPostSinistre, type DevisPostSinistreData } from './devis-post_sinistre';
 import { genererDevis as genererDevisFinChantier, type DevisData as DevisFinChantierData } from './devis-nettoyagefinchantier';
 import { genererDevisAutreService } from './devis-autreservice';
+import { genererDevisMenageStandard, type DevisStandardData } from './devis-menagestandard';
 
 const toNumber = (value: unknown): number => {
   const n = Number(value);
@@ -265,7 +266,7 @@ const buildAuxiliaireData = (demande: Demande): DevisAuxiliaireData => {
   return {
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
-    validite: 'Valable 30 jours',
+    validite: 'Valable 7 jours',
     objet: form.objet || `${demande.service} — Mission ${form.duree || ''}`.trim(),
     client: {
       beneficiaire: form.beneficiaire || form.nom_beneficiaire || getClientName(demande, form),
@@ -635,6 +636,45 @@ const buildGestion360Data = (demande: Demande): DevisGestion360Data => {
   };
 };
 
+const buildMenageStandardData = (demande: Demande): DevisStandardData => {
+  const form = demande.formulaire_data || {};
+  const total = getTotalPrice(demande, form);
+  const isGrand = (demande.service || '').toLowerCase().includes('grand');
+  const isAbonnement = demande.frequency === 'abonnement' || form.frequency === 'subscription' || form.frequency === 'abonnement';
+
+  const lignes: Array<{ designation: string; montant: number | string; isReduction?: boolean }> = [];
+  if (Array.isArray(form.prestations) && form.prestations.length) {
+    form.prestations.forEach((p: any) => {
+      const m = typeof p.montant === 'string' && isNaN(Number(p.montant)) ? p.montant : parseMoney(p.montant || p.prix || 0);
+      lignes.push({ designation: p.desc || p.designation || p.label || 'Prestation', montant: m, isReduction: p.isReduction });
+    });
+  } else {
+    lignes.push({ designation: isGrand ? 'Grand ménage' : 'Ménage standard', montant: total });
+  }
+  const computedTotal = lignes.reduce((s, l) => s + (typeof l.montant === 'number' ? l.montant : 0), 0) || total;
+
+  return {
+    numero: buildDevisNumber(demande),
+    date: formatLongDate(demande.created_at || demande.date_intervention),
+    isGrand,
+    isAbonnement,
+    client: {
+      nom: getClientName(demande, form),
+      telephone: getClientPhone(demande, form),
+      whatsapp: form.whatsapp_phone || demande.client_whatsapp || getClientPhone(demande, form),
+      email: form.email || form.mail || '—',
+      adresse: getClientAddress(demande, form),
+    },
+    lignes,
+    total: computedTotal,
+    codePromo: form.code_promo || undefined,
+    codePromoPct: toNumber(form.code_promo_pct || 0),
+    total1erMois: toNumber(form.montant_1er_mois || 0) || undefined,
+    frequenceLabel: form.frequence,
+    ...getAdvanceFields(form),
+  };
+};
+
 const getServiceKey = (service: string): string => service.toLowerCase().trim();
 
 export const generateDevisPdf = async (demande: Demande): Promise<{ blob: Blob; name: string }> => {
@@ -675,6 +715,9 @@ export const generateDevisPdf = async (demande: Demande): Promise<{ blob: Blob; 
       const data = buildPlacementFlexibleData(demande);
       blob = await genererDevisPlacementFlexible(data, logoBase64, signatureBase64);
     }
+  } else if (serviceKey.includes('standard') || serviceKey.includes('grand')) {
+    const data = buildMenageStandardData(demande);
+    blob = genererDevisMenageStandard(data, logoBase64, signatureBase64);
   } else {
     const data = buildAirbnbData(demande);
     blob = await genererDevisAirbnb(data, logoBase64, signatureBase64);

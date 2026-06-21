@@ -119,10 +119,17 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
     // 1.5. Ménage Airbnb
     if (serviceLower.includes('airbnb') || serviceLower.includes('air bnb')) {
         const AIRBNB_PRICES = {
-            A: { studio: 130, '1chambre': 165, '2chambres': 195, '3chambres': 260, '4chambres': 325, villa: 390 },
-            B: { studio: 220, '1chambre': 255, '2chambres': 285, '3chambres': 350, '4chambres': 415, villa: 480 }
+            A: { studio: 130, '1chambre': 165, '2chambres': 195, '2chambresDoubleSDB': 230, '3chambres': 260, '4chambres': 325, villa: 390 },
+            B: { studio: 220, '1chambre': 255, '2chambres': 285, '2chambresDoubleSDB': 320, '3chambres': 350, '4chambres': 415, villa: 480 }
         } as const;
-        
+
+        // Tarif linge par set (brief) : 1er 50, 2ème 45, 3ème et + 40 DH
+        const linenSetsCost = (n: number): number => {
+            let c = 0;
+            for (let i = 1; i <= n; i++) c += i === 1 ? 50 : i === 2 ? 45 : 40;
+            return c;
+        };
+
         const formula = input.formula || 'A';
         const sizeTier = (input.size_tier || '1chambre') as keyof typeof AIRBNB_PRICES.A;
         const conso = !!input.conso;
@@ -131,7 +138,7 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         const basePrice = AIRBNB_PRICES[formula]?.[sizeTier] ?? AIRBNB_PRICES.A['1chambre'];
         let total = basePrice;
         if (conso) total += 25;
-        if (formula === 'B' && linenSets > 0) total += linenSets * 90;
+        if (formula === 'B' && linenSets > 0) total += linenSetsCost(linenSets);
         
         // Add location surcharge
         total += locationSurcharge;
@@ -162,33 +169,37 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         else if (frequence.includes('4/mois')) visitsPerWeek = 1;
     }
 
-    // 3. Ménage Bureaux
+    // 3. Ménage Bureaux — base 60 DH HT/h ; produits/torchons en option flat (brief)
     if (serviceLower.includes('menage bureaux')) {
-        const hourlyRate = produits ? 70 : 60;
-        const perVisitBasePrice = duree * nb_intervenants * hourlyRate * multiplier;
-        const perVisitTotal = perVisitBasePrice;
-        
+        const optionsPerVisit = (produits ? 90 : 0) + (torchons ? 40 : 0);
+        const laborPerVisit = duree * nb_intervenants * 60 * multiplier;
+
         if (isSubscription && !isOneShot) {
-            const subtotalMonthly = perVisitTotal * visitsPerWeek * 4;
-            const discountAmount = subtotalMonthly * 0.1;
-            return Math.round(subtotalMonthly - discountAmount);
+            const laborMonthly = laborPerVisit * visitsPerWeek * 4;
+            const discountAmount = laborMonthly * 0.1; // remise sur la main-d'œuvre uniquement
+            // Options en ligne flat (une seule fois), conformément au brief
+            return Math.round(laborMonthly - discountAmount + optionsPerVisit);
         } else {
-            return Math.round(perVisitTotal);
+            return Math.round(laborPerVisit + optionsPerVisit);
         }
     }
 
     // 4. Ménage Standard, Grand Ménage
     if (serviceLower.includes('menage standard') || serviceLower.includes('grand menage')) {
-        const baseRate = serviceLower.includes('grand menage') ? 70 : 60;
+        const isGrand = serviceLower.includes('grand menage');
+        const baseRate = isGrand ? 70 : 60;
+        // Durée minimum facturable (brief) : standard 4h, grand ménage 6h
+        const minHours = isGrand ? 6 : 4;
+        const effDuree = Math.max(Number(duree) || 0, minHours);
         let totalServicePrice = 0;
 
         if (isSubscription && !isOneShot) {
-            const monthlyHours = duree * visitsPerWeek * 4;
+            const monthlyHours = effDuree * visitsPerWeek * 4;
             const subtotalMonthly = monthlyHours * baseRate * nb_intervenants;
             const discountAmount = subtotalMonthly * 0.1;
             totalServicePrice = (subtotalMonthly - discountAmount) * multiplier;
         } else {
-            totalServicePrice = duree * baseRate * nb_intervenants * multiplier;
+            totalServicePrice = effDuree * baseRate * nb_intervenants * multiplier;
         }
 
         let price = totalServicePrice;

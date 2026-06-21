@@ -168,15 +168,23 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
     y += 6.5;
   });
 
+  const isEntreprise = data.client.segment === 'entreprise';
+
   y += 3;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(55, 65, 81);
-  const introText = [
-    "Nous vous remercions pour votre demande et avons le plaisir de vous soumettre notre devis pour le nettoyage complet de votre bien en fin de chantier.",
-    "",
-    "Notre intervention comprend l'élimination de l'ensemble des résidus de travaux (poussières, résidus de peinture, traces de plâtre), le grattage des surfaces selon le niveau convenu, et la remise en état complète du bien pour sa réception ou sa mise en location.",
-  ];
+  const introText = isEntreprise
+    ? [
+        "Madame, Monsieur,",
+        "",
+        "Nous vous remercions de votre demande. Vous trouverez ci-dessous notre proposition pour le nettoyage de vos locaux en fin de chantier. Notre équipe prend en charge l'intégralité de la prestation et se déplace avec le matériel adapté à la nature et à l'envergure de votre chantier.",
+      ]
+    : [
+        "Merci de nous faire confiance. Vous trouverez ci-dessous notre proposition pour le nettoyage de votre bien en fin de chantier.",
+        "",
+        "Notre équipe prend en charge l'intégralité de la prestation, du matériel aux produits, pour vous livrer un espace propre, sain et prêt à être occupé.",
+      ];
   for (const para of introText) {
     if (para === '') { y += 3; continue; }
     const wrapped = doc.splitTextToSize(para, contentWidth);
@@ -241,6 +249,29 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   doc.text(`${formatNumber(totalHT)} DH`, right - 2, y + 3.5, { align: 'right' });
   y += 14;
 
+  // TVA 20% + TOTAL TTC (entreprises uniquement)
+  if (isEntreprise) {
+    const tva = totalHT * 0.2;
+    const totalTTC = totalHT + tva;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    doc.text('TVA 20%', right - 55, y, { align: 'right' });
+    doc.text(`${formatNumber(tva)} DH`, right - 2, y, { align: 'right' });
+    y += 7;
+    doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
+    doc.setLineWidth(0.4);
+    doc.line(margin, y - 3, right, y - 3);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    doc.text('TOTAL TTC', right - 55, y + 3.5, { align: 'right' });
+    doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+    doc.setFontSize(13);
+    doc.text(`${formatNumber(totalTTC)} DH`, right - 2, y + 3.5, { align: 'right' });
+    y += 14;
+  }
+
   if (data.avanceActive) {
     doc.setFillColor(239, 246, 255);
     doc.rect(margin, y - 4, contentWidth, 8, 'F');
@@ -295,14 +326,22 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  doc.text('• La terrasse et le rooftop sont inclus dans la surface globale au même taux au m2.', margin, y);
-  y += 6.5;
-  doc.text('• La cristallisation du marbre sera réalisée après le nettoyage de base.', margin, y);
-  y += 6.5;
-  doc.text("• Délai d'intervention : 48 à 72h après acceptation du devis.", margin, y);
-  y += 6.5;
-  doc.text('• Minimum facturable : 1 500 DH HT.', margin, y);
-  y += 10;
+  const finChantierConditions = [
+    "• Aucune intervention ne peut avoir lieu tant que les travaux ne sont pas totalement terminés et qu'aucun ouvrier n'est présent sur site.",
+    "• Le client doit obligatoirement mettre à disposition un point d'eau et une alimentation électrique fonctionnels. En cas de non-respect, l'agence peut annuler ou reporter la mission, et facturer des frais de déplacement.",
+    "• Notre équipe effectue une visite préalable gratuite du site avant le démarrage. Si l'état réel dépasse l'estimation, un devis révisé est soumis avant toute intervention.",
+    "• L'agence est seule responsable de l'estimation du temps de travail et du nombre d'intervenants à mobiliser.",
+    "• Un acompte de 50% du montant total est exigé avant le début de la prestation.",
+    "• Le client doit être présent à la fin de la mission pour signer le PV de livraison. Le solde restant est payable sur place, en présence de l'équipe Agence Ménage.",
+    "• La désinsectisation n'est pas incluse dans la prestation.",
+  ];
+  finChantierConditions.forEach((c, ci) => {
+    const wrapped = doc.splitTextToSize(`${ci + 1}. ${c.replace(/^•\s*/, '')}`, contentWidth);
+    if (y + wrapped.length * 5 > pageHeight - 28) { doc.addPage(); y = 24; }
+    doc.text(wrapped, margin, y);
+    y += wrapped.length * 5 + 1.5;
+  });
+  y += 2;
 
   if (y > pageHeight - 110) {
     doc.addPage();
@@ -321,20 +360,27 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  const msgLines = [
-    `Bonjour ${data.client.nom},`,
-    '',
-    "Suite à votre demande de nettoyage post-chantier, nous vous adressons notre proposition détaillée.",
-    "Notre équipe spécialisée est habituée aux interventions de fin de chantier et dispose de l'équipement",
-    "nécessaire pour traiter tout type de surface.",
-    '',
-    "Le présent devis inclut l'ensemble des prestations discutées, notamment le grattage des vitres et la",
-    "cristallisation du marbre en option premium.",
-    '',
-    "Nous restons disponibles pour planifier une visite préalable à votre convenance.",
-    '',
-    "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
-  ];
+  const msgLines = isEntreprise
+    ? [
+        "Madame, Monsieur,",
+        '',
+        "Merci de faire appel à Agence Ménage. Veuillez trouver ci-joint notre estimation pour le nettoyage de vos locaux en fin de chantier.",
+        '',
+        "Notre équipe se déplace avec tout le matériel nécessaire. Une visite préalable gratuite sera planifiée pour confirmer les conditions d'intervention.",
+        '',
+        "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
+      ]
+    : [
+        `Bonjour ${data.client.nom},`,
+        '',
+        "Merci de faire appel à Agence Ménage ! Vous trouverez ci-joint notre proposition pour le nettoyage de votre bien en fin de chantier.",
+        '',
+        "Notre équipe se déplace avec tout le matériel nécessaire. Une visite préalable gratuite sera organisée avant le démarrage.",
+        '',
+        "Votre chargée de clientèle est disponible pour toute question.",
+        '',
+        "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
+      ];
   for (const para of msgLines) {
     if (para === '') { y += 3; continue; }
     const wrapped = doc.splitTextToSize(para, contentWidth);
@@ -381,7 +427,9 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
         { maxWidth: contentWidth, align: 'center' }
       );
       doc.text(
-        "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.",
+        isEntreprise
+          ? "Ce devis est établi en HT, TVA 20% applicable. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel."
+          : "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.",
         pageWidth / 2,
         footerY + 12,
         { maxWidth: contentWidth, align: 'center' }

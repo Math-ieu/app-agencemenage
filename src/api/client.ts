@@ -372,6 +372,12 @@ export const createPromoCode = (data: Record<string, unknown>) => apiClient.post
 export const updatePromoCode = (id: number, data: Record<string, unknown>) => apiClient.patch(`/api/marketing/promos/${id}/`, data);
 export const deletePromoCode = (id: number) => apiClient.delete(`/api/marketing/promos/${id}/`);
 
+// FÊTES RELIGIEUSES / JOURS FÉRIÉS (Paramètres)
+export const getFetesReligieuses = (params?: Record<string, unknown>) => apiClient.get('/api/fetes-religieuses/', { params });
+export const createFeteReligieuse = (data: Record<string, unknown>) => apiClient.post('/api/fetes-religieuses/', data);
+export const updateFeteReligieuse = (id: number, data: Record<string, unknown>) => apiClient.patch(`/api/fetes-religieuses/${id}/`, data);
+export const deleteFeteReligieuse = (id: number) => apiClient.delete(`/api/fetes-religieuses/${id}/`);
+
 export const getCommercialGestures = (params?: Record<string, unknown>) => apiClient.get('/api/marketing/gestes/', { params });
 export const createCommercialGesture = (data: Record<string, unknown>) => apiClient.post('/api/marketing/gestes/', data);
 export const updateCommercialGesture = (id: number, data: Record<string, unknown>) => apiClient.patch(`/api/marketing/gestes/${id}/`, data);

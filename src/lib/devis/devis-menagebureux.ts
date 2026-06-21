@@ -184,7 +184,9 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   doc.setFontSize(9.5);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const introLines = doc.splitTextToSize(
-    "Nous vous remercions de votre intérêt pour nos services de nettoyage de bureaux et avons le plaisir de vous adresser notre proposition. Notre prestation comprend le dépoussiérage des bureaux et surfaces accessibles, le nettoyage des sols, le vidage des poubelles, l'entretien des espaces communs (salles de réunion, cuisine, sanitaires) et le nettoyage des vitres accessibles.",
+    isAbonnement
+      ? "Madame, Monsieur, nous vous remercions de l'intérêt que vous portez aux services d'Agence Ménage. Vous trouverez ci-dessous notre proposition d'abonnement pour l'entretien régulier de vos locaux. En optant pour l'abonnement, vous bénéficiez d'un tarif préférentiel et d'une intervenante stable, avec un planning établi à l'avance chaque mois."
+      : "Madame, Monsieur, nous vous remercions de l'intérêt que vous portez aux services d'Agence Ménage. Vous trouverez ci-dessous notre proposition pour l'entretien ponctuel de vos locaux. Nous mettons à votre disposition une femme de ménage qualifiée pour garantir un environnement de travail propre, sain et agréable pour vos équipes et vos visiteurs.",
     contentWidth
   );
   doc.text(introLines, margin, y);
@@ -269,13 +271,16 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
 
   // Note abonnement verte
   if (isAbonnement) {
+    const remiseTxt = data.details.reductionAbonnement > 0
+      ? `Tarif abonnement appliqué (–${data.details.reductionAbonnement}%). `
+      : '';
     doc.setFillColor(240, 253, 244); // Fond vert clair
     doc.roundedRect(margin, y, tableWidth, 12, 1, 1, 'F');
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(8.5);
     doc.setTextColor(21, 128, 61); // Texte vert foncé
     doc.text(
-      `• Tarif abonnement appliqué (–${data.details.reductionAbonnement}%). Planning adapté à vos horaires (matin ou soir). Remplacement assuré en cas d'absence.`,
+      `• ${remiseTxt}Planning adapté à vos horaires (matin ou soir). Remplacement assuré en cas d'absence.`,
       margin + 4,
       y + 5,
       { maxWidth: tableWidth - 8 }
@@ -300,11 +305,27 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  doc.text('• Intervention planifiable en dehors des heures de bureau sur demande.', margin, y);
-  y += 6.5;
-  doc.text("• Remplacement organisé automatiquement en cas d'absence de l'intervenante.", margin, y);
-  y += 6.5;
-  doc.text('• Supplément de 50 DH par passage pour les zones éloignées (Bouskoura, Dar Bouazza, Mohammédia).', margin, y);
+  const bureauxConditions = [
+    "• Le ménage bureaux ne comprend ni produits ni matériel. Votre entreprise doit mettre à disposition tout le nécessaire avant son arrivée. Cette obligation ne s'applique pas si vous avez souscrit à une option matériel.",
+    "• Une tolérance de 30 minutes de retard est accordée. Nos intervenantes se déplacent en transport en commun.",
+    "• La femme de ménage effectue un tour de vos locaux à son arrivée. Tout dépassement de 30 minutes est soumis à validation de votre chargée de clientèle.",
+    "• La femme de ménage n'utilise aucun appareil électroménager du client. L'aspirateur est la seule exception, sur accord explicite du client.",
+    "• La désinsectisation n'est pas incluse dans la prestation.",
+    ...(isAbonnement ? [
+      "• L'abonnement est valable du 1er au 31 de chaque mois.",
+      "• Le règlement s'effectue par virement bancaire avant le 20 du mois précédent.",
+      "• Votre planning détaillé vous est adressé entre le 15 et le 18 du mois. Il indique le nombre exact de passages prévus et les dates correspondantes.",
+      "• En cas de 5ème semaine sur votre jour habituel, ce passage est calculé automatiquement au prorata et inclus dans votre facture.",
+      "• Nous faisons tout notre possible pour que ce soit la même intervenante à chaque passage. Cela ne peut pas être garanti dans tous les cas, notamment en cas d'absence ou d'imprévu.",
+      "• Par respect des jours de fête, aucune intervention ne peut avoir lieu 1 jour avant et 2 jours après les trois fêtes religieuses suivantes : Aïd el Kébir, Aïd el Fitr et Mawlid Ennabawi. Si votre jour de passage habituel tombe dans cette période, votre chargée de clientèle vous contactera pour convenir ensemble d'un report ou d'une annulation.",
+    ] : []),
+  ];
+  bureauxConditions.forEach((c, ci) => {
+    const wrapped = doc.splitTextToSize(`${ci + 1}. ${c.replace(/^•\s*/, '')}`, contentWidth);
+    if (y + wrapped.length * 5 > pageHeight - 28) { doc.addPage(); y = 24; }
+    doc.text(wrapped, margin, y);
+    y += wrapped.length * 5 + 1.5;
+  });
 
   if (y > pageHeight - 110) {
     doc.addPage();
@@ -384,7 +405,7 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
         { maxWidth: contentWidth, align: 'center' }
       );
       doc.text(
-        "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.",
+        "Ce devis est établi en HT, TVA 20% applicable. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.",
         pageWidth / 2,
         footerY + 12,
         { maxWidth: contentWidth, align: 'center' }

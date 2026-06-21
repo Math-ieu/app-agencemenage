@@ -45,6 +45,21 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'intervention_gratuite', apiValue: 'intervention_gratuite', label: 'Intervention gratuite' },
 ];
 
+// Workflow des statuts de devis (brief). Champ backend dédié Demande.devis_statut,
+// indépendant du statut métier de la demande (Demande.statut reste inchangé).
+const DEVIS_STATUTS: { value: string; label: string; cls: string }[] = [
+  { value: 'brouillon', label: 'Brouillon', cls: 'bg-gray-100 text-gray-700 border border-gray-200' },
+  { value: 'en_attente_validation', label: 'En attente validation', cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  { value: 'valide', label: 'Validé', cls: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  { value: 'envoye', label: 'Envoyé', cls: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
+  { value: 'accepte', label: 'Accepté', cls: 'bg-green-50 text-green-700 border border-green-200' },
+  { value: 'refuse', label: 'Refusé / Expiré', cls: 'bg-red-50 text-red-700 border border-red-200' },
+];
+const getDevisStatutMeta = (value?: string) =>
+  DEVIS_STATUTS.find(s => s.value === value) || DEVIS_STATUTS[0];
+// Numéro de devis aligné sur le PDF (buildDevisNumber) : DEV-{année}-{id sur 4 chiffres}
+const formatDevisNumber = (id: number) => `DEV-${new Date().getFullYear()}-${String(id).padStart(4, '0')}`;
+
 const strip212 = (p: string) => {
   if (!p) return '';
   let cleaned = p.trim().replace(/\s+/g, '');
@@ -996,6 +1011,16 @@ export default function DemandesEnAttente() {
     }
   };
 
+  const handleDevisStatutChange = async (demandeId: number, value: string) => {
+    setDemandes(prev => prev.map(d => d.id === demandeId ? { ...d, devis_statut: value as any } : d));
+    try {
+      await updateDemande(demandeId, { devis_statut: value } as any);
+    } catch (e) {
+      console.error('Erreur lors de la mise à jour du statut du devis', e);
+      addToast('Erreur lors de la mise à jour du statut du devis.', 'error');
+    }
+  };
+
   const handleQuoteUpdate = async (demandeId: number, patch: Record<string, any>) => {
     // 1. Local optimistic update so UI is immediately responsive
     setDemandes(prev => prev.map(d => {
@@ -1197,8 +1222,26 @@ export default function DemandesEnAttente() {
                       {d.identification_statut === 'nouvelle' && <span className="badge badge-green" style={{ fontSize: '10px' }}>Nouvelle</span>}
                       {d.identification_statut === 'existant_valide' && <span className="badge badge-teal" style={{ fontSize: '10px' }}>Client existe déjà</span>}
                       {d.identification_statut === 'verification_requise' && <span className="badge badge-orange" style={{ fontSize: '10px' }}>Vérification requise</span>}
+                      {d.is_devis && (
+                        <span className={`badge ${getDevisStatutMeta(d.devis_statut).cls} font-medium text-[10px] px-2 py-0.5 rounded-full`}>
+                          {getDevisStatutMeta(d.devis_statut).label}
+                        </span>
+                      )}
                       <span className="text-muted text-xs"># {d.id}</span>
                     </div>
+                    {d.is_devis && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-semibold text-slate-600 font-mono">{formatDevisNumber(d.id)}</span>
+                        <select
+                          className="text-[11px] border border-slate-200 rounded px-1.5 py-0.5 bg-white text-slate-700"
+                          value={d.devis_statut || 'brouillon'}
+                          onChange={(e) => handleDevisStatutChange(d.id, e.target.value)}
+                          title="Statut du devis"
+                        >
+                          {DEVIS_STATUTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                        </select>
+                      </div>
+                    )}
                     <h3 className="fw-bold">Nom : <span className="text-main">{d.client_name || d.formulaire_data?.nom || 'Non renseigné'}</span></h3>
                   </div>
                   <div className="text-right">
@@ -1434,6 +1477,11 @@ export default function DemandesEnAttente() {
                           Non affecté
                         </span>
                       )}
+                      {d.is_devis && (
+                        <span className={`badge ${getDevisStatutMeta(d.devis_statut).cls} font-medium text-[9px] px-2 py-0.5 rounded-full`}>
+                          {getDevisStatutMeta(d.devis_statut).label}
+                        </span>
+                      )}
                       <span className="text-muted text-xs">#{d.id}</span>
                     </div>
                     {d.created_at && (
@@ -1442,6 +1490,19 @@ export default function DemandesEnAttente() {
                       </span>
                     )}
                   </div>
+                  {d.is_devis && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[11px] font-semibold text-slate-600 font-mono">{formatDevisNumber(d.id)}</span>
+                      <select
+                        className="text-[10px] border border-slate-200 rounded px-1.5 py-0.5 bg-white text-slate-700"
+                        value={d.devis_statut || 'brouillon'}
+                        onChange={(e) => handleDevisStatutChange(d.id, e.target.value)}
+                        title="Statut du devis"
+                      >
+                        {DEVIS_STATUTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <h3 className="mobile-client-name">{d.client_name || d.formulaire_data?.nom || 'Nom inconnu'}</h3>
                   <div className="mobile-contact-info">
                     <a href={`tel:${d.client_phone || d.formulaire_data?.whatsapp_phone || ''}`} className="mobile-contact-link">

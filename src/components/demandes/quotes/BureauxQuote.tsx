@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
-import { FormulaBox, B, s, ResultBar, fmt, Field } from "./QuoteShared";
+import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
+import RemiseSection, { type RemiseValue } from "./RemiseSection";
+import { SURCHARGE_CITIES } from "../../../utils/pricing";
 import type { QuotePrestationLine } from "./QuoteSection";
 
 const visitsMap: Record<string, number> = {
@@ -61,6 +63,13 @@ const getCadenceLabel = (val: string) => {
   }
 };
 
+// Brief Services 06/07 — base 60 DH HT/h ; options HT à la carte
+const HOURLY_RATE = 60;
+const OPT_PRODUITS = 90;
+const OPT_TORCHONS = 40;
+const OPT_PACK = 200;
+const OPT_ZONE = 50;
+
 interface BureauxQuoteProps {
   demande: any;
   onPrestationsChange?: (prestations: QuotePrestationLine[], total: number, extra?: Record<string, any>) => void;
@@ -69,10 +78,29 @@ interface BureauxQuoteProps {
 export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQuoteProps) {
   const data = demande.formulaire_data || {};
 
-  const [prestationType, setPrestationType] = useState(() => data.produits ? "avec_produit" : "sans_produit");
+  // Ville concernée par le supplément zone éloignée ?
+  const ville = data.ville || data.city || demande.client_city || "";
+  const villeConcernee = SURCHARGE_CITIES.includes(ville);
+  const zoneDefault = (d: any) => d.zone_eloignee !== undefined ? Boolean(d.zone_eloignee) : villeConcernee;
+
+  const [opts, setOpts] = useState(() => ({
+    produits: Boolean(data.produits),
+    torchons: Boolean(data.torchons),
+    pack: Boolean(data.pack_integral),
+    zone: zoneDefault(data),
+  }));
+  const togOpt = (k: "produits" | "torchons" | "pack" | "zone") => setOpts(o => ({ ...o, [k]: !o[k] }));
+
+  const [remise, setRemise] = useState<RemiseValue>(() => ({
+    abonnement: data.reduction_abonnement ? true : (demande.frequency === "abonnement" || (demande.frequency_label && demande.frequency_label !== "une fois")),
+    etenduePct: Number(data.remise_etendue_pct || 0),
+    promoCode: data.code_promo || "",
+    promoPct: Number(data.code_promo_pct || 0),
+  }));
+
   const [heures, setHeures] = useState(() => data.nb_heures || data.heures || data.duree || data.duration || demande.nb_heures || 3);
   const [personnes, setPersonnes] = useState(() => data.nb_intervenantes || data.nb_intervenants || data.numberOfPeople || demande.nb_intervenants || 1);
-  
+
   // frequency state
   const [frequency, setFrequency] = useState(() => {
     if (data.frequency) return data.frequency;
@@ -98,7 +126,18 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
   // Keep state in sync with prop updates (e.g. when modified via modal)
   useEffect(() => {
     const freshData = demande.formulaire_data || {};
-    setPrestationType(freshData.produits ? "avec_produit" : "sans_produit");
+    setOpts({
+      produits: Boolean(freshData.produits),
+      torchons: Boolean(freshData.torchons),
+      pack: Boolean(freshData.pack_integral),
+      zone: zoneDefault(freshData),
+    });
+    setRemise({
+      abonnement: freshData.reduction_abonnement ? true : (demande.frequency === "abonnement" || (demande.frequency_label && demande.frequency_label !== "une fois")),
+      etenduePct: Number(freshData.remise_etendue_pct || 0),
+      promoCode: freshData.code_promo || "",
+      promoPct: Number(freshData.code_promo_pct || 0),
+    });
     setHeures(freshData.nb_heures || freshData.heures || freshData.duree || freshData.duration || demande.nb_heures || 3);
     setPersonnes(freshData.nb_intervenantes || freshData.nb_intervenants || freshData.numberOfPeople || demande.nb_intervenants || 1);
 
@@ -128,6 +167,9 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
     demande.frequency,
     demande.frequency_label,
     demande.formulaire_data?.produits,
+    demande.formulaire_data?.torchons,
+    demande.formulaire_data?.pack_integral,
+    demande.formulaire_data?.zone_eloignee,
     demande.formulaire_data?.duree,
     demande.formulaire_data?.duration,
     demande.formulaire_data?.nb_heures,
@@ -148,40 +190,51 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
     }
   }, [minHours, heures]);
 
-  const hourlyRate = prestationType === "avec_produit" ? 70 : 60;
   const isAbo = frequency === "subscription";
-  const frequencyDiscount = isAbo ? 0.10 : 0.00;
-  
-  const pricePerPassage = Math.round(heures * personnes * hourlyRate * (1 - frequencyDiscount));
   const nbPassages = isAbo ? (visitsMap[subFrequency] * 4) : 1;
-  const total = isAbo ? (pricePerPassage * nbPassages) : pricePerPassage;
+
+  const optionsPerPassage = (opts.produits ? OPT_PRODUITS : 0) + (opts.torchons ? OPT_TORCHONS : 0)
+    + (opts.pack ? OPT_PACK : 0) + (opts.zone ? OPT_ZONE : 0);
+
+  const laborPerPassage = heures * personnes * HOURLY_RATE;
+  const laborTotal = laborPerPassage * nbPassages;
+  // Remise effective : −10% abonnement ou remise étendue (la plus avantageuse) — via RemiseSection
+  const remisePct = isAbo ? Math.max(remise.abonnement ? 10 : 0, remise.etenduePct) : remise.etenduePct;
+  const remiseMontant = Math.round(laborTotal * (remisePct / 100));
+  const laborAfterDiscount = laborTotal - remiseMontant;
+  const pricePerPassage = Math.round(laborPerPassage * (1 - remisePct / 100));
+  // Brief : les options sont des lignes flat (une seule fois), y compris en abonnement
+  const optionsTotal = optionsPerPassage;
+  const total = laborAfterDiscount + optionsTotal;
+  const promoMontant = remise.promoCode ? Math.round(laborAfterDiscount * (remise.promoPct / 100)) : 0;
+  const total1erMois = total - promoMontant;
 
   useEffect(() => {
     if (!onPrestationsChange) return;
 
     const prestations: QuotePrestationLine[] = [];
     const dbSubFrequency = dbSubFreqMap[subFrequency] || "1/sem";
-    const typeLabel = prestationType === "avec_produit" ? "avec produit" : "sans produit";
 
     if (isAbo) {
-      const baseMonthly = Math.round(heures * personnes * hourlyRate * nbPassages);
-      const discountAmount = Math.round(baseMonthly * 0.10);
-      
       prestations.push({
-        designation: `Ménage bureaux ${typeLabel} — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} × ${nbPassages} passages/mois`,
-        montant: baseMonthly
-      });
-      prestations.push({
-        designation: `Remise abonnement (–10%)`,
-        montant: -discountAmount,
-        isReduction: true
+        designation: `Ménage bureaux — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} × ${nbPassages} passages/mois`,
+        montant: laborTotal,
       });
     } else {
       prestations.push({
-        designation: `Ménage bureaux ${typeLabel} — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} (prestation ponctuelle)`,
-        montant: pricePerPassage
+        designation: `Ménage bureaux — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} (prestation ponctuelle)`,
+        montant: laborPerPassage,
       });
     }
+    if (remiseMontant > 0) {
+      const rLabel = isAbo && remise.abonnement && remisePct === 10 ? "Remise abonnement (–10%)" : `Remise (–${remisePct}%)`;
+      prestations.push({ designation: rLabel, montant: -remiseMontant, isReduction: true });
+    }
+
+    if (opts.produits) prestations.push({ designation: `Produits ménagers fournis par l'agence`, montant: OPT_PRODUITS });
+    if (opts.torchons) prestations.push({ designation: `Torchons et serpières (usage unique)`, montant: OPT_TORCHONS });
+    if (opts.pack) prestations.push({ designation: `Pack Intégral (produits + torchons + matériel)`, montant: OPT_PACK });
+    if (opts.zone) prestations.push({ designation: `Zone éloignée (Bouskoura, Dar Bouazza, Mohammédia…)`, montant: OPT_ZONE });
 
     onPrestationsChange(prestations, total, {
       nb_heures: heures,
@@ -193,31 +246,33 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
       nb_personnel: personnes,
       numberOfPeople: personnes,
       nb_passages_mois: nbPassages,
-      reduction_abonnement: isAbo ? 10 : 0,
-      prix_base: isAbo ? Math.round(heures * personnes * hourlyRate * nbPassages) : total,
-      prix_produits: 0,
-      produits: prestationType === "avec_produit",
-      torchons: false,
-      zone_eloignee: false,
+      reduction: remiseMontant,
+      reduction_montant: remiseMontant,
+      reduction_pourcentage: remisePct,
+      reduction_abonnement: isAbo && remise.abonnement ? 10 : 0,
+      remise_etendue_pct: remise.etenduePct,
+      code_promo: remise.promoCode,
+      code_promo_pct: remise.promoPct,
+      montant_1er_mois: total1erMois,
+      prix_base: isAbo ? laborTotal : laborPerPassage,
+      prix_produits: opts.produits ? OPT_PRODUITS : 0,
+      produits: opts.produits,
+      torchons: opts.torchons,
+      pack_integral: opts.pack,
+      zone_eloignee: opts.zone,
       frequence: isAbo ? dbSubFrequency : "une fois",
       frequency,
       subFrequency
     });
-  }, [heures, personnes, frequency, subFrequency, prestationType, total, nbPassages, pricePerPassage, hourlyRate, onPrestationsChange]);
+  }, [heures, personnes, frequency, subFrequency, opts, remise, total, nbPassages, laborPerPassage, laborTotal, remiseMontant, remisePct, total1erMois, onPrestationsChange]);
 
   return (
     <div className="quote-calculator">
       <FormulaBox>
-        <B>Base :</B> Heures × Personnes × {hourlyRate} DH/h · <B>Abonnement :</B> −10%
+        <B>Base :</B> Heures × Personnes × 60 DH/h HT · <B>Abonnement :</B> −10% (sur la main-d'œuvre) · min {minHours}h/passage
       </FormulaBox>
       <div style={s.grid2}>
         <div>
-          <Field label="Type de prestation">
-            <select value={prestationType} onChange={e => setPrestationType(e.target.value)} style={s.input as any}>
-              <option value="sans_produit">Ménage bureaux sans produit — 60 DH/h</option>
-              <option value="avec_produit">Ménage bureaux avec produit — 70 DH/h</option>
-            </select>
-          </Field>
           <Field label="Heures par passage">
             <input type="number" value={heures} min={minHours} max={12} onChange={e => setHeures(Math.max(minHours, +e.target.value))} style={s.input as any} />
           </Field>
@@ -249,40 +304,21 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
           )}
         </div>
         <div>
-          {prestationType === "sans_produit" ? (
-            <div style={{
-              padding: "16px",
-              background: "#E8F5E9",
-              border: "1px solid #C8E6C9",
-              borderRadius: "12px",
-              fontSize: "13px",
-              lineHeight: "1.6",
-              color: "#2E7D32"
-            }}>
-              Sans produit de ménage et serpillères fournis.<br />
-              L'intervenant fera le ménage avec vos produits.
-            </div>
-          ) : (
-            <div style={{
-              padding: "16px",
-              background: "#E3F2FD",
-              border: "1px solid #BBDEFB",
-              borderRadius: "12px",
-              fontSize: "13px",
-              lineHeight: "1.6",
-              color: "#1565C0"
-            }}>
-              Avec option produit de ménage et serpillière, l'intervenant interviendra équipé de produits de ménage.
-            </div>
-          )}
+          <div style={s.optTitle}>Options (HT)</div>
+          <OptRow label="Produits ménagers fournis" price="+90 DH" checked={opts.produits} onChange={() => togOpt("produits")} />
+          <OptRow label="Torchons et serpières" note="usage unique, non laissés sur place" price="+40 DH" checked={opts.torchons} onChange={() => togOpt("torchons")} />
+          <OptRow label="Pack Intégral" note="produits + torchons + serpière + raclette + balai + seau" price="+200 DH" checked={opts.pack} onChange={() => togOpt("pack")} />
+          <OptRow label="Zone éloignée" note={villeConcernee ? `Activée — ${ville} est une zone concernée` : "Bouskoura, Dar Bouazza, Mohammédia…"} price="+50 DH" checked={opts.zone} onChange={() => togOpt("zone")} />
         </div>
       </div>
+
+      <RemiseSection isAbo={isAbo} segment={demande.segment} montantBase={laborTotal} value={remise} onChange={setRemise} />
+
       <ResultBar
         detail={isAbo
-          ? `${heures}h × ${personnes} agent(s) × ${hourlyRate} DH × 0,90 (abonnement - ${getCadenceLabel(subFrequency)}) = ${fmt(pricePerPassage)} DH/passage (${nbPassages} passages/mois)`
-          : `${heures}h × ${personnes} agent(s) × ${hourlyRate} DH`}
+          ? `${heures}h × ${personnes} agent(s) × 60 DH × 0,90 (${getCadenceLabel(subFrequency)}) = ${fmt(pricePerPassage)} DH/passage × ${nbPassages}${optionsPerPassage > 0 ? ` + options ${fmt(optionsTotal)} DH` : ""}`
+          : `${heures}h × ${personnes} agent(s) × 60 DH${optionsPerPassage > 0 ? ` + options ${fmt(optionsPerPassage)} DH` : ""}`}
         total={`${fmt(total)} DH`} label={isAbo ? "Total mensuel HT" : "Total intervention HT"} />
     </div>
   );
 }
-

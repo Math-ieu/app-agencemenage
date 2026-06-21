@@ -91,7 +91,7 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   pdf.setFontSize(11);
   pdf.setTextColor(LIGHT_GREY[0], LIGHT_GREY[1], LIGHT_GREY[2]);
   pdf.text(`Date : ${data.date}`, pageWidth - margin, y + 17, { align: 'right' });
-  pdf.text('Valable 30 jours', pageWidth - margin, y + 24, { align: 'right' });
+  pdf.text(data.validite || 'Valable 7 jours', pageWidth - margin, y + 24, { align: 'right' });
   
   // Agency address
   y += 34;
@@ -152,7 +152,7 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   pdf.setFontSize(9.5);
   pdf.setFont('helvetica', 'italic');
   pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
-  const remerciement = "Nous vous remercions de la confiance que vous nous accordez pour l'accompagnement de votre proche. Agence Ménage met à disposition des auxiliaires de vie formées, attentionnées et expérimentées, sélectionnées pour leur sens du soin et leur bienveillance. Notre engagement est de garantir confort, sécurité et qualité de vie au quotidien.";
+  const remerciement = "Nous comprenons l'importance de trouver une personne de confiance pour accompagner votre proche au quotidien. Agence Ménage met à votre disposition une auxiliaire de vie formée, attentionnée et fiable, avec un suivi régulier pour votre tranquillité.";
   pdf.text(remerciement, margin, y, { maxWidth: contentWidth, align: 'justify' });
   y += 14;
 
@@ -266,15 +266,22 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
   const notes = [
-    "• Intervenant(e) dédié(e) et stable sur toute la durée de la mission.",
-    "• Remplacement garanti en cas d'absence de l'intervenante.",
-    "• Un bilan hebdomadaire peut être transmis à la famille sur demande.",
-    "• Discrétion et confidentialité assurées."
+    "• Le paiement est hebdomadaire, au plus tard le mercredi pour la semaine suivante. Sans confirmation de paiement, la prestation est mise en attente jusqu'à régularisation.",
+    "• L'abonnement est calculé sur 4 passages par mois. En cas de 5ème occurrence du jour d'intervention dans le mois, ce passage est facturé en complément sur accord du client.",
+    "• En cas d'absence ou d'indisponibilité de dernière minute, une intervenante de remplacement est mobilisée sous 2 heures.",
+    "• Nous faisons tout notre possible pour assurer la continuité avec la même intervenante. Cela ne peut être garanti dans tous les cas.",
+    "• Toute annulation doit être signalée au moins 48h à l'avance. En deçà de ce délai, le passage est dû.",
+    "• Le matériel médical, les protections et les produits d'hygiène spécifiques sont fournis par la famille.",
+    "• Les frais de courses, pharmacie ou transport sont à la charge du client, sur justificatifs.",
+    "• Par respect des jours de fête, aucune intervention ne peut avoir lieu 1 jour avant et 2 jours après les fêtes suivantes : Aïd el Kébir, Aïd el Fitr et Mawlid Ennabawi. Votre chargée de clientèle vous contactera pour convenir d'un report ou d'une annulation.",
+    "• Ce devis est valable 7 jours à compter de sa date d'émission."
   ];
-  for (const note of notes) {
-    pdf.text(note, margin + 5, y);
-    y += 5.5;
-  }
+  notes.forEach((note, ni) => {
+    const noteWrapped = pdf.splitTextToSize(`${ni + 1}. ${note.replace(/^•\s*/, '')}`, contentWidth - 5);
+    if (y + noteWrapped.length * 5.5 > pageHeight - 28) { pdf.addPage(); y = 24; }
+    pdf.text(noteWrapped, margin + 5, y);
+    y += noteWrapped.length * 5.5;
+  });
   y += 8;
 
   // ==================== MESSAGE D'ACCOMPAGNEMENT ====================
@@ -301,9 +308,9 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   
   const message = data.message || `Bonjour ${data.client.donneurOrdre},
 
-Nous comprenons l'importance de trouver une personne de confiance pour accompagner votre mère au quotidien. Nous vous assurons de notre engagement à vous proposer une auxiliaire de vie attentive, professionnelle et stable tout au long de la mission.
+Merci de faire confiance à Agence Ménage pour l'accompagnement de votre proche. Vous trouverez ci-joint notre proposition adaptée à votre situation.
 
-Ce devis couvre 4 semaines d'accompagnement avec les prestations sélectionnées. N'hésitez pas à nous contacter pour ajuster la mission à l'évolution des besoins.
+Un cahier de liaison sera mis en place dès le démarrage pour un suivi transparent entre l'intervenante et votre famille. Votre chargée de clientèle reste disponible à tout moment.
 
 Avec toute notre disponibilité,
 L'équipe Agence Ménage — 06 64 22 67 90`;
@@ -360,7 +367,7 @@ L'équipe Agence Ménage — 06 64 22 67 90`;
       const footerText1 = "Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | contact@agencemenage.ma | agencemenage.ma";
       pdf.text(footerText1, pageWidth / 2, footerY + 4, { align: 'center', maxWidth: contentWidth });
       
-      const footerText2 = "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.";
+      const footerText2 = "Ce devis est établi sans TVA. Il est valable 7 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.";
       pdf.text(footerText2, pageWidth / 2, footerY + 11, { align: 'center', maxWidth: contentWidth });
     }
   }

@@ -138,8 +138,8 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
 
   // Intro
   const intro = [
-    "Nous vous remercions de l'intérêt porté à nos services de placement flexible.",
-    "Cette formule vous permet de disposer de personnel qualifié avec une gestion administrative simplifiée.",
+    "Madame, Monsieur, nous vous remercions de l'intérêt que vous portez aux services d'Agence Ménage.",
+    "Vous trouverez ci-dessous notre proposition pour la mise à disposition d'une intervenante dédiée à votre entreprise. Agence Ménage prend en charge l'intégralité du processus : sélection du profil, gestion administrative et sociale, couverture assurantielle et continuité en cas d'absence — sans les contraintes de gestion d'un employeur.",
   ];
   doc.setFontSize(10).setTextColor(...LIGHT);
   for (const para of intro) {
@@ -194,14 +194,40 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
     y += 10;
   }
 
+  // ==================== CONDITIONS & GARANTIES ====================
+  if (y > pageHeight - 90) {
+    doc.addPage();
+    y = 24;
+  }
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...BLUE);
+  doc.text('CONDITIONS DU SERVICE', margin, y);
+  y += 3;
+  doc.setDrawColor(229, 231, 235).setLineWidth(0.3).line(margin, y, right, y);
+  y += 7;
+  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(...TEXT);
+  const placementConditions = [
+    "• Démarrage sous 5 jours ouvrables après validation du devis, selon disponibilité des profils.",
+    "• Une visite préalable gratuite de vos locaux est organisée avant le démarrage pour valider le profil et les consignes.",
+    "• Période d'ajustement de 30 jours : vous pouvez affiner le profil ou les missions sans frais supplémentaires.",
+    "• Engagement minimum : 3 mois — renouvelable par accord mutuel.",
+    "• Paiement : facturation mensuelle — règlement en fin de mois.",
+    "• Résiliation : préavis de 2 mois par écrit.",
+  ];
+  placementConditions.forEach((c, ci) => {
+    const wrapped = doc.splitTextToSize(`${ci + 1}. ${c.replace(/^•\s*/, '')}`, contentWidth);
+    if (y + wrapped.length * 5 > pageHeight - 28) { doc.addPage(); y = 24; }
+    doc.text(wrapped, margin, y);
+    y += wrapped.length * 5 + 1.5;
+  });
+
   // ==================== MESSAGE D'ACCOMPAGNEMENT ====================
   if (y > pageHeight - 110) {
     doc.addPage();
     y = 24;
   } else {
-    y += 12;
+    y += 10;
   }
-  
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
@@ -217,15 +243,15 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   
   const msgLines = [
-    `Bonjour ${data.client.interlocuteur},`,
+    "Madame, Monsieur,",
     '',
-    "Suite à notre échange, nous avons le plaisir de vous soumettre notre proposition pour la mise à disposition de personnel (Placement Flexible).",
+    "Merci de faire appel à Agence Ménage. Veuillez trouver ci-joint notre proposition pour la mise à disposition d'une intervenante dédiée à votre entreprise.",
     '',
-    `Cette solution vous permet de bénéficier de ${data.details.nbIntervenantes} intervenante(s) qualifiée(s) pour un volume de ${data.details.heuresParMois}h par mois, avec une gestion administrative et RH entièrement prise en charge par Agence Ménage.`,
+    `Cette solution vous permet de bénéficier de ${data.details.nbIntervenantes} intervenante(s) qualifiée(s) pour un volume de ${data.details.heuresParMois}h par mois, avec une gestion administrative et RH entièrement prise en charge par Agence Ménage. Notre service inclut CNSS, assurance Accident du Travail, RC professionnelle et contrat de travail légal.`,
     '',
-    "Nous restons à votre entière disposition pour finaliser les détails de cette collaboration et organiser le démarrage de la mission.",
+    "Nous pouvons organiser une visite gratuite de vos locaux à votre convenance pour finaliser cette collaboration.",
     '',
-    "Bien cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
+    "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
   ];
   for (const para of msgLines) {
     if (para === '') { y += 3; continue; }

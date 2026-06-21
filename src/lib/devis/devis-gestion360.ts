@@ -186,7 +186,7 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.setFontSize(9.5);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const introLines = doc.splitTextToSize(
-    "Avec notre offre Gestion 360°, vous n'achetez pas \"du ménage\". Vous achetez un standard de propreté garanti, piloté de A à Z par Agence Ménage. Nous dimensionnons les équipes, organisons les plannings, fournissons les produits et le matériel, assurons la supervision et vous livrons un reporting mensuel. Votre seul interlocuteur : votre chargé de compte Agence Ménage.",
+    "Madame, Monsieur, nous vous remercions de l'intérêt que vous portez aux services d'Agence Ménage. Avec notre offre Gestion 360°, vous n'achetez pas \"du ménage\" : vous achetez un standard de propreté garanti, piloté de A à Z par Agence Ménage. Nous dimensionnons les équipes, organisons les plannings, fournissons les produits et le matériel, assurons la supervision et vous livrons un reporting mensuel. Vous n'avez rien à gérer.",
     contentWidth
   );
   doc.text(introLines, margin, y);
@@ -292,7 +292,7 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text('NOTES ET CONDITIONS PARTICULIÈRES', margin, y);
+  doc.text('CONDITIONS DU SERVICE', margin, y);
   y += 2.5;
   doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
   doc.line(margin, y, right, y);
@@ -300,11 +300,20 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  doc.text("• Remplacement garanti le jour même en cas d'absence d'une intervenante.", margin, y);
-  y += 6.5;
-  doc.text('• Contrôle qualité mensuel avec rapport transmis au donneur d\'ordre.', margin, y);
-  y += 6.5;
-  doc.text('• Traitement de toute réclamation sous 24h avec plan d\'action correctif.', margin, y);
+  const gestion360Conditions = [
+    "• Démarrage sous 5 à 10 jours ouvrables après validation, selon la taille de l'équipe.",
+    "• Une visite préalable gratuite de vos locaux est obligatoire avant le démarrage.",
+    "• Période de rodage de 30 jours : période d'ajustement mutuel. Aucune pénalité applicable durant cette phase.",
+    "• Engagement minimum : 3 mois — renouvelable par accord mutuel.",
+    "• Paiement : facturation mensuelle — règlement en fin de mois.",
+    "• Résiliation : préavis de 2 mois par écrit.",
+  ];
+  gestion360Conditions.forEach((c, ci) => {
+    const wrapped = doc.splitTextToSize(`${ci + 1}. ${c.replace(/^•\s*/, '')}`, contentWidth);
+    if (y + wrapped.length * 5 > pageHeight - 28) { doc.addPage(); y = 24; }
+    doc.text(wrapped, margin, y);
+    y += wrapped.length * 5 + 1.5;
+  });
 
   if (y > pageHeight - 110) {
     doc.addPage();
@@ -324,17 +333,15 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const msgLines = [
-    `Bonjour ${data.client.interlocuteur},`,
+    "Madame, Monsieur,",
     '',
-    'Suite à notre visite de vos locaux, nous avons le plaisir de vous soumettre notre proposition Gestion 360°, notre offre premium clé en main.',
+    "Merci de faire appel à Agence Ménage. Veuillez trouver ci-joint notre proposition Gestion 360°, notre offre clé en main pour l'entretien de vos locaux.",
     '',
-    `Ce dispositif de ${data.details.nbIntervenantes} intervenantes couvre l'ensemble de vos besoins en propreté sur ${data.details.joursParSemaine} jours par semaine. Vous bénéficiez d'un service structuré, mesuré et constant, sans aucune charge de gestion interne.`,
+    `Ce dispositif de ${data.details.nbIntervenantes} intervenante(s) couvre l'ensemble de vos besoins en propreté sur ${data.details.joursParSemaine} jours par semaine. Avec Gestion 360°, vous bénéficiez d'une équipe supervisée et remplacée le jour même en cas d'absence. Zéro gestion pour vous.`,
     '',
-    `L'engagement ${data.details.engagementMois} mois vous permet de bénéficier d'une réduction immédiate de 5% sur le tarif mensuel. Nous pouvons organiser une réunion de lancement à votre convenance pour finaliser le plan de nettoyage sur mesure et les créneaux horaires.`,
+    "Nous pouvons organiser une visite gratuite de vos locaux pour établir un plan de nettoyage sur mesure.",
     '',
-    'Nous vous remercions de la confiance que vous accordez à Agence Ménage.',
-    '',
-    'Bien cordialement, L\'équipe Agence Ménage — 06 64 22 67 90',
+    "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
   ];
   for (const para of msgLines) {
     if (para === '') { y += 3; continue; }
@@ -382,7 +389,7 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
         { maxWidth: contentWidth, align: 'center' }
       );
       doc.text(
-        "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.",
+        "Ce devis est établi en HT, TVA 20% applicable. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.",
         pageWidth / 2,
         footerY + 12,
         { maxWidth: contentWidth, align: 'center' }

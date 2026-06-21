@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
+import { FormulaBox, B, s, ResultBar, fmt, Field } from "./QuoteShared";
+import RemiseSection, { type RemiseValue } from "./RemiseSection";
 import type { QuotePrestationLine } from "./QuoteSection";
 
 interface AuxvieQuoteProps {
@@ -7,88 +8,96 @@ interface AuxvieQuoteProps {
   onPrestationsChange?: (prestations: QuotePrestationLine[], total: number, extra?: Record<string, any>) => void;
 }
 
+// Brief Service 10 — Auxiliaire de vie / garde malade
+const WEEKDAY_RATE = 100; // DH/h — lundi à samedi
+const SUNDAY_RATE = 150;  // DH/h — dimanche & jours fériés civils (+50%)
+
 export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuoteProps) {
   const data = demande.formulaire_data || {};
-  
-  const [mode, setMode] = useState(data.tarif_journalier?.toString() || data.mode || "240");
-  const [jours, setJours] = useState(data.nb_jours || data.numberOfDays || 5);
-  const [semaines, setSemaines] = useState(data.nb_semaines || 4);
-  const [duree, setDuree] = useState(data.coefficient_duree?.toString() || data.duree_coef || "1.00");
-  const [opts, setOpts] = useState({ 
-    toilette: Boolean(data.toilette), 
-    repas: Boolean(data.repas), 
-    medic: Boolean(data.medic), 
-    sortie: Boolean(data.sortie) 
-  });
-  const tog = (k: keyof typeof opts) => setOpts(o => ({ ...o, [k]: !o[k] }));
 
-  const tarif = parseFloat(mode);
-  const cd = parseFloat(duree);
-  const totalJ = jours * semaines;
-  const opj = (opts.toilette ? 50 : 0) + (opts.repas ? 40 : 0) + (opts.medic ? 30 : 0) + (opts.sortie ? 80 : 0);
-  const base = tarif * totalJ * cd;
-  const optionsTotal = opj * totalJ;
-  const total = base + optionsTotal;
+  const [hSemaine, setHSemaine] = useState<number>(data.heures_semaine ?? 24);
+  const [hDimanche, setHDimanche] = useState<number>(data.heures_dimanche ?? 0);
+  const [semaines, setSemaines] = useState<number>(data.nb_semaines || 4);
 
-  const modeLabel = mode === "240" ? "Journée (8h)" : mode === "420" ? "Nuit (12h)" : "24h";
-  const dureeLabel = cd === 1.2 ? "Ponctuelle" : cd === 1 ? "Court terme" : "Long terme (−10%)";
+  const [remise, setRemise] = useState<RemiseValue>(() => ({
+    abonnement: false,
+    etenduePct: Number(data.remise_etendue_pct || 0),
+    promoCode: data.code_promo || "",
+    promoPct: Number(data.code_promo_pct || 0),
+  }));
+
+  const baseWeek = hSemaine * WEEKDAY_RATE;
+  const baseSun = hDimanche * SUNDAY_RATE;
+  const base = (baseWeek + baseSun) * semaines;
+  const remiseMontant = Math.round(base * remise.etenduePct / 100);
+  const promoMontant = remise.promoCode ? Math.round((base - remiseMontant) * remise.promoPct / 100) : 0;
+  const total = base - remiseMontant - promoMontant;
 
   useEffect(() => {
     if (!onPrestationsChange) return;
     const prestations: QuotePrestationLine[] = [
-      { designation: `Auxiliaire de vie — ${modeLabel} — ${totalJ} jours — ${dureeLabel}`, montant: Math.round(base) },
+      {
+        designation: `Accompagnement auxiliaire de vie — ${hSemaine}h/sem (lun.–sam.) × ${semaines} sem. × ${WEEKDAY_RATE} DH/h`,
+        montant: Math.round(baseWeek * semaines),
+      },
     ];
-    if (opts.toilette) prestations.push({ designation: `Aide à la toilette (${totalJ} jours × 50 DH)`, montant: 50 * totalJ });
-    if (opts.repas) prestations.push({ designation: `Préparation repas (${totalJ} jours × 40 DH)`, montant: 40 * totalJ });
-    if (opts.medic) prestations.push({ designation: `Suivi médicaments (${totalJ} jours × 30 DH)`, montant: 30 * totalJ });
-    if (opts.sortie) prestations.push({ designation: `Accompagnement sorties (${totalJ} jours × 80 DH)`, montant: 80 * totalJ });
+    if (hDimanche > 0) {
+      prestations.push({
+        designation: `Majoration dimanche / jours fériés — ${hDimanche}h/sem × ${semaines} sem. × ${SUNDAY_RATE} DH/h`,
+        montant: Math.round(baseSun * semaines),
+      });
+    }
+    if (remiseMontant > 0) prestations.push({ designation: `Remise (–${remise.etenduePct}%)`, montant: -remiseMontant, isReduction: true });
+    if (promoMontant > 0) prestations.push({ designation: `Code promo ${remise.promoCode} (–${remise.promoPct}%)`, montant: -promoMontant, isReduction: true });
     onPrestationsChange(prestations, total, {
-      tarif_journalier: tarif, nb_jours: jours, nb_semaines: semaines,
-      coefficient_duree: cd, duree: dureeLabel,
-      toilette: opts.toilette, repas: opts.repas, medic: opts.medic, sortie: opts.sortie
+      tarif_horaire: WEEKDAY_RATE,
+      heures_semaine: hSemaine,
+      heures_dimanche: hDimanche,
+      nb_semaines: semaines,
+      duree: `${hSemaine + hDimanche}h/sem`,
+      reduction: remiseMontant + promoMontant,
+      reduction_montant: remiseMontant + promoMontant,
+      reduction_pourcentage: remise.etenduePct,
+      remise_etendue_pct: remise.etenduePct,
+      code_promo: remise.promoCode,
+      code_promo_pct: remise.promoPct,
     });
-  }, [mode, jours, semaines, duree, opts, base, total, totalJ]);
+  }, [hSemaine, hDimanche, semaines, base, remise, remiseMontant, promoMontant, total]);
 
   return (
     <div className="quote-calculator">
       <FormulaBox>
-        <B>Base :</B> Tarif × Jours × Semaines × Coeff
-        <br /><span style={{ fontSize: 10, display: "block", marginTop: 3 }}>Usage interne : tarification basée sur les forfaits 8h/12h/24h.</span>
+        <B>Base :</B> Heures × Tarif horaire × Semaines · <B>100 DH/h</B> en semaine, <B>150 DH/h</B> dimanche &amp; jours fériés (+50%)
+        <br /><span style={{ fontSize: 10, display: "block", marginTop: 3 }}>
+          Facturation par tranches de 30 min · minimum 0,5h par passage · frais de mise à disposition offerts. Hygiène, suivi des médicaments et cahier de liaison inclus.
+        </span>
       </FormulaBox>
       <div style={s.grid2}>
         <div>
-          <Field label="Présence">
-            <select value={mode} onChange={e => setMode(e.target.value)} style={s.input as any}>
-              <option value="240">Journée (8h) — 240 DH</option>
-              <option value="420">Nuit (12h) — 420 DH</option>
-              <option value="580">24h — 580 DH</option>
-            </select>
+          <Field label="Heures / semaine (lun.–sam., 100 DH/h)">
+            <input type="number" value={hSemaine} min={0.5} step={0.5} onChange={e => setHSemaine(Math.max(0.5, +e.target.value))} style={s.input as any} />
           </Field>
-          <Field label="Jours / semaine">
-            <input type="number" value={jours} min={1} max={7} onChange={e => setJours(+e.target.value)} style={s.input as any} />
+          <Field label="Heures / semaine dimanche &amp; fériés (150 DH/h)">
+            <input type="number" value={hDimanche} min={0} step={0.5} onChange={e => setHDimanche(Math.max(0, +e.target.value))} style={s.input as any} />
           </Field>
           <Field label="Durée de la mission (semaines)">
             <input type="number" value={semaines} min={1} max={52} onChange={e => setSemaines(+e.target.value)} style={s.input as any} />
           </Field>
-          <Field label="Durée mission">
-            <select value={duree} onChange={e => setDuree(e.target.value)} style={s.input as any}>
-              <option value="1.20">Ponctuelle — moins d'1 semaine (×1,20)</option>
-              <option value="1.00">Court terme — 1 à 4 semaines (×1,00)</option>
-              <option value="0.90">Long terme — plus d'1 mois (×0,90)</option>
-            </select>
-          </Field>
         </div>
         <div>
-          <div style={s.optTitle}>Options / jour de présence</div>
-          <OptRow label="Aide à la toilette" price="+50 DH/j" checked={opts.toilette} onChange={() => tog("toilette")} />
-          <OptRow label="Préparation des repas" price="+40 DH/j" checked={opts.repas} onChange={() => tog("repas")} />
-          <OptRow label="Suivi prise de médicaments" price="+30 DH/j" checked={opts.medic} onChange={() => tog("medic")} />
-          <OptRow label="Accompagnement sorties" price="+80 DH/j" checked={opts.sortie} onChange={() => tog("sortie")} />
+          <div style={s.optTitle}>Inclus dans la prestation</div>
+          <ul style={{ fontSize: 11, lineHeight: 1.7, paddingLeft: 16, margin: 0 }}>
+            <li>Présence, accompagnement et surveillance</li>
+            <li>Aide à l'hygiène et au confort</li>
+            <li>Aide à la prise des médicaments (selon ordonnance)</li>
+            <li>Cahier de liaison + suivi WhatsApp famille</li>
+          </ul>
         </div>
       </div>
+      <RemiseSection isAbo={false} segment={demande.segment} montantBase={base} value={remise} onChange={setRemise} />
       <ResultBar
-        detail={`${mode === "240" ? "8h" : mode === "420" ? "12h" : "24h"} × ${totalJ} j × ${cd.toFixed(2)} = ${fmt(base)} DH + options ${fmt(opj * totalJ)} DH`}
-        total={`${fmt(total)} DH`} label="Total mission HT" />
+        detail={`${hSemaine}h × ${WEEKDAY_RATE} DH${hDimanche > 0 ? ` + ${hDimanche}h × ${SUNDAY_RATE} DH` : ""} × ${semaines} sem.${remiseMontant > 0 ? ` − ${fmt(remiseMontant)} remise` : ""}${promoMontant > 0 ? ` − ${fmt(promoMontant)} promo` : ""}`}
+        total={`${fmt(total)} DH`} label="Total mission" />
     </div>
   );
 }

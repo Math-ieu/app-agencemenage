@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
+import RemiseSection, { type RemiseValue } from "./RemiseSection";
+import { SURCHARGE_CITIES } from "../../../utils/pricing";
 import type { QuotePrestationLine } from "./QuoteSection";
 
 interface ChantierQuoteProps {
@@ -18,6 +20,8 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
   const [marbre, setMarbre] = useState(Boolean(data.marbre || data.surface_marbre > 0));
   const [surfMarbre, setSurfMarbre] = useState(data.surface_marbre || 30);
   const [terrasse, setTerrasse] = useState(Boolean(data.terrasse_incluse));
+  const villeConcernee = SURCHARGE_CITIES.includes(data.ville || data.city || demande.client_city || "");
+  const [zone, setZone] = useState(data.zone_eloignee !== undefined ? Boolean(data.zone_eloignee) : villeConcernee);
 
   const MIN = 1500;
   const baseRaw = surface * parseFloat(grattage);
@@ -26,7 +30,17 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
   const dechetsCost = dechets === "-1" ? 0 : (parseFloat(dechets) || 0);
   const devisSpe = dechets === "-1";
   const marbreCost = marbre ? surfMarbre * 25 : 0;
-  const total = base + vitresCost + dechetsCost + marbreCost;
+  const zoneCost = zone ? 200 : 0;
+  const [remise, setRemise] = useState<RemiseValue>(() => ({
+    abonnement: false,
+    etenduePct: Number(data.remise_etendue_pct || 0),
+    promoCode: data.code_promo || "",
+    promoPct: Number(data.code_promo_pct || 0),
+  }));
+  const preRemise = base + vitresCost + dechetsCost + marbreCost + zoneCost;
+  const remiseMontant = Math.round(preRemise * remise.etenduePct / 100);
+  const promoMontant = remise.promoCode ? Math.round((preRemise - remiseMontant) * remise.promoPct / 100) : 0;
+  const total = preRemise - remiseMontant - promoMontant;
 
   const grattageLabel = parseFloat(grattage) <= 12 ? 'sans grattage' : parseFloat(grattage) <= 15 ? 'grattage léger' : 'rénovation totale';
 
@@ -52,6 +66,15 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
     if (marbreCost > 0) {
       prestations.push({ designation: `Cristallisation du marbre — ${surfMarbre} m²`, montant: marbreCost });
     }
+    if (zoneCost > 0) {
+      prestations.push({ designation: "Zone éloignée (Bouskoura, Dar Bouazza, Mohammédia…)", montant: zoneCost });
+    }
+    if (remiseMontant > 0) {
+      prestations.push({ designation: `Remise (–${remise.etenduePct}%)`, montant: -remiseMontant, isReduction: true });
+    }
+    if (promoMontant > 0) {
+      prestations.push({ designation: `Code promo ${remise.promoCode} (–${remise.promoPct}%)`, montant: -promoMontant, isReduction: true });
+    }
     onPrestationsChange(prestations, total, {
       surface, grattage: parseFloat(grattage), grattage_rate: parseFloat(grattage),
       surface_vitres: vitres === "25" ? surfVitres : 0,
@@ -61,9 +84,16 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
       surface_marbre: marbre ? surfMarbre : 0,
       prix_marbre: marbreCost,
       terrasse_incluse: terrasse,
+      zone_eloignee: zone ? 200 : 0,
       prix_base: base,
+      reduction: remiseMontant + promoMontant,
+      reduction_montant: remiseMontant + promoMontant,
+      reduction_pourcentage: remise.etenduePct,
+      remise_etendue_pct: remise.etenduePct,
+      code_promo: remise.promoCode,
+      code_promo_pct: remise.promoPct,
     });
-  }, [surface, grattage, vitres, surfVitres, dechets, marbre, surfMarbre, terrasse, base, vitresCost, dechetsCost, marbreCost, total]);
+  }, [surface, grattage, vitres, surfVitres, dechets, marbre, surfMarbre, terrasse, zone, base, vitresCost, dechetsCost, marbreCost, zoneCost, remise, remiseMontant, promoMontant, total]);
 
   const detail = `${surface} m² × ${grattage} DH = ${fmt(baseRaw)} DH${baseRaw < MIN ? ` (min ${fmt(MIN)})` : ""}` +
     (vitresCost ? ` + vitres` : "") +
@@ -118,8 +148,10 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
             </Field>
           )}
           <OptRow label="Terrasse / Rooftop" price="Inclus" checked={terrasse} onChange={setTerrasse} />
+          <OptRow label="Zone éloignée" note="Bouskoura, Dar Bouazza, Mohammédia…" price="+200 DH" checked={zone} onChange={setZone} />
         </div>
       </div>
+      <RemiseSection isAbo={false} segment={demande.segment} montantBase={preRemise} value={remise} onChange={setRemise} />
       <ResultBar detail={detail} total={`${fmt(total)}${devisSpe ? " +" : ""} DH`} label="Devis HT" />
     </div>
   );

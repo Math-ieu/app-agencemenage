@@ -6,6 +6,7 @@ import AuxvieQuote from "./AuxvieQuote";
 import SinistreQuote from "./SinistreQuote";
 import BureauxQuote from "./BureauxQuote";
 import PlacementQuote from "./PlacementQuote";
+import StandardQuote from "./StandardQuote";
 import AutreServiceQuote from "./AutreServiceQuote";
 import { fmt, Field, s } from "./QuoteShared";
 
@@ -32,6 +33,7 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
     service.includes('air bnb') || service.includes('airbnb') || 
     service.includes('sinistre') || service.includes('auxiliaire') || 
     service.includes('chantier') || service.includes('placement') || service.includes('gestion') ||
+    service.includes('standard') || service.includes('grand') || service.includes('bureaux') ||
     service.includes('autre service') || service.includes('autre_service');
   
   const type = isDevis ? 'devis' : 'png';
@@ -230,6 +232,7 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
     if (service.includes("sinistre")) return <SinistreQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
     if (service.includes("bureaux")) return <BureauxQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
     if (service.includes("placement") || service.includes("gestion")) return <PlacementQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("standard") || service.includes("grand")) return <StandardQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
     return null;
   };
 

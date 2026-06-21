@@ -116,6 +116,7 @@ export interface Demande {
   tarif_produit?: number;
   prix: number | string;
   is_devis: boolean;
+  devis_statut?: 'brouillon' | 'en_attente_validation' | 'valide' | 'envoye' | 'accepte' | 'refuse';
   tarif_total?: number;
   reste_a_payer?: number;
   avance_paiement?: number | string | null;

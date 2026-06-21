@@ -149,9 +149,9 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   doc.setFontSize(10);
   doc.setTextColor(55, 65, 81);
   const introTexts = [
-    "Nous vous remercions de votre confiance et avons le plaisir de vous adresser notre proposition tarifaire pour l'entretien de votre bien en location courte durée.",
+    "Merci de nous faire confiance. Vous trouverez ci-dessous notre proposition pour l'entretien de votre bien en location courte durée.",
     "",
-    "Notre service Airbnb est conçu pour garantir à chaque passage un logement impeccable, prêt à accueillir vos voyageurs dans les meilleures conditions. Vous gérez les réservations, nous gérons la propreté.",
+    "Nous mettons à votre disposition une femme de ménage pour remettre votre logement en état après chaque départ de voyageur. Vous gérez les réservations, nous gérons la propreté.",
   ];
   for (const para of introTexts) {
     if (para === '') { y += 3; continue; }
@@ -260,13 +260,19 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const conditions = [
-    "• Intervention planifiable en moins de 24h entre deux séjours.",
-    "• Un rapport de passage (photos clés de l'appartement) peut être fourni sur demande.",
-    "• Produits ménagers professionnels utilisés par nos intervenantes.",
+    "• Le client met à disposition ses propres produits ménagers, torchons, seau, serpillère, raclette et balai. Sans ces éléments, la mission ne peut pas démarrer.",
+    "• Le client doit disposer d'un minimum de 2 sets de linge propre à chaque passage (3 sets recommandés en période de pluie).",
+    "• La femme de ménage ne lave pas le linge chez le client et n'utilise pas sa machine à laver. Le lavage est pris en charge par notre équipe en dehors du bien.",
+    "• Tout article supplémentaire remis en dehors du set standard est facturé 5 DH par pièce. Le service linge nécessite au minimum 1 set complet.",
+    "• Une tolérance de 30 minutes de retard est accordée. Nos intervenantes se déplacent en transport en commun.",
+    "• Un tour du bien est effectué à l'arrivée. Si le temps estimé dépasse la durée prévue de plus de 30 minutes, la mission est annulée sauf accord du client (heures supplémentaires validées avec la chargée de clientèle).",
+    "• Le réassort de vos produits ménagers est inclus si vous les mettez à disposition. L'agence n'apporte pas ses propres produits pour le moment.",
   ];
-  conditions.forEach((c) => {
-    doc.text(c, MARGIN, y);
-    y += 6.5;
+  conditions.forEach((c, ci) => {
+    const wrapped = doc.splitTextToSize(`${ci + 1}. ${c.replace(/^•\s*/, '')}`, CONTENT_W);
+    if (y + wrapped.length * 5 > pageHeight - 28) { doc.addPage(); y = 24; }
+    doc.text(wrapped, MARGIN, y);
+    y += wrapped.length * 5 + 1.5;
   });
 
   // Message d'accompagnement
@@ -293,9 +299,9 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   const msgLines = [
     `Bonjour ${data.client.nom},`,
     '',
-    "Suite à notre échange, veuillez trouver ci-dessous notre proposition pour l'entretien de votre appartement Airbnb. Notre Formule B intègre le ménage complet ainsi que la collecte, le lavage et le repassage du linge, vous permettant de proposer un logement toujours frais à vos voyageurs.",
+    "Merci de faire appel à Agence Ménage ! Vous trouverez ci-joint notre proposition pour l'entretien de votre bien Airbnb, afin de remettre votre logement en état après chaque départ de voyageur.",
     '',
-    "N'hésitez pas à nous contacter pour toute question ou pour planifier votre première intervention.",
+    "Votre chargée de clientèle est disponible pour toute question ou pour planifier votre première intervention.",
     '',
     "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
   ];
