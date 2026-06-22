@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient, uploadDocument } from '../api/client';
 import { decodeId } from '../utils/obfuscation';
@@ -60,6 +60,18 @@ const getDevisStatutMeta = (value?: string) =>
 // Numéro de devis aligné sur le PDF (buildDevisNumber) : DEV-{année}-{id sur 4 chiffres}
 const formatDevisNumber = (id: number) => `DEV-${new Date().getFullYear()}-${String(id).padStart(4, '0')}`;
 
+const isMobilityMatching = (value: string, option: string) => {
+  if (!value || !option) return false;
+  const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const v = clean(value);
+  const o = clean(option);
+  if (v === o) return true;
+  if (v.includes('aide') && o.includes('aide')) return true;
+  if ((v.includes('alite') || v.includes('alite(e)')) && (o.includes('alite') || o.includes('alite(e)'))) return true;
+  if ((v.includes('age') || v.includes('personneage')) && (o.includes('age') || o.includes('personneage'))) return true;
+  return false;
+};
+
 const strip212 = (p: string) => {
   if (!p) return '';
   let cleaned = p.trim().replace(/\s+/g, '');
@@ -112,6 +124,10 @@ export default function DemandesEnAttente() {
   const [syncWhatsApp, setSyncWhatsApp] = useState(true);
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [editingDemande, setEditingDemande] = useState<Demande | null>(null);
+  const editingDemandeRef = useRef<Demande | null>(null);
+  useEffect(() => {
+    editingDemandeRef.current = editingDemande;
+  }, [editingDemande]);
   const [isRenewal, setIsRenewal] = useState(false);
   const [showAnnulationModal, setShowAnnulationModal] = useState<{ demandeId: number } | null>(null);
   const [annulationReason, setAnnulationReason] = useState('');
@@ -236,25 +252,27 @@ export default function DemandesEnAttente() {
   const calculatedPrice = usePriceCalculator(formData, selectedService);
   const estimatedResources = useResourceEstimator(formData, selectedService);
 
-  // Sync estimated resources
+  // Sync estimated resources (only for new creations, not for edits or renewals)
   useEffect(() => {
-    if (estimatedResources) {
+    if (!editingDemande && !isRenewal && estimatedResources) {
       setFormData(prev => ({
         ...prev,
         duree: estimatedResources.duration,
         nb_intervenants: estimatedResources.people
       }));
     }
-  }, [estimatedResources]);
+  }, [estimatedResources, editingDemande, isRenewal]);
 
-  // Sync calculated price to montant
+  // Sync calculated price to montant (only for new creations)
   useEffect(() => {
-    if (calculatedPrice && calculatedPrice !== 'Sur devis') {
-      setFormData(prev => ({ ...prev, montant: calculatedPrice }));
-    } else if (calculatedPrice === 'Sur devis') {
-      setFormData(prev => ({ ...prev, montant: '' }));
+    if (!editingDemande && !isRenewal) {
+      if (calculatedPrice && calculatedPrice !== 'Sur devis') {
+        setFormData(prev => ({ ...prev, montant: calculatedPrice }));
+      } else if (calculatedPrice === 'Sur devis') {
+        setFormData(prev => ({ ...prev, montant: '' }));
+      }
     }
-  }, [calculatedPrice]);
+  }, [calculatedPrice, editingDemande, isRenewal]);
 
   // Enforce minDuree for duration
   useEffect(() => {
@@ -442,6 +460,19 @@ export default function DemandesEnAttente() {
 
       setDemandes(filtered);
       setPendingCount(filtered.length);
+
+      if (editingDemandeRef.current) {
+        const currentEditing = editingDemandeRef.current;
+        const fresh = results.find((d: any) => d.id === currentEditing.id);
+        if (fresh) {
+          const docLenChanged = (fresh.documents?.length || 0) !== (currentEditing.documents?.length || 0);
+          const prixChanged = fresh.prix !== currentEditing.prix;
+          const statusChanged = fresh.statut !== currentEditing.statut;
+          if (docLenChanged || prixChanged || statusChanged) {
+            setEditingDemande(fresh);
+          }
+        }
+      }
     } catch (err) {
       console.error('Erreur fetchDemandes:', err);
       addToast('Erreur lors du chargement des demandes', 'error');
@@ -634,12 +665,12 @@ export default function DemandesEnAttente() {
 
     setFormData({
       nom: d.client_name || d.formulaire_data?.nom || d.formulaire_data?.fullName || '',
-      email: d.formulaire_data?.email || d.client_detail?.email || '',
-      entity_name: d.formulaire_data?.entityName || d.formulaire_data?.entity_name || '',
-      contact_person: d.formulaire_data?.contactPerson || d.formulaire_data?.contact_person || '',
-      ville: d.formulaire_data?.ville || d.client_city || 'Casablanca',
-      quartier: normalizeQuartier(d.formulaire_data?.quartier || d.client_neighborhood || ''),
-      adresse: d.formulaire_data?.adresse || '',
+      email: d.client_email || d.formulaire_data?.email || d.client_detail?.email || '',
+      entity_name: d.client_entity || d.formulaire_data?.entityName || d.formulaire_data?.entity_name || '',
+      contact_person: d.client_contact || d.formulaire_data?.contactPerson || d.formulaire_data?.contact_person || '',
+      ville: d.client_city || d.formulaire_data?.ville || 'Casablanca',
+      quartier: normalizeQuartier(d.client_neighborhood || d.formulaire_data?.quartier || ''),
+      adresse: d.client_address || d.formulaire_data?.adresse || '',
       date: d.date_intervention || d.formulaire_data?.date || d.formulaire_data?.scheduledDate || '',
       heure: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime || '',
       scheduling_type: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime ? 'fixed' : 'flexible',
@@ -647,12 +678,12 @@ export default function DemandesEnAttente() {
       type_habitation: normalizeStructure(d.formulaire_data?.type_habitation || ''),
       frequence: normalizeFrequence(d.frequency_label || d.formulaire_data?.frequence || (d.frequency === 'oneshot' ? 'une fois' : 'mensuel')),
       intervention_nature: d.formulaire_data?.interventionNature || d.formulaire_data?.intervention_nature || 'sinistre',
-      accommodation_state: d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '',
-      cleanliness_type: d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '',
-      nb_intervenants: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || 1,
+      accommodation_state: (d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+      cleanliness_type: (d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+      nb_intervenants: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || d.formulaire_data?.numberOfPeople || d.nb_intervenants || 1,
       surface: d.formulaire_data?.surface || 50,
       details_pieces: d.formulaire_data?.details_pieces || '',
-      duree: d.formulaire_data?.duree || d.formulaire_data?.nb_heures || 4,
+      duree: d.formulaire_data?.duree || d.formulaire_data?.nb_heures || d.nb_heures || 4,
       produits: d.formulaire_data?.produits || d.formulaire_data?.produitsEtOutils || false,
       torchons: d.formulaire_data?.torchons || d.formulaire_data?.torchonsEtSerpierres || false,
       montant: d.prix?.toString() || d.formulaire_data?.montant || '',
@@ -662,7 +693,7 @@ export default function DemandesEnAttente() {
       notes: d.formulaire_data?.notes || '',
       service_type: d.formulaire_data?.service_type || 'flexible',
       structure_type: normalizeStructure(d.formulaire_data?.structure_type || ''),
-      nb_personnel: d.formulaire_data?.nb_personnel || 1,
+      nb_personnel: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || d.formulaire_data?.numberOfPeople || d.nb_intervenants || 1,
       lieu_garde: d.formulaire_data?.lieu_garde || 'domicile',
       age_personne: d.formulaire_data?.age_personne || '',
       sexe_personne: normalizeSexe(d.formulaire_data?.sexe_personne || ''),
@@ -724,12 +755,12 @@ export default function DemandesEnAttente() {
 
     setFormData({
       nom: d.client_name || d.formulaire_data?.nom || d.formulaire_data?.fullName || '',
-      email: d.formulaire_data?.email || d.client_detail?.email || '',
-      entity_name: d.formulaire_data?.entityName || d.formulaire_data?.entity_name || '',
-      contact_person: d.formulaire_data?.contactPerson || d.formulaire_data?.contact_person || '',
-      ville: d.formulaire_data?.ville || d.client_city || 'Casablanca',
-      quartier: normalizeQuartier(d.formulaire_data?.quartier || d.client_neighborhood || ''),
-      adresse: d.formulaire_data?.adresse || '',
+      email: d.client_email || d.formulaire_data?.email || d.client_detail?.email || '',
+      entity_name: d.client_entity || d.formulaire_data?.entityName || d.formulaire_data?.entity_name || '',
+      contact_person: d.client_contact || d.formulaire_data?.contactPerson || d.formulaire_data?.contact_person || '',
+      ville: d.client_city || d.formulaire_data?.ville || 'Casablanca',
+      quartier: normalizeQuartier(d.client_neighborhood || d.formulaire_data?.quartier || ''),
+      adresse: d.client_address || d.formulaire_data?.adresse || '',
       date: d.date_intervention || d.formulaire_data?.date || d.formulaire_data?.scheduledDate || '',
       heure: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime || '',
       scheduling_type: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime ? 'fixed' : 'flexible',
@@ -737,12 +768,12 @@ export default function DemandesEnAttente() {
       type_habitation: normalizeStructure(d.formulaire_data?.type_habitation || ''),
       frequence: normalizeFrequence(d.frequency_label || d.formulaire_data?.frequence || (d.frequency === 'oneshot' ? 'une fois' : 'mensuel')),
       intervention_nature: d.formulaire_data?.interventionNature || d.formulaire_data?.intervention_nature || 'sinistre',
-      accommodation_state: d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '',
-      cleanliness_type: d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '',
-      nb_intervenants: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || 1,
+      accommodation_state: (d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+      cleanliness_type: (d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+      nb_intervenants: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || d.formulaire_data?.numberOfPeople || d.nb_intervenants || 1,
       surface: d.formulaire_data?.surface || 50,
       details_pieces: d.formulaire_data?.details_pieces || '',
-      duree: d.formulaire_data?.duree || d.formulaire_data?.nb_heures || 4,
+      duree: d.formulaire_data?.duree || d.formulaire_data?.nb_heures || d.nb_heures || 4,
       produits: d.formulaire_data?.produits || d.formulaire_data?.produitsEtOutils || false,
       torchons: d.formulaire_data?.torchons || d.formulaire_data?.torchonsEtSerpierres || false,
       montant: d.prix?.toString() || d.formulaire_data?.montant || '',
@@ -752,7 +783,7 @@ export default function DemandesEnAttente() {
       notes: d.formulaire_data?.notes || '',
       service_type: d.formulaire_data?.service_type || 'flexible',
       structure_type: normalizeStructure(d.formulaire_data?.structure_type || ''),
-      nb_personnel: d.formulaire_data?.nb_personnel || 1,
+      nb_personnel: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || d.formulaire_data?.numberOfPeople || d.nb_intervenants || 1,
       lieu_garde: d.formulaire_data?.lieu_garde || 'domicile',
       age_personne: d.formulaire_data?.age_personne || '',
       sexe_personne: normalizeSexe(d.formulaire_data?.sexe_personne || ''),
@@ -793,6 +824,155 @@ export default function DemandesEnAttente() {
       avance_fixe: d.formulaire_data?.avance_fixe || d.formulaire_data?.advance_amount || 0
     });
     setShowCreateModal(true);
+  };
+
+  const getUpdatedDemandeFromForm = (baseDemande: Demande | null): Demande => {
+    const frequencyValue = formData.frequence === 'une fois' ? 'oneshot' : 'abonnement';
+    const isFixedSchedule = formData.scheduling_type === 'fixed';
+    const clientDisplayName = activeSegment === 'entreprise'
+      ? (formData.entity_name || formData.contact_person || formData.nom)
+      : formData.nom;
+
+    const formatPhone = (p: string) => {
+      if (!p) return "";
+      let cleaned = p.replace(/\s+/g, '');
+      if (cleaned.startsWith('0')) cleaned = cleaned.substring(1);
+      if (!cleaned.startsWith('+')) return `+212${cleaned}`;
+      return cleaned;
+    };
+
+    const finalPhone = formatPhone(directPhone);
+    const finalWhatsApp = formatPhone(whatsappPhone);
+
+    const additionalServices = {
+      produitsEtOutils: Boolean(formData.produits),
+      torchonsEtSerpierres: Boolean(formData.torchons),
+    };
+
+    const paymentOption = PAYMENT_STATUS_OPTIONS.find(o => o.value === formData.statut_paiement_ui);
+
+    const finalService = selectedService === 'Autre service'
+      ? (formData.custom_service_type || 'Autre service')
+      : selectedService;
+
+    const isAuxiliaire = selectedServiceKey.includes('auxiliaire de vie') || selectedService.toLowerCase().includes('auxiliaire');
+    const cleanerCount = isAuxiliaire ? (formData.nb_personnel || 1) : (formData.nb_intervenants || 1);
+
+    const formulaire_data = {
+      ...(baseDemande?.formulaire_data || {}),
+      facturation: {
+        ...(baseDemande?.formulaire_data?.facturation || {}),
+        statut_paiement_ui: formData.statut_paiement_ui,
+      },
+      statut_paiement_ui: formData.statut_paiement_ui,
+      nom: clientDisplayName,
+      firstName: activeSegment === 'particulier' ? (formData.nom.split(' ').slice(0, -1).join(' ') || formData.nom) : '',
+      lastName: activeSegment === 'particulier' ? (formData.nom.split(' ').slice(-1).join(' ') || formData.nom) : '',
+      email: formData.email,
+      entityName: formData.entity_name,
+      contactPerson: formData.contact_person,
+      ville: formData.ville,
+      city: formData.ville,
+      quartier: formData.quartier,
+      neighborhood: formData.quartier,
+      adresse: formData.adresse,
+      preference_horaire: isFixedSchedule ? '' : formData.preference_horaire,
+      schedulingType: formData.scheduling_type,
+      schedulingDate: formData.date || null,
+      fixedTime: isFixedSchedule ? (formData.heure || '') : '',
+      schedulingTime: isFixedSchedule ? '' : (formData.preference_horaire === 'matin' ? 'morning' : formData.preference_horaire === 'apres_midi' ? 'afternoon' : ''),
+      type_habitation: selectedService === 'Autre service'
+        ? (formData.property_category === 'logement' ? formData.property_subtype : formData.property_category)
+        : formData.type_habitation,
+      propertyType: selectedService === 'Autre service'
+        ? (formData.property_category === 'logement' ? (formData.property_subtype || '').toLowerCase() : (formData.property_category || '').toLowerCase())
+        : (formData.type_habitation ? formData.type_habitation.toLowerCase() : ''),
+      surface: formData.surface,
+      surfaceArea: formData.surface,
+      duree: formData.duree,
+      duration: formData.duree,
+      nb_intervenants: cleanerCount,
+      numberOfPeople: cleanerCount,
+      nb_intervenantes: cleanerCount,
+      details_pieces: formData.details_pieces,
+      produits: formData.produits,
+      torchons: formData.torchons,
+      additionalServices,
+      heard_about_us: formData.heard_about_us,
+      comment_connu: formData.heard_about_us,
+      lead_source: formData.heard_about_us,
+      structure_type: formData.structure_type,
+      structureType: formData.structure_type,
+      service_type: formData.service_type,
+      serviceType: formData.service_type,
+      nb_personnel: cleanerCount,
+      lieu_garde: formData.lieu_garde,
+      careLocation: formData.lieu_garde,
+      age_personne: formData.age_personne,
+      patientAge: formData.age_personne,
+      sexe_personne: formData.sexe_personne,
+      patientGender: formData.sexe_personne,
+      mobilite: formData.mobilite,
+      situation_medicale: formData.situation_medicale,
+      healthIssues: formData.situation_medicale,
+      nb_jours: formData.nb_jours,
+      numberOfDays: formData.nb_jours,
+      interventionNature: formData.intervention_nature,
+      accommodationState: formData.accommodation_state,
+      cleanlinessType: formData.cleanliness_type,
+      whatsapp_phone: finalWhatsApp,
+      whatsappNumber: finalWhatsApp,
+      notes: formData.notes,
+      rooms: formData.rooms,
+      formula: formData.formula,
+      size_tier: formData.size_tier,
+      sizeTier: formData.size_tier,
+      conso: formData.conso,
+      linen_sets: formData.linen_sets,
+      linenSets: formData.linen_sets,
+      is_autre_service: selectedService === 'Autre service' || baseDemande?.formulaire_data?.is_autre_service || false,
+      custom_service_type: formData.custom_service_type,
+      property_category: formData.property_category,
+      property_subtype: formData.property_subtype,
+      duration_unit: formData.duration_unit,
+      description: formData.description,
+      amount_ht: formData.amount_ht,
+      tva_active: formData.tva_active,
+      quote_number: formData.quote_number,
+      frequency_custom: formData.frequency_custom,
+      options: formData.options,
+      vat_rate: formData.vat_rate,
+      advance_required: formData.advance_required,
+      advance_mode: formData.advance_mode,
+      advance_percent: formData.advance_percent,
+      advance_amount: formData.advance_amount,
+      avance_paiement: formData.avance_paiement,
+      avance_active: formData.avance_active,
+      avance_type: formData.avance_type,
+      avance_pourcentage: formData.avance_pourcentage,
+      avance_fixe: formData.avance_fixe,
+      frequence: formData.frequence
+    };
+
+    return {
+      ...(baseDemande || {}),
+      client_name: clientDisplayName,
+      client_phone: finalPhone,
+      client_whatsapp: finalWhatsApp,
+      service: finalService,
+      segment: activeSegment,
+      date_intervention: formData.date || null,
+      heure_intervention: isFixedSchedule ? (formData.heure || '') : '',
+      prix: formData.montant || null,
+      is_devis: selectedService === 'Autre service' || isDevisRequired({ service: selectedService, segment: activeSegment, formulaire_data: formData } as any),
+      mode_paiement: formData.mode_paiement,
+      statut_paiement: paymentOption?.apiValue || 'non_paye',
+      frequency: frequencyValue,
+      frequency_label: formData.frequence,
+      nb_heures: formData.duree || 4,
+      nb_intervenants: cleanerCount,
+      formulaire_data
+    } as Demande;
   };
 
   const handleCreateDemande = async () => {
@@ -855,6 +1035,9 @@ export default function DemandesEnAttente() {
         ? (formData.custom_service_type || 'Autre service')
         : selectedService;
 
+      const isAuxiliaire = selectedServiceKey.includes('auxiliaire de vie') || selectedService.toLowerCase().includes('auxiliaire');
+      const cleanerCount = isAuxiliaire ? (formData.nb_personnel || 1) : (formData.nb_intervenants || 1);
+
       const payload = {
         client_name: clientDisplayName,
         client_phone: finalPhone,
@@ -869,6 +1052,8 @@ export default function DemandesEnAttente() {
         statut_paiement: paymentOption?.apiValue || 'non_paye',
         frequency: frequencyValue,
         frequency_label: formData.frequence,
+        nb_heures: formData.duree || 4,
+        nb_intervenants: cleanerCount,
         ...(isRenewal ? { statut: 'en_attente', cao: false, profils_envoyes: [], documents: [] } : {}),
         ...(decodedClientId ? { client: decodedClientId } : {}),
         formulaire_data: {
@@ -903,8 +1088,9 @@ export default function DemandesEnAttente() {
           surfaceArea: formData.surface,
           duree: formData.duree,
           duration: formData.duree,
-          nb_intervenants: formData.nb_intervenants,
-          numberOfPeople: formData.nb_intervenants,
+          nb_intervenants: cleanerCount,
+          numberOfPeople: cleanerCount,
+          nb_intervenantes: cleanerCount,
           details_pieces: formData.details_pieces,
           produits: formData.produits,
           torchons: formData.torchons,
@@ -917,7 +1103,7 @@ export default function DemandesEnAttente() {
           structureType: formData.structure_type,
           service_type: formData.service_type,
           serviceType: formData.service_type,
-          nb_personnel: formData.nb_personnel,
+          nb_personnel: cleanerCount,
           // Auxiliaire de vie
           lieu_garde: formData.lieu_garde,
           careLocation: formData.lieu_garde,
@@ -1022,14 +1208,31 @@ export default function DemandesEnAttente() {
   };
 
   const handleQuoteUpdate = async (demandeId: number, patch: Record<string, any>) => {
+    // Synchroniser le patch de manière bidirectionnelle
+    const updatedPatch = { ...patch };
+    const val = patch.nb_intervenants !== undefined ? patch.nb_intervenants : (patch.nb_personnel !== undefined ? patch.nb_personnel : (patch.nb_intervenantes !== undefined ? patch.nb_intervenantes : (patch.numberOfPeople !== undefined ? patch.numberOfPeople : undefined)));
+    if (val !== undefined) {
+      updatedPatch.nb_intervenants = val;
+      updatedPatch.nb_personnel = val;
+      updatedPatch.nb_intervenantes = val;
+      updatedPatch.numberOfPeople = val;
+    }
+
+    const durVal = patch.duree !== undefined ? patch.duree : (patch.nb_heures !== undefined ? patch.nb_heures : (patch.duration !== undefined ? patch.duration : undefined));
+    if (durVal !== undefined) {
+      updatedPatch.duree = durVal;
+      updatedPatch.nb_heures = durVal;
+      updatedPatch.duration = durVal;
+    }
+
     // 1. Local optimistic update so UI is immediately responsive
     setDemandes(prev => prev.map(d => {
       if (d.id === demandeId) {
         return {
           ...d,
           prix: patch.montant !== undefined ? patch.montant : patch.prix !== undefined ? patch.prix : d.prix,
-          nb_heures: patch.duree !== undefined ? patch.duree : patch.nb_heures !== undefined ? patch.nb_heures : d.nb_heures,
-          nb_intervenants: patch.nb_intervenants !== undefined ? patch.nb_intervenants : d.nb_intervenants,
+          nb_heures: durVal !== undefined ? durVal : d.nb_heures,
+          nb_intervenants: val !== undefined ? val : d.nb_intervenants,
           avance_paiement: patch.avance_paiement !== undefined ? patch.avance_paiement : d.avance_paiement,
           frequency: patch.frequency !== undefined 
             ? ((patch.frequency === 'subscription' || patch.frequency === 'abonnement') ? 'abonnement' : 'oneshot') 
@@ -1037,7 +1240,7 @@ export default function DemandesEnAttente() {
           frequency_label: patch.frequence !== undefined ? patch.frequence : d.frequency_label,
           formulaire_data: {
             ...(d.formulaire_data || {}),
-            ...patch
+            ...updatedPatch
           }
         };
       }
@@ -1052,17 +1255,15 @@ export default function DemandesEnAttente() {
       const payload: any = {
         formulaire_data: {
           ...(targetDemande.formulaire_data || {}),
-          ...patch
+          ...updatedPatch
         }
       };
 
       if (patch.montant !== undefined) payload.prix = patch.montant;
       else if (patch.prix !== undefined) payload.prix = patch.prix;
 
-      if (patch.duree !== undefined) payload.nb_heures = patch.duree;
-      else if (patch.nb_heures !== undefined) payload.nb_heures = patch.nb_heures;
-
-      if (patch.nb_intervenants !== undefined) payload.nb_intervenants = patch.nb_intervenants;
+      if (durVal !== undefined) payload.nb_heures = durVal;
+      if (val !== undefined) payload.nb_intervenants = val;
       
       if (patch.avance_paiement !== undefined) payload.avance_paiement = patch.avance_paiement;
 
@@ -1756,7 +1957,7 @@ export default function DemandesEnAttente() {
                             <div style={{ background: 'white', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                               {["Adulte", "Personne Agée", "Autonome", "Besoin d'aide", "Alité(e)"].map(mob => (
                                 <label key={mob} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', fontWeight: '500', color: '#334155' }}>
-                                  <input type="radio" name="mobilite" value={mob} checked={formData.mobilite === mob} onChange={() => setFormData({ ...formData, mobilite: mob })} />
+                                  <input type="radio" name="mobilite" value={mob} checked={isMobilityMatching(formData.mobilite, mob)} onChange={() => setFormData({ ...formData, mobilite: mob })} />
                                   {mob}
                                 </label>
                               ))}
@@ -1955,36 +2156,7 @@ export default function DemandesEnAttente() {
                         <option value="carte">Par carte bancaire (solution de paiement en ligne)</option>
                       </select>
                     </div>
-                    <div className="form-group">
-                      <label className="label-teal">Statut de paiement</label>
-                      {(() => {
-                        const currentVal = formData.statut_paiement_ui || 'non_confirme';
-                        const isFree = currentVal === 'intervention_gratuite';
-                        const options = PAYMENT_STATUS_OPTIONS.filter(o => {
-                          if (o.value === 'intervention_gratuite') return isFree;
-                          return true;
-                        });
-                        return (
-                          <select 
-                            className="ws-select" 
-                            value={currentVal} 
-                            disabled={isFree} 
-                            onChange={e => {
-                              const v = e.target.value;
-                              const updates: any = { ...formData, statut_paiement_ui: v };
-                              if (v === 'facturation_annulee' || v === 'intervention_gratuite') {
-                                updates.part_agence = 0;
-                              }
-                              setFormData(updates);
-                            }}
-                          >
-                            {options.map(o => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
-                        );
-                      })()}
-                    </div>
+
                   </div>
                 </div>
 
@@ -2084,8 +2256,10 @@ export default function DemandesEnAttente() {
                     Annuler
                   </button>
                   <button className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '8px 16px', borderRadius: '4px', border: 'none' }} type="button" onClick={() => {
-                    const isDevis = isDevisRequired(editingDemande);
-                    handlePreviewDocument(editingDemande, isDevis ? 'devis' : 'png');
+                    if (editingDemande) {
+                      const updated = getUpdatedDemandeFromForm(editingDemande);
+                      handlePreviewDocument(updated, isDevisRequired(updated) ? 'devis' : 'png');
+                    }
                   }}>
                     <Eye size={16} /> Aperçu du {isDevisRequired(editingDemande) ? 'Devis' : 'Récapitulatif'}
                   </button>

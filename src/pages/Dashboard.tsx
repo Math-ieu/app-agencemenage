@@ -873,13 +873,16 @@ export default function Dashboard() {
         return cleaned;
       };
 
+      const isAuxiliaire = exactEditServiceNormalized.includes('auxiliaire de vie') || exactEditServiceNormalized.includes('auxiliaire');
+      const cleanerCount = isAuxiliaire ? (parseInt(editFormData.nb_personnel) || 1) : (parseInt(editFormData.nb_intervenants) || 1);
+
       const updateData: any = {
         service: editFormData.service,
         segment: editFormData.segment,
         statut: editFormData.statut,
         prix: montantTTC,
         nb_heures: parseInt(editFormData.duree || editFormData.nb_heures) || 0,
-        nb_intervenants: parseInt(editFormData.nb_intervenants) || 1,
+        nb_intervenants: cleanerCount,
         avec_produit: Boolean(editFormData.produits || editFormData.avec_produit),
         frequency,
         frequency_label: editFormData.frequence || selectedDemande.frequency_label || '',
@@ -934,7 +937,9 @@ export default function Dashboard() {
         preference_horaire: editFormData.preference_horaire || '',
         type_habitation: editFormData.type_habitation || '',
         frequence: editFormData.frequence || '',
-        nb_intervenants: parseInt(editFormData.nb_intervenants) || 1,
+        nb_intervenants: cleanerCount,
+        numberOfPeople: cleanerCount,
+        nb_intervenantes: cleanerCount,
         surface: toNumber(editFormData.surface),
         details_pieces: editFormData.details_pieces || '',
         duree: parseInt(editFormData.duree || editFormData.nb_heures) || 0,
@@ -955,7 +960,7 @@ export default function Dashboard() {
         linen_sets: parseInt(editFormData.linen_sets) || 0,
         linenSets: parseInt(editFormData.linen_sets) || 0,
         date: editFormData.date || editFormData.date_intervention || '',
-        nb_personnel: parseInt(editFormData.nb_personnel) || 1,
+        nb_personnel: cleanerCount,
         lieu_garde: editFormData.lieu_garde || 'domicile',
         age_personne: editFormData.age_personne || '',
         sexe_personne: editFormData.sexe_personne || '',
@@ -1285,14 +1290,14 @@ export default function Dashboard() {
       intervention_nature: formData.intervention_nature || formData.nature_intervention || 'entretien_regulier',
       accommodation_state: formData.accommodation_state || formData.etat_logement || 'habite',
       cleanliness_type: formData.cleanliness_type || formData.type_proprete || 'regulier',
-      nb_personnel: formData.nb_personnel || 1,
+      nb_personnel: formData.nb_intervenants || formData.nb_personnel || formData.numberOfPeople || d.nb_intervenants || 1,
       surface: formData.surface || formData.surfaceArea || 0,
       details_pieces: formData.details_pieces || '',
       ville: formData.ville || d.client_city || 'Casablanca',
       quartier: normalizeQuartier(formData.quartier || d.client_neighborhood || ''),
       adresse: formData.adresse || d.client_address || '',
       preference_horaire: normalizeTimePref(formData.preference_horaire || ''),
-      nb_intervenants: formData.nb_intervenants || formData.numberOfPeople || d.nb_intervenants || ((d.nb_heures || 0) > 0 ? 1 : 0),
+      nb_intervenants: formData.nb_intervenants || formData.nb_personnel || formData.numberOfPeople || d.nb_intervenants || 1,
       rooms: formData.rooms || {
         cuisine: 0,
         suiteAvecBain: 0,

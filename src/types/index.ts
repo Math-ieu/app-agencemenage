@@ -85,6 +85,9 @@ export interface Demande {
   client_name: string;
   client_phone: string;
   client_whatsapp?: string;
+  client_email?: string;
+  client_entity?: string;
+  client_contact?: string;
   client_city?: string;
   client_neighborhood?: string;
   client_address?: string;

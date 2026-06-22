@@ -6,6 +6,44 @@ export interface FormBlockProps {
     activeSegment?: 'particulier' | 'entreprise' | null;
 }
 
+export const isStructureTypeMatching = (val?: string, option?: string) => {
+    if (!val || !option) return false;
+    const v = val.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const o = option.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (v === o) return true;
+    
+    const stripPlural = (s: string) => s.endsWith('s') ? s.slice(0, -1) : s;
+    const vClean = stripPlural(v);
+    const oClean = stripPlural(o);
+    
+    if (vClean === oClean) return true;
+    if (o.includes(v) || v.includes(o)) return true;
+    if (oClean.includes(vClean) || vClean.includes(oClean)) return true;
+
+    if (v.includes('entrepot') && o.includes('entrepot')) return true;
+    if (v.includes('magasin') && o.includes('magasin')) return true;
+    if (v.includes('boutique') && o.includes('boutique')) return true;
+    if (v.includes('bureau') && o.includes('bureau')) return true;
+    if (v.includes('restaurant') && o.includes('restaurant')) return true;
+    if (v.includes('cafe') && o.includes('cafe')) return true;
+    if (v.includes('hotel') && o.includes('hotel')) return true;
+    if (v.includes('riad') && o.includes('riad')) return true;
+    if (v.includes('clinique') && o.includes('clinique')) return true;
+    if (v.includes('hopital') && o.includes('hopital')) return true;
+    if (v.includes('sante') && o.includes('sante')) return true;
+    if (v.includes('enseignement') && o.includes('enseignement')) return true;
+    if (v.includes('usine') && o.includes('usine')) return true;
+    if (v.includes('laboratoire') && o.includes('laboratoire')) return true;
+    if (v.includes('agence') && o.includes('agence')) return true;
+    if (v.includes('duplex') && o.includes('duplex')) return true;
+    if (v.includes('studio') && o.includes('studio')) return true;
+    if (v.includes('villa') && o.includes('villa')) return true;
+    if (v.includes('maison') && o.includes('maison')) return true;
+    if (v.includes('appartement') && o.includes('appartement')) return true;
+    
+    return false;
+};
+
 export const HabitationTypeBlock: React.FC<FormBlockProps> = ({ formData, setFormData, activeSegment }) => {
     const isEntreprise = activeSegment === 'entreprise';
     const options = isEntreprise
@@ -19,7 +57,7 @@ export const HabitationTypeBlock: React.FC<FormBlockProps> = ({ formData, setFor
             "Restaurants",
             "Hôtels / Hébergements",
             "Laboratoires",
-            "Agences : banques, immobilières…"
+            "Agences : banques, immobilières..."
           ]
         : ['Studio', 'Appartement', 'Duplex', 'Villa', 'Maison'];
 
@@ -35,7 +73,7 @@ export const HabitationTypeBlock: React.FC<FormBlockProps> = ({ formData, setFor
                             type="radio" 
                             name="propertyType" 
                             value={type} 
-                            checked={formData.type_habitation === type} 
+                            checked={isStructureTypeMatching(formData.type_habitation, type)} 
                             onChange={e => setFormData({ ...formData, type_habitation: e.target.value })} 
                         />
                         <span style={isEntreprise ? { textAlign: 'left', fontSize: '0.8rem' } : undefined}>{type}</span>
@@ -463,35 +501,38 @@ export const StructureTypePlacementBlock: React.FC<FormBlockProps> = ({ formData
             {[
                 'Bureaux', 'Magasin/Boutique', 'Restaurant/Café', 'Clinique',
                 'Hôpital', 'Hôtel', 'Riad', 'Immeuble/Résidence/Luxe', 'Entrepôt'
-            ].map(type => (
-                <label
-                    key={type}
-                    className={`ws-surface-card ${formData.structure_type === type.toLowerCase() ? 'active' : ''}`}
-                    onClick={() => setFormData({ ...formData, structure_type: type.toLowerCase() })}
-                    style={{
-                        padding: '0.75rem 0.5rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        textAlign: 'center',
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        minHeight: '70px',
-                        justifyContent: 'center'
-                    }}
-                >
-                    <input
-                        type="radio"
-                        name="placementStructureType"
-                        checked={formData.structure_type === type.toLowerCase()}
-                        onChange={() => setFormData({ ...formData, structure_type: type.toLowerCase() })}
-                        style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
-                    />
-                    <span>{type}</span>
-                </label>
-            ))}
+            ].map(type => {
+                const isSelected = isStructureTypeMatching(formData.structure_type, type);
+                return (
+                    <label
+                        key={type}
+                        className={`ws-surface-card ${isSelected ? 'active' : ''}`}
+                        onClick={() => setFormData({ ...formData, structure_type: type })}
+                        style={{
+                            padding: '0.75rem 0.5rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            textAlign: 'center',
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            minHeight: '70px',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        <input
+                            type="radio"
+                            name="placementStructureType"
+                            checked={isSelected}
+                            onChange={() => setFormData({ ...formData, structure_type: type })}
+                            style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
+                        />
+                        <span>{type}</span>
+                    </label>
+                );
+            })}
         </div>
     </div>
 );
