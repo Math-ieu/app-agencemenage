@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AGENCY_CITIES = ["Casablanca", "Rabat", "Marrakech"] as const;
+export const AGENCY_CITIES = ["Casablanca", "Rabat", "Salé", "Temara", "Ain Aouda", "El Harhoura", "Marrakech"] as const;
 export type AgencyCity = (typeof AGENCY_CITIES)[number];
 
 export const USER_STATUSES = ["actif", "desactive"] as const;

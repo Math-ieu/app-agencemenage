@@ -2556,7 +2556,7 @@ export default function Dashboard() {
                             <div className="form-group">
                               <label className="label-teal">Ville *</label>
                               <select className="ws-select" required value={editFormData.ville} onChange={e => setEditFormData({ ...editFormData, ville: e.target.value, quartier: '' })}>
-                                {['Casablanca', 'Rabat', 'Bouskoura', 'Dar Bouazza', 'Mansouria', 'Almaz', 'Sidi Rahal', 'Benslimane', 'Mohammédia', 'Ville Verte'].map(c => (
+                                {['Casablanca', 'Rabat', 'Salé', 'Temara', 'Ain Aouda', 'El Harhoura', 'Bouskoura', 'Dar Bouazza', 'Mansouria', 'Almaz', 'Sidi Rahal', 'Benslimane', 'Mohammédia', 'Ville Verte'].map(c => (
                                   <option key={c} value={c}>{c}</option>
                                 ))}
                               </select>

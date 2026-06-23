@@ -421,6 +421,10 @@ export default function Qualite() {
             <option value="toutes">Toutes les villes</option>
             <option value="Casablanca">Casablanca</option>
             <option value="Rabat">Rabat</option>
+            <option value="Salé">Salé</option>
+            <option value="Temara">Temara</option>
+            <option value="Ain Aouda">Ain Aouda</option>
+            <option value="El Harhoura">El Harhoura</option>
             <option value="Marrakech">Marrakech</option>
             <option value="Tanger">Tanger</option>
           </SelectFilter>

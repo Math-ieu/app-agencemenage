@@ -217,6 +217,10 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                 <select value={formData.city} onChange={e => { setFormData({ ...formData, city: e.target.value }); if (errors.city) setErrors({ ...errors, city: false }); }} className={`form-select ${errors.city ? 'form-input-error' : ''}`}>
                   <option>Casablanca</option>
                   <option>Rabat</option>
+                  <option>Salé</option>
+                  <option>Temara</option>
+                  <option>Ain Aouda</option>
+                  <option>El Harhoura</option>
                   <option>Marrakech</option>
                 </select>
               </div>

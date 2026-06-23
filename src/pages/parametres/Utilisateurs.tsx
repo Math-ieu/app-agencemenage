@@ -297,7 +297,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
 
 
 
-const CITIES = ["Casablanca", "Rabat", "Marrakech", "Fès", "Tanger", "Agadir", "Meknès", "Oujda", "Kénitra", "Tétouan"];
+const CITIES = ["Casablanca", "Rabat", "Salé", "Temara", "Ain Aouda", "El Harhoura", "Marrakech", "Fès", "Tanger", "Agadir", "Meknès", "Oujda", "Kénitra", "Tétouan"];
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
 function getInitials(name: string) {

@@ -2013,7 +2013,7 @@ export default function DemandesEnAttente() {
                     <div className="form-group">
                       <label className="label-teal">Ville *</label>
                       <select className="ws-select" required value={formData.ville} onChange={e => setFormData({ ...formData, ville: e.target.value, quartier: '' })}>
-                        {['Casablanca', 'Rabat', 'Bouskoura', 'Dar Bouazza', 'Mansouria', 'Almaz', 'Sidi Rahal', 'Benslimane', 'Mohammédia', 'Ville Verte'].map(c => (
+                        {['Casablanca', 'Rabat', 'Salé', 'Temara', 'Ain Aouda', 'El Harhoura', 'Bouskoura', 'Dar Bouazza', 'Mansouria', 'Almaz', 'Sidi Rahal', 'Benslimane', 'Mohammédia', 'Ville Verte'].map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
