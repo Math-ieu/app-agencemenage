@@ -1908,8 +1908,22 @@ export default function LesSuivis() {
                                 ? `${row.originalDemande?.formulaire_data?.planning?.hourly_rate} DH/h`
                                 : '30 DH/h'}
                             </td>
-                            <td className="ls-val-bold ls-val-teal">{money(row.partProfil)}</td>
-                            <td className="ls-val-bold ls-val-blue">{money(row.partAgence)}</td>
+                            <td className="ls-val-bold ls-val-teal">
+                              {(() => {
+                                const hasPartsRepartition = Array.isArray(row.parts_repartition) && row.parts_repartition.length > 0;
+                                const hasExplicitPartAgence = row.partAgence > 0;
+                                if (!hasPartsRepartition && !hasExplicitPartAgence) return '—';
+                                return money(row.partProfil);
+                              })()}
+                            </td>
+                            <td className="ls-val-bold ls-val-blue">
+                              {(() => {
+                                const hasPartsRepartition = Array.isArray(row.parts_repartition) && row.parts_repartition.length > 0;
+                                const hasExplicitPartAgence = row.partAgence > 0;
+                                if (!hasPartsRepartition && !hasExplicitPartAgence) return '—';
+                                return money(row.partAgence);
+                              })()}
+                            </td>
                             <td className="ls-val-bold">
                               {(() => {
                                 const subInfo = getSubInfo(row);
