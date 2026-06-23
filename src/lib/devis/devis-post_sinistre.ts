@@ -16,6 +16,7 @@ interface DevisPostSinistreData {
     email: string;
     adresse: string;
     segment?: string;
+    interlocuteur?: string;
   };
   prestations: Array<{ designation: string; montant: number; isMajoration?: boolean }>;
   details: {
@@ -140,11 +141,16 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
 
   const clientInfo = [
     { label: data.client.segment === 'entreprise' ? "Raison sociale" : "Nom", value: data.client.nom },
+  ];
+  if (data.client.segment === 'entreprise') {
+    clientInfo.push({ label: "Interlocuteur", value: data.client.interlocuteur || '—' });
+  }
+  clientInfo.push(
     { label: "Téléphone", value: data.client.telephone },
     { label: "WhatsApp", value: data.client.whatsapp },
     { label: "Email", value: data.client.email },
-    { label: "Adresse", value: data.client.adresse },
-  ];
+    { label: "Adresse", value: data.client.adresse }
+  );
 
   doc.setFontSize(10);
   for (const info of clientInfo) {

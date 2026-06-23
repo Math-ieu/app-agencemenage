@@ -15,6 +15,7 @@ interface DevisData {
     email: string;
     adresse: string;
     segment?: string;
+    interlocuteur?: string;
   };
   prestations: Array<{ designation: string; montant: number | string }>;
   surface: number;
@@ -139,13 +140,17 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   doc.line(margin, y, right, y);
   y += 7;
 
-  const infoRows = [
-    [data.client.segment === 'entreprise' ? 'Raison sociale' : 'Nom / Prénom', data.client.nom],
-    ['Téléphone', data.client.telephone],
-    ['WhatsApp', data.client.whatsapp],
-    ['Email', data.client.email],
-    ['Adresse', data.client.adresse],
-  ];
+  const infoRows: Array<[string, string]> = [];
+  if (data.client.segment === 'entreprise') {
+    infoRows.push(['Raison sociale', data.client.nom]);
+    infoRows.push(['Interlocuteur', data.client.interlocuteur || '—']);
+  } else {
+    infoRows.push(['Nom / Prénom', data.client.nom]);
+  }
+  infoRows.push(['Téléphone', data.client.telephone]);
+  infoRows.push(['WhatsApp', data.client.whatsapp]);
+  infoRows.push(['Email', data.client.email]);
+  infoRows.push(['Adresse', data.client.adresse]);
   const labelX = margin;
   const valueX = margin + 55;
   doc.setFontSize(10);

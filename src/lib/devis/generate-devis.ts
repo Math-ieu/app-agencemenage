@@ -349,6 +349,7 @@ const buildFinChantierData = (demande: Demande): DevisFinChantierData => {
       email: form.email || form.mail || '—',
       adresse: getClientAddress(demande, form),
       segment: demande.segment || form.segment,
+      interlocuteur: getInterlocuteur(demande, form),
     },
     prestations,
     surface: surface || 0,
@@ -419,6 +420,7 @@ const buildPostSinistreData = (demande: Demande): DevisPostSinistreData => {
       email: form.email || form.mail || '—',
       adresse: getClientAddress(demande, form),
       segment: demande.segment || form.segment,
+      interlocuteur: getInterlocuteur(demande, form),
     },
     prestations,
     details: {
