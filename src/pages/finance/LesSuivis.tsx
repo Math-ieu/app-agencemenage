@@ -764,7 +764,7 @@ export default function LesSuivis() {
     
     // Sort chronologically
     const allMappedRows = [...missionRows, ...demandRows]
-      .filter((row) => !!row.clientId && (row.originalDemande?.statut !== 'en_attente' || row.statutPaiementUi))
+      .filter((row) => !!row.clientId && row.originalDemande?.statut !== 'en_attente')
       .sort((a, b) => {
         const dateA = parseFrenchDate(a.date)?.getTime() || 0;
         const dateB = parseFrenchDate(b.date)?.getTime() || 0;

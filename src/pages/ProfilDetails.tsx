@@ -535,8 +535,8 @@ export default function ProfilDetails() {
   });
 
   const filteredDemandes = allDemandes.filter(d => {
-    // Exclure les demandes "en attente"
-    if (d.statut === 'en_attente') return false;
+    // Exclure les demandes "en attente" ou déjà traitées/terminées
+    if (d.statut === 'en_attente' || d.statut === 'pres_terminee' || d.statut === 'termine') return false;
     
     const facturation = d.formulaire_data?.facturation || {};
     const statutUi = facturation.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
