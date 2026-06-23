@@ -275,6 +275,32 @@ export default function Dashboard() {
   const [caoPreviewIndex, setCaoPreviewIndex] = useState(0);
   const [allProfils, setAllProfils] = useState<any[]>([]);
 
+  const getSubInfo = (d: Demande) => {
+    const isSub = d.frequency === 'abonnement' || !!d.parent_demande;
+    if (!isSub) return null;
+    const parentId = d.parent_demande || d.id;
+    if (!parentId) return null;
+
+    const subDemands = demandes
+      .filter(x => (x.frequency === 'abonnement' || !!x.parent_demande) && (x.id === parentId || x.parent_demande === parentId))
+      .sort((a, b) => {
+        const dateA = a.date_intervention || a.created_at;
+        const dateB = b.date_intervention || b.created_at;
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+        return 0;
+      });
+
+    const index = subDemands.findIndex(x => x.id === d.id);
+    if (index === -1) return null;
+
+    return {
+      rank: index + 1,
+      total: subDemands.length,
+      isFirst: index === 0
+    };
+  };
+
   // Filtres
   const [search, setSearch] = useState('');
   const [serviceFilter, setServiceFilter] = useState('tous');
@@ -1783,8 +1809,29 @@ export default function Dashboard() {
                       </td>
                       <td>
                         <div className="price-info">
-                          <p className="price-main">{typeof d.prix === 'number' ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD</p>
-                          <p className="price-sub">{d.is_devis ? 'Prix/devis' : 'Prix/réservation'}</p>
+                          {(() => {
+                            const subInfo = getSubInfo(d);
+                            if (subInfo) {
+                              if (subInfo.isFirst) {
+                                return (
+                                  <>
+                                    <p className="price-main">{typeof d.prix === 'number' ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD — Abonnement</p>
+                                    <p className="price-sub">{d.is_devis ? 'Prix/devis' : 'Prix/réservation'}</p>
+                                  </>
+                                );
+                              } else {
+                                return (
+                                  <p className="price-main">Intervention {subInfo.rank}/{subInfo.total} — Abonnement</p>
+                                );
+                              }
+                            }
+                            return (
+                              <>
+                                <p className="price-main">{typeof d.prix === 'number' ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD</p>
+                                <p className="price-sub">{d.is_devis ? 'Prix/devis' : 'Prix/réservation'}</p>
+                              </>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td>
@@ -2138,7 +2185,17 @@ export default function Dashboard() {
                     <div>
                       <span className="text-muted" style={{ marginRight: '4px' }}>Tarif :</span>
                       <span className="fw-bold">
-                        {typeof d.prix === 'number' && d.prix > 0 ? `${d.prix.toLocaleString('fr-FR')} MAD` : (d.prix && d.prix !== '0' ? `${d.prix} MAD` : '—')}
+                        {(() => {
+                          const subInfo = getSubInfo(d);
+                          if (subInfo) {
+                            if (subInfo.isFirst) {
+                              return `${typeof d.prix === 'number' && d.prix > 0 ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD — Abonnement`;
+                            } else {
+                              return `Intervention ${subInfo.rank}/${subInfo.total} — Abonnement`;
+                            }
+                          }
+                          return typeof d.prix === 'number' && d.prix > 0 ? `${d.prix.toLocaleString('fr-FR')} MAD` : (d.prix && d.prix !== '0' ? `${d.prix} MAD` : '—');
+                        })()}
                       </span>
                     </div>
                   </div>

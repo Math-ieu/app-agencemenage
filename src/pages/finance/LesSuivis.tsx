@@ -789,6 +789,35 @@ export default function LesSuivis() {
     void loadData();
   }, [loadData]);
 
+  const getSubInfo = useCallback((row: FacturationRow) => {
+    const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement';
+    if (!isSub) return null;
+    const parentId = row.originalDemande?.parent_demande || row.originalDemande?.id || row.demandeId;
+    if (!parentId) return null;
+
+    const subRows = facturationData
+      .filter(r => {
+        const rIsSub = r.frequency === 'abonnement' || r.originalDemande?.frequency === 'abonnement';
+        if (!rIsSub) return false;
+        const rParentId = r.originalDemande?.parent_demande || r.originalDemande?.id || r.demandeId;
+        return rParentId === parentId;
+      })
+      .sort((a, b) => {
+        const dateA = parseFrenchDate(a.date)?.getTime() || 0;
+        const dateB = parseFrenchDate(b.date)?.getTime() || 0;
+        return dateA - dateB;
+      });
+
+    const index = subRows.findIndex(r => r.missionId === row.missionId && r.demandeId === row.demandeId && r.date === row.date);
+    if (index === -1) return null;
+    
+    return {
+      rank: index + 1,
+      total: subRows.length,
+      isFirst: index === 0
+    };
+  }, [facturationData]);
+
   // Expanded Rows to match VueGlobale Credit and Debit logic
   const expandedRows = useMemo(() => {
     const result: FacturationRow[] = [];
@@ -950,10 +979,13 @@ export default function LesSuivis() {
         row.statutPaiementUi === 'intervention_gratuite';
 
       if (!isCancelled) {
-        const ca = row.partProfil + row.partAgence;
-        totalCa += ca;
-        totalPartAgence += row.partAgence;
-        totalPartProfil += row.partProfil;
+        const subInfo = getSubInfo(row);
+        if (!subInfo || subInfo.isFirst) {
+          const ca = row.partProfil + row.partAgence;
+          totalCa += ca;
+          totalPartAgence += row.partAgence;
+          totalPartProfil += row.partProfil;
+        }
       }
     });
 
@@ -964,12 +996,18 @@ export default function LesSuivis() {
       if (isCredit) {
         const isPaid = row.partProfilVersee ?? row._partProfilVersee;
         if (!isPaid && row.reglementInterne !== 'Réglé') {
-          unpaidPartProfil += row.partProfil;
+          const subInfo = getSubInfo(row);
+          if (!subInfo || subInfo.isFirst) {
+            unpaidPartProfil += row.partProfil;
+          }
         }
       } else if (isDebit) {
         const isPaid = row.partAgenceReversee ?? row._partAgenceReversee;
         if (!isPaid && row.reglementInterne !== 'Réglé') {
-          unpaidPartAgence += row.partAgence;
+          const subInfo = getSubInfo(row);
+          if (!subInfo || subInfo.isFirst) {
+            unpaidPartAgence += row.partAgence;
+          }
         }
       }
     });
@@ -981,7 +1019,7 @@ export default function LesSuivis() {
       unpaidPartAgence,
       unpaidPartProfil
     };
-  }, [facturationData, expandedRows]);
+  }, [facturationData, expandedRows, getSubInfo]);
 
   // Tab 1: Filtered Rows
   const filteredRows = useMemo(() => {
@@ -1106,7 +1144,10 @@ export default function LesSuivis() {
           statsMap.set(commName, { name: commName, ca: 0, dossiers: 0 });
         }
         const data = statsMap.get(commName)!;
-        data.ca += row.partProfil + row.partAgence;
+        const subInfo = getSubInfo(row);
+        if (!subInfo || subInfo.isFirst) {
+          data.ca += row.partProfil + row.partAgence;
+        }
         data.dossiers += 1;
       }
     });
@@ -1141,7 +1182,7 @@ export default function LesSuivis() {
       commissionAgence,
       activeCount,
     };
-  }, [facturationData, periodFilter, commercialFilter, commerciauxList, commDateFrom, commDateTo]);
+  }, [facturationData, periodFilter, commercialFilter, commerciauxList, commDateFrom, commDateTo, getSubInfo]);
 
   // Tab 2 Calculations: Selected Commercial Detail Breakdown
   const selectedCommercialDetail = useMemo(() => {
@@ -1191,7 +1232,13 @@ export default function LesSuivis() {
       return true;
     });
 
-    const totalRealisation = commRows.reduce((sum, r) => sum + (r.partProfil + r.partAgence), 0);
+    const totalRealisation = commRows.reduce((sum, r) => {
+      const subInfo = getSubInfo(r);
+      if (!subInfo || subInfo.isFirst) {
+        return sum + (r.partProfil + r.partAgence);
+      }
+      return sum;
+    }, 0);
     const totalDossiers = commRows.length;
     
     const activeMonthsSet = new Set<string>();
@@ -1240,10 +1287,13 @@ export default function LesSuivis() {
       const qKey = formatQuarterFR(rDate);
       const yKey = formatYearFR(rDate);
 
-      const ca = row.partProfil + row.partAgence;
-      teamCAMap.set(mKey, (teamCAMap.get(mKey) || 0) + ca);
-      teamCAMap.set(qKey, (teamCAMap.get(qKey) || 0) + ca);
-      teamCAMap.set(yKey, (teamCAMap.get(yKey) || 0) + ca);
+      const subInfo = getSubInfo(row);
+      if (!subInfo || subInfo.isFirst) {
+        const ca = row.partProfil + row.partAgence;
+        teamCAMap.set(mKey, (teamCAMap.get(mKey) || 0) + ca);
+        teamCAMap.set(qKey, (teamCAMap.get(qKey) || 0) + ca);
+        teamCAMap.set(yKey, (teamCAMap.get(yKey) || 0) + ca);
+      }
     });
 
     const groupByPeriod = (
@@ -1258,7 +1308,8 @@ export default function LesSuivis() {
             groups.set(key, { realisation: 0, dossiers: 0, commAgence: 0 });
           }
           const g = groups.get(key)!;
-          const ca = r.partProfil + r.partAgence;
+          const subInfo = getSubInfo(r);
+          const ca = (!subInfo || subInfo.isFirst) ? (r.partProfil + r.partAgence) : 0;
           g.realisation += ca;
           g.dossiers += 1;
           g.commAgence += ca * 0.03;
@@ -1289,7 +1340,7 @@ export default function LesSuivis() {
       parTrimestre,
       parAnnee,
     };
-  }, [facturationData, selectedCommercialName, periodFilter, commDateFrom, commDateTo]);
+  }, [facturationData, selectedCommercialName, periodFilter, commDateFrom, commDateTo, getSubInfo]);
 
   // Open Edit status modal
   const handleOpenEdit = (row: FacturationRow) => {
@@ -1588,7 +1639,13 @@ export default function LesSuivis() {
         row.originalDemande?.formulaire_data?.planning?.hourly_rate ? `${row.originalDemande?.formulaire_data?.planning?.hourly_rate} DH/h` : '30 DH/h',
         `${row.partProfil} DH`,
         `${row.partAgence} DH`,
-        `${row.partProfil + row.partAgence} DH`,
+        (() => {
+          const subInfo = getSubInfo(row);
+          if (subInfo && !subInfo.isFirst) {
+            return `Abonnement ${subInfo.rank}/${subInfo.total}`;
+          }
+          return `${row.partProfil + row.partAgence} DH`;
+        })(),
         row.statut,
         statutEncais,
         reglementLabel,
@@ -1853,7 +1910,15 @@ export default function LesSuivis() {
                             </td>
                             <td className="ls-val-bold ls-val-teal">{money(row.partProfil)}</td>
                             <td className="ls-val-bold ls-val-blue">{money(row.partAgence)}</td>
-                            <td className="ls-val-bold">{money(row.partProfil + row.partAgence)}</td>
+                            <td className="ls-val-bold">
+                              {(() => {
+                                const subInfo = getSubInfo(row);
+                                if (subInfo && !subInfo.isFirst) {
+                                  return `Abonnement ${subInfo.rank}/${subInfo.total}`;
+                                }
+                                return money(row.partProfil + row.partAgence);
+                              })()}
+                            </td>
                             <td>
                               <span className={`ls-pill ${getRealPaymentStatusClass(row)}`}>
                                 {getRealPaymentStatusLabel(row)}

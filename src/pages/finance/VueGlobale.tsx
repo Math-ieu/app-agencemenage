@@ -2726,9 +2726,9 @@ export default function VueGlobale() {
         row.profil,
         row.service,
         row.segment,
-        ttc,
-        paid,
-        ecart,
+        row.isSubscriptionSecondary ? 'Abonnement' : ttc,
+        row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 && paid === 0 ? '—' : paid),
+        row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 ? '—' : ecart),
         row.partAgence,
         row.partProfil,
         row.encaissePar,
@@ -2768,9 +2768,9 @@ export default function VueGlobale() {
         <td>${row.profil}</td>
         <td>${row.service}</td>
         <td>${row.segment}</td>
-        <td>${money(ttc)}</td>
-        <td>${money(paid)}</td>
-        <td>${money(ecart)}</td>
+        <td>${row.isSubscriptionSecondary ? 'Abonnement' : money(ttc)}</td>
+        <td>${row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 && paid === 0 ? '—' : money(paid))}</td>
+        <td>${row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 ? '—' : money(ecart))}</td>
       </tr>`;
     }).join('');
 
@@ -3515,12 +3515,22 @@ export default function VueGlobale() {
                         )}
                       </td>
                       <td><span className={`fg-pill ${row.segment === 'Particulier' ? 'fg-pill-outline-sky' : 'fg-pill-violet'}`}>{row.segment}</span></td>
-                      <td className="fw-bold" style={{ color: ht < 0 ? '#dc2626' : '#0f5f5b' }}>{renderMoney(ht)}</td>
-                      <td style={{ color: '#0f5f5b' }}>{renderMoney(tva)}</td>
-                      <td className="fw-bold" style={{ color: ttc < 0 ? '#dc2626' : '#0f5f5b' }}>{renderMoney(ttc)}</td>
+                      <td className="fw-bold" style={{ color: ht < 0 ? '#dc2626' : '#0f5f5b' }}>
+                        {row.isSubscriptionSecondary ? '—' : renderMoney(ht)}
+                      </td>
+                      <td style={{ color: '#0f5f5b' }}>
+                        {row.isSubscriptionSecondary ? renderMoney(0) : renderMoney(tva)}
+                      </td>
+                      <td className="fw-bold" style={{ color: ttc < 0 ? '#dc2626' : '#0f5f5b' }}>
+                        {row.isSubscriptionSecondary ? 'Abonnement' : renderMoney(ttc)}
+                      </td>
                       <td style={{ color: '#64748b' }}>{row.modePaiementReel || row.modePaiement || '—'}</td>
-                      <td className="fw-bold" style={{ color: '#059669' }}>{renderMoney(paye)}</td>
-                      <td className="fw-bold" style={{ color: '#d97706' }}>{Math.abs(ecart) > 0.009 ? renderMoney(ecart) : renderMoney(0)}</td>
+                      <td className="fw-bold" style={{ color: '#059669' }}>
+                        {row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 && paye === 0 ? '—' : renderMoney(paye))}
+                      </td>
+                      <td className="fw-bold" style={{ color: '#d97706' }}>
+                        {row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 ? '—' : renderMoney(ecart))}
+                      </td>
                       <td>
                         <span className={`fg-pill ${statusPillClass}`} style={{ textAlign: 'left', display: 'inline-block', lineHeight: '1.3', border: 'none', padding: '0.35rem 0.55rem' }}>
                           {statusContent}
