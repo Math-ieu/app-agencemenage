@@ -380,11 +380,13 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
     });
   }
 
-  rows.push({
-    label: "Couverture jours fériés (si sélectionnée, +20%)",
-    value: `+${formatNumber(ferieAmount)} DH HT`,
-    isItalic: true
-  });
+  if (data.ferie) {
+    rows.push({
+      label: "Couverture jours fériés (+20%)",
+      value: `+${formatNumber(ferieAmount)} DH HT`,
+      isItalic: true
+    });
+  }
 
   if (discountPct > 0) {
     const engLabel = data.details.engagementMois > 0 ? ` engagement ${data.details.engagementMois} mois` : "";

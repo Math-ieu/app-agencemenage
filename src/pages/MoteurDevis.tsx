@@ -495,7 +495,7 @@ function FlexCalc() {
   const [nb, setNb] = useState(1);
   const [eng, setEng] = useState("0");
   const [ferie, setFerie] = useState(false);
-  const [tenue, setTenue] = useState(false);
+  const [tenue, setTenue] = useState(true);
   const [frequency, setFrequency] = useState("oneshot");
   const [subFrequency, setSubFrequency] = useState("1foisParSemaine");
 

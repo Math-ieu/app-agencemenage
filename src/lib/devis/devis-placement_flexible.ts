@@ -301,11 +301,13 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
     value: `${formatNumber(cleanForfait)} DH HT`
   });
 
-  rows.push({
-    label: "Couverture jours fériés (si sélectionnée, +20%)",
-    value: `+${formatNumber(ferieAmount)} DH HT`,
-    isItalic: true
-  });
+  if (data.ferie) {
+    rows.push({
+      label: "Couverture jours fériés (+20%)",
+      value: `+${formatNumber(ferieAmount)} DH HT`,
+      isItalic: true
+    });
+  }
 
   if (reductionPourcentage > 0) {
     const engLabel = data.details.engagementMois > 0 ? ` engagement ${data.details.engagementMois} mois` : "";

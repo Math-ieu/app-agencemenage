@@ -58,7 +58,7 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const [nb, setNb] = useState(data.nb_intervenantes || data.nb_intervenants || data.nb_personnel || 1);
   const [eng, setEng] = useState(data.engagement_mois === 12 ? "0.10" : data.engagement_mois === 6 ? "0.05" : "0");
   const [ferie, setFerie] = useState(Boolean(data.ferie || data.majoration_ferie));
-  const [tenue, setTenue] = useState(Boolean(data.tenue_travail));
+  const [tenue, setTenue] = useState(data.tenue_travail !== undefined ? Boolean(data.tenue_travail) : true);
   const [frequency, setFrequency] = useState(data.frequency || "oneshot");
   const [subFrequency, setSubFrequency] = useState(data.subFrequency || "1foisParSemaine");
 
@@ -110,6 +110,8 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
       service_type: "flexible",
       frequency,
       subFrequency,
+      ferie: ferie,
+      majoration_ferie: ferie,
     });
   }, [hj, js, nb, eng, ferie, tenue, base, total, reductionMontant, frequencyDiscountMontant, frequency, subFrequency, tenueCost, hm, jsSem, engLabel, engPct]);
 
@@ -224,6 +226,9 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
     if (superv > 0) {
       prestations.push({ designation: "Supplément supervision (< 3 personnes)", montant: superv });
     }
+    if (ferie) {
+      prestations.push({ designation: "Majoration jours fériés (+20%)", montant: "Inclus" });
+    }
     onPrestationsChange(prestations, total, {
       heures_par_jour: hj, jours_par_semaine: jsSem, heures_par_mois: hm,
       nb_intervenantes: nbS, nb_intervenants: nbS, prix_base: Math.round(base),
@@ -234,6 +239,8 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
       service_type: "gestion360",
       frequency,
       subFrequency,
+      ferie: ferie,
+      majoration_ferie: ferie,
     });
   }, [hj, js, nb, eng, ferie, base, total, reductionMontant, frequencyDiscountMontant, frequency, subFrequency, superv, hm, jsSem, nbS, engLabel, engPct]);
 
