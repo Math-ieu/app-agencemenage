@@ -172,22 +172,75 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   doc.line(margin, y + 2.5, right, y + 2.5);
   y += 10;
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  doc.text('DETAILS SINISTRE', margin, y);
-  y += 6;
+  // ==================== INTRO ====================
+  const isEntreprise = data.client.segment === 'entreprise';
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
-  doc.text(`Type : ${data.details.typeSinistre}`, margin, y);
-  doc.text(`Niveau : ${data.details.niveau}`, margin + 80, y);
-  y += 6;
-  doc.text(`Surface : ${data.details.surface} m²`, margin, y);
-  // Pas de coefficient d'urgence (brief) : un seul tarif quelle que soit la date d'intervention.
-  if (data.details.desodorisation > 0) {
-    doc.text(`Désinfection / désodorisation : ${formatNumber(data.details.desodorisation)} DH`, margin + 80, y);
-  }
+  doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  
+  const introText = isEntreprise
+    ? "Madame, Monsieur, suite à votre demande d'intervention post-sinistre, nous vous adressons notre estimation pour la remise en état de vos locaux. Notre équipe prend en charge l'ensemble de la prestation et se déplace avec le matériel adapté. Vous n'avez rien à préparer."
+    : "Nous comprenons l'urgence de votre situation et mettons tout en œuvre pour intervenir dans les meilleurs délais. Notre équipe prend en charge l'intégralité de la remise en état de votre bien après sinistre : produits, matériel, équipes. Vous n'avez rien à préparer.";
+
+  const introLines = doc.splitTextToSize(introText, contentWidth);
+  doc.text(introLines, margin, y);
+  y += introLines.length * 4.8 + 6;
+
+  // ==================== DETAILS SINISTRE ====================
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('DÉTAILS DU SINISTRE', margin, y);
+  y += 4;
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]).setLineWidth(0.2).line(margin, y, right, y);
+  y += 5;
+
+  doc.setFont('helvetica', 'bold').setFontSize(9.5).setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  doc.text('Type de sinistre', margin, y);
+  doc.text('Gravité / Niveau', margin + 60, y);
+  doc.text('Superficie', margin + 120, y);
+  y += 5;
+
+  doc.setFont('helvetica', 'normal').setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text(data.details.typeSinistre || '—', margin, y);
+  doc.text(data.details.niveau || '—', margin + 60, y);
+  doc.text(`${data.details.surface} m²`, margin + 120, y);
   y += 8;
+
+  // ==================== PRESTATIONS INCLUSES ====================
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('PRESTATIONS INCLUSES', margin, y);
+  y += 4;
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]).setLineWidth(0.2).line(margin, y, right, y);
+  y += 5;
+
+  const inclusions = [
+    "Évacuation des résidus et débris liés au sinistre",
+    "Nettoyage et assèchement des surfaces affectées",
+    "Désinfection des zones touchées",
+    "Dépoussiérage et nettoyage des surfaces, murs et sols",
+    "Nettoyage des vitres intérieures accessibles"
+  ];
+
+  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  inclusions.forEach(item => {
+    doc.setFont('helvetica', 'bold').setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+    doc.text("✓", margin + 2, y);
+    doc.setFont('helvetica', 'normal').setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    const wrappedItem = doc.splitTextToSize(item, contentWidth - 8);
+    doc.text(wrappedItem, margin + 8, y);
+    y += Math.max(5, wrappedItem.length * 4.5) + 1.5;
+  });
+  y += 4;
+
+  // Warning note below checklist
+  doc.setFillColor(254, 243, 199); // Fond jaune/orange clair `#fef3c7`
+  doc.roundedRect(margin, y, contentWidth, 8, 1, 1, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(8.5).setTextColor(146, 64, 14); // Texte orange foncé `#92400e`
+  doc.text("Toute tâche non mentionnée dans cette liste n'est pas incluse dans la prestation.", margin + 4, y + 5.5);
+  y += 14;
+
+  // Page break to Page 2
+  doc.addPage();
+  y = 24;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
@@ -237,8 +290,6 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   doc.text('TOTAL HT', col1, y + 5.5);
   doc.text(`${formatNumber(totalHT)} DH`, right - 5, y + 5.5, { align: 'right' });
   y += rowHeight + 6;
-
-  const isEntreprise = data.client.segment === 'entreprise';
 
   // TVA 20% + TOTAL TTC (entreprises uniquement)
   if (isEntreprise) {
@@ -300,6 +351,8 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
   if (y > footerThreshold - 30) {
     doc.addPage();
     y = 24;
+  } else {
+    y += 10;
   }
 
   doc.setFont('helvetica', 'bold');
@@ -432,7 +485,13 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
     doc.text(wrapped, margin, y);
     y += wrapped.length * 5;
   }
-  y += 16;
+  // Check for page break before signatures block
+  if (y > footerThreshold - 40) {
+    doc.addPage();
+    y = 24;
+  } else {
+    y += 16;
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.text('Pour Agence Ménage :', margin, y);

@@ -513,7 +513,13 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
     doc.text(wrapped, margin, y);
     y += wrapped.length * 5;
   }
-  y += 16;
+  // Check for page break before signatures block
+  if (y > footerThreshold - 40) {
+    doc.addPage();
+    y = 24;
+  } else {
+    y += 16;
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.text('Pour Agence Ménage :', margin, y);

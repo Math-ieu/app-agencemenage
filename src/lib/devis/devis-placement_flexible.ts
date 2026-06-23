@@ -461,7 +461,14 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
     doc.text(wrapped, margin, y);
     y += wrapped.length * 5;
   }
-  y += 20;
+  // Check for page break before signatures block
+  const footerThreshold = pageHeight - 40;
+  if (y > footerThreshold - 40) {
+    doc.addPage();
+    y = 24;
+  } else {
+    y += 20;
+  }
 
   // Signatures
   doc.setFont('helvetica', 'bold');
