@@ -45,6 +45,7 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 20;
   const contentWidth = pageWidth - 2 * margin;
+  const footerThreshold = pageHeight - 40;
   let y = 24;
 
   // ==================== HEADER ====================
@@ -147,7 +148,105 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   pdf.text(remerciement, margin, y, { maxWidth: contentWidth, align: 'justify' });
   y += 14;
 
+  // ==================== PRESTATIONS INCLUSES ====================
+  if (y > footerThreshold - 30) {
+    pdf.addPage();
+    y = 24;
+  }
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(11);
+  pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  pdf.text('PRESTATIONS INCLUSES', margin, y);
+  y += 3;
+  pdf.setDrawColor(BORDER_GREY[0], BORDER_GREY[1], BORDER_GREY[2]);
+  pdf.setLineWidth(0.3);
+  pdf.line(margin, y, pageWidth - margin, y);
+  y += 7;
+
+  const categories = [
+    {
+      title: "A — Présence et accompagnement (non médical)",
+      items: [
+        "Présence rassurante, compagnie et surveillance générale.",
+        "Aide à la mobilité légère : se lever, marcher, s'installer — sans manipulation lourde.",
+        "Assistance à l'organisation de la journée : routine, confort, sécurité."
+      ]
+    },
+    {
+      title: "B — Aide à l'hygiène et au confort",
+      items: [
+        "Aide à la toilette non médicale et à l'habillage selon le niveau d'autonomie.",
+        "Changement de tenue et protections — si fournies par la famille.",
+        "Mise en place d'un environnement confortable : lit, chambre, zone de vie."
+      ]
+    },
+    {
+      title: "C — Aide et suivi des médicaments oraux",
+      items: [
+        "L'auxiliaire de vie accompagne la personne dans la prise des médicaments par voie orale, selon les consignes de la famille et l'ordonnance. Elle assure les rappels, présente les médicaments préparés et note chaque prise dans le cahier de liaison. En cas d'anomalie (refus, oubli, effet indésirable), elle alerte immédiatement la famille.",
+        "Limite : l'auxiliaire de vie ne modifie jamais la posologie, ne décide pas des médicaments et ne réalise aucun acte médical ou infirmier."
+      ],
+      isParagraph: true
+    },
+    {
+      title: "D — Suivi et communication",
+      items: [
+        "Cahier de liaison mis à jour à chaque passage.",
+        "Suivi WhatsApp avec la famille sur demande.",
+        "Remontée immédiate des alertes : chute, fièvre, comportement inhabituel, refus de médicaments."
+      ]
+    }
+  ];
+
+  categories.forEach((cat) => {
+    if (y > footerThreshold - 15) {
+      pdf.addPage();
+      y = 24;
+    }
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+    pdf.text(cat.title, margin, y);
+    y += 5.5;
+
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(MEDIUM_GREY[0], MEDIUM_GREY[1], MEDIUM_GREY[2]);
+
+    cat.items.forEach((item) => {
+      const bulletText = cat.isParagraph ? item : `• ${item}`;
+      const wrapped = pdf.splitTextToSize(bulletText, contentWidth - 4);
+      
+      if (y + wrapped.length * 4.5 > footerThreshold) {
+        pdf.addPage();
+        y = 24;
+      }
+      
+      pdf.text(wrapped, margin + (cat.isParagraph ? 0 : 2), y);
+      y += wrapped.length * 4.5 + 1.5;
+    });
+    y += 3.5;
+  });
+  y += 10;
+
   // ==================== TABLEAU DÉTAIL DE LA PRESTATION ====================
+  // Calculate total height of the table block to prevent layout overflow
+  const descColWidth = contentWidth - 40;
+  let estimatedTableHeight = 6 + 9 + 17 + (data.avanceActive ? 10 : 0);
+  for (let i = 0; i < data.prestations.length; i++) {
+    const prestation = data.prestations[i];
+    const lines = pdf.splitTextToSize(prestation.desc, descColWidth);
+    const rowHeight = Math.max(8, lines.length * 5 + 2);
+    estimatedTableHeight += rowHeight;
+  }
+
+  if (y + estimatedTableHeight > footerThreshold) {
+    pdf.addPage();
+    y = 24;
+  }
+
   pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
@@ -167,7 +266,6 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   // Table rows
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(10);
-  const descColWidth = contentWidth - 40;
   for (let i = 0; i < data.prestations.length; i++) {
     const prestation = data.prestations[i];
     const lines = pdf.splitTextToSize(prestation.desc, descColWidth);
@@ -216,8 +314,6 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   const noteText = "Pour les missions de plus d'un mois, un tarif préférentiel de -10% est appliqué automatiquement. Contactez-nous pour un devis mission longue durée.";
   const noteLines = pdf.splitTextToSize(noteText, contentWidth - 15);
   const noteHeight = noteLines.length * 5 + 6;
-
-  const footerThreshold = pageHeight - 40;
 
   // Check for page break before note
   if (y > footerThreshold - 15) {
@@ -276,17 +372,6 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   y += 8;
 
   // ==================== MESSAGE D'ACCOMPAGNEMENT ====================
-  if (y > pageHeight - 80) {
-    pdf.addPage();
-    y = 24;
-  } else {
-    y += 8;
-  }
-  
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
-  
   const message = data.message || `Bonjour ${data.client.donneurOrdre},
 
 Merci de faire confiance à Agence Ménage pour l'accompagnement de votre proche. Vous trouverez ci-joint notre proposition adaptée à votre situation.
@@ -298,11 +383,27 @@ L'équipe Agence Ménage — 05 22 20 02 39`;
 
   const messageLines = pdf.splitTextToSize(message, contentWidth);
   const messageHeight = messageLines.length * 5;
+
+  if (y + messageHeight + 12 > footerThreshold) {
+    pdf.addPage();
+    y = 24;
+  } else {
+    y += 8;
+  }
+  
+  pdf.setFontSize(10);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
   
   pdf.text(messageLines, margin, y);
   y += messageHeight + 12;
 
   // ==================== SIGNATURES ====================
+  // Check for page break before signatures block
+  if (y > footerThreshold - 35) {
+    pdf.addPage();
+    y = 24;
+  }
   const sigY = y;
   
   pdf.setFontSize(10);
