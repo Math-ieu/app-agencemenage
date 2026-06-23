@@ -88,16 +88,7 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   doc.text(`Date : ${data.date}`, RIGHT, y + 17, { align: 'right' });
   doc.text('Valable 30 jours', RIGHT, y + 24, { align: 'right' });
 
-  // Agency address
-  y += 34;
-  doc.setFontSize(9);
-  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-  doc.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", MARGIN, y);
-  doc.text('Tél : 06 64 22 67 90 | contact@agencemenage.ma', MARGIN, y + 5);
-  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text('agencemenage.ma', MARGIN, y + 10);
-
-  y += 18;
+  y += 30;
   doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
   doc.setLineWidth(0.5);
   doc.line(MARGIN, y, RIGHT, y);
@@ -151,7 +142,7 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   const introTexts = [
     "Merci de nous faire confiance. Vous trouverez ci-dessous notre proposition pour l'entretien de votre bien en location courte durée.",
     "",
-    "Nous mettons à votre disposition une femme de ménage pour remettre votre logement en état après chaque départ de voyageur. Vous gérez les réservations, nous gérons la propreté.",
+    "Nous mettons à votre disposition une femme de ménage pour remettre votre logement en état après chaque départ de voyageur.",
   ];
   for (const para of introTexts) {
     if (para === '') { y += 3; continue; }
@@ -260,12 +251,12 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const conditions = [
-    "• Le client met à disposition ses propres produits ménagers, torchons, seau, serpillère, raclette et balai. Sans ces éléments, la mission ne peut pas démarrer.",
+    "• Le client doit mettre à disposition ses propres produits ménagers, torchons, seau, serpillère, raclette et balai. Sans ces éléments, la mission ne peut pas démarrer.",
     "• Le client doit disposer d'un minimum de 2 sets de linge propre à chaque passage (3 sets recommandés en période de pluie).",
     "• La femme de ménage ne lave pas le linge chez le client et n'utilise pas sa machine à laver. Le lavage est pris en charge par notre équipe en dehors du bien.",
     "• Tout article supplémentaire remis en dehors du set standard est facturé 5 DH par pièce. Le service linge nécessite au minimum 1 set complet.",
     "• Une tolérance de 30 minutes de retard est accordée. Nos intervenantes se déplacent en transport en commun.",
-    "• Un tour du bien est effectué à l'arrivée. Si le temps estimé dépasse la durée prévue de plus de 30 minutes, la mission est annulée sauf accord du client (heures supplémentaires validées avec la chargée de clientèle).",
+    "• La femme de ménage effectue un tour du bien à son arrivée. Si le temps estimé dépasse la durée prévue de plus de 30 minutes, la mission est annulée sauf accord du client pour des heures supplémentaires, validé avec la chargée de clientèle.",
     "• Le réassort de vos produits ménagers est inclus si vous les mettez à disposition. L'agence n'apporte pas ses propres produits pour le moment.",
   ];
   conditions.forEach((c, ci) => {
@@ -276,22 +267,12 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   });
 
   // Message d'accompagnement
-  if (y > pageHeight - 110) {
+  if (y > pageHeight - 80) {
     doc.addPage();
     y = 24;
   } else {
-    y += 12;
+    y += 8;
   }
-  
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text("MESSAGE D'ACCOMPAGNEMENT", MARGIN, y);
-  y += 3;
-  doc.setDrawColor(229, 231, 235);
-  doc.setLineWidth(0.3);
-  doc.line(MARGIN, y, RIGHT, y);
-  y += 8;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10.5);
@@ -303,7 +284,7 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
     '',
     "Votre chargée de clientèle est disponible pour toute question ou pour planifier votre première intervention.",
     '',
-    "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
+    "Cordialement, L'équipe Agence Ménage — 05 22 20 02 39",
   ];
   for (const para of msgLines) {
     if (para === '') { y += 3; continue; }
@@ -337,25 +318,21 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   for (let p = 1; p <= totalPages; p++) {
     if (p === totalPages) {
       doc.setPage(p);
-      const footerY = 275;
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.2);
+      const footerY = 270;
+      doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
+      doc.setLineWidth(0.4);
       doc.line(MARGIN, footerY, RIGHT, footerY);
-      doc.setFontSize(7.5);
+      
+      doc.setFont('helvetica', 'bolditalic');
+      doc.setFontSize(9);
+      doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+      doc.text("Agence Ménage SARL — Groupe Agence PREMIUM Services", PAGE_W / 2, footerY + 5.5, { align: 'center' });
+
       doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
       doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-      doc.text(
-        "Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | contact@agencemenage.ma | agencemenage.ma",
-        PAGE_W / 2,
-        footerY + 4,
-        { maxWidth: CONTENT_W, align: 'center' }
-      );
-      doc.text(
-        "Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.",
-        PAGE_W / 2,
-        footerY + 12,
-        { maxWidth: CONTENT_W, align: 'center' }
-      );
+      doc.text("Bureau Casa : 36A Boulevard d'Anfa, 7ème étage  ·  Bureau Rabat : Avenue Hassan II, Centre commercial REDA porte G", PAGE_W / 2, footerY + 10.5, { align: 'center' });
+      doc.text("Email : mehdi@agencemenage.ma  ·  RC : 704771  ·  Patente : 35409085  ·  IF : 71002832  ·  ICE : 003854034000063", PAGE_W / 2, footerY + 15, { align: 'center' });
     }
   }
 

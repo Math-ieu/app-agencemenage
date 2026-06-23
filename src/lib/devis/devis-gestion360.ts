@@ -48,7 +48,7 @@ const devisGestion360Data: DevisGestion360Data = {
   },
   prestations: [
     { designation: "Gestion 360° — 3 intervenantes — 4h/j × 6j/sem (312h/mois)", montant: 14040 },
-    { designation: "Réduction engagement 6 mois (−5%)", montant: -702, isReduction: true },
+    { designation: "Réduction engagement 6 mois (-5%)", montant: -702, isReduction: true },
     { designation: "Tenues de travail incluses (3 personnes)", montant: "Inclus" },
     { designation: "Supervision qualité incluse (≥3 personnes)", montant: "Inclus" }
   ],
@@ -123,16 +123,7 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.text(`Date : ${data.date}`, right, y + 17, { align: 'right' });
   doc.text('Valable 30 jours', right, y + 24, { align: 'right' });
 
-  // Agency address
-  y += 34;
-  doc.setFontSize(9);
-  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-  doc.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", margin, y);
-  doc.text('Tél : 06 64 22 67 90 | contact@agencemenage.ma', margin, y + 5);
-  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text('agencemenage.ma', margin, y + 10);
-
-  y += 18;
+  y += 30;
   doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageWidth - margin, y);
@@ -315,20 +306,12 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
     y += wrapped.length * 5 + 1.5;
   });
 
-  if (y > pageHeight - 110) {
+  if (y > pageHeight - 80) {
     doc.addPage();
     y = 24;
   } else {
-    y += 12;
+    y += 8;
   }
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text("MESSAGE D'ACCOMPAGNEMENT", margin, y);
-  y += 2.5;
-  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
-  doc.line(margin, y, right, y);
-  y += 6.5;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
@@ -341,7 +324,7 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
     '',
     "Nous pouvons organiser une visite gratuite de vos locaux pour établir un plan de nettoyage sur mesure.",
     '',
-    "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
+    "Cordialement, L'équipe Agence Ménage — 05 22 20 02 39",
   ];
   for (const para of msgLines) {
     if (para === '') { y += 3; continue; }
@@ -375,25 +358,21 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   for (let p = 1; p <= totalPages; p++) {
     if (p === totalPages) {
       doc.setPage(p);
-      const footerY = pageHeight - 22;
-      doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
-      doc.setLineWidth(0.2);
+      const footerY = pageHeight - 27;
+      doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
+      doc.setLineWidth(0.4);
       doc.line(margin, footerY, right, footerY);
-      doc.setFontSize(7.5);
+      
+      doc.setFont('helvetica', 'bolditalic');
+      doc.setFontSize(9);
+      doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+      doc.text("Agence Ménage SARL — Groupe Agence PREMIUM Services", pageWidth / 2, footerY + 5.5, { align: 'center' });
+
       doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
       doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-      doc.text(
-        "Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | contact@agencemenage.ma | agencemenage.ma",
-        pageWidth / 2,
-        footerY + 4,
-        { maxWidth: contentWidth, align: 'center' }
-      );
-      doc.text(
-        "Ce devis est établi en HT, TVA 20% applicable. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.",
-        pageWidth / 2,
-        footerY + 12,
-        { maxWidth: contentWidth, align: 'center' }
-      );
+      doc.text("Bureau Casa : 36A Boulevard d'Anfa, 7ème étage  ·  Bureau Rabat : Avenue Hassan II, Centre commercial REDA porte G", pageWidth / 2, footerY + 10.5, { align: 'center' });
+      doc.text("Email : mehdi@agencemenage.ma  ·  RC : 704771  ·  Patente : 35409085  ·  IF : 71002832  ·  ICE : 003854034000063", pageWidth / 2, footerY + 15, { align: 'center' });
     }
   }
 

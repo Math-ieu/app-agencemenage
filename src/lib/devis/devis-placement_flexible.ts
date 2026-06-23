@@ -92,14 +92,7 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   doc.text(`Date : ${data.date}`,  right, y + 17, { align: 'right' });
   doc.text('Valable 30 jours',     right, y + 24, { align: 'right' });
 
-  // Agency address
-  y += 34;
-  doc.setFontSize(9).setTextColor(...MUTED);
-  doc.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", margin, y);
-  doc.text('Tél : 06 64 22 67 90 | contact@agencemenage.ma', margin, y + 5);
-  doc.setTextColor(...BLUE).text('agencemenage.ma', margin, y + 10);
-
-  y += 18;
+  y += 30;
   doc.setDrawColor(...BLUE).setLineWidth(0.5).line(margin, y, right, y);
   y += 12;
 
@@ -221,22 +214,12 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   });
 
   // ==================== MESSAGE D'ACCOMPAGNEMENT ====================
-  if (y > pageHeight - 110) {
+  if (y > pageHeight - 80) {
     doc.addPage();
     y = 24;
   } else {
-    y += 10;
+    y += 8;
   }
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text("MESSAGE D'ACCOMPAGNEMENT", margin, y);
-  y += 3;
-  doc.setDrawColor(229, 231, 235);
-  doc.setLineWidth(0.3);
-  doc.line(margin, y, right, y);
-  y += 8;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10.5);
@@ -251,7 +234,7 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
     '',
     "Nous pouvons organiser une visite gratuite de vos locaux à votre convenance pour finaliser cette collaboration.",
     '',
-    "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
+    "Cordialement, L'équipe Agence Ménage — 05 22 20 02 39",
   ];
   for (const para of msgLines) {
     if (para === '') { y += 3; continue; }
@@ -285,15 +268,21 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   for (let p = 1; p <= totalPages; p++) {
     if (p === totalPages) {
       doc.setPage(p);
-      const footY = pageHeight - 25;
-      doc.setDrawColor(229, 231, 235);
-      doc.setLineWidth(0.2);
+      const footY = pageHeight - 27;
+      doc.setDrawColor(...BLUE);
+      doc.setLineWidth(0.4);
       doc.line(margin, footY, right, footY);
+      
+      doc.setFont('helvetica', 'bolditalic');
+      doc.setFontSize(9);
+      doc.setTextColor(...TEXT);
+      doc.text("Agence Ménage SARL — Groupe Agence PREMIUM Services", pageWidth/2, footY + 5.5, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.5);
-      doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-      const footerText = "Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | agencemenage.ma";
-      doc.text(footerText, pageWidth/2, footY + 5, { align: 'center' });
-      doc.text("Ce devis est valable 30 jours. Toute acceptation vaut engagement contractuel.", pageWidth/2, footY + 10, { align: 'center' });
+      doc.setTextColor(...MUTED);
+      doc.text("Bureau Casa : 36A Boulevard d'Anfa, 7ème étage  ·  Bureau Rabat : Avenue Hassan II, Centre commercial REDA porte G", pageWidth/2, footY + 10.5, { align: 'center' });
+      doc.text("Email : mehdi@agencemenage.ma  ·  RC : 704771  ·  Patente : 35409085  ·  IF : 71002832  ·  ICE : 003854034000063", pageWidth/2, footY + 15, { align: 'center' });
     }
   }
 

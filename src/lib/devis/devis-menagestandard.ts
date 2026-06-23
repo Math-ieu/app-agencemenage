@@ -71,13 +71,7 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
   doc.text(`Date : ${data.date}`, RIGHT, y + 17, { align: "right" });
   doc.text("Valable 30 jours", RIGHT, y + 24, { align: "right" });
 
-  y += 34;
-  doc.setFontSize(9).setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-  doc.text("36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca", MARGIN, y);
-  doc.text("Tél : 06 64 22 67 90 | contact@agencemenage.ma", MARGIN, y + 5);
-  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]).text("agencemenage.ma", MARGIN, y + 10);
-
-  y += 18;
+  y += 30;
   doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]).setLineWidth(0.5).line(MARGIN, y, RIGHT, y);
   y += 7;
 
@@ -167,7 +161,7 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
     const wrapped = doc.splitTextToSize(ligne.designation, CONTENT_W - 40);
     doc.setTextColor(ligne.isReduction ? 21 : TEXT[0], ligne.isReduction ? 128 : TEXT[1], ligne.isReduction ? 61 : TEXT[2]);
     doc.text(wrapped, MARGIN + 4, y);
-    const montantStr = typeof ligne.montant === "number" ? `${ligne.montant < 0 ? "−" : ""}${formatNumber(Math.abs(ligne.montant))} DH` : String(ligne.montant);
+    const montantStr = typeof ligne.montant === "number" ? `${ligne.montant < 0 ? "-" : ""}${formatNumber(Math.abs(ligne.montant))} DH` : String(ligne.montant);
     doc.text(montantStr, RIGHT - 4, y, { align: "right" });
     y += Math.max(8, wrapped.length * 5);
   });
@@ -183,7 +177,7 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
   if (data.codePromo && data.total1erMois !== undefined && data.total1erMois < data.total) {
     doc.setFillColor(254, 252, 232).rect(MARGIN, y - 3, CONTENT_W, 14, "F");
     doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(133, 77, 14);
-    doc.text(`Offre 1er mois — code ${data.codePromo} (−${data.codePromoPct || 0}%)`, MARGIN + 4, y + 2);
+    doc.text(`Offre 1er mois — code ${data.codePromo} (-${data.codePromoPct || 0}%)`, MARGIN + 4, y + 2);
     doc.text(`${formatNumber(data.total1erMois)} DH`, RIGHT - 4, y + 2, { align: "right" });
     doc.setFont("helvetica", "normal").setFontSize(8.5);
     doc.text(`Tarif mensuel à partir du 2ème mois : ${formatNumber(data.total)} DH`, MARGIN + 4, y + 8);
@@ -234,12 +228,7 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
   y += 4;
 
   // ─── Message d'accompagnement ───
-  if (y > pageHeight - 70) { doc.addPage(); y = 24; }
-  doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text("MESSAGE D'ACCOMPAGNEMENT", MARGIN, y);
-  y += 2.5;
-  doc.setDrawColor(226, 232, 240).line(MARGIN, y, RIGHT, y);
-  y += 7;
+  if (y > pageHeight - 50) { doc.addPage(); y = 24; }
   doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const msg = [
     `Bonjour ${data.client.nom},`,
@@ -252,7 +241,7 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
       ? "Votre facture et votre planning vous seront adressés entre le 15 et le 18 de chaque mois."
       : "Votre chargée de clientèle reste disponible pour toute question.",
     "",
-    "Cordialement, L'équipe Agence Ménage — 06 64 22 67 90",
+    "Cordialement, L'équipe Agence Ménage — 05 22 20 02 39",
   ];
   for (const para of msg) {
     if (para === "") { y += 3; continue; }
@@ -282,11 +271,21 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
   for (let p = 1; p <= totalPages; p++) {
     if (p === totalPages) {
       doc.setPage(p);
-      const footerY = 275;
-      doc.setDrawColor(226, 232, 240).setLineWidth(0.2).line(MARGIN, footerY, RIGHT, footerY);
-      doc.setFontSize(7.5).setFont("helvetica", "normal").setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-      doc.text("Agence Ménage — 36 Boulevard d'Anfa, Résidence Anafe A, 7ème étage, Casablanca | 06 64 22 67 90 | contact@agencemenage.ma | agencemenage.ma", PAGE_W / 2, footerY + 4, { maxWidth: CONTENT_W, align: "center" });
-      doc.text("Ce devis est établi sans TVA. Il est valable 30 jours à compter de sa date d'émission. Toute acceptation vaut engagement contractuel.", PAGE_W / 2, footerY + 12, { maxWidth: CONTENT_W, align: "center" });
+      const footerY = 270;
+      doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
+      doc.setLineWidth(0.4);
+      doc.line(MARGIN, footerY, RIGHT, footerY);
+      
+      doc.setFont('helvetica', 'bolditalic');
+      doc.setFontSize(9);
+      doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+      doc.text("Agence Ménage SARL — Groupe Agence PREMIUM Services", PAGE_W / 2, footerY + 5.5, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+      doc.text("Bureau Casa : 36A Boulevard d'Anfa, 7ème étage  ·  Bureau Rabat : Avenue Hassan II, Centre commercial REDA porte G", PAGE_W / 2, footerY + 10.5, { align: 'center' });
+      doc.text("Email : mehdi@agencemenage.ma  ·  RC : 704771  ·  Patente : 35409085  ·  IF : 71002832  ·  ICE : 003854034000063", PAGE_W / 2, footerY + 15, { align: 'center' });
     }
   }
 
