@@ -246,7 +246,7 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  pdf.text('NOTES ET CONDITIONS PARTICULIÈRES', margin, y);
+  pdf.text('CONDITIONS DU SERVICE', margin, y);
   y += 3;
   pdf.setDrawColor(BORDER_GREY[0], BORDER_GREY[1], BORDER_GREY[2]);
   pdf.setLineWidth(0.3);

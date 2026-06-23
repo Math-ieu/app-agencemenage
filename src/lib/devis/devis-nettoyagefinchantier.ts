@@ -369,7 +369,7 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text('NOTES ET CONDITIONS PARTICULIÈRES', margin, y);
+  doc.text('CONDITIONS DU SERVICE', margin, y);
   y += 2.5;
   doc.setDrawColor(226, 232, 240);
   doc.line(margin, y, right, y);

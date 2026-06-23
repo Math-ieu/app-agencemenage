@@ -306,7 +306,7 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text('NOTES ET CONDITIONS PARTICULIÈRES', MARGIN, y);
+  doc.text('CONDITIONS DU SERVICE', MARGIN, y);
   y += 2.5;
   doc.setDrawColor(226, 232, 240);
   doc.line(MARGIN, y, RIGHT, y);
