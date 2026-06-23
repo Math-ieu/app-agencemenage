@@ -290,12 +290,24 @@ export default function LesSuivis() {
     if (id) navigate(`/clients/${encodeId(id)}`);
   };
 
+  const canSeeDus = hasPermission(user, 'consulter_dus_agences_profils') || hasPermission(user, 'voir_la_caisse');
+  const canSeeCommerciaux = hasPermission(user, 'consulter_suivi_commerciaux') || hasPermission(user, 'voir_la_caisse');
+  const defaultTab = canSeeDus ? 'dus-profils' : (canSeeCommerciaux ? 'commerciaux' : 'dus-profils');
+
   // State Management
-  const [activeTab, setActiveTab] = useState<'dus-profils' | 'commerciaux'>('dus-profils');
+  const [activeTab, setActiveTab] = useState<'dus-profils' | 'commerciaux'>(defaultTab);
   const [isLoading, setIsLoading] = useState(true);
   const [facturationData, setFacturationData] = useState<FacturationRow[]>([]);
   const [commerciauxList, setCommerciauxList] = useState<any[]>([]);
   const [agentsList, setAgentsList] = useState<AgentApiItem[]>([]);
+
+  useEffect(() => {
+    if (!canSeeDus && activeTab === 'dus-profils' && canSeeCommerciaux) {
+      setActiveTab('commerciaux');
+    } else if (!canSeeCommerciaux && activeTab === 'commerciaux' && canSeeDus) {
+      setActiveTab('dus-profils');
+    }
+  }, [canSeeDus, canSeeCommerciaux, activeTab]);
 
   // Search & Filters Tab 1
   const [searchQuery, setSearchQuery] = useState('');
@@ -1623,6 +1635,15 @@ export default function LesSuivis() {
     document.body.removeChild(link);
   };
 
+  if (!canSeeDus && !canSeeCommerciaux) {
+    return (
+      <div style={{ padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: '#ef4444', fontWeight: 600, fontSize: 16 }}>
+        <X size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
+        Vous n'avez pas l'autorisation d'accéder aux suivis financiers.
+      </div>
+    );
+  }
+
   return (
     <div className="ls-page">
       {/* Page Title & Subtitle */}
@@ -1633,18 +1654,22 @@ export default function LesSuivis() {
 
       {/* Tabs Menu */}
       <div className="ls-tabs-container">
-        <button
-          className={`ls-tab-btn tab-dus ${activeTab === 'dus-profils' ? 'active' : ''}`}
-          onClick={() => setActiveTab('dus-profils')}
-        >
-          Suivi des dus Agence-Profils
-        </button>
-        <button
-          className={`ls-tab-btn tab-comm ${activeTab === 'commerciaux' ? 'active' : ''}`}
-          onClick={() => setActiveTab('commerciaux')}
-        >
-          Suivi des commerciaux
-        </button>
+        {canSeeDus && (
+          <button
+            className={`ls-tab-btn tab-dus ${activeTab === 'dus-profils' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dus-profils')}
+          >
+            Suivi des dus Agence-Profils
+          </button>
+        )}
+        {canSeeCommerciaux && (
+          <button
+            className={`ls-tab-btn tab-comm ${activeTab === 'commerciaux' ? 'active' : ''}`}
+            onClick={() => setActiveTab('commerciaux')}
+          >
+            Suivi des commerciaux
+          </button>
+        )}
       </div>
 
       {isLoading ? (
@@ -1654,7 +1679,7 @@ export default function LesSuivis() {
       ) : (
         <>
           {/* ─── TAB 1: DUS AGENCE ↔ PROFILS ─── */}
-          {activeTab === 'dus-profils' && (
+          {activeTab === 'dus-profils' && canSeeDus && (
             <>
               {/* KPI Header block */}
               <div className="ls-kpi-banner">
@@ -1663,7 +1688,7 @@ export default function LesSuivis() {
                     <h3>Suivi des dus Agence ↔ Profils</h3>
                     <p>Détail par mission FDM : parts, encaissement et règlement</p>
                   </div>
-                  {hasPermission(user, 'voir_la_caisse') && (
+                  {(hasPermission(user, 'consulter_dus_agences_profils') || hasPermission(user, 'voir_la_caisse')) && (
                     <button className="ls-export-btn" onClick={exportDuesCsv}>
                       <Download size={14} /> Exporter CSV
                     </button>
@@ -1852,14 +1877,16 @@ export default function LesSuivis() {
                             </td>
                             <td>
                               <div className="ls-action-cell">
-                                <button
-                                  type="button"
-                                  className="ls-action-btn"
-                                  title="Modifier le règlement"
-                                  onClick={() => handleOpenEdit(row)}
-                                >
-                                  <Pencil size={13} />
-                                </button>
+                                {(hasPermission(user, 'validation_paiements_dus') || hasPermission(user, 'voir_la_caisse')) && (
+                                  <button
+                                    type="button"
+                                    className="ls-action-btn"
+                                    title="Modifier le règlement"
+                                    onClick={() => handleOpenEdit(row)}
+                                  >
+                                    <Pencil size={13} />
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   className="ls-action-btn"
@@ -1888,7 +1915,7 @@ export default function LesSuivis() {
           )}
 
           {/* ─── TAB 2: SUIVI DES COMMERCIAUX ─── */}
-          {activeTab === 'commerciaux' && (
+          {activeTab === 'commerciaux' && canSeeCommerciaux && (
             <>
               {/* Filter Row */}
               <div className="ls-filters-container" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -1899,6 +1926,7 @@ export default function LesSuivis() {
                       <select
                         value={periodFilter}
                         onChange={(e) => setPeriodFilter(e.target.value as any)}
+                        disabled={!hasPermission(user, 'filtrer_suivi_commerciaux')}
                       >
                         <option value="mois-en-cours">Ce mois</option>
                         <option value="mois-dernier">Le mois dernier</option>
@@ -1929,6 +1957,7 @@ export default function LesSuivis() {
                           }}
                           value={commDateFrom}
                           onChange={(e) => setCommDateFrom(e.target.value)}
+                          disabled={!hasPermission(user, 'filtrer_suivi_commerciaux')}
                         />
                       </div>
 
@@ -1949,6 +1978,7 @@ export default function LesSuivis() {
                           }}
                           value={commDateTo}
                           onChange={(e) => setCommDateTo(e.target.value)}
+                          disabled={!hasPermission(user, 'filtrer_suivi_commerciaux')}
                         />
                       </div>
                     </>
@@ -1964,6 +1994,7 @@ export default function LesSuivis() {
                           setCommercialFilter(val);
                           setSelectedCommercialName(val === 'all' ? null : val);
                         }}
+                        disabled={!hasPermission(user, 'filtrer_suivi_commerciaux')}
                       >
                         <option value="all">Tous les commerciaux</option>
                         {commerciauxList.map((c) => {

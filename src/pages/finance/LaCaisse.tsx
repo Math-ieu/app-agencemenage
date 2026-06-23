@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
-import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X, Slash, Trash2, Info } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Calendar, Check, ChevronDown, Download, FileText, Pencil, Plus, Search, Upload, X, Trash2, Info } from 'lucide-react';
 import { createCaisseMouvement, exportCaisseCsv, getCaisse, getCaisseSolde, updateCaisseMouvement, getMissions, getDemandesHistorique, deleteCaisseMouvement } from '../../api/client';
 import { useAuthStore } from '../../store/auth';
-import { checkPermission, hasPermission } from '../../utils/permissions';
+import { hasPermission } from '../../utils/permissions';
 import './LaCaisse.css';
 
 interface CashRow {
@@ -89,7 +89,20 @@ const extractAmount = (value: string): string => {
 
 export default function LaCaisse() {
   const user = useAuthStore(state => state.user);
-  const [activeTab, setActiveTab] = useState<'tresorerie' | 'caisse'>('tresorerie');
+
+  const canSeeTresorerie = hasPermission(user, 'consulter_tresorerie') || hasPermission(user, 'voir_la_caisse');
+  const canSeeCaisse = hasPermission(user, 'consulter_solde_caisse') || hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse') || hasPermission(user, 'voir_la_caisse');
+  const defaultTab = canSeeTresorerie ? 'tresorerie' : (canSeeCaisse ? 'caisse' : 'tresorerie');
+
+  const [activeTab, setActiveTab] = useState<'tresorerie' | 'caisse'>(defaultTab);
+
+  useEffect(() => {
+    if (!canSeeTresorerie && activeTab === 'tresorerie' && canSeeCaisse) {
+      setActiveTab('caisse');
+    } else if (!canSeeCaisse && activeTab === 'caisse' && canSeeTresorerie) {
+      setActiveTab('tresorerie');
+    }
+  }, [canSeeTresorerie, canSeeCaisse, activeTab]);
   const [currentPage, setCurrentPage] = useState(1);
   const [rows, setRows] = useState<CashRow[]>([]);
   const [operationsCount, setOperationsCount] = useState(0);
@@ -612,12 +625,10 @@ export default function LaCaisse() {
     if (!movementLabel.trim() || !movementDate) return;
 
     const opTypeCode = typeLabelToCode(selectedOperationType);
-    if (opTypeCode === 'sortie' && !hasPermission(user, 'sorties_caisse')) {
-      alert("Vous n'avez pas la permission de saisir une sortie.");
-      return;
-    }
-    if (opTypeCode !== 'sortie' && !hasPermission(user, 'mouvements_caisse')) {
-      alert("Vous n'avez pas la permission de saisir une entrée/alimentation.");
+    const hasCaissePerm = opTypeCode === 'sortie' ? hasPermission(user, 'sorties_caisse') : hasPermission(user, 'mouvements_caisse');
+    const hasTresorPerm = activeTab === 'tresorerie' && hasPermission(user, 'creer_mouvements_tresorerie');
+    if (!hasCaissePerm && !hasTresorPerm) {
+      alert("Vous n'avez pas la permission de saisir cette opération.");
       return;
     }
 
@@ -688,12 +699,12 @@ export default function LaCaisse() {
     }
   };
 
-  const perm = checkPermission(user, 'financier');
-  if (!perm.allowed) {
+  const hasAccess = hasPermission(user, 'voir_la_caisse') || hasPermission(user, 'consulter_tresorerie') || hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse') || hasPermission(user, 'consulter_solde_caisse');
+  if (!hasAccess) {
     return (
       <div style={{ padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: '#ef4444', fontWeight: 600, fontSize: 16 }}>
-        <Slash size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
-        {perm.message || "Vous n'avez pas l'autorisation d'accéder à la gestion financière."}
+        <X size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
+        Vous n'avez pas l'autorisation d'accéder à la gestion de trésorerie et caisse.
       </div>
     );
   }
@@ -712,23 +723,27 @@ export default function LaCaisse() {
 
       {/* TABS SWITCHER */}
       <div className="lc-tabs" style={{ marginBottom: '1.5rem' }}>
-        <button
-          type="button"
-          className={`lc-tab ${activeTab === 'tresorerie' ? 'active' : ''}`}
-          onClick={() => setActiveTab('tresorerie')}
-        >
-          Trésorerie
-        </button>
-        <button
-          type="button"
-          className={`lc-tab ${activeTab === 'caisse' ? 'active' : ''}`}
-          onClick={() => setActiveTab('caisse')}
-        >
-          La Caisse
-        </button>
+        {canSeeTresorerie && (
+          <button
+            type="button"
+            className={`lc-tab ${activeTab === 'tresorerie' ? 'active' : ''}`}
+            onClick={() => setActiveTab('tresorerie')}
+          >
+            Trésorerie
+          </button>
+        )}
+        {canSeeCaisse && (
+          <button
+            type="button"
+            className={`lc-tab ${activeTab === 'caisse' ? 'active' : ''}`}
+            onClick={() => setActiveTab('caisse')}
+          >
+            La Caisse
+          </button>
+        )}
       </div>
 
-      {activeTab === 'tresorerie' ? (
+      {activeTab === 'tresorerie' && canSeeTresorerie ? (
         <>
           {/* TRESORERIE STATS GRID */}
           <div className="lc-stats-banner" style={{ marginBottom: '1.5rem' }}>
@@ -821,21 +836,21 @@ export default function LaCaisse() {
               <div className="lc-filter-group">
                 <span className="lc-filter-label">Du</span>
                 <div className="lc-filter-input-wrapper date">
-                  <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                  <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} disabled={!hasPermission(user, 'filtrer_tresorerie')} />
                   <Calendar size={14} className="lc-input-icon-right" />
                 </div>
               </div>
               <div className="lc-filter-group">
                 <span className="lc-filter-label">Au</span>
                 <div className="lc-filter-input-wrapper date">
-                  <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                  <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} disabled={!hasPermission(user, 'filtrer_tresorerie')} />
                   <Calendar size={14} className="lc-input-icon-right" />
                 </div>
               </div>
               <div className="lc-filter-group">
                 <span className="lc-filter-label">Type</span>
                 <div className="lc-filter-input-wrapper">
-                  <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                  <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} disabled={!hasPermission(user, 'filtrer_tresorerie')}>
                     <option value="all">Tous</option>
                     <option value="entree">Entrée</option>
                     <option value="sortie">Sortie</option>
@@ -846,7 +861,7 @@ export default function LaCaisse() {
               <div className="lc-filter-group">
                 <span className="lc-filter-label">Saisi par</span>
                 <div className="lc-filter-input-wrapper">
-                  <select value={userFilter} onChange={(e) => setUserFilter(e.target.value)}>
+                  <select value={userFilter} onChange={(e) => setUserFilter(e.target.value)} disabled={!hasPermission(user, 'filtrer_tresorerie')}>
                     <option value="all">Tous</option>
                     {uniqueUsers.map(u => (
                       <option key={u} value={u}>{u}</option>
@@ -864,6 +879,7 @@ export default function LaCaisse() {
                     placeholder="Libellé, catégorie, notes..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    disabled={!hasPermission(user, 'filtrer_tresorerie')}
                   />
                 </div>
               </div>
@@ -876,7 +892,7 @@ export default function LaCaisse() {
               <button type="button" className="lc-action-btn-white" onClick={() => window.print()}>
                 <FileText size={14} /> PDF
               </button>
-              {(hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse')) && (
+              {(hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse') || hasPermission(user, 'creer_mouvements_tresorerie')) && (
                 <button type="button" className="lc-action-btn-green" onClick={openAddMovementModal}>
                   <Plus size={14} /> + Ajouter un mouvement
                 </button>
@@ -935,8 +951,9 @@ export default function LaCaisse() {
                             <span className="lc-action-auto">Auto</span>
                           ) : (
                             <div style={{ display: 'flex', gap: '8px' }}>
-                              {((row.typeCode === 'sortie' && hasPermission(user, 'sorties_caisse')) ||
-                                (row.typeCode !== 'sortie' && hasPermission(user, 'mouvements_caisse'))) && (
+                              {(((row.typeCode === 'sortie' && hasPermission(user, 'sorties_caisse')) ||
+                                (row.typeCode !== 'sortie' && hasPermission(user, 'mouvements_caisse'))) ||
+                                hasPermission(user, 'creer_mouvements_tresorerie')) && (
                                 <>
                                   <button type="button" className="icon-btn" title="Modifier" onClick={() => openEditMovementModal(row)}>
                                     <Pencil size={14} />
@@ -990,7 +1007,7 @@ export default function LaCaisse() {
             )}
           </section>
         </>
-      ) : (
+      ) : (canSeeCaisse ? (
         <>
           {/* ORIGINAL CAISSE TAB RENDER */}
           <section className="lc-actions-row">
@@ -1119,7 +1136,7 @@ export default function LaCaisse() {
             </div>
           </section>
         </>
-      )}
+      ) : null)}
 
       {/* MOVEMENT DIALOG MODAL */}
       {showMovementModal && (

@@ -59,8 +59,14 @@ export default function AppLayout() {
     // If item has children, filter children
     if ('children' in item && item.children) {
       const filteredChildren = item.children.filter(child => {
-        if (child.to === '/finance/vue-globale' || child.to === '/finance/les-suivis' || child.to === '/finance/la-caisse') {
+        if (child.to === '/finance/vue-globale') {
           return hasPermission(user, 'voir_la_caisse');
+        }
+        if (child.to === '/finance/les-suivis') {
+          return hasPermission(user, 'consulter_dus_agences_profils') || hasPermission(user, 'consulter_suivi_commerciaux') || hasPermission(user, 'voir_la_caisse');
+        }
+        if (child.to === '/finance/la-caisse') {
+          return hasPermission(user, 'consulter_tresorerie') || hasPermission(user, 'voir_la_caisse') || hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse');
         }
         if (child.to === '/seo/blog') {
           return hasPermission(user, 'rediger_blog');

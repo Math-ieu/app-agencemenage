@@ -108,6 +108,17 @@ const PERMISSIONS = [
   { key: "sorties_caisse", label: "Saisir une sortie / dépense", group: "Gestion financière — La caisse" },
   { key: "cloturer_caisse_journaliere", label: "Clôturer la caisse journalière", group: "Gestion financière — La caisse" },
 
+  // Gestion financière — Suivis (Nouveaux)
+  { key: "consulter_dus_agences_profils", label: "Consultation (Suivi des dus agences / profils)", group: "Gestion financière — Suivis", subgroup: "Suivi des dus agences / profils" },
+  { key: "validation_paiements_dus", label: "Validation des paiements", group: "Gestion financière — Suivis", subgroup: "Suivi des dus agences / profils" },
+  { key: "consulter_suivi_commerciaux", label: "Consultation (Suivi des commerciaux)", group: "Gestion financière — Suivis", subgroup: "Suivi des commerciaux" },
+  { key: "filtrer_suivi_commerciaux", label: "Filtrer", group: "Gestion financière — Suivis", subgroup: "Suivi des commerciaux" },
+
+  // Gestion financière — Trésorerie & Caisse (Nouveaux)
+  { key: "consulter_tresorerie", label: "Consultation (Trésorerie)", group: "Gestion financière — Trésorerie & Caisse", subgroup: "Trésorerie" },
+  { key: "creer_mouvements_tresorerie", label: "Création des mouvements", group: "Gestion financière — Trésorerie & Caisse", subgroup: "Trésorerie" },
+  { key: "filtrer_tresorerie", label: "Filtrer", group: "Gestion financière — Trésorerie & Caisse", subgroup: "Trésorerie" },
+
   // Marketing
   { key: "consulter_marketing", label: "Consulter toutes les pages", group: "Marketing" },
   { key: "creer_code_promo", label: "Créer un code promo", group: "Marketing" },
@@ -165,6 +176,10 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "voir_la_caisse", "consulter_debit", "valider_paiement_debit", "filtrer_debit", "consulter_credit", "valider_paiement_credit", "filtrer_credit", "consulter_factures", "exporter_pdf_excel_facture", "editer_facture", "modifier_facture", "editer_besoin_facture", "generer_facture", "envoi_facture_client", "consulter_comptes_profil",
     // La caisse
     "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "cloturer_caisse_journaliere",
+    // Gestion financière — Suivis (Nouveaux)
+    "consulter_dus_agences_profils", "validation_paiements_dus", "consulter_suivi_commerciaux", "filtrer_suivi_commerciaux",
+    // Gestion financière — Trésorerie & Caisse (Nouveaux)
+    "consulter_tresorerie", "creer_mouvements_tresorerie", "filtrer_tresorerie",
     // Marketing
     "consulter_marketing", "creer_code_promo", "creer_geste_commercial", "creer_campagne",
     // Qualité
@@ -191,6 +206,10 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "voir_la_caisse", "consulter_debit", "valider_paiement_debit", "filtrer_debit", "consulter_credit", "valider_paiement_credit", "filtrer_credit", "consulter_factures", "exporter_pdf_excel_facture", "editer_facture", "modifier_facture", "editer_besoin_facture", "generer_facture", "envoi_facture_client", "consulter_comptes_profil",
     // La caisse
     "consulter_solde_caisse", "mouvements_caisse", "sorties_caisse", "cloturer_caisse_journaliere",
+    // Gestion financière — Suivis (Nouveaux)
+    "consulter_dus_agences_profils", "validation_paiements_dus", "consulter_suivi_commerciaux", "filtrer_suivi_commerciaux",
+    // Gestion financière — Trésorerie & Caisse (Nouveaux)
+    "consulter_tresorerie", "creer_mouvements_tresorerie", "filtrer_tresorerie",
     // Marketing
     "consulter_marketing", "creer_code_promo", "creer_geste_commercial", "creer_campagne",
     // Qualité
@@ -215,6 +234,8 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_factures", "editer_besoin_facture",
     // La caisse
     "mouvements_caisse",
+    // Gestion financière — Trésorerie & Caisse (Nouveaux)
+    "creer_mouvements_tresorerie",
     // Marketing
     "consulter_marketing",
     // Qualité
@@ -237,6 +258,10 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "voir_la_caisse", "consulter_debit", "filtrer_debit", "consulter_credit", "valider_paiement_credit", "filtrer_credit", "consulter_factures", "consulter_comptes_profil",
     // La caisse
     "consulter_solde_caisse", "sorties_caisse",
+    // Gestion financière — Suivis (Nouveaux)
+    "consulter_dus_agences_profils", "validation_paiements_dus", "consulter_suivi_commerciaux", "filtrer_suivi_commerciaux",
+    // Gestion financière — Trésorerie & Caisse (Nouveaux)
+    "consulter_tresorerie", "creer_mouvements_tresorerie", "filtrer_tresorerie",
     // Marketing
     "consulter_marketing",
     // Qualité
