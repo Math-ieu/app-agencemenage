@@ -561,6 +561,14 @@ export default function DemandesEnAttente() {
         addToast("Action non autorisée. Vous n'êtes ni le créateur de cette demande ni son commercial assigné.", 'error');
         return;
       }
+      const serviceName = (d.service || "").toLowerCase();
+      if (serviceName.includes("chantier")) {
+        const materiel = d.formulaire_data?.materiel_mobilise || "";
+        if (!materiel.trim()) {
+          addToast("Le matériel mobilisé est obligatoire avant de valider une mission fin de chantier.", 'error');
+          return;
+        }
+      }
     } else if (action === 'annuler') {
       const perm = checkPermission(user, 'annuler_demande');
       if (!perm.allowed) {

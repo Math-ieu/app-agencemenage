@@ -22,6 +22,7 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
   const [terrasse, setTerrasse] = useState(Boolean(data.terrasse_incluse));
   const villeConcernee = SURCHARGE_CITIES.includes(data.ville || data.city || demande.client_city || "");
   const [zone, setZone] = useState(data.zone_eloignee !== undefined ? Boolean(data.zone_eloignee) : villeConcernee);
+  const [materielMobilise, setMaterielMobilise] = useState(data.materiel_mobilise || "");
 
   const MIN = 1500;
   const baseRaw = surface * parseFloat(grattage);
@@ -92,8 +93,9 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
       remise_etendue_pct: remise.etenduePct,
       code_promo: remise.promoCode,
       code_promo_pct: remise.promoPct,
+      materiel_mobilise: materielMobilise,
     });
-  }, [surface, grattage, vitres, surfVitres, dechets, marbre, surfMarbre, terrasse, zone, base, vitresCost, dechetsCost, marbreCost, zoneCost, remise, remiseMontant, promoMontant, total]);
+  }, [surface, grattage, vitres, surfVitres, dechets, marbre, surfMarbre, terrasse, zone, base, vitresCost, dechetsCost, marbreCost, zoneCost, remise, remiseMontant, promoMontant, total, materielMobilise]);
 
   const detail = `${surface} m² × ${grattage} DH = ${fmt(baseRaw)} DH${baseRaw < MIN ? ` (min ${fmt(MIN)})` : ""}` +
     (vitresCost ? ` + vitres` : "") +
@@ -151,6 +153,35 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
           <OptRow label="Zone éloignée" note="Bouskoura, Dar Bouazza, Mohammédia…" price="+200 DH" checked={zone} onChange={setZone} />
         </div>
       </div>
+
+      <div style={{ marginTop: 12, marginBottom: 12 }}>
+        <label style={{ display: "block", fontSize: 11, fontWeight: "bold", color: "#1e293b", marginBottom: 4 }}>
+          Matériel mobilisé (interne — invisible dans le PDF client)
+        </label>
+        <textarea
+          value={materielMobilise}
+          onChange={e => setMaterielMobilise(e.target.value)}
+          placeholder="Aspirateur industriel, karcher, monobrosse, escabeau..."
+          rows={3}
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            border: "1px solid #f59e0b",
+            borderRadius: 8,
+            fontSize: 12,
+            fontFamily: "inherit",
+            resize: "vertical",
+            boxSizing: "border-box",
+            outline: "none",
+            backgroundColor: "#fff",
+            color: "inherit"
+          }}
+        />
+        <span style={{ display: "block", fontSize: 10, color: "#64748b", marginTop: 4 }}>
+          Champ obligatoire avant validation pour les missions fin de chantier
+        </span>
+      </div>
+
       <RemiseSection isAbo={false} segment={demande.segment} montantBase={preRemise} value={remise} onChange={setRemise} />
       <ResultBar detail={detail} total={`${fmt(total)}${devisSpe ? " +" : ""} DH`} label="Devis HT" />
     </div>
