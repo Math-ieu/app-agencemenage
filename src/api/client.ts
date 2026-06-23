@@ -161,8 +161,8 @@ export const deleteDemande = (id: number) =>
 export const validerDemande = (id: number) =>
   apiClient.post(`/api/demandes/${id}/valider/`);
 
-export const annulerDemande = (id: number, avis: string) =>
-  apiClient.post(`/api/demandes/${id}/annuler/`, { avis_annulation: avis });
+export const annulerDemande = (id: number, avis: string, cancelType?: 'besoin' | 'intervention') =>
+  apiClient.post(`/api/demandes/${id}/annuler/`, { avis_annulation: avis, cancel_type: cancelType });
 
 export const nrpDemande = (id: number, notes?: string) =>
   apiClient.post(`/api/demandes/${id}/nrp/`, { notes });

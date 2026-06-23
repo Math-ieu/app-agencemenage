@@ -129,7 +129,7 @@ export default function DemandesEnAttente() {
     editingDemandeRef.current = editingDemande;
   }, [editingDemande]);
   const [isRenewal, setIsRenewal] = useState(false);
-  const [showAnnulationModal, setShowAnnulationModal] = useState<{ demandeId: number } | null>(null);
+  const [showAnnulationModal, setShowAnnulationModal] = useState<{ demandeId: number; isSubscription?: boolean } | null>(null);
   const [annulationReason, setAnnulationReason] = useState('');
 
   // Nouveaux états pour le formulaire
@@ -611,7 +611,9 @@ export default function DemandesEnAttente() {
         return;
       }
       else if (action === 'annuler') {
-        setShowAnnulationModal({ demandeId: id });
+        const d = demandes.find(x => x.id === id);
+        const isSubscription = d ? (d.frequency === 'abonnement' || !!d.parent_demande) : false;
+        setShowAnnulationModal({ demandeId: id, isSubscription });
         return;
       }
       await fetchDemandes();
@@ -2438,29 +2440,80 @@ export default function DemandesEnAttente() {
               >
                 Annuler
               </button>
-              <button
-                onClick={async () => {
-                  if (!annulationReason.trim()) return;
-                  try {
-                    await annulerDemande(showAnnulationModal.demandeId, annulationReason.trim());
-                    addToast('Demande rejetée / annulée', 'success');
-                    setShowAnnulationModal(null);
-                    setAnnulationReason('');
-                    fetchDemandes();
-                  } catch (err) {
-                    addToast('Erreur lors de l\'annulation', 'error');
-                  }
-                }}
-                disabled={!annulationReason.trim()}
-                style={{
-                  padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white',
-                  backgroundColor: annulationReason.trim() ? '#ef4444' : '#fca5a5',
-                  border: 'none', cursor: annulationReason.trim() ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s'
-                }}
-              >
-                Confirmer
-              </button>
+              {showAnnulationModal.isSubscription ? (
+                <>
+                  <button
+                    onClick={async () => {
+                      if (!annulationReason.trim()) return;
+                      try {
+                        await annulerDemande(showAnnulationModal.demandeId, annulationReason.trim(), 'intervention');
+                        addToast('Intervention annulée', 'success');
+                        setShowAnnulationModal(null);
+                        setAnnulationReason('');
+                        fetchDemandes();
+                      } catch (err) {
+                        addToast('Erreur lors de l\'annulation', 'error');
+                      }
+                    }}
+                    disabled={!annulationReason.trim()}
+                    style={{
+                      padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white',
+                      backgroundColor: annulationReason.trim() ? '#f97316' : '#fed7aa',
+                      border: 'none', cursor: annulationReason.trim() ? 'pointer' : 'not-allowed',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Annuler l'intervention
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!annulationReason.trim()) return;
+                      try {
+                        await annulerDemande(showAnnulationModal.demandeId, annulationReason.trim(), 'besoin');
+                        addToast('Besoin complet annulé', 'success');
+                        setShowAnnulationModal(null);
+                        setAnnulationReason('');
+                        fetchDemandes();
+                      } catch (err) {
+                        addToast('Erreur lors de l\'annulation', 'error');
+                      }
+                    }}
+                    disabled={!annulationReason.trim()}
+                    style={{
+                      padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white',
+                      backgroundColor: annulationReason.trim() ? '#ef4444' : '#fca5a5',
+                      border: 'none', cursor: annulationReason.trim() ? 'pointer' : 'not-allowed',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Annuler le besoin
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={async () => {
+                    if (!annulationReason.trim()) return;
+                    try {
+                      await annulerDemande(showAnnulationModal.demandeId, annulationReason.trim(), 'besoin');
+                      addToast('Demande rejetée / annulée', 'success');
+                      setShowAnnulationModal(null);
+                      setAnnulationReason('');
+                      fetchDemandes();
+                    } catch (err) {
+                      addToast('Erreur lors de l\'annulation', 'error');
+                    }
+                  }}
+                  disabled={!annulationReason.trim()}
+                  style={{
+                    padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, color: 'white',
+                    backgroundColor: annulationReason.trim() ? '#ef4444' : '#fca5a5',
+                    border: 'none', cursor: annulationReason.trim() ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Confirmer
+                </button>
+              )}
             </div>
           </div>
         </div>

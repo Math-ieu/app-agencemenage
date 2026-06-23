@@ -912,6 +912,31 @@ export default function ClientDetails() {
     </div>
   );
 
+  const getInterventionLabel = (d: any) => {
+    if (d.frequency !== 'abonnement') {
+      return "Intervention une fois";
+    }
+    const parentId = d.parent_demande || d.id;
+    const subDemands = demandes
+      .filter(x => x.frequency === 'abonnement' && (x.id === parentId || x.parent_demande === parentId))
+      .sort((a, b) => {
+        const dateA = a.date_intervention || a.created_at;
+        const dateB = b.date_intervention || b.created_at;
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+        return 0;
+      });
+    const index = subDemands.findIndex(x => x.id === d.id);
+    if (index === -1) {
+      return "Intervention abonnement";
+    }
+    const rank = index + 1;
+    if (rank === 1) {
+      return "1ère intervention";
+    }
+    return `${rank}ème intervention`;
+  };
+
   /* ═══ Render ═══ */
   return (
     <div style={{ background: '#F8F9FA', minHeight: '100vh', paddingBottom: 64, fontFamily: 'Inter, sans-serif' }}>
@@ -1031,7 +1056,7 @@ export default function ClientDetails() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
-                  <Th>Date</Th><Th>Nom du service</Th><Th>Profils proposés</Th><Th>Segment</Th><Th>Statut</Th><Th>Paiement</Th><Th center>Actions</Th>
+                  <Th>Date</Th><Th>Nom du service</Th><Th>Intervention</Th><Th>Profils proposés</Th><Th>Segment</Th><Th>Statut</Th><Th>Paiement</Th><Th center>Actions</Th>
                 </tr></thead>
                 <tbody>
                   {demandes.map(d => (
@@ -1039,6 +1064,7 @@ export default function ClientDetails() {
                       <tr style={{ borderBottom: '1px solid #f8fafc' }}>
                         <Td>{new Date(d.created_at).toLocaleDateString('fr-FR')}</Td>
                         <Td bold color="#1e293b">{d.service}</Td>
+                        <Td>{getInterventionLabel(d)}</Td>
                         <Td>
                           {(d.profils_envoyes?.length ?? 0) > 0 ? (
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1675,7 +1701,16 @@ export default function ClientDetails() {
                                           {assocDemand ? (
                                             <>
                                               {/* Status Badge */}
-                                              {['pres_terminee', 'termine'].includes(assocDemand.statut) ? (
+                                              {assocDemand.statut === 'annule' ? (
+                                                <span style={{
+                                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                  backgroundColor: '#fee2e2', border: '1px solid #ef4444',
+                                                  borderRadius: 8, padding: '4px 10px',
+                                                  fontSize: 12, fontWeight: 700, color: '#ef4444'
+                                                }}>
+                                                  Annulée
+                                                </span>
+                                              ) : ['pres_terminee', 'termine'].includes(assocDemand.statut) ? (
                                                 <span style={{
                                                   display: 'inline-flex', alignItems: 'center', gap: 4,
                                                   backgroundColor: '#dcfce7', border: '1px solid #10b981',

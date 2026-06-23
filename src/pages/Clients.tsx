@@ -22,6 +22,7 @@ interface LatestDemande {
   commercial: string | null;
   cao?: boolean;
   created_at: string;
+  frequency?: string;
 }
 
 interface Client {
@@ -560,6 +561,7 @@ export default function Clients() {
                 <th>Statut besoin</th>
                 <th>Statut paiem.</th>
                 <th>Segment</th>
+                <th>Fréquence</th>
                 <th>Commercial</th>
                 <th>Nom client</th>
                 <th>Quartier / Ville</th>
@@ -657,6 +659,17 @@ export default function Clients() {
                       {c.segment === 'particulier' ? 'Particulier' : 'Entreprise'}
                     </span>
                   </td>
+                  <td>
+                    {c.latest_demande ? (
+                      c.latest_demande.frequency === 'abonnement' ? (
+                        <span className="badge badge-purple">Abonnement</span>
+                      ) : (
+                        <span className="badge badge-gray">Une fois</span>
+                      )
+                    ) : (
+                      <span className="badge badge-gray">Une fois</span>
+                    )}
+                  </td>
                   <td className="text-slate-500 font-medium">
                     {c.latest_demande?.commercial || '—'}
                   </td>
@@ -716,7 +729,7 @@ export default function Clients() {
               ))}
               {clients.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="empty-row text-center py-12 text-slate-400">Aucun client trouvé.</td>
+                  <td colSpan={10} className="empty-row text-center py-12 text-slate-400">Aucun client trouvé.</td>
                 </tr>
               )}
             </tbody>
