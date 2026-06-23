@@ -38,6 +38,7 @@ interface DevisPlacementFlexibleData {
   avancePourcentage?: number;
   avanceFixe?: number;
   avancePaiement?: number;
+  ferie?: boolean;
 }
 
 
@@ -129,49 +130,199 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   }
   y += 6;
 
-  // Intro
-  const intro = [
-    "Madame, Monsieur, nous vous remercions de l'intérêt que vous portez aux services d'Agence Ménage.",
-    "Vous trouverez ci-dessous notre proposition pour la mise à disposition d'une intervenante dédiée à votre entreprise. Agence Ménage prend en charge l'intégralité du processus : sélection du profil, gestion administrative et sociale, couverture assurantielle et continuité en cas d'absence — sans les contraintes de gestion d'un employeur.",
+  // ==================== 1. INTRO & 2. GARANTIES (Page 1) ====================
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...LIGHT);
+  const introTxt1 = "Madame, Monsieur, nous vous remercions de l'intérêt que vous portez aux services d'Agence Ménage.";
+  const introTxt2 = "Vous trouverez ci-dessous notre proposition pour la mise à disposition d'une intervenante dédiée à votre entreprise. Agence Ménage prend en charge l'intégralité du processus : sélection du profil, gestion administrative et sociale, couverture assurantielle et continuité en cas d'absence. Vous bénéficiez d'une intervenante qualifiée sans les contraintes de gestion d'un employeur.";
+  
+  const introLines1 = doc.splitTextToSize(introTxt1, contentWidth);
+  doc.text(introLines1, margin, y);
+  y += introLines1.length * LINE_H + 2;
+
+  const introLines2 = doc.splitTextToSize(introTxt2, contentWidth);
+  doc.text(introLines2, margin, y);
+  y += introLines2.length * LINE_H + 8;
+
+  // Title for Guarantees
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...BLUE);
+  doc.text("CE QUE VOTRE TARIF INCLUT QUE NOS CONCURRENTS N'OFFRENT PAS", margin, y);
+  y += 4;
+  doc.setDrawColor(226, 232, 240).setLineWidth(0.2).line(margin, y, right, y);
+  y += 5;
+
+  const guarantees = [
+    { label: "Déclaration CNSS obligatoire", desc: "L'intervenante bénéficie d'une couverture maladie, retraite et allocations familiales. En cas de contrôle, vous êtes protégé." },
+    { label: "Assurance Accident du Travail", desc: "Tout incident sur le lieu de travail est couvert by notre assurance. Sans déclaration, c'est vous qui êtes responsable." },
+    { label: "Assurance RC Professionnelle", desc: "Casse, dégâts matériels, incidents accidentels — notre RC couvre les dommages causés par l'intervenante chez vous." },
+    { label: "Contrat de travail légal (loi 19-12)", desc: "L'intervenante est employée selon la réglementation marocaine des employés de maison. Cadre juridique clair et sécurisé." }
   ];
-  doc.setFontSize(10).setTextColor(...LIGHT);
-  for (const para of intro) {
-    const lines = doc.splitTextToSize(para, contentWidth);
-    doc.text(lines, margin, y);
-    y += lines.length * LINE_H;
-  }
+
+  // Draw table header
+  doc.setFillColor(243, 244, 246);
+  doc.rect(margin, y, contentWidth, 8, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(...LIGHT);
+  doc.text("Garantie", margin + 4, y + 5.5);
+  doc.text("Ce que ça signifie pour vous", margin + 55, y + 5.5);
   y += 8;
 
-  // Table
-  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...BLUE);
-  doc.text('DÉTAIL DE LA PRESTATION', margin, y);
-  y += 7;
-
-  doc.setFillColor(243, 244, 246).rect(margin, y, contentWidth, 8, 'F');
-  doc.setFontSize(10).setTextColor(...LIGHT).text('Désignation', margin + 4, y + 5.5);
-  doc.text('Montant HT / mois', right - 4, y + 5.5, { align: 'right' });
-  y += 10;
-
-  doc.setFont('helvetica', 'normal').setTextColor(...TEXT);
-  data.prestations.forEach((p, idx) => {
-    const desLines = doc.splitTextToSize(p.designation, contentWidth - 50);
-    const h = Math.max(8, desLines.length * LINE_H + 2);
-    if (idx % 2 === 1) doc.setFillColor(249, 250, 251).rect(margin, y - 4.5, contentWidth, h, 'F');
-    doc.text(desLines, margin + 4, y);
-    const m = typeof p.montant === 'number' ? `${formatNumber(p.montant)} DH` : p.montant;
-    doc.text(m, right - 4, y, { align: 'right' });
+  // Draw rows
+  doc.setFont('helvetica', 'normal').setFontSize(8.5);
+  guarantees.forEach((g, idx) => {
+    const wrappedLabel = doc.splitTextToSize(g.label, 48);
+    const wrappedDesc = doc.splitTextToSize(g.desc, contentWidth - 56);
+    const h = Math.max(wrappedLabel.length * 4.5, wrappedDesc.length * 4.5) + 4;
+    
+    if (idx % 2 === 1) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(margin, y, contentWidth, h, 'F');
+    }
+    
+    // Draw left col
+    doc.setFont('helvetica', 'bold').setTextColor(...TEXT);
+    doc.text(wrappedLabel, margin + 4, y + 4);
+    
+    // Draw right col
+    doc.setFont('helvetica', 'normal').setTextColor(...LIGHT);
+    doc.text(wrappedDesc, margin + 55, y + 4);
+    
     y += h;
   });
 
-  const totalHT = data.prestations.reduce((sum, p) => {
-    const amt = typeof p.montant === 'number' ? p.montant : 0;
-    return sum + amt;
-  }, 0);
-  doc.setDrawColor(...BLUE).setLineWidth(0.4).line(margin, y - 4, right, y - 4);
-  doc.setFillColor(239, 246, 255).rect(margin, y - 4, contentWidth, 10, 'F');
-  doc.setFont('helvetica', 'bold').setFontSize(12).text('TOTAL HT / MOIS', right - 60, y + 2, { align: 'right' });
-  doc.setTextColor(...BLUE).text(`${formatNumber(totalHT)} DH`, right - 4, y + 2, { align: 'right' });
-  y += 15;
+  // Page break to Page 2
+  doc.addPage();
+  y = 24;
+
+  // ==================== 3. PRESTATION COMPRISE (Page 2) ====================
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(...BLUE);
+  doc.text("CE QUE COMPREND LA PRESTATION", margin, y);
+  y += 4;
+  doc.setDrawColor(226, 232, 240).setLineWidth(0.2).line(margin, y, right, y);
+  y += 5;
+
+  const inclusionItems = [
+    "Entretien préalable et validation des références",
+    "Rédaction et signature du contrat de travail",
+    "Déclaration CNSS mensuelle et gestion des cotisations patronales et salariales",
+    "Couverture Assurance RC et Accident du Travail",
+    "Tenue professionnelle fournie — facturée au 1er mois uniquement (+200 DH HT / personne)",
+    "Suivi régulier et gestion des litiges ou incidents",
+    "Remplacement sous 48h en cas d'absence prolongée ou rupture",
+    "Cahier de liaison et point mensuel avec votre chargée de clientèle",
+    "Non inclus : produits, matériel, transport, congés au-delà du cadre légal."
+  ];
+
+  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(...LIGHT);
+  inclusionItems.forEach(item => {
+    doc.setFont('helvetica', 'bold').setTextColor(...BLUE);
+    doc.text("✓", margin + 2, y);
+    doc.setFont('helvetica', 'normal').setTextColor(...LIGHT);
+    const wrappedItem = doc.splitTextToSize(item, contentWidth - 8);
+    doc.text(wrappedItem, margin + 8, y);
+    y += Math.max(5, wrappedItem.length * 4.5) + 1.5;
+  });
+  y += 10;
+
+  // ==================== DÉTAIL DE LA PRESTATION ====================
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(4, 80, 59);
+  doc.text('DÉTAIL DE LA PRESTATION', margin, y);
+  y += 7;
+
+  // Header row
+  doc.setFillColor(4, 80, 59);
+  doc.rect(margin, y, contentWidth, 8, 'F');
+  doc.setFontSize(10).setFont('helvetica', 'bold').setTextColor(255, 255, 255);
+  doc.text('Désignation', margin + 4, y + 5.5);
+  doc.text('Montant', right - 4, y + 5.5, { align: 'right' });
+  y += 8;
+
+  // Prepare table rows
+  const cleanForfait = Math.round(data.details.prixBase / (data.ferie ? 1.20 : 1));
+  const joursParMois = data.details.joursParSemaine === 5 ? 22 : data.details.joursParSemaine === 6 ? 26 : data.details.joursParSemaine === 7 ? 30 : data.details.joursParSemaine * 4;
+  const ferieAmount = Math.round(cleanForfait * 0.20);
+  const reductionPourcentage = data.details.reductionPourcentage || 0;
+  const remiseAmount = Math.round(cleanForfait * (data.ferie ? 1.2 : 1) * (reductionPourcentage / 100));
+  const tenueCost = data.details.tenueTravail || 0;
+
+  const rows: Array<{ label: string; value: string; isItalic?: boolean; isReduction?: boolean; isBold?: boolean }> = [];
+  
+  rows.push({
+    label: "Frais de dossier (sélection, vérification, onboarding)",
+    value: "OFFERT"
+  });
+
+  const persLabel = data.details.nbIntervenantes > 1 ? "personnes" : "personne";
+  rows.push({
+    label: `Forfait mensuel — ${data.details.nbIntervenantes} ${persLabel} × ${data.details.heuresParJour}h/j × ${joursParMois} j/mois × 32 DH`,
+    value: `${formatNumber(cleanForfait)} DH HT`
+  });
+
+  rows.push({
+    label: "Couverture jours fériés (si sélectionnée, +20%)",
+    value: `+${formatNumber(ferieAmount)} DH HT`,
+    isItalic: true
+  });
+
+  if (reductionPourcentage > 0) {
+    const engLabel = data.details.engagementMois > 0 ? ` engagement ${data.details.engagementMois} mois` : "";
+    rows.push({
+      label: `Remise${engLabel} -${reductionPourcentage}%`,
+      value: `-${formatNumber(remiseAmount)} DH HT`,
+      isReduction: true
+    });
+  }
+
+  if (tenueCost > 0) {
+    const persTenue = data.details.nbIntervenantes > 1 ? "personnes" : "personne";
+    rows.push({
+      label: `Tenue professionnelle × ${data.details.nbIntervenantes} ${persTenue} (1er mois)`,
+      value: `+${formatNumber(tenueCost)} DH HT`
+    });
+  }
+
+  // Draw rows
+  rows.forEach((r, idx) => {
+    // Alternating background
+    if (idx % 2 === 1) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(margin, y, contentWidth, 8, 'F');
+    }
+    
+    if (r.isItalic) {
+      doc.setFont('helvetica', 'italic');
+    } else if (r.isBold) {
+      doc.setFont('helvetica', 'bold');
+    } else {
+      doc.setFont('helvetica', 'normal');
+    }
+    
+    doc.setFontSize(9.5).setTextColor(31, 41, 55);
+    doc.text(r.label, margin + 4, y + 5.5);
+    doc.text(r.value, right - 4, y + 5.5, { align: 'right' });
+    y += 8;
+  });
+
+  // Calculate totals
+  const totalMoisSuivants = cleanForfait + (data.ferie ? ferieAmount : 0) - remiseAmount;
+  const total1erMois = totalMoisSuivants + tenueCost;
+
+  // Draw double footer
+  // Row 1: TOTAL 1ER MOIS HT
+  doc.setFillColor(30, 41, 59); // Slate `#1e293b`
+  doc.rect(margin, y, contentWidth, 9, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(10.5).setTextColor(255, 255, 255);
+  doc.text('TOTAL 1ER MOIS HT', margin + 4, y + 6);
+  doc.text(`${formatNumber(total1erMois)} DH HT`, right - 4, y + 6, { align: 'right' });
+  y += 9;
+
+  // Row 2: TOTAL MOIS SUIVANTS HT (sans tenue)
+  doc.setFillColor(254, 240, 138); // Yellow `#fef08a`
+  doc.rect(margin, y, contentWidth, 9, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(10.5).setTextColor(15, 23, 42); // Black `#0f172a`
+  doc.text('TOTAL MOIS SUIVANTS HT (sans tenue)', margin + 4, y + 6);
+  doc.text(`${formatNumber(totalMoisSuivants)} DH HT`, right - 4, y + 6, { align: 'right' });
+  y += 12;
 
   if (data.avanceActive) {
     doc.setFillColor(239, 246, 255);
@@ -191,6 +342,8 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   if (y > pageHeight - 50) {
     doc.addPage();
     y = 24;
+  } else {
+    y += 10;
   }
 
   doc.setFont('helvetica', 'bold');

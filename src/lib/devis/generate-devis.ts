@@ -565,6 +565,7 @@ const buildPlacementFlexibleData = (demande: Demande): DevisPlacementFlexibleDat
       prixApresReduction: Math.max(0, prixBase - reduction),
     },
     ...getAdvanceFields(form),
+    ferie: Boolean(form.ferie || form.majoration_ferie),
   };
 };
 
@@ -635,6 +636,7 @@ const buildGestion360Data = (demande: Demande): DevisGestion360Data => {
       engagementMois: toNumber(form.engagement_mois || 0),
     },
     ...getAdvanceFields(form),
+    ferie: Boolean(form.ferie || form.majoration_ferie),
   };
 };
 

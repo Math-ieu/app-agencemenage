@@ -32,6 +32,7 @@ interface DevisGestion360Data {
   avancePourcentage?: number;
   avanceFixe?: number;
   avancePaiement?: number;
+  ferie?: boolean;
 }
 
 // Données d'exemple (correspondant au devis original)
@@ -69,14 +70,14 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   const margin = 20;
   const right = pageWidth - margin;
   const contentWidth = right - margin;
+  const tableWidth = contentWidth;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const footerThreshold = pageHeight - 40;
   const BLUE: [number, number, number] = [30, 58, 138];
   const TEXT: [number, number, number] = [15, 23, 42];
   const MUTED: [number, number, number] = [100, 116, 139];
   const BORDER: [number, number, number] = [226, 232, 240];
   let y = 24;
-
-  const formatAmount = (value: number | string) =>
-    typeof value === 'number' ? `${formatNumber(value)} DH` : value;
 
   // Header — Logo
   if (logoBase64) {
@@ -173,111 +174,225 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.line(margin, y + 2.5, right, y + 2.5);
   y += 10;
 
+  // ==================== 1. INTRO & 2. GARANTIES (Page 1) ====================
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  const introLines = doc.splitTextToSize(
-    "Madame, Monsieur, nous vous remercions de l'intérêt que vous portez aux services d'Agence Ménage. Avec notre offre Gestion 360°, vous n'achetez pas \"du ménage\" : vous achetez un standard de propreté garanti, piloté de A à Z par Agence Ménage. Nous dimensionnons les équipes, organisons les plannings, fournissons les produits et le matériel, assurons la supervision et vous livrons un reporting mensuel. Vous n'avez rien à gérer.",
-    contentWidth
-  );
+  const introTxt = "Madame, Monsieur, nous vous remercions de l'intérêt que vous portez aux services d'Agence Ménage. Vous trouverez ci-dessous notre proposition Gestion 360°, notre offre clé en main. Avec Gestion 360°, vous n'achetez pas du ménage. Vous achetez un standard de propreté garanti. Agence Ménage pilote l'intégralité de la prestation : équipes, méthodes, produits, supervision et reporting. Vous n'avez rien à gérer.";
+  
+  const introLines = doc.splitTextToSize(introTxt, contentWidth);
   doc.text(introLines, margin, y);
-  y += introLines.length * 4.6 + 6;
+  y += introLines.length * 4.8 + 8;
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text('DÉTAIL DE LA PRESTATION', margin, y);
-  y += 3;
-  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
-  doc.line(margin, y + 2.5, right, y + 2.5);
-  y += 7;
+  // Title for Guarantees
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text("CE QUE VOTRE TARIF INCLUT QUE NOS CONCURRENTS N'OFFRENT PAS", margin, y);
+  y += 4;
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]).setLineWidth(0.2).line(margin, y, right, y);
+  y += 5;
 
-  const rows = data.prestations.map((item) => ({
-    label: item.designation,
-    value: formatAmount(item.montant),
-  }));
-  const totalHT = data.prestations.reduce((sum, item) => {
-    if (typeof item.montant === 'number') {
-      return sum + item.montant;
+  const guarantees = [
+    { label: "Déclaration CNSS obligatoire", desc: "Personnel déclaré et couvert. Vous êtes à l'abri de tout risque juridique." },
+    { label: "Assurance Accident du Travail", desc: "Tout incident sur site est couvert. Aucune responsabilité pour votre entreprise." },
+    { label: "Assurance RC Professionnelle", desc: "Dommages accidentels causés par nos équipes — intégralement couverts." },
+    { label: "Contrat de travail légal (loi 19-12)", desc: "Cadre juridique clair, conforme à la réglementation marocaine." }
+  ];
+
+  // Draw table header
+  doc.setFillColor(243, 244, 246);
+  doc.rect(margin, y, contentWidth, 8, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text("Garantie", margin + 4, y + 5.5);
+  doc.text("Ce que ça signifie pour vous", margin + 55, y + 5.5);
+  y += 8;
+
+  // Draw rows
+  doc.setFont('helvetica', 'normal').setFontSize(8.5);
+  guarantees.forEach((g, idx) => {
+    const wrappedLabel = doc.splitTextToSize(g.label, 48);
+    const wrappedDesc = doc.splitTextToSize(g.desc, contentWidth - 56);
+    const h = Math.max(wrappedLabel.length * 4.5, wrappedDesc.length * 4.5) + 4;
+    
+    if (idx % 2 === 1) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(margin, y, contentWidth, h, 'F');
     }
-    return sum;
-  }, 0);
-
-  const col1 = margin + 2;
-  const col2 = right - 40;
-  const tableWidth = right - margin;
-  const rowHeight = 8;
-  doc.setFillColor(226, 232, 240);
-  doc.rect(margin, y, tableWidth, rowHeight, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  doc.text('Désignation', col1, y + 5.5);
-  doc.text('Montant HT', right - 5, y + 5.5, { align: 'right' });
-  y += rowHeight;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9.5);
-  rows.forEach((row, idx) => {
-    if (idx % 2 === 0) {
-      doc.setFillColor(250, 250, 250);
-      doc.rect(margin, y, tableWidth, rowHeight, 'F');
-    }
-    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-    doc.text(row.label, col1, y + 5.5, { maxWidth: col2 - col1 - 4 });
-    doc.text(row.value, right - 5, y + 5.5, { align: 'right' });
-    y += rowHeight;
+    
+    // Draw left col
+    doc.setFont('helvetica', 'bold').setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    doc.text(wrappedLabel, margin + 4, y + 4);
+    
+    // Draw right col
+    doc.setFont('helvetica', 'normal').setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text(wrappedDesc, margin + 55, y + 4);
+    
+    y += h;
   });
 
-  doc.setFillColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.rect(margin, y, tableWidth, rowHeight, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TOTAL HT', col1, y + 5.5);
-  doc.text(`${formatNumber(totalHT)} DH`, right - 5, y + 5.5, { align: 'right' });
-  y += rowHeight + 6;
+  // Page break to Page 2
+  doc.addPage();
+  y = 24;
 
-  if (data.avanceActive) {
-    doc.setFillColor(239, 246, 255);
-    doc.rect(margin, y - 4, tableWidth, 8, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-    const labelAvance = data.avanceType === 'pourcentage'
-      ? `Avance requise (${data.avancePourcentage}%)`
-      : 'Avance requise';
-    doc.text(labelAvance, right - 65, y + 1.5);
-    doc.text(`${formatAmount(data.avancePaiement || 0)}`, right - 5, y + 1.5, { align: 'right' });
-    y += 10;
+  // ==================== 3. PRESTATION COMPRISE (Page 2) ====================
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text("CE QUE COMPREND LA PRESTATION", margin, y);
+  y += 4;
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]).setLineWidth(0.2).line(margin, y, right, y);
+  y += 5;
+
+  const inclusionItems = [
+    "Dimensionnement et organisation des équipes selon vos locaux",
+    "Planification des interventions adaptée à votre activité",
+    "Fourniture des produits ménagers et du matériel nécessaire",
+    "Tenues professionnelles fournies — incluses dans le forfait",
+    "Supervision sur site selon le volume de l'équipe",
+    "Check-lists qualité et inspections régulières",
+    "Remplacement le jour même en cas d'absence",
+    "Rapport mensuel d'activité transmis avant le 5 de chaque mois",
+    "Traitement de toute réclamation sous 24h avec plan d'action",
+    "Point mensuel avec votre chargée de clientèle dédiée"
+  ];
+
+  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  inclusionItems.forEach(item => {
+    doc.setFont('helvetica', 'bold').setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+    doc.text("✓", margin + 2, y);
+    doc.setFont('helvetica', 'normal').setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    const wrappedItem = doc.splitTextToSize(item, contentWidth - 8);
+    doc.text(wrappedItem, margin + 8, y);
+    y += Math.max(5, wrappedItem.length * 4.5) + 1.5;
+  });
+  y += 6;
+
+  // ==================== 4. NOS ENGAGEMENTS (SLA) ====================
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text("NOS ENGAGEMENTS (SLA)", margin, y);
+  y += 4;
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]).setLineWidth(0.2).line(margin, y, right, y);
+  y += 5;
+
+  const slaItems = [
+    { label: "Remplacement en cas d'absence", val: "Le jour même" },
+    { label: "Traitement des réclamations", val: "Sous 24h avec plan d'action" },
+    { label: "Rapport mensuel d'activité", val: "Avant le 5 de chaque mois" },
+    { label: "Visite préalable des locaux", val: "Gratuite — avant tout démarrage" }
+  ];
+
+  // Draw SLA header
+  doc.setFillColor(243, 244, 246);
+  doc.rect(margin, y, contentWidth, 8, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(9).setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text("Engagement", margin + 4, y + 5.5);
+  doc.text("Délai / Modalité", margin + 75, y + 5.5);
+  y += 8;
+
+  doc.setFont('helvetica', 'normal').setFontSize(8.5);
+  slaItems.forEach((item, idx) => {
+    if (idx % 2 === 1) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(margin, y, contentWidth, 8, 'F');
+    }
+    doc.setFont('helvetica', 'bold').setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    doc.text(item.label, margin + 4, y + 5.5);
+    doc.setFont('helvetica', 'normal').setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text(item.val, margin + 75, y + 5.5);
+    y += 8;
+  });
+  y += 8;
+
+  // ==================== DÉTAIL DE LA PRESTATION ====================
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(4, 80, 59);
+  doc.text('DÉTAIL DE LA PRESTATION', margin, y);
+  y += 7;
+
+  // Header row
+  doc.setFillColor(4, 80, 59);
+  doc.rect(margin, y, contentWidth, 8, 'F');
+  doc.setFontSize(10).setFont('helvetica', 'bold').setTextColor(255, 255, 255);
+  doc.text('Désignation', margin + 4, y + 5.5);
+  doc.text('Montant', right - 4, y + 5.5, { align: 'right' });
+  y += 8;
+
+  // Prepare table rows
+  const cleanForfait = Math.round(data.details.prixBase / (data.ferie ? 1.20 : 1));
+  const joursParSem = data.details.joursParSemaine || 5;
+  const joursParMois = joursParSem === 5 ? 22 : joursParSem === 6 ? 26 : joursParSem === 7 ? 30 : joursParSem * 4;
+  const superv = data.details.nbIntervenantes < 3 ? 800 : 0;
+  const ferieAmount = Math.round((cleanForfait + superv) * 0.20);
+  const discountPct = data.details.prixBase > 0 ? (data.details.reduction / data.details.prixBase) : 0;
+  const remiseAmount = Math.round((cleanForfait + superv) * (data.ferie ? 1.2 : 1) * discountPct);
+
+  const rows: Array<{ label: string; value: string; isItalic?: boolean; isReduction?: boolean; isBold?: boolean }> = [];
+
+  const persLabel = data.details.nbIntervenantes > 1 ? "personnes" : "personne";
+  rows.push({
+    label: `Forfait mensuel — ${data.details.nbIntervenantes} ${persLabel} × ${data.details.heuresParJour}h/j × ${joursParMois} j/mois × 45 DH`,
+    value: `${formatNumber(cleanForfait)} DH HT`
+  });
+
+  if (superv > 0) {
+    rows.push({
+      label: `Supervision (${data.details.nbIntervenantes} personnes < 3)`,
+      value: `+${formatNumber(superv)} DH HT`
+    });
   }
 
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const footerThreshold = pageHeight - 40;
+  rows.push({
+    label: "Couverture jours fériés (si sélectionnée, +20%)",
+    value: `+${formatNumber(ferieAmount)} DH HT`,
+    isItalic: true
+  });
 
-  // Check for page break before inclusions note
-  if (y > footerThreshold - 15) {
-    doc.addPage();
-    y = 24;
+  if (discountPct > 0) {
+    const engLabel = data.details.engagementMois > 0 ? ` engagement ${data.details.engagementMois} mois` : "";
+    rows.push({
+      label: `Remise${engLabel} -${Math.round(discountPct * 100)}%`,
+      value: `-${formatNumber(remiseAmount)} DH HT`,
+      isReduction: true
+    });
   }
 
-  // Note inclusions orange
-  doc.setFillColor(255, 247, 237); // Fond orange clair
-  doc.roundedRect(margin, y, tableWidth, 12, 1, 1, 'F');
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8.5);
-  doc.setTextColor(154, 52, 18); // Texte orange foncé
-  doc.text(
-    '• Inclus sans supplément : tenues de travail, check-lists qualité, inspections régulières, remplacement le jour même en cas d\'absence, reporting mensuel, SLA réclamations 24h.',
-    margin + 4,
-    y + 5,
-    { maxWidth: tableWidth - 8 }
-  );
-  y += 18;
+  // Draw rows
+  rows.forEach((r, idx) => {
+    // Alternating background
+    if (idx % 2 === 1) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(margin, y, contentWidth, 8, 'F');
+    }
+
+    if (r.isItalic) {
+      doc.setFont('helvetica', 'italic');
+    } else if (r.isBold) {
+      doc.setFont('helvetica', 'bold');
+    } else {
+      doc.setFont('helvetica', 'normal');
+    }
+
+    doc.setFontSize(9.5).setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    doc.text(r.label, margin + 4, y + 5.5);
+    doc.text(r.value, right - 4, y + 5.5, { align: 'right' });
+    y += 8;
+  });
+
+  // Calculate totals
+  const totalHT = cleanForfait + superv + (data.ferie ? ferieAmount : 0) - remiseAmount;
+
+  // Draw footer
+  doc.setFillColor(30, 41, 59); // Slate `#1e293b`
+  doc.rect(margin, y, contentWidth, 9, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(10.5).setTextColor(255, 255, 255);
+  doc.text('TOTAL MENSUEL HT', margin + 4, y + 6);
+  doc.text(`${formatNumber(totalHT)} DH HT`, right - 4, y + 6, { align: 'right' });
+  y += 15;
+
+
 
   // Options table
   if (y > footerThreshold - 30) {
     doc.addPage();
     y = 24;
+  } else {
+    y += 10;
   }
 
   doc.setFont('helvetica', 'bold');
