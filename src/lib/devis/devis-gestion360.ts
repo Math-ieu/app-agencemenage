@@ -300,6 +300,49 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   });
   y += 8;
 
+  // ==================== GRILLE JOURS FACTURÉS ====================
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('TARIFICATION', margin, y);
+  y += 4;
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]).setLineWidth(0.2).line(margin, y, right, y);
+  y += 5;
+
+  // Table header
+  const col1Width = contentWidth * 0.5;
+  const col2Width = contentWidth * 0.5;
+  doc.setFillColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.rect(margin, y, col1Width, 8, 'F');
+  doc.rect(margin + col1Width, y, col2Width, 8, 'F');
+  doc.setFont('helvetica', 'bold').setFontSize(9.5).setTextColor(255, 255, 255);
+  doc.text('Jours / semaine', margin + 4, y + 5.5);
+  doc.text('Jours facturés / mois', margin + col1Width + 4, y + 5.5);
+  y += 8;
+
+  // Table rows
+  const joursRows: [string, string][] = [
+    ['5 jours / semaine', '22 jours / mois'],
+    ['6 jours / semaine', '26 jours / mois'],
+    ['7 jours / semaine', '30 jours / mois'],
+  ];
+  doc.setFont('helvetica', 'normal').setFontSize(9.5);
+  joursRows.forEach((jr, idx) => {
+    if (idx % 2 === 0) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(margin, y, contentWidth, 8, 'F');
+    }
+    doc.setFont('helvetica', 'bold').setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    doc.text(jr[0], margin + 4, y + 5.5);
+    doc.setFont('helvetica', 'normal').setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text(jr[1], margin + col1Width + 4, y + 5.5);
+    y += 8;
+  });
+
+  // Formula note
+  y += 3;
+  doc.setFont('helvetica', 'italic').setFontSize(9).setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+  doc.text('Formule de calcul : Heures/jour × Jours/mois × 45 DH × Nb personnes × (1 – remise)', margin, y);
+  y += 10;
+
   // ==================== DÉTAIL DE LA PRESTATION ====================
   doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(4, 80, 59);
   doc.text('DÉTAIL DE LA PRESTATION', margin, y);
