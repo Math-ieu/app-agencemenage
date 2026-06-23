@@ -231,6 +231,71 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   doc.text(noteWrapped, MARGIN + 8, y + 6);
   y += noteBoxH + 6;
 
+  // Options table
+  if (y > footerThreshold - 30) {
+    doc.addPage();
+    y = 24;
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('OPTIONS DISPONIBLES', MARGIN, y);
+  y += 2.5;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(MARGIN, y, RIGHT, y);
+  y += 5;
+
+  // Header
+  doc.setFillColor(243, 244, 246);
+  doc.rect(MARGIN, y, CONTENT_W, 8, 'F');
+  doc.setFontSize(9.5);
+  doc.setTextColor(55, 65, 81);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Option', MARGIN + 4, y + 5.5);
+  doc.text('Prix', RIGHT - 4, y + 5.5, { align: 'right' });
+  y += 11;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+
+  const optionsList = [
+    { name: "Réassort consommables (savon liquide, café, papier toilette...)", price: "+25 DH" }
+  ];
+
+  optionsList.forEach((opt, idx) => {
+    const wrappedName = doc.splitTextToSize(opt.name, CONTENT_W - 45);
+    const rowHeight = Math.max(8, wrappedName.length * 5);
+
+    if (y + rowHeight > pageHeight - 28) {
+      doc.addPage();
+      y = 24;
+      doc.setFillColor(243, 244, 246);
+      doc.rect(MARGIN, y, CONTENT_W, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(55, 65, 81);
+      doc.text('Option', MARGIN + 4, y + 5.5);
+      doc.text('Prix', RIGHT - 4, y + 5.5, { align: 'right' });
+      y += 11;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    }
+
+    if (idx % 2 === 1) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(MARGIN, y - 4, CONTENT_W, rowHeight, 'F');
+    }
+
+    doc.text(wrappedName, MARGIN + 4, y + 1);
+    doc.text(opt.price, RIGHT - 4, y + 1, { align: 'right' });
+    y += rowHeight;
+  });
+  y += 6;
+
   // Check for page break before Conditions section
   if (y > footerThreshold - 20) {
     doc.addPage();

@@ -187,6 +187,72 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
     y += 10;
   }
 
+  // Options table
+  if (y > pageHeight - 50) {
+    doc.addPage();
+    y = 24;
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...BLUE);
+  doc.text('OPTIONS DISPONIBLES', margin, y);
+  y += 2.5;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(margin, y, right, y);
+  y += 5;
+
+  // Header row
+  doc.setFillColor(243, 244, 246);
+  doc.rect(margin, y, contentWidth, 8, 'F');
+  doc.setFontSize(9.5);
+  doc.setTextColor(55, 65, 81);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Option', margin + 4, y + 5.5);
+  doc.text('Prix', right - 4, y + 5.5, { align: 'right' });
+  y += 11;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...TEXT);
+
+  const optionsList = [
+    { name: "Couverture jours fériés", price: "+20% sur le forfait mensuel" },
+    { name: "Audit qualité mensuel (visite + compte rendu)", price: "Défini par le commercial" }
+  ];
+
+  optionsList.forEach((opt, idx) => {
+    const wrappedName = doc.splitTextToSize(opt.name, contentWidth - 45);
+    const rowHeight = Math.max(8, wrappedName.length * 5);
+
+    if (y + rowHeight > pageHeight - 28) {
+      doc.addPage();
+      y = 24;
+      doc.setFillColor(243, 244, 246);
+      doc.rect(margin, y, contentWidth, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(55, 65, 81);
+      doc.text('Option', margin + 4, y + 5.5);
+      doc.text('Prix', right - 4, y + 5.5, { align: 'right' });
+      y += 11;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(...TEXT);
+    }
+
+    if (idx % 2 === 1) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(margin, y - 4, contentWidth, rowHeight, 'F');
+    }
+
+    doc.text(wrappedName, margin + 4, y + 1);
+    doc.text(opt.price, right - 4, y + 1, { align: 'right' });
+    y += rowHeight;
+  });
+  y += 6;
+
   // ==================== CONDITIONS & GARANTIES ====================
   if (y > pageHeight - 90) {
     doc.addPage();

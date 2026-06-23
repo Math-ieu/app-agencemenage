@@ -300,6 +300,79 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   );
   y += 18;
 
+  // Options table
+  if (y > footerThreshold - 30) {
+    doc.addPage();
+    y = 24;
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('OPTIONS DISPONIBLES', margin, y);
+  y += 2.5;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(margin, y, right, y);
+  y += 5;
+
+  // Header row
+  doc.setFillColor(243, 244, 246);
+  doc.rect(margin, y, contentWidth, 8, 'F');
+  doc.setFontSize(9.5);
+  doc.setTextColor(55, 65, 81);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Option', margin + 4, y + 5.5);
+  doc.text('Prix', right - 4, y + 5.5, { align: 'right' });
+  y += 11;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+
+  const suffix = isEntreprise ? " HT" : "";
+  const optionsList = [
+    { name: "Grattage vitres léger (stickers, traces légères)", price: `Forfait +150 DH${suffix}` },
+    { name: "Grattage vitres profond (silicone, béton)", price: `25 DH${suffix} / m² vitré` },
+    { name: "Ramassage déchets — moins de 100 kg", price: `+200 DH${suffix}` },
+    { name: "Ramassage déchets — 100 à 300 kg", price: `+380 DH${suffix}` },
+    { name: "Ramassage déchets — 300 à 500 kg", price: `+650 DH${suffix}` },
+    { name: "Ramassage déchets — plus de 500 kg", price: "Devis spécifique" },
+    { name: "Cristallisation du marbre", price: `25 DH${suffix} / m² de marbre` },
+    { name: "Zone éloignée (Bouskoura, Dar Bouazza, Mohammédia...)", price: `+200 DH${suffix}` }
+  ];
+
+  optionsList.forEach((opt, idx) => {
+    const wrappedName = doc.splitTextToSize(opt.name, contentWidth - 45);
+    const rowHeight = Math.max(8, wrappedName.length * 5);
+
+    if (y + rowHeight > pageHeight - 28) {
+      doc.addPage();
+      y = 24;
+      doc.setFillColor(243, 244, 246);
+      doc.rect(margin, y, contentWidth, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(55, 65, 81);
+      doc.text('Option', margin + 4, y + 5.5);
+      doc.text('Prix', right - 4, y + 5.5, { align: 'right' });
+      y += 11;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    }
+
+    if (idx % 2 === 1) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(margin, y - 4, contentWidth, rowHeight, 'F');
+    }
+
+    doc.text(wrappedName, margin + 4, y + 1);
+    doc.text(opt.price, right - 4, y + 1, { align: 'right' });
+    y += rowHeight;
+  });
+  y += 6;
+
   // Check for page break before Notes section
   if (y > footerThreshold - 20) {
     doc.addPage();

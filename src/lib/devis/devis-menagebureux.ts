@@ -279,6 +279,74 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
     y += 18;
   }
 
+  // Options table
+  if (y > footerThreshold - 30) {
+    doc.addPage();
+    y = 24;
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('OPTIONS DISPONIBLES', margin, y);
+  y += 2.5;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(margin, y, right, y);
+  y += 5;
+
+  // Header row
+  doc.setFillColor(243, 244, 246);
+  doc.rect(margin, y, tableWidth, 8, 'F');
+  doc.setFontSize(9.5);
+  doc.setTextColor(55, 65, 81);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Option', margin + 4, y + 5.5);
+  doc.text('Prix', right - 4, y + 5.5, { align: 'right' });
+  y += 11;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+
+  const optionsList = [
+    { name: "Produits ménagers (nettoyant multi-usage, nettoyant vitres, désinfectants, produit sols, kit complet)", price: "+90 DH HT" },
+    { name: "Torchons et serpières (usage unique, non laissés chez le client)", price: "+40 DH HT" },
+    { name: "Pack Intégral (produits + torchons, serpière, raclette, balai, seau)", price: "+200 DH HT" },
+    { name: "Zone éloignée (Bouskoura, Dar Bouazza, Mohammédia, Ville Verte...)", price: "+50 DH HT" }
+  ];
+
+  optionsList.forEach((opt, idx) => {
+    const wrappedName = doc.splitTextToSize(opt.name, tableWidth - 45);
+    const rowHeight = Math.max(8, wrappedName.length * 5);
+
+    if (y + rowHeight > pageHeight - 28) {
+      doc.addPage();
+      y = 24;
+      doc.setFillColor(243, 244, 246);
+      doc.rect(margin, y, tableWidth, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(55, 65, 81);
+      doc.text('Option', margin + 4, y + 5.5);
+      doc.text('Prix', right - 4, y + 5.5, { align: 'right' });
+      y += 11;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    }
+
+    if (idx % 2 === 1) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(margin, y - 4, tableWidth, rowHeight, 'F');
+    }
+
+    doc.text(wrappedName, margin + 4, y + 1);
+    doc.text(opt.price, right - 4, y + 1, { align: 'right' });
+    y += rowHeight;
+  });
+  y += 6;
+
   // Check for page break before Notes section
   if (y > footerThreshold - 20) {
     doc.addPage();
