@@ -240,7 +240,7 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text('OPTIONS DISPONIBLES', MARGIN, y);
+  doc.text('OPTIONS', MARGIN, y);
   y += 2.5;
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.4);

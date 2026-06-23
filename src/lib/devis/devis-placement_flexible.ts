@@ -196,7 +196,7 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(...BLUE);
-  doc.text('OPTIONS DISPONIBLES', margin, y);
+  doc.text('OPTIONS', margin, y);
   y += 2.5;
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.4);

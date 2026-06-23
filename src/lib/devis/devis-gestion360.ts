@@ -283,7 +283,7 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text('OPTIONS DISPONIBLES', margin, y);
+  doc.text('OPTIONS', margin, y);
   y += 2.5;
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.4);

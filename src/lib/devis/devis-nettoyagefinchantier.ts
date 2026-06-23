@@ -280,25 +280,7 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   const pageHeight = doc.internal.pageSize.getHeight();
   const footerThreshold = pageHeight - 40;
 
-  // Check for page break before orange note
-  if (y > footerThreshold - 15) {
-    doc.addPage();
-    y = 24;
-  }
 
-  // Note indicative orange
-  doc.setFillColor(255, 247, 237); // Fond orange clair
-  doc.roundedRect(margin, y, contentWidth, 12, 1, 1, 'F');
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8.5);
-  doc.setTextColor(154, 52, 18); // Texte orange foncé
-  doc.text(
-    "• Ce devis a été établi sur la base des informations communiquées. Une visite préalable peut être organisée pour affiner l'estimation. Devis soumis à validation avant envoi.",
-    margin + 4,
-    y + 5,
-    { maxWidth: contentWidth - 8 }
-  );
-  y += 18;
 
   // Options table
   if (y > footerThreshold - 30) {
@@ -309,7 +291,7 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.text('OPTIONS DISPONIBLES', margin, y);
+  doc.text('OPTIONS', margin, y);
   y += 2.5;
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.4);
