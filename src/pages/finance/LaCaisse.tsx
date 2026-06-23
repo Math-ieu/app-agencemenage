@@ -19,7 +19,7 @@ interface CashRow {
   montantNumber: number;
   utilisateur: string;
   document: string;
-  notes: string;
+  notes: string; 
 }
 
 const paymentModes = ['Espèces', 'Virement', 'Chèque', 'Paiement agence'];
