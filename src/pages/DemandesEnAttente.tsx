@@ -103,9 +103,9 @@ const canValidateDemande = (user: any, d: Demande) => {
 const canModifyDemande = (user: any, d: Demande) => {
   if (!user) return false;
   if (isExemptFromOwnership(user)) {
-    return hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin');
+    return hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin') || hasPermission(user, 'editer_besoin_agence') || hasPermission(user, 'editer_besoin_facture');
   }
-  const hasPerm = hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin');
+  const hasPerm = hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin') || hasPermission(user, 'editer_besoin_agence') || hasPermission(user, 'editer_besoin_facture');
   const isConcerned = d.created_by === user.id || d.assigned_to === user.id || d.assigned_to_operations === user.id;
   return hasPerm && isConcerned;
 };

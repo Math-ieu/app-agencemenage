@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
-  CheckCircle, UserCheck, MessageSquare, AlertTriangle, Gift,
+  CheckCircle, UserCheck, MessageSquare, AlertTriangle, Gift, Lock,
   Check, ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle, Calendar, Trash2, Plus, Pencil
 } from 'lucide-react';
 
@@ -1722,7 +1722,7 @@ export default function Dashboard() {
                             right: 'auto',
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            {hasPermissionWithContext(user, 'editer_besoin', d) && (
+                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
                               <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                                 <Edit2 size={14} /> Éditer le besoin
                               </button>
@@ -1861,7 +1861,7 @@ export default function Dashboard() {
                             minWidth: '220px',
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            {hasPermissionWithContext(user, 'editer_besoin', d) && (
+                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
                               <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                                 <Pencil size={16} /> Éditer le besoin
                               </button>
@@ -1893,9 +1893,9 @@ export default function Dashboard() {
                               </button>
                             )}
 
-                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
+                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
 
-                            {hasPermissionWithContext(user, 'editer_besoin', d) && (
+                            {hasPermissionWithContext(user, 'editer_besoin_agence', d) && (
                               <>
                                 <button 
                                   className="menu-item" 
@@ -2042,7 +2042,7 @@ export default function Dashboard() {
                             zIndex: 50,
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            {hasPermissionWithContext(user, 'editer_besoin', d) && (
+                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
                               <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                                 <Pencil size={16} /> Éditer le besoin
                               </button>
@@ -2074,9 +2074,9 @@ export default function Dashboard() {
                               </button>
                             )}
 
-                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
+                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
 
-                            {hasPermissionWithContext(user, 'editer_besoin', d) && (
+                            {hasPermissionWithContext(user, 'editer_besoin_agence', d) && (
                               <>
                                 <button 
                                   className="menu-item" 
@@ -2244,7 +2244,7 @@ export default function Dashboard() {
                           right: 'auto', left: 0, zIndex: 50, minWidth: '220px',
                           ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
                         }}>
-                          {hasPermissionWithContext(user, 'editer_besoin', d) && (
+                          {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
                             <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMenu(null); }}>
                               <Pencil size={16} /> Éditer le besoin
                             </button>
@@ -2427,12 +2427,17 @@ export default function Dashboard() {
                       <div className="section-title">
                         <ClipboardList size={18} />
                         <span>Formulaire de la demande</span>
+                        {!hasPermissionWithContext(user, 'editer_besoin', selectedDemande) && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', background: 'rgba(0,0,0,0.06)', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', color: '#64748B' }}>
+                            <Lock size={12} /> Lecture seule
+                          </span>
+                        )}
                       </div>
                       {isFormExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </div>
 
                     {isFormExpanded && (
-                      <fieldset disabled={user?.role === 'charge_operations'} style={{ border: 'none', padding: 0, margin: 0, width: '100%' }}>
+                      <fieldset disabled={!hasPermissionWithContext(user, 'editer_besoin', selectedDemande)} style={{ border: 'none', padding: 0, margin: 0, width: '100%' }}>
                         <div className="form-section-content">
                         {/* ====== CONDITIONAL SERVICE SECTIONS ====== */}
                         {isAuxiliaireService ? (
@@ -2703,11 +2708,18 @@ export default function Dashboard() {
                       <div className="section-title">
                         <Building2 size={18} />
                         <span>Espace agence</span>
+                        {!hasPermissionWithContext(user, 'editer_besoin_agence', selectedDemande) && !hasPermissionWithContext(user, 'editer_besoin_facture', selectedDemande) && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', background: 'rgba(0,0,0,0.06)', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', color: '#64748B' }}>
+                            <Lock size={12} /> Lecture seule
+                          </span>
+                        )}
                       </div>
                       {isAgencyExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                     </button>
 
-                    {isAgencyExpanded && <div className="form-section-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {isAgencyExpanded && (
+                      <fieldset disabled={!hasPermissionWithContext(user, 'editer_besoin_agence', selectedDemande) && !hasPermissionWithContext(user, 'editer_besoin_facture', selectedDemande)} style={{ border: 'none', padding: 0, margin: 0, width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        <div className="form-section-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
                       {/* ── Besoin ── */}
                       <div>
@@ -3649,7 +3661,9 @@ export default function Dashboard() {
                           </div>
                         </div>
                       </div>
-                    </div>}
+                        </div>
+                      </fieldset>
+                    )}
                   </div>
 
                   <div className="agency-block agency-block-history">
@@ -3860,7 +3874,9 @@ export default function Dashboard() {
                         </button>
                       </>
                     ) : (
-                      <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Modifier</button>
+                      (hasPermissionWithContext(user, 'editer_besoin', selectedDemande) || hasPermissionWithContext(user, 'editer_besoin_agence', selectedDemande) || hasPermissionWithContext(user, 'editer_besoin_facture', selectedDemande)) && (
+                        <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Modifier</button>
+                      )
                     )}
                   </div>
                 </>

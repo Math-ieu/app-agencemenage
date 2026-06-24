@@ -38,7 +38,8 @@ const PERMISSIONS = [
   // Tableau de bord
   { key: "consulter_dashboard", label: "Accéder / consulter au tableau de bord", group: "Tableau de bord" },
   { key: "consulter_compte_client_dashboard", label: "Consulter le compte client", group: "Tableau de bord" },
-  { key: "editer_besoin", label: "Éditer le besoin (formulaire de la demande, espace agence)", group: "Tableau de bord" },
+  { key: "editer_besoin", label: "Éditer le besoin (formulaire de la demande)", group: "Tableau de bord" },
+  { key: "editer_besoin_agence", label: "Éditer le besoin (espace agence)", group: "Tableau de bord" },
   { key: "confirmation_avant_operation", label: "Confirmation avant opération", group: "Tableau de bord" },
   { key: "supprimer_demande_dashboard", label: "Supprimer une demande", group: "Tableau de bord" },
   { key: "facturation_annulee", label: "Facturation annulée", group: "Tableau de bord" },
@@ -163,7 +164,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   "Admin": PERMISSIONS.map((p) => p.key),
   "Moderateur": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
     // Listing profils
@@ -193,7 +194,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   ],
   "Responsable commercial": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
     // Listing profils
@@ -221,7 +222,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   ],
   "commercial": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
     // Listing profils
@@ -245,7 +246,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   ],
   "Responsable des Opérations": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard",
     // Demandes en attente
     "creer_demande", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande",
     // Listing profils
@@ -271,7 +272,7 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   ],
   "Chargée des Opérations": [
     // Tableau de bord
-    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
+    "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
     // Demandes en attente
     "creer_demande", "consulter_demandes",
     // Listing profils
