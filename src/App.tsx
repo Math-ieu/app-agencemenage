@@ -91,8 +91,8 @@ export default function App() {
           <Route path="historique" element={<PermissionRoute permission="consulter_historique_global"><Historique /></PermissionRoute>} />
           <Route path="finance">
             <Route path="vue-globale" element={<PermissionRoute permission="voir_la_caisse"><VueGlobale /></PermissionRoute>} />
-            <Route path="les-suivis" element={<PermissionRoute permission="consulter_dus_agences_profils|consulter_suivi_commerciaux|voir_la_caisse"><LesSuivis /></PermissionRoute>} />
-            <Route path="la-caisse" element={<PermissionRoute permission="consulter_tresorerie|voir_la_caisse|mouvements_caisse|sorties_caisse"><LaCaisse /></PermissionRoute>} />
+            <Route path="les-suivis" element={<PermissionRoute permission="consulter_dus_agences_profils|consulter_suivi_commerciaux"><LesSuivis /></PermissionRoute>} />
+            <Route path="la-caisse" element={<PermissionRoute permission="consulter_tresorerie|mouvements_caisse|sorties_caisse"><LaCaisse /></PermissionRoute>} />
           </Route>
           <Route path="qualite" element={<PermissionRoute permission="consulter_retours_qualite"><Qualite /></PermissionRoute>} />
           <Route path="marketing" element={<PermissionRoute permission="consulter_marketing"><Marketing /></PermissionRoute>} />

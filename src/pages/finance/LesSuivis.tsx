@@ -290,8 +290,8 @@ export default function LesSuivis() {
     if (id) navigate(`/clients/${encodeId(id)}`);
   };
 
-  const canSeeDus = hasPermission(user, 'consulter_dus_agences_profils') || hasPermission(user, 'voir_la_caisse');
-  const canSeeCommerciaux = hasPermission(user, 'consulter_suivi_commerciaux') || hasPermission(user, 'voir_la_caisse');
+  const canSeeDus = hasPermission(user, 'consulter_dus_agences_profils');
+  const canSeeCommerciaux = hasPermission(user, 'consulter_suivi_commerciaux');
   const defaultTab = canSeeDus ? 'dus-profils' : (canSeeCommerciaux ? 'commerciaux' : 'dus-profils');
 
   // State Management
@@ -1770,7 +1770,7 @@ export default function LesSuivis() {
                     <h3>Suivi des dus Agence ↔ Profils</h3>
                     <p>Détail par mission FDM : parts, encaissement et règlement</p>
                   </div>
-                  {(hasPermission(user, 'consulter_dus_agences_profils') || hasPermission(user, 'voir_la_caisse')) && (
+                  {hasPermission(user, 'consulter_dus_agences_profils') && (
                     <button className="ls-export-btn" onClick={exportDuesCsv}>
                       <Download size={14} /> Exporter CSV
                     </button>
@@ -1981,7 +1981,7 @@ export default function LesSuivis() {
                             </td>
                             <td>
                               <div className="ls-action-cell">
-                                {(hasPermission(user, 'validation_paiements_dus') || hasPermission(user, 'voir_la_caisse')) && (
+                                {hasPermission(user, 'validation_paiements_dus') && (
                                   <button
                                     type="button"
                                     className="ls-action-btn"

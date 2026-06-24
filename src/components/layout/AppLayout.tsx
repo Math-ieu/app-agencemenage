@@ -63,10 +63,10 @@ export default function AppLayout() {
           return hasPermission(user, 'voir_la_caisse');
         }
         if (child.to === '/finance/les-suivis') {
-          return hasPermission(user, 'consulter_dus_agences_profils') || hasPermission(user, 'consulter_suivi_commerciaux') || hasPermission(user, 'voir_la_caisse');
+          return hasPermission(user, 'consulter_dus_agences_profils') || hasPermission(user, 'consulter_suivi_commerciaux');
         }
         if (child.to === '/finance/la-caisse') {
-          return hasPermission(user, 'consulter_tresorerie') || hasPermission(user, 'voir_la_caisse') || hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse');
+          return hasPermission(user, 'consulter_tresorerie') || hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse');
         }
         if (child.to === '/seo/blog') {
           return hasPermission(user, 'rediger_blog');

@@ -90,8 +90,8 @@ const extractAmount = (value: string): string => {
 export default function LaCaisse() {
   const user = useAuthStore(state => state.user);
 
-  const canSeeTresorerie = hasPermission(user, 'consulter_tresorerie') || hasPermission(user, 'voir_la_caisse');
-  const canSeeCaisse = hasPermission(user, 'consulter_solde_caisse') || hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse') || hasPermission(user, 'voir_la_caisse');
+  const canSeeTresorerie = hasPermission(user, 'consulter_tresorerie');
+  const canSeeCaisse = hasPermission(user, 'consulter_solde_caisse') || hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse');
   const defaultTab = canSeeTresorerie ? 'tresorerie' : (canSeeCaisse ? 'caisse' : 'tresorerie');
 
   const [activeTab, setActiveTab] = useState<'tresorerie' | 'caisse'>(defaultTab);
@@ -699,7 +699,7 @@ export default function LaCaisse() {
     }
   };
 
-  const hasAccess = hasPermission(user, 'voir_la_caisse') || hasPermission(user, 'consulter_tresorerie') || hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse') || hasPermission(user, 'consulter_solde_caisse');
+  const hasAccess = hasPermission(user, 'consulter_tresorerie') || hasPermission(user, 'mouvements_caisse') || hasPermission(user, 'sorties_caisse') || hasPermission(user, 'consulter_solde_caisse');
   if (!hasAccess) {
     return (
       <div style={{ padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: '#ef4444', fontWeight: 600, fontSize: 16 }}>
