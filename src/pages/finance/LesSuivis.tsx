@@ -460,9 +460,20 @@ export default function LesSuivis() {
       ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
       : 0;
 
+    const hasRepartition = partsSum > 0 || 
+      (facturationData.part_profil !== null && facturationData.part_profil !== undefined && Number(facturationData.part_profil) > 0) ||
+      (facturationData.part_agence !== null && facturationData.part_agence !== undefined && Number(facturationData.part_agence) > 0) ||
+      (d_part_agence !== null && d_part_agence !== undefined && Number(d_part_agence) > 0);
+
     const rawPartProfil = partsSum > 0
       ? partsSum
-      : Number(facturationData.part_profil ?? (facturationData.montant_agence_doit_profil || (rawMontant - rawPartAgence)));
+      : (facturationData.part_profil !== null && facturationData.part_profil !== undefined)
+        ? Number(facturationData.part_profil)
+        : (facturationData.montant_agence_doit_profil !== null && facturationData.montant_agence_doit_profil !== undefined && facturationData.montant_agence_doit_profil > 0)
+          ? Number(facturationData.montant_agence_doit_profil)
+          : hasRepartition
+            ? Math.max(0, rawMontant - rawPartAgence)
+            : 0;
 
     const partAgence = rawPartAgence * ratio;
     const partProfil = rawPartProfil * ratio;
@@ -530,9 +541,20 @@ export default function LesSuivis() {
       ? d_parts_repartition.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
       : 0;
 
+    const hasRepartition = partsSum > 0 || 
+      (facturationData.part_profil !== null && facturationData.part_profil !== undefined && Number(facturationData.part_profil) > 0) ||
+      (facturationData.part_agence !== null && facturationData.part_agence !== undefined && Number(facturationData.part_agence) > 0) ||
+      (d_part_agence !== null && d_part_agence !== undefined && Number(d_part_agence) > 0);
+
     const partProfil = partsSum > 0
       ? partsSum
-      : Number(facturationData.part_profil ?? (facturationData.montant_agence_doit_profil || (montant - partAgence)));
+      : (facturationData.part_profil !== null && facturationData.part_profil !== undefined)
+        ? Number(facturationData.part_profil)
+        : (facturationData.montant_agence_doit_profil !== null && facturationData.montant_agence_doit_profil !== undefined && facturationData.montant_agence_doit_profil > 0)
+          ? Number(facturationData.montant_agence_doit_profil)
+          : hasRepartition
+            ? Math.max(0, montant - partAgence)
+            : 0;
 
     const rawStatutPaiementUi =
       facturationData.statut_paiement_ui ||
@@ -981,10 +1003,13 @@ export default function LesSuivis() {
       if (!isCancelled) {
         const subInfo = getSubInfo(row);
         if (!subInfo || subInfo.isFirst) {
-          const ca = row.partProfil + row.partAgence;
-          totalCa += ca;
+          totalCa += row.montant;
           totalPartAgence += row.partAgence;
-          totalPartProfil += row.partProfil;
+          
+          const isProfilePaid = row.partProfilVersee || row.reglementInterne === 'Réglé';
+          if (isProfilePaid) {
+            totalPartProfil += row.partProfil;
+          }
         }
       }
     });
@@ -1146,7 +1171,7 @@ export default function LesSuivis() {
         const data = statsMap.get(commName)!;
         const subInfo = getSubInfo(row);
         if (!subInfo || subInfo.isFirst) {
-          data.ca += row.partProfil + row.partAgence;
+          data.ca += row.montant;
         }
         data.dossiers += 1;
       }
@@ -1235,7 +1260,7 @@ export default function LesSuivis() {
     const totalRealisation = commRows.reduce((sum, r) => {
       const subInfo = getSubInfo(r);
       if (!subInfo || subInfo.isFirst) {
-        return sum + (r.partProfil + r.partAgence);
+        return sum + r.montant;
       }
       return sum;
     }, 0);
@@ -1309,7 +1334,7 @@ export default function LesSuivis() {
           }
           const g = groups.get(key)!;
           const subInfo = getSubInfo(r);
-          const ca = (!subInfo || subInfo.isFirst) ? (r.partProfil + r.partAgence) : 0;
+          const ca = (!subInfo || subInfo.isFirst) ? r.montant : 0;
           g.realisation += ca;
           g.dossiers += 1;
           g.commAgence += ca * 0.03;
@@ -1644,7 +1669,7 @@ export default function LesSuivis() {
           if (subInfo && !subInfo.isFirst) {
             return `Abonnement ${subInfo.rank}/${subInfo.total}`;
           }
-          return `${row.partProfil + row.partAgence} DH`;
+          return `${row.montant} DH`;
         })(),
         row.statut,
         statutEncais,
@@ -1765,8 +1790,8 @@ export default function LesSuivis() {
                   </div>
                   <div className="ls-kpi-item">
                     <span className="ls-kpi-item-value">{money(kpiStats.totalPartProfil)}</span>
-                    <span className="ls-kpi-item-label">Part profils</span>
-                    <span className="ls-kpi-item-sub">Montant dû aux intervenants (temps réel)</span>
+                    <span className="ls-kpi-item-label">Total versé aux profils</span>
+                    <span className="ls-kpi-item-sub">Montant versé aux intervenants (temps réel)</span>
                   </div>
                   <div className="ls-kpi-item indicator-green">
                     <span className="ls-kpi-item-value" style={{ color: '#10b981' }}>{money(kpiStats.unpaidPartAgence)}</span>
@@ -1930,7 +1955,7 @@ export default function LesSuivis() {
                                 if (subInfo && !subInfo.isFirst) {
                                   return `Abonnement ${subInfo.rank}/${subInfo.total}`;
                                 }
-                                return money(row.partProfil + row.partAgence);
+                                return money(row.montant);
                               })()}
                             </td>
                             <td>
@@ -2600,7 +2625,7 @@ export default function LesSuivis() {
                     <div className="ls-details-column">
                       <div className="ls-detail-row">
                         <span className="ls-detail-label">CA Total</span>
-                        <span className="ls-detail-value">{money(selectedRow.partProfil + selectedRow.partAgence)}</span>
+                        <span className="ls-detail-value">{money(selectedRow.montant)}</span>
                       </div>
                       <div className="ls-detail-row">
                         <span className="ls-detail-label">Part Agence</span>
