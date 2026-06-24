@@ -127,7 +127,7 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
   ];
   const grandExtra = [
     "Lessivage des murs", "Nettoyage des dessous de lits et canapés",
-    "Nettoyage intérieur des placards de cuisine", "Organisation du dressing (selon instructions)",
+    "Nettoyage intérieur des placards de cuisine", "Organisation du dressing (selon instructions du client en début de mission)",
     "Nettoyage intérieur du réfrigérateur (à vider avant l'intervention)",
   ];
   const tasks = data.isGrand ? [...baseTasks, ...grandExtra] : baseTasks;
