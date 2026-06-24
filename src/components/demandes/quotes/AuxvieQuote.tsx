@@ -49,6 +49,8 @@ export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuot
     }
     if (remiseMontant > 0) prestations.push({ designation: `Remise (–${remise.etenduePct}%)`, montant: -remiseMontant, isReduction: true });
     if (promoMontant > 0) prestations.push({ designation: `Code promo ${remise.promoCode} (–${remise.promoPct}%)`, montant: -promoMontant, isReduction: true });
+    const totalSemaine = baseWeek + baseSun;
+    const totalSemaineDiscounted = semaines > 0 ? (total / semaines) : totalSemaine;
     onPrestationsChange(prestations, total, {
       tarif_horaire: WEEKDAY_RATE,
       heures_semaine: hSemaine,
@@ -61,6 +63,10 @@ export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuot
       remise_etendue_pct: remise.etenduePct,
       code_promo: remise.promoCode,
       code_promo_pct: remise.promoPct,
+      total_label: 'TOTAL SEMAINE',
+      total_semaine: totalSemaineDiscounted,
+      total_mensuel: total,
+      total_mensuel_label: `TOTAL MENSUEL ESTIMÉ (${semaines} semaines)`,
     });
   }, [hSemaine, hDimanche, semaines, base, remise, remiseMontant, promoMontant, total]);
 

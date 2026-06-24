@@ -263,6 +263,7 @@ const buildAutreServiceData = (demande: Demande) => {
 const buildAuxiliaireData = (demande: Demande): DevisAuxiliaireData => {
   const form = demande.formulaire_data || {};
   const total = getTotalPrice(demande, form);
+  const nbSemaines = toNumber(form.nb_semaines || 4);
   return {
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
@@ -275,13 +276,21 @@ const buildAuxiliaireData = (demande: Demande): DevisAuxiliaireData => {
       adresse: getClientAddress(demande, form),
     },
     prestations: Array.isArray(form.prestations) && form.prestations.length
-      ? form.prestations.map((p: any) => ({ desc: p.desc || p.designation || p.label || 'Prestation', montant: p.montant || p.prix || 0 }))
+      ? form.prestations.map((p: any) => ({
+          desc: p.desc || p.designation || p.label || 'Prestation',
+          montant: typeof p.montant === 'string' && isNaN(Number(p.montant)) ? p.montant : (p.montant || p.prix || 0),
+        }))
       : [{ desc: `Prestation ${demande.service}`, montant: total }],
-    totalHT: total,
+    totalHT: form.total_semaine !== undefined ? toNumber(form.total_semaine) : (total / (nbSemaines > 0 ? nbSemaines : 4)),
+    totalLabel: form.total_label || 'TOTAL SEMAINE',
+    totalMensuelLabel: form.total_mensuel_label || `TOTAL MENSUEL ESTIMÉ (${nbSemaines} semaines)`,
+    totalMensuel: form.total_mensuel !== undefined ? toNumber(form.total_mensuel) : total,
+    nbSemaines,
     message: form.message_devis,
     ...getAdvanceFields(form),
   };
 };
+
 
 const buildFinChantierData = (demande: Demande): DevisFinChantierData => {
   const form = demande.formulaire_data || {};

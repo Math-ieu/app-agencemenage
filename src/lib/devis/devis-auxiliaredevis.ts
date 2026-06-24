@@ -17,7 +17,7 @@ interface DevisAuxiliaireData {
   date: string;
   objet: string;
   client: DevisAuxiliaireClient;
-  prestations: Array<{ desc: string; montant: number }>;
+  prestations: Array<{ desc: string; montant: number | string }>;
   totalHT: number;
   validite?: string;
   message?: string;
@@ -26,6 +26,10 @@ interface DevisAuxiliaireData {
   avancePourcentage?: number;
   avanceFixe?: number;
   avancePaiement?: number;
+  totalLabel?: string;
+  totalMensuelLabel?: string;
+  totalMensuel?: number;
+  nbSemaines?: number;
 }
 
 async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: string, signatureBase64?: string): Promise<Blob> {
@@ -40,6 +44,9 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   const GREEN_BG = [236, 253, 245];
   const GREEN_TEXT = [22, 101, 52];
   const BORDER_GREY = [229, 231, 235];
+  const TEAL_DARK = [26, 92, 76];       // Dark teal for table header & total row
+  const YELLOW_BG = [254, 249, 195];     // Light yellow for TOTAL MENSUEL row
+  const YELLOW_TEXT = [113, 63, 18];     // Dark amber text for TOTAL MENSUEL
   
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -234,7 +241,8 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   // ==================== TABLEAU DÉTAIL DE LA PRESTATION ====================
   // Calculate total height of the table block to prevent layout overflow
   const descColWidth = contentWidth - 40;
-  let estimatedTableHeight = 6 + 9 + 17 + (data.avanceActive ? 10 : 0);
+  // prestations rows + header(9) + OFFERT row(8) + TOTAL row(10) + MENSUEL row(10) + title(6) + avance(10?)
+  let estimatedTableHeight = 6 + 9 + 8 + 10 + 10 + (data.avanceActive ? 10 : 0);
   for (let i = 0; i < data.prestations.length; i++) {
     const prestation = data.prestations[i];
     const lines = pdf.splitTextToSize(prestation.desc, descColWidth);
@@ -253,17 +261,17 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   pdf.text('DÉTAIL DE LA PRESTATION', margin, y);
   y += 6;
 
-  // Table header
-  pdf.setFillColor(243, 244, 246);
+  // Table header — dark teal background, white text
+  pdf.setFillColor(TEAL_DARK[0], TEAL_DARK[1], TEAL_DARK[2]);
   pdf.rect(margin, y, contentWidth, 9, 'F');
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+  pdf.setTextColor(255, 255, 255);
   pdf.text('Désignation', margin + 5, y + 6);
-  pdf.text('Montant HT', pageWidth - margin - 5, y + 6, { align: 'right' });
+  pdf.text('Montant', pageWidth - margin - 5, y + 6, { align: 'right' });
   y += 9;
 
-  // Table rows
+  // Table rows — prestation lines
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(10);
   for (let i = 0; i < data.prestations.length; i++) {
@@ -271,29 +279,74 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
     const lines = pdf.splitTextToSize(prestation.desc, descColWidth);
     const rowHeight = Math.max(8, lines.length * 5 + 2);
 
+    if (y + rowHeight > footerThreshold) {
+      pdf.addPage();
+      y = 24;
+    }
+
     if (i % 2 === 1) {
       pdf.setFillColor(249, 250, 251);
       pdf.rect(margin, y, contentWidth, rowHeight, 'F');
     }
-    
+
     pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
     pdf.text(lines, margin + 5, y + 5);
-    pdf.text(`${formatNumber(prestation.montant)} DH`, pageWidth - margin - 5, y + 5, { align: 'right' });
+
+    // Support string montant (e.g. "OFFERT") and numeric
+    const montantVal = prestation.montant;
+    if (typeof montantVal === 'string') {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(GREEN_TEXT[0], GREEN_TEXT[1], GREEN_TEXT[2]);
+      pdf.text(montantVal, pageWidth - margin - 5, y + 5, { align: 'right' });
+      pdf.setFont('helvetica', 'normal');
+    } else {
+      const prefix = montantVal > 0 && prestation.desc.toLowerCase().includes('majoration') ? '+' : '';
+      pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+      pdf.text(`${prefix}${formatNumber(montantVal)} DH`, pageWidth - margin - 5, y + 5, { align: 'right' });
+    }
     y += rowHeight;
   }
 
-  // Total line
-  pdf.setDrawColor(BLUE[0], BLUE[1], BLUE[2]);
-  pdf.setLineWidth(0.4);
-  pdf.line(margin, y + 1, pageWidth - margin, y + 1);
-  pdf.setFillColor(LIGHT_BLUE[0], LIGHT_BLUE[1], LIGHT_BLUE[2]);
-  pdf.rect(margin, y + 1, contentWidth, 10, 'F');
+  // "Frais de mise à disposition" → OFFERT row (if not already in prestations)
+  const hasOffertLine = data.prestations.some(p => typeof p.montant === 'string' && p.montant.toUpperCase() === 'OFFERT');
+  if (!hasOffertLine) {
+    const offertRowH = 8;
+    if (data.prestations.length % 2 === 1) {
+      pdf.setFillColor(249, 250, 251);
+      pdf.rect(margin, y, contentWidth, offertRowH, 'F');
+    }
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(10);
+    pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
+    pdf.text('Frais de mise à disposition', margin + 5, y + 5);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(GREEN_TEXT[0], GREEN_TEXT[1], GREEN_TEXT[2]);
+    pdf.text('OFFERT', pageWidth - margin - 5, y + 5, { align: 'right' });
+    y += offertRowH;
+  }
+
+  // TOTAL SEMAINE row — dark teal background, white text
+  const totalLabel = data.totalLabel || 'TOTAL SEMAINE';
+  pdf.setFillColor(TEAL_DARK[0], TEAL_DARK[1], TEAL_DARK[2]);
+  pdf.rect(margin, y, contentWidth, 10, 'F');
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(11);
-  pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
-  pdf.text('TOTAL HT', pageWidth - margin - 55, y + 7);
-  pdf.setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  pdf.setTextColor(255, 255, 255);
+  pdf.text(totalLabel, margin + 5, y + 7);
   pdf.text(`${formatNumber(data.totalHT)} DH`, pageWidth - margin - 5, y + 7, { align: 'right' });
+  y += 10;
+
+  // TOTAL MENSUEL ESTIMÉ row — yellow background, dark amber text
+  const nbSem = data.nbSemaines || 4;
+  const totalMensuel = data.totalMensuel || data.totalHT * nbSem;
+  const totalMensuelLabel = data.totalMensuelLabel || `TOTAL MENSUEL ESTIMÉ (${nbSem} semaines)`;
+  pdf.setFillColor(YELLOW_BG[0], YELLOW_BG[1], YELLOW_BG[2]);
+  pdf.rect(margin, y, contentWidth, 10, 'F');
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(11);
+  pdf.setTextColor(YELLOW_TEXT[0], YELLOW_TEXT[1], YELLOW_TEXT[2]);
+  pdf.text(totalMensuelLabel, margin + 5, y + 7);
+  pdf.text(`${formatNumber(totalMensuel)} DH`, pageWidth - margin - 5, y + 7, { align: 'right' });
   y += 17;
 
   if (data.avanceActive) {
