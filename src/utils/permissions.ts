@@ -401,3 +401,99 @@ export const checkPermission = (
 
   return { allowed: true };
 };
+
+export const isExemptFromOwnership = (user: User | null): boolean => {
+  if (!user) return false;
+  const role = (user.role || '').toLowerCase().trim();
+  return ['admin', 'moderateur', 'modérateur', 'responsable commercial', 'responsable_commercial'].includes(role);
+};
+
+export const hasPermissionWithContext = (
+  user: User | null,
+  permissionKey: string,
+  contextObj?: any
+): boolean => {
+  if (!user) return false;
+  if (!hasPermission(user, permissionKey)) return false;
+  if (isExemptFromOwnership(user)) return true;
+  if (!contextObj) return true;
+
+  // Check if contextObj is a Demand
+  const isDemand = 'created_by' in contextObj || 'assigned_to' in contextObj || 'assigned_to_operations' in contextObj;
+  if (isDemand) {
+    const createdBy = typeof contextObj.created_by === 'object' && contextObj.created_by !== null ? contextObj.created_by.id : contextObj.created_by;
+    const assignedTo = typeof contextObj.assigned_to === 'object' && contextObj.assigned_to !== null ? contextObj.assigned_to.id : contextObj.assigned_to;
+    const assignedToOps = typeof contextObj.assigned_to_operations === 'object' && contextObj.assigned_to_operations !== null ? contextObj.assigned_to_operations.id : contextObj.assigned_to_operations;
+
+    return createdBy === user.id || assignedTo === user.id || assignedToOps === user.id;
+  }
+
+  // Check if contextObj is a Client
+  const isClient = 'assigned_commercial' in contextObj || 'demandes_count' in contextObj;
+  if (isClient) {
+    const assignedCommercial = typeof contextObj.assigned_commercial === 'object' && contextObj.assigned_commercial !== null
+      ? contextObj.assigned_commercial.id
+      : (typeof contextObj.assigned_commercial === 'string'
+          ? parseInt(contextObj.assigned_commercial, 10)
+          : contextObj.assigned_commercial);
+    return assignedCommercial === user.id;
+  }
+
+  // Check if contextObj is a Feedback
+  const isFeedback = 'note_agence' in contextObj || 'note_intervenant' in contextObj || 'commentaire' in contextObj;
+  if (isFeedback) {
+    const demand = contextObj.demande || (contextObj.mission ? contextObj.mission.demande : null);
+    if (demand) {
+      const createdBy = typeof demand.created_by === 'object' && demand.created_by !== null ? demand.created_by.id : demand.created_by;
+      const assignedTo = typeof demand.assigned_to === 'object' && demand.assigned_to !== null ? demand.assigned_to.id : demand.assigned_to;
+      const assignedToOps = typeof demand.assigned_to_operations === 'object' && demand.assigned_to_operations !== null ? demand.assigned_to_operations.id : demand.assigned_to_operations;
+      return createdBy === user.id || assignedTo === user.id || assignedToOps === user.id;
+    }
+  }
+
+  // Check if contextObj is a FacturationRow/Invoice
+  const isInvoice = 'numero' in contextObj || ('missionNo' in contextObj && 'originalDemande' in contextObj);
+  if (isInvoice) {
+    const demand = contextObj.originalDemande || contextObj.demande;
+    if (demand) {
+      const createdBy = typeof demand.created_by === 'object' && demand.created_by !== null ? demand.created_by.id : demand.created_by;
+      const assignedTo = typeof demand.assigned_to === 'object' && demand.assigned_to !== null ? demand.assigned_to.id : demand.assigned_to;
+      const assignedToOps = typeof demand.assigned_to_operations === 'object' && demand.assigned_to_operations !== null ? demand.assigned_to_operations.id : demand.assigned_to_operations;
+      return createdBy === user.id || assignedTo === user.id || assignedToOps === user.id;
+    }
+  }
+
+  return true;
+};
+
+export const hasPermissionWithClientContext = (
+  user: User | null,
+  client: any,
+  demandes?: any[]
+): boolean => {
+  if (!user) return false;
+  if (!hasPermission(user, 'modifier_clients')) return false;
+  if (isExemptFromOwnership(user)) return true;
+  if (!client) return false;
+
+  // Check if assigned commercial matches
+  const assignedCommercial = typeof client.assigned_commercial === 'object' && client.assigned_commercial !== null
+    ? client.assigned_commercial.id
+    : (typeof client.assigned_commercial === 'string'
+        ? parseInt(client.assigned_commercial, 10)
+        : client.assigned_commercial);
+  if (assignedCommercial === user.id) return true;
+
+  // Check if concerned with any of the client's demands
+  if (demandes && demandes.length > 0) {
+    const isConcerned = demandes.some((d) => {
+      const createdBy = typeof d.created_by === 'object' && d.created_by !== null ? d.created_by.id : d.created_by;
+      const assignedTo = typeof d.assigned_to === 'object' && d.assigned_to !== null ? d.assigned_to.id : d.assigned_to;
+      const assignedToOps = typeof d.assigned_to_operations === 'object' && d.assigned_to_operations !== null ? d.assigned_to_operations.id : d.assigned_to_operations;
+      return createdBy === user.id || assignedTo === user.id || assignedToOps === user.id;
+    });
+    if (isConcerned) return true;
+  }
+
+  return false;
+};

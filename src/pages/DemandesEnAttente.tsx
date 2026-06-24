@@ -4,7 +4,7 @@ import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, cr
 import { decodeId } from '../utils/obfuscation';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
-import { checkPermission, hasPermission } from '../utils/permissions';
+import { checkPermission, hasPermission, isExemptFromOwnership } from '../utils/permissions';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
 import {
   RefreshCw, Search, XCircle,
@@ -88,7 +88,9 @@ const strip212 = (p: string) => {
 
 const canValidateDemande = (user: any, d: Demande) => {
   if (!user) return false;
-  if (user.role?.toLowerCase() === 'admin') return true;
+  if (isExemptFromOwnership(user)) {
+    return hasPermission(user, 'traiter_demandes_affectees') || hasPermission(user, 'creer_valider_demande');
+  }
   if (d.created_by === user.id) {
     return hasPermission(user, 'creer_valider_demande');
   }
@@ -99,7 +101,23 @@ const canValidateDemande = (user: any, d: Demande) => {
 };
 
 const canModifyDemande = (user: any, d: Demande) => {
-  return canValidateDemande(user, d);
+  if (!user) return false;
+  if (isExemptFromOwnership(user)) {
+    return hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin');
+  }
+  const hasPerm = hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin');
+  const isConcerned = d.created_by === user.id || d.assigned_to === user.id || d.assigned_to_operations === user.id;
+  return hasPerm && isConcerned;
+};
+
+const canRefuseDemande = (user: any, d: Demande) => {
+  if (!user) return false;
+  if (isExemptFromOwnership(user)) {
+    return hasPermission(user, 'refuser_demande') || hasPermission(user, 'annulation_demande');
+  }
+  const hasPerm = hasPermission(user, 'refuser_demande') || hasPermission(user, 'annulation_demande');
+  const isConcerned = d.created_by === user.id || d.assigned_to === user.id || d.assigned_to_operations === user.id;
+  return hasPerm && isConcerned;
 };
 
 
@@ -1426,8 +1444,8 @@ export default function DemandesEnAttente() {
                           👤 {d.assigned_to_name}
                         </span>
                       ) : (
-                        <span className="badge bg-slate-50 text-slate-500 border border-slate-200 font-medium text-[10px] px-2 py-0.5 rounded-full">
-                          Non affecté
+                        <span className={`badge ${d.source === 'site' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'} border font-medium text-[10px] px-2 py-0.5 rounded-full`}>
+                          {d.source === 'site' ? "En attente d'affectation" : "Non affecté"}
                         </span>
                       )}
                       {d.identification_statut === 'nouvelle' && <span className="badge badge-green" style={{ fontSize: '10px' }}>Nouvelle</span>}
@@ -1639,7 +1657,7 @@ export default function DemandesEnAttente() {
                     </div>
                     <div className="self-end" style={{ paddingBottom: '2px' }}>
                       <span className="text-[13px] font-bold text-slate-800">
-                        {d.assigned_to_name ? `Affecté à commercial(${d.assigned_to_name})` : 'Non affecté'}
+                        {d.assigned_to_name ? `Affecté à commercial(${d.assigned_to_name})` : (d.source === 'site' ? "En attente d'affectation" : "Non affecté")}
                       </span>
                     </div>
                   </div>
@@ -1649,7 +1667,7 @@ export default function DemandesEnAttente() {
                   <button className="btn btn-nrp flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'nrp')}>
                     NRP ({d.nrp_count ?? 0})
                   </button>
-                  {hasPermission(user, 'refuser_demande') && (
+                  {canRefuseDemande(user, d) && (
                     <button className="btn btn-cancel flex-1 leading-tight px-1 py-2 text-[13px] text-center" onClick={() => handleAction(d.id, 'annuler')}>Annulé</button>
                   )}
                   {canValidateDemande(user, d) && (
@@ -1684,8 +1702,8 @@ export default function DemandesEnAttente() {
                           👤 {d.assigned_to_name}
                         </span>
                       ) : (
-                        <span className="badge bg-slate-50 text-slate-500 border border-slate-200 font-medium text-[9px] px-2 py-0.5 rounded-full">
-                          Non affecté
+                        <span className={`badge ${d.source === 'site' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'} border font-medium text-[9px] px-2 py-0.5 rounded-full`}>
+                          {d.source === 'site' ? "En attente d'affectation" : "Non affecté"}
                         </span>
                       )}
                       {d.is_devis && (
@@ -1795,7 +1813,7 @@ export default function DemandesEnAttente() {
                     <button className="btn btn-nrp flex-1" onClick={() => handleAction(d.id, 'nrp')}>
                       NRP ({d.nrp_count ?? 0})
                     </button>
-                    {hasPermission(user, 'refuser_demande') && (
+                    {canRefuseDemande(user, d) && (
                       <button className="btn btn-cancel flex-1" onClick={() => handleAction(d.id, 'annuler')}>Annuler</button>
                     )}
                     {canModifyDemande(user, d) && (

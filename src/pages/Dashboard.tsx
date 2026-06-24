@@ -11,7 +11,7 @@ import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, aff
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
-import { checkPermission, hasPermission } from '../utils/permissions';
+import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -463,7 +463,10 @@ export default function Dashboard() {
     try {
       const [resDemandes, resAgents] = await Promise.all([
         getDemandes({ no_page: 'true' }),
-        getAgents({ limit: 1000 })
+        getAgents({ limit: 1000 }).catch(err => {
+          console.warn('Failed to fetch agents:', err);
+          return { data: { results: [] } };
+        })
       ]);
       const data = resDemandes.data;
       const allResults: Demande[] = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
@@ -1719,13 +1722,13 @@ export default function Dashboard() {
                             right: 'auto',
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            {hasPermission(user, 'editer_besoin') && (
+                            {hasPermissionWithContext(user, 'editer_besoin', d) && (
                               <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
                                 <Edit2 size={14} /> Éditer le besoin
                               </button>
                             )}
 
-                            {hasPermission(user, 'confirmation_avant_operation') && (
+                            {hasPermissionWithContext(user, 'confirmation_avant_operation', d) && (
                               <button
                                 className="menu-item w-full"
                                 onClick={(e) => {
@@ -1858,7 +1861,7 @@ export default function Dashboard() {
                             minWidth: '220px',
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            {hasPermission(user, 'editer_besoin') && (
+                            {hasPermissionWithContext(user, 'editer_besoin', d) && (
                               <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                                 <Pencil size={16} /> Éditer le besoin
                               </button>
@@ -1890,9 +1893,9 @@ export default function Dashboard() {
                               </button>
                             )}
 
-                            {(hasPermission(user, 'editer_besoin') || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
+                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
 
-                            {hasPermission(user, 'editer_besoin') && (
+                            {hasPermissionWithContext(user, 'editer_besoin', d) && (
                               <>
                                 <button 
                                   className="menu-item" 
@@ -1936,7 +1939,7 @@ export default function Dashboard() {
                               </>
                             )}
 
-                            {hasPermission(user, 'annulation_demande') && (
+                            {hasPermissionWithContext(user, 'annulation_demande', d) && (
                               <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
                                 setAnnulationReason('');
                                 const isSubscription = d.frequency === 'abonnement' || !!d.parent_demande;
@@ -2039,7 +2042,7 @@ export default function Dashboard() {
                             zIndex: 50,
                             ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
                           }}>
-                            {hasPermission(user, 'editer_besoin') && (
+                            {hasPermissionWithContext(user, 'editer_besoin', d) && (
                               <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
                                 <Pencil size={16} /> Éditer le besoin
                               </button>
@@ -2071,9 +2074,9 @@ export default function Dashboard() {
                               </button>
                             )}
 
-                            {(hasPermission(user, 'editer_besoin') || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
+                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
 
-                            {hasPermission(user, 'editer_besoin') && (
+                            {hasPermissionWithContext(user, 'editer_besoin', d) && (
                               <>
                                 <button 
                                   className="menu-item" 
@@ -2117,7 +2120,7 @@ export default function Dashboard() {
                               </>
                             )}
 
-                            {hasPermission(user, 'annulation_demande') && (
+                            {hasPermissionWithContext(user, 'annulation_demande', d) && (
                               <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
                                 setAnnulationReason('');
                                 const isSubscription = d.frequency === 'abonnement' || !!d.parent_demande;
@@ -2241,13 +2244,13 @@ export default function Dashboard() {
                           right: 'auto', left: 0, zIndex: 50, minWidth: '220px',
                           ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
                         }}>
-                          {hasPermission(user, 'editer_besoin') && (
+                          {hasPermissionWithContext(user, 'editer_besoin', d) && (
                             <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMenu(null); }}>
                               <Pencil size={16} /> Éditer le besoin
                             </button>
                           )}
 
-                          {hasPermission(user, 'confirmation_avant_operation') && (
+                          {hasPermissionWithContext(user, 'confirmation_avant_operation', d) && (
                             <button className="menu-item" style={{ color: '#0d9488' }} onClick={(e) => { e.stopPropagation(); openCAOModal(d); setActiveMenu(null); }}>
                               <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> Confirmation avant opération
                             </button>

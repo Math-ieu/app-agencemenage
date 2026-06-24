@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { encodeId } from '../utils/obfuscation';
-import { getClients, getUsers, affecterDemande, updateClient, deleteClient } from '../api/client';
+import { getClients, getUsers, updateClient, deleteClient, affecterClient } from '../api/client';
 import { renderStatusBadge } from '../utils/statusUtils';
 import { useAuthStore } from '../store/auth';
-import { checkPermission, hasPermission } from '../utils/permissions';
+import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
 import { useToastStore } from '../store/toast';
 import { User } from '../types';
 import {
@@ -43,6 +43,8 @@ interface Client {
   avis_commercial?: string;
   avis_operationnel?: string;
   is_blacklisted?: boolean;
+  assigned_commercial?: number | null;
+  assigned_commercial_name?: string | null;
 }
 
 const PAYMENT_STATUS_OPTIONS = [
@@ -239,19 +241,19 @@ export default function Clients() {
   useEffect(() => { fetchData(); }, [search, activeTab, commercialFilter, segmentFilter, serviceFilter, dateDebut, dateFin]);
 
   useEffect(() => {
-    if (checkPermission(user, 'affecter_commercial').allowed) {
+    if (checkPermission(user, 'affecter_commercial').allowed || checkPermission(user, 'affectation_client').allowed) {
       getUsers({ role: 'commercial' }).then(res => setCommerciaux(res.data?.results || res.data)).catch(console.error);
     }
   }, [user]);
 
-  const handleAffecter = async (demandeId: number, commercialId: number) => {
-    const perm = checkPermission(user, 'affecter_commercial');
-    if (!perm.allowed) {
-      addToast(perm.message || 'Action non autorisée', 'error');
+  const handleAffecter = async (clientId: number, commercialId: number) => {
+    const isAllowed = checkPermission(user, 'affecter_commercial').allowed || checkPermission(user, 'affectation_client').allowed;
+    if (!isAllowed) {
+      addToast('Action non autorisée', 'error');
       return;
     }
     try {
-      await affecterDemande(demandeId, commercialId);
+      await affecterClient(clientId, commercialId);
       addToast('Client affecté avec succès', 'success');
       fetchData();
       setShowAssignmentModal(null);
@@ -602,7 +604,7 @@ export default function Clients() {
                               <span>Compte client</span>
                             </Link>
 
-                            {hasPermission(user, 'modifier_clients') && (
+                            {hasPermissionWithContext(user, 'modifier_clients', c) && (
                               <>
                                 <div className="dropdown-divider"></div>
                                 <div className="dropdown-item" onClick={() => {
@@ -622,11 +624,11 @@ export default function Clients() {
                                 <div className="dropdown-divider"></div>
                               </>
                             )}
-                            {hasPermission(user, 'affectation_client') && c.latest_demande && (
+                            {(hasPermission(user, 'affectation_client') || hasPermission(user, 'affecter_commercial')) && (
                               <div className="dropdown-item" onClick={(e) => {
                                 e.stopPropagation();
-                                setShowAssignmentModal(c.latest_demande!.id);
-                                setActiveDropdown(null);
+                                setShowAssignmentModal(c.id);
+                                  setActiveDropdown(null);
                               }}>
                                 <UserPlus size={16} className="dropdown-item-icon" />
                                 <span>Affectation</span>
@@ -671,7 +673,7 @@ export default function Clients() {
                     )}
                   </td>
                   <td className="text-slate-500 font-medium">
-                    {c.latest_demande?.commercial || '—'}
+                    {c.assigned_commercial_name || '—'}
                   </td>
                   <td>
                     <div className="flex items-center">
@@ -707,7 +709,16 @@ export default function Clients() {
                                 <UserIcon size={16} className="dropdown-item-icon" />
                                 <span>Voir le compte</span>
                               </Link>
-
+                              {(hasPermission(user, 'affectation_client') || hasPermission(user, 'affecter_commercial')) && (
+                                <div className="dropdown-item" onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowAssignmentModal(c.id);
+                                  setActiveDropdown(null);
+                                }}>
+                                  <UserPlus size={16} className="dropdown-item-icon" />
+                                  <span>Affectation</span>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

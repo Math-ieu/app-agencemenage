@@ -230,6 +230,9 @@ export const updateClient = (id: number, data: Record<string, unknown>) =>
 export const deleteClient = (id: number) =>
   apiClient.delete(`/api/clients/${id}/`);
 
+export const affecterClient = (id: number, commercial_id: number) =>
+  apiClient.post(`/api/clients/${id}/affecter/`, { commercial_id });
+
 // ─── Agents/Profils ───────────────────────────────────────────────────────────
 export const getAgents = (params?: Record<string, string | number>) =>
   apiClient.get('/api/agents/', { params });

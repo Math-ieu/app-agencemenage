@@ -33,7 +33,7 @@ import { User as ApiUser } from '../../types';
 import { encodeId } from '../../utils/obfuscation';
 import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
-import { checkPermission, hasPermission } from '../../utils/permissions';
+import { checkPermission, hasPermission, hasPermissionWithContext } from '../../utils/permissions';
 import './VueGlobale.css';
 
 type FinanceSubTab = 'vue-globale' | 'debit-profil' | 'credit-profil' | 'suivi-facturation' | 'comptes-profils';
@@ -4287,10 +4287,10 @@ export default function VueGlobale() {
             </div>
 
             <footer className="fg-mission-footer">
-              {hasPermission(user, 'modifier_facture') && (
+              {hasPermissionWithContext(user, 'modifier_facture', selectedMission?.originalDemande) && (
                 <button type="button" className="btn btn-secondary" onClick={() => openMissionEditModal()}>Modifier</button>
               )}
-              {selectedMission?.demandeId && hasPermission(user, 'editer_besoin_facture') && (
+              {selectedMission?.demandeId && hasPermissionWithContext(user, 'editer_besoin_facture', selectedMission?.originalDemande) && (
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -4303,12 +4303,12 @@ export default function VueGlobale() {
                   <Pencil size={14} /> Éditer le besoin
                 </button>
               )}
-              {hasPermission(user, 'generer_facture') && (
+              {hasPermissionWithContext(user, 'generer_facture', selectedMission?.originalDemande) && (
                 <button type="button" className="btn btn-secondary" onClick={handleGenerateInvoicePreview} disabled={isGeneratingInvoice}>
                   {isGeneratingInvoice ? 'Génération...' : 'Générer la facture'}
                 </button>
               )}
-              {hasPermission(user, 'envoi_facture_client') && (
+              {hasPermissionWithContext(user, 'envoi_facture_client', selectedMission?.originalDemande) && (
                 <button type="button" className="btn btn-primary" onClick={handleSendInvoice} disabled={!invoicePreview || isSendingInvoice}>
                   {isSendingInvoice ? 'Envoi...' : 'Envoyer au client'}
                 </button>
@@ -4352,7 +4352,7 @@ export default function VueGlobale() {
               <a href={invoicePreview.url} download={invoicePreview.name} target="_blank" rel="noreferrer" className="btn transition-all flex items-center gap-2" style={{ backgroundColor: '#f1f5f9', color: '#0f766e', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none' }}>
                 <Download size={18} /> Télécharger
               </a>
-              {hasPermission(user, 'envoi_facture_client') && (
+              {hasPermissionWithContext(user, 'envoi_facture_client', selectedMission?.originalDemande) && (
                 <button
                   className="btn transition-all flex items-center gap-2"
                   style={{ backgroundColor: '#0f766e', color: 'white', fontWeight: 500, padding: '10px 24px', borderRadius: '6px', border: 'none', opacity: isSendingInvoice ? 0.7 : 1 }}

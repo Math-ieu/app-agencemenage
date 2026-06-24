@@ -13,7 +13,7 @@ import {
   XCircle, Send, Download, CheckCircle, X, Check, Trash2, Plus
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
-import { checkPermission, hasPermission } from '../utils/permissions';
+import { checkPermission, hasPermission, hasPermissionWithClientContext } from '../utils/permissions';
 import { useAuthStore } from '../store/auth';
 import { Client, Demande } from '../types';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
@@ -999,7 +999,7 @@ export default function ClientDetails() {
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 10 }} className="flex-wrap">
-            {hasPermission(user, 'modifier_clients') && (
+            {hasPermissionWithClientContext(user, client, demandes) && (
               <button
                 onClick={() => setShowEditModal(true)}
                 style={{
