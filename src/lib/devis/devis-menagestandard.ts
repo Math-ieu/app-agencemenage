@@ -149,14 +149,32 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
   doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(BLUE[0], BLUE[1], BLUE[2]);
   doc.text("DÉTAIL DE LA PRESTATION", MARGIN, y);
   y += 6;
-  doc.setFillColor(243, 244, 246).rect(MARGIN, y, CONTENT_W, 8, "F");
-  doc.setFontSize(10).setTextColor(55, 65, 81);
+  if (data.isAbonnement) {
+    doc.setFillColor(26, 92, 76).rect(MARGIN, y, CONTENT_W, 8, "F");
+    doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(255, 255, 255);
+  } else {
+    doc.setFillColor(243, 244, 246).rect(MARGIN, y, CONTENT_W, 8, "F");
+    doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(55, 65, 81);
+  }
   doc.text("Désignation", MARGIN + 4, y + 5.5);
   doc.text("Montant", RIGHT - 4, y + 5.5, { align: "right" });
   y += 10;
 
   doc.setFont("helvetica", "normal").setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  data.lignes.forEach((ligne, idx) => {
+  
+  const linesToRender = [...data.lignes];
+  if (data.isAbonnement && data.codePromo && data.total1erMois !== undefined && data.total1erMois < data.total) {
+    const economy = Math.round(data.total - data.total1erMois);
+    if (economy > 0) {
+      linesToRender.push({
+        designation: `Remise code promo 1er mois -${data.codePromoPct || 0}%`,
+        montant: -economy,
+        isReduction: true
+      });
+    }
+  }
+
+  linesToRender.forEach((ligne, idx) => {
     if (idx % 2 === 1) { doc.setFillColor(249, 250, 251).rect(MARGIN, y - 4.5, CONTENT_W, 8, "F"); }
     const wrapped = doc.splitTextToSize(ligne.designation, CONTENT_W - 40);
     doc.setTextColor(ligne.isReduction ? 21 : TEXT[0], ligne.isReduction ? 128 : TEXT[1], ligne.isReduction ? 61 : TEXT[2]);
@@ -166,21 +184,48 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
     y += Math.max(8, wrapped.length * 5);
   });
 
-  doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]).setLineWidth(0.4).line(MARGIN, y - 4, RIGHT, y - 4);
-  doc.setFillColor(239, 246, 255).rect(MARGIN, y - 4, CONTENT_W, 10, "F");
-  doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  doc.text(data.isAbonnement ? "TOTAL MENSUEL" : "TOTAL", RIGHT - 50, y + 2, { align: "right" });
-  doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]).text(`${formatNumber(data.total)} DH`, RIGHT - 4, y + 2, { align: "right" });
-  y += 12;
+  if (data.isAbonnement) {
+    if (data.codePromo && data.total1erMois !== undefined && data.total1erMois < data.total) {
+      // Case B: Code Promo active
+      // TOTAL 1ER MOIS
+      doc.setFillColor(26, 92, 76).rect(MARGIN, y - 4, CONTENT_W, 10, "F");
+      doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(255, 255, 255);
+      doc.text("TOTAL 1ER MOIS", MARGIN + 4, y + 2.5);
+      doc.text(`${formatNumber(data.total1erMois)} DH`, RIGHT - 4, y + 2.5, { align: "right" });
+      y += 10;
 
-  // ─── Code promo 1er mois ───
-  if (data.codePromo && data.total1erMois !== undefined && data.total1erMois < data.total) {
+      // Tarif mensuel à partir du 2ème mois
+      doc.setFillColor(254, 249, 195).rect(MARGIN, y - 4, CONTENT_W, 10, "F");
+      doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(113, 63, 18);
+      doc.text("Tarif mensuel à partir du 2ème mois", MARGIN + 4, y + 2.5);
+      doc.text(`${formatNumber(data.total)} DH`, RIGHT - 4, y + 2.5, { align: "right" });
+      y += 10;
+    } else {
+      // Case A: No Code Promo
+      doc.setFillColor(26, 92, 76).rect(MARGIN, y - 4, CONTENT_W, 10, "F");
+      doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(255, 255, 255);
+      doc.text("TOTAL MENSUEL", MARGIN + 4, y + 2.5);
+      doc.text(`${formatNumber(data.total)} DH`, RIGHT - 4, y + 2.5, { align: "right" });
+      y += 10;
+    }
+  } else {
+    // Non-subscription (ponctuel) case
+    doc.setDrawColor(BLUE[0], BLUE[1], BLUE[2]).setLineWidth(0.4).line(MARGIN, y - 4, RIGHT, y - 4);
+    doc.setFillColor(239, 246, 255).rect(MARGIN, y - 4, CONTENT_W, 10, "F");
+    doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    doc.text("TOTAL", RIGHT - 50, y + 2, { align: "right" });
+    doc.setTextColor(BLUE[0], BLUE[1], BLUE[2]).text(`${formatNumber(data.total)} DH`, RIGHT - 4, y + 2, { align: "right" });
+    y += 12;
+  }
+
+  // ─── Code promo 1er mois (uniquement en ponctuel si applicable) ───
+  if (!data.isAbonnement && data.codePromo && data.total1erMois !== undefined && data.total1erMois < data.total) {
     doc.setFillColor(254, 252, 232).rect(MARGIN, y - 3, CONTENT_W, 14, "F");
     doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(133, 77, 14);
     doc.text(`Offre 1er mois — code ${data.codePromo} (-${data.codePromoPct || 0}%)`, MARGIN + 4, y + 2);
     doc.text(`${formatNumber(data.total1erMois)} DH`, RIGHT - 4, y + 2, { align: "right" });
     doc.setFont("helvetica", "normal").setFontSize(8.5);
-    doc.text(`Tarif mensuel à partir du 2ème mois : ${formatNumber(data.total)} DH`, MARGIN + 4, y + 8);
+    doc.text(`Tarif de base : ${formatNumber(data.total)} DH`, MARGIN + 4, y + 8);
     doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
     y += 18;
   }
