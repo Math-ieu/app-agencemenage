@@ -470,7 +470,7 @@ export const hasPermissionWithContext = (
 export const hasPermissionWithClientContext = (
   user: User | null,
   client: any,
-  demandes?: any[]
+  _demandes?: any[]
 ): boolean => {
   if (!user) return false;
   if (!hasPermission(user, 'modifier_clients')) return false;
@@ -483,18 +483,5 @@ export const hasPermissionWithClientContext = (
     : (typeof client.assigned_commercial === 'string'
         ? parseInt(client.assigned_commercial, 10)
         : client.assigned_commercial);
-  if (assignedCommercial === user.id) return true;
-
-  // Check if concerned with any of the client's demands
-  if (demandes && demandes.length > 0) {
-    const isConcerned = demandes.some((d) => {
-      const createdBy = typeof d.created_by === 'object' && d.created_by !== null ? d.created_by.id : d.created_by;
-      const assignedTo = typeof d.assigned_to === 'object' && d.assigned_to !== null ? d.assigned_to.id : d.assigned_to;
-      const assignedToOps = typeof d.assigned_to_operations === 'object' && d.assigned_to_operations !== null ? d.assigned_to_operations.id : d.assigned_to_operations;
-      return createdBy === user.id || assignedTo === user.id || assignedToOps === user.id;
-    });
-    if (isConcerned) return true;
-  }
-
-  return false;
+  return assignedCommercial === user.id;
 };
