@@ -158,7 +158,7 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
   }
   doc.text("Désignation", MARGIN + 4, y + 5.5);
   doc.text("Montant", RIGHT - 4, y + 5.5, { align: "right" });
-  y += 10;
+  y += 13;
 
   doc.setFont("helvetica", "normal").setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   
