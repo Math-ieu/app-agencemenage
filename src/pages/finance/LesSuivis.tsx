@@ -79,6 +79,7 @@ interface FacturationRow {
   _partProfilVersee?: boolean;
   _partAgenceDue?: number;
   _partAgenceReversee?: boolean;
+  isFirstProfileOfRow?: boolean;
 }
 
 interface AgentApiItem {
@@ -957,7 +958,7 @@ export default function LesSuivis() {
         }
 
         if (partsRep && partsRep.length > 0) {
-          for (const part of partsRep) {
+          partsRep.forEach((part: any, index: number) => {
             const isPaid = part.part_profil_versee ?? row.partProfilVersee;
             const pId = Number(part.profile_id);
             const agentObj = agentsList.find((a) => Number(a.id) === pId);
@@ -995,8 +996,9 @@ export default function LesSuivis() {
               _uniqueKey: `${row.missionNo}-${pId}-credit`,
               dateVersementProfil: versementDate,
               note_commercial: noteCommercial,
+              isFirstProfileOfRow: index === 0,
             });
-          }
+          });
         } else {
           const partProfilDue = getPartProfilDueFromAgence(row);
           const isPaid = row.partProfilVersee;
@@ -1011,6 +1013,7 @@ export default function LesSuivis() {
             _uniqueKey: `${row.missionNo}-credit`,
             dateVersementProfil: versementDate,
             note_commercial: row.note_commercial || '—',
+            isFirstProfileOfRow: true,
           });
         }
       } else if (isDebit) {
@@ -1047,6 +1050,7 @@ export default function LesSuivis() {
               _uniqueKey: `${row.missionNo}-${pId}-debit`,
               dateRemiseAgence: remiseDate,
               note_commercial: noteCommercial,
+              isFirstProfileOfRow: true,
             });
           }
         } else {
@@ -1063,6 +1067,7 @@ export default function LesSuivis() {
             _uniqueKey: `${row.missionNo}-debit`,
             dateRemiseAgence: remiseDate,
             note_commercial: row.note_commercial || '—',
+            isFirstProfileOfRow: true,
           });
         }
       } else {
@@ -1071,6 +1076,7 @@ export default function LesSuivis() {
           ...row,
           _uniqueKey: `${row.missionNo}-unsettled`,
           note_commercial: row.note_commercial || '—',
+          isFirstProfileOfRow: true,
         });
       }
     }
@@ -1767,6 +1773,9 @@ export default function LesSuivis() {
         `${row.partProfil} DH`,
         `${row.partAgence} DH`,
         (() => {
+          if (row.isFirstProfileOfRow === false) {
+            return '—';
+          }
           const subInfo = getSubInfo(row);
           if (subInfo && !subInfo.isFirst) {
             return `Abonnement ${subInfo.rank}/${subInfo.total}`;
@@ -2053,6 +2062,9 @@ export default function LesSuivis() {
                             </td>
                             <td className="ls-val-bold">
                               {(() => {
+                                if (row.isFirstProfileOfRow === false) {
+                                  return '—';
+                                }
                                 const subInfo = getSubInfo(row);
                                 if (subInfo && !subInfo.isFirst) {
                                   return `Abonnement ${subInfo.rank}/${subInfo.total}`;
