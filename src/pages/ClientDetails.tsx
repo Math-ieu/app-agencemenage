@@ -1636,18 +1636,20 @@ export default function ClientDetails() {
                                 const assocDemand = dayConfig.demande_id 
                                   ? demandes.find(d => d.id === dayConfig.demande_id)
                                   : (latest ? demandes.find(d => d.parent_demande === latest.id && d.date_intervention === dayDateStr) : null);
+                                const isTerminee = !!(assocDemand && ['pres_terminee', 'termine'].includes(assocDemand.statut));
                                 return (
                                   <div key={day.key} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.3fr 1.3fr 2.2fr', gap: 12, alignItems: 'center' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: isTerminee ? 'not-allowed' : 'pointer', userSelect: 'none' }}>
                                       <input
                                         type="checkbox"
                                         checked={dayConfig.selected || false}
                                         onChange={(e) => updateWeekDayField(week.id, day.key, 'selected', e.target.checked)}
+                                        disabled={isTerminee}
                                         style={{
-                                          width: 16, height: 16, accentColor: C.teal, cursor: 'pointer'
+                                          width: 16, height: 16, accentColor: C.teal, cursor: isTerminee ? 'not-allowed' : 'pointer'
                                         }}
                                       />
-                                      <span style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>
+                                      <span style={{ fontSize: 13, fontWeight: 600, color: isTerminee ? '#94a3b8' : '#475569' }}>
                                         {day.label}
                                       </span>
                                     </label>
@@ -1655,7 +1657,7 @@ export default function ClientDetails() {
                                     <div>
                                       <input
                                         type="time"
-                                        disabled={!dayConfig.selected}
+                                        disabled={!dayConfig.selected || isTerminee}
                                         value={dayConfig.heure_debut ? dayConfig.heure_debut.slice(0, 5) : ''}
                                         onChange={(e) => updateWeekDayField(week.id, day.key, 'heure_debut', e.target.value)}
                                         placeholder="--:--"
@@ -1667,8 +1669,8 @@ export default function ClientDetails() {
                                           fontSize: 13,
                                           outline: 'none',
                                           color: '#334155',
-                                          opacity: dayConfig.selected ? 1 : 0.4,
-                                          background: dayConfig.selected ? 'white' : '#f8fafc'
+                                          opacity: dayConfig.selected && !isTerminee ? 1 : 0.4,
+                                          background: dayConfig.selected && !isTerminee ? 'white' : '#f8fafc'
                                         }}
                                       />
                                     </div>
@@ -1676,7 +1678,7 @@ export default function ClientDetails() {
                                     <div>
                                       <input
                                         type="time"
-                                        disabled={!dayConfig.selected}
+                                        disabled={!dayConfig.selected || isTerminee}
                                         value={dayConfig.heure_fin ? dayConfig.heure_fin.slice(0, 5) : ''}
                                         onChange={(e) => updateWeekDayField(week.id, day.key, 'heure_fin', e.target.value)}
                                         placeholder="--:--"
