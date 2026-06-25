@@ -908,6 +908,8 @@ export default function ClientDetails() {
     }
   };
 
+  const parentDemandes = useMemo(() => demandes.filter(d => !d.parent_demande), [demandes]);
+
   /* ── Loading / Not found ── */
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
@@ -945,7 +947,7 @@ export default function ClientDetails() {
     return `${rank}ème intervention`;
   };
 
-  const parentDemandes = useMemo(() => demandes.filter(d => !d.parent_demande), [demandes]);
+
 
   /* ═══ Render ═══ */
   return (

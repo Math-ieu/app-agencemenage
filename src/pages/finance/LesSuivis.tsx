@@ -867,19 +867,22 @@ export default function LesSuivis() {
     const parentRow = facturationData.find(r => r.demandeId === parentId && !r.parentDemandeId);
     const parentDemande = parentRow?.originalDemande || (row.parentDemandeId ? null : row.originalDemande);
     const weeks = parentDemande?.planning?.semaines;
-    if (weeks && Array.isArray(weeks)) {
-      let plannedCount = 0;
-      weeks.forEach(w => {
-        if (w.jours) {
-          Object.keys(w.jours).forEach(dayKey => {
-            if (w.jours[dayKey]?.selected) {
-              plannedCount++;
-            }
-          });
-        }
-      });
-      if (plannedCount > 0) {
-        total = Math.max(subRows.length, plannedCount);
+    if (weeks && Array.isArray(weeks) && weeks.length > 0) {
+      // Count interventions per week from the first week's selected days
+      const firstWeek = weeks[0];
+      let perWeekCount = 0;
+      if (firstWeek?.jours) {
+        Object.keys(firstWeek.jours).forEach(dayKey => {
+          if (firstWeek.jours[dayKey]?.selected) {
+            perWeekCount++;
+          }
+        });
+      }
+      // Multiply by the number of weeks in the month
+      const numberOfWeeks = weeks.length;
+      const monthlyPlannedCount = perWeekCount * numberOfWeeks;
+      if (monthlyPlannedCount > 0) {
+        total = Math.max(subRows.length, monthlyPlannedCount);
       }
     }
     
