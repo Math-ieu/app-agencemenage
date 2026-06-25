@@ -300,6 +300,7 @@ export default function LesSuivis() {
   const [facturationData, setFacturationData] = useState<FacturationRow[]>([]);
   const [commerciauxList, setCommerciauxList] = useState<any[]>([]);
   const [agentsList, setAgentsList] = useState<AgentApiItem[]>([]);
+  const [demandsMap, setDemandsMap] = useState<Map<number, any>>(new Map());
 
   useEffect(() => {
     if (!canSeeDus && activeTab === 'dus-profils' && canSeeCommerciaux) {
@@ -753,6 +754,7 @@ export default function LesSuivis() {
         d.note_commercial = dashD.note_commercial || d.note_commercial;
         d.note_operationnel = dashD.note_operationnel || d.note_operationnel;
         d.nb_heures = dashD.nb_heures || d.nb_heures;
+        d.planning = dashD.planning || d.planning;
         if (d.formulaire_data && dashD.formulaire_data) {
           d.formulaire_data.facturation = {
             ...d.formulaire_data.facturation,
@@ -773,6 +775,7 @@ export default function LesSuivis() {
           detailObj.note_commercial = fullD.note_commercial || detailObj.note_commercial;
           detailObj.note_operationnel = fullD.note_operationnel || detailObj.note_operationnel;
           detailObj.nb_heures = fullD.nb_heures || detailObj.nb_heures;
+          detailObj.planning = fullD.planning || detailObj.planning;
           if (fullD.formulaire_data) {
             detailObj.formulaire_data = {
               ...detailObj.formulaire_data,
@@ -823,6 +826,7 @@ export default function LesSuivis() {
       }
     }
 
+    setDemandsMap(allDemandsMap);
     setFacturationData(allMappedRows);
     setAgentsList(agents);
 
@@ -847,12 +851,20 @@ export default function LesSuivis() {
     const parentId = row.originalDemande?.parent_demande || row.originalDemande?.id || row.demandeId;
     if (!parentId) return null;
 
+    const rowDate = parseFrenchDate(row.date);
+    if (!rowDate) return null;
+    const year = rowDate.getFullYear();
+    const month = rowDate.getMonth();
+
     const subRows = facturationData
       .filter(r => {
         const rIsSub = r.frequency === 'abonnement' || r.originalDemande?.frequency === 'abonnement';
         if (!rIsSub) return false;
         const rParentId = r.originalDemande?.parent_demande || r.originalDemande?.id || r.demandeId;
-        return rParentId === parentId;
+        if (rParentId !== parentId) return false;
+
+        const rDate = parseFrenchDate(r.date);
+        return rDate && rDate.getFullYear() === year && rDate.getMonth() === month;
       })
       .sort((a, b) => {
         const dateA = parseFrenchDate(a.date)?.getTime() || 0;
@@ -865,25 +877,54 @@ export default function LesSuivis() {
     
     let total = subRows.length;
     const parentRow = facturationData.find(r => r.demandeId === parentId && !r.parentDemandeId);
-    const parentDemande = parentRow?.originalDemande || (row.parentDemandeId ? null : row.originalDemande);
+    const parentDemande = demandsMap.get(Number(parentId)) || parentRow?.originalDemande || (row.parentDemandeId ? null : row.originalDemande);
     const weeks = parentDemande?.planning?.semaines;
+    
+    let perWeekCount = 0;
     if (weeks && Array.isArray(weeks) && weeks.length > 0) {
-      // Count interventions per week from the first week's selected days
-      const firstWeek = weeks[0];
-      let perWeekCount = 0;
-      if (firstWeek?.jours) {
-        Object.keys(firstWeek.jours).forEach(dayKey => {
-          if (firstWeek.jours[dayKey]?.selected) {
+      const refWeek = weeks[0];
+      if (refWeek?.jours) {
+        Object.keys(refWeek.jours).forEach(dayKey => {
+          if (refWeek.jours[dayKey]?.selected) {
             perWeekCount++;
           }
         });
       }
-      // Multiply by the number of weeks in the month
-      const numberOfWeeks = weeks.length;
-      const monthlyPlannedCount = perWeekCount * numberOfWeeks;
-      if (monthlyPlannedCount > 0) {
-        total = Math.max(subRows.length, monthlyPlannedCount);
+    }
+    
+    if (perWeekCount === 0) {
+      const freqLabel = parentDemande?.frequency_label || row.originalDemande?.frequency_label || '';
+      const freq = freqLabel.toLowerCase();
+      if (freq.includes('/sem') || freq.includes('semaine') || freq.includes('sem')) {
+        perWeekCount = parseInt(freq, 10) || 0;
+      } else if (freq === 'quotidien') {
+        perWeekCount = 7;
       }
+    }
+
+    let weeksCount = 0;
+    const tempDate = new Date(year, month, 1);
+    while (tempDate.getMonth() === month) {
+      if (tempDate.getDay() === 1) { // Monday
+        weeksCount++;
+      }
+      tempDate.setDate(tempDate.getDate() + 1);
+    }
+    if (weeksCount === 0) weeksCount = 4;
+
+    let monthlyPlannedCount = 0;
+    if (perWeekCount > 0) {
+      monthlyPlannedCount = perWeekCount * weeksCount;
+    } else {
+      const freqLabel = parentDemande?.frequency_label || row.originalDemande?.frequency_label || '';
+      const freq = freqLabel.toLowerCase();
+      if (freq.includes('/mois')) {
+        monthlyPlannedCount = parseInt(freq, 10) || 1;
+      }
+    }
+
+    if (monthlyPlannedCount > 0) {
+      total = Math.max(subRows.length, monthlyPlannedCount);
     }
     
     return {
@@ -891,7 +932,7 @@ export default function LesSuivis() {
       total: total,
       isFirst: index === 0
     };
-  }, [facturationData]);
+  }, [facturationData, demandsMap]);
 
   // Expanded Rows to match VueGlobale Credit and Debit logic
   const expandedRows = useMemo(() => {
