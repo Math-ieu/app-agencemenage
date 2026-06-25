@@ -1675,6 +1675,17 @@ export default function VueGlobale() {
       .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
       .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
 
+    const unfilteredActiveRows = facturationData.filter((row) => 
+      row.statut !== 'Facturation annulée' && 
+      row.statut !== 'Intervention annulée' && 
+      row.statut !== 'Intervention gratuite' && 
+      row.statutPaiementUi !== 'facturation_annulee' && 
+      row.statutPaiementUi !== 'intervention_gratuite'
+    );
+    const chiffreAffairesTotal = unfilteredActiveRows
+      .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
+      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
+
     // Commission brute (hors annulations)
     const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row, true), 0);
 
@@ -1688,8 +1699,8 @@ export default function VueGlobale() {
     // Commission nette = brute - pertes
     const commissionAgence = commissionBrute - facturationAnnulee;
 
-    return { missions, chiffreAffaires, commissionAgence, facturationAnnulee };
-  }, [periodFilteredRows, missionsEnCours]);
+    return { missions, chiffreAffaires, chiffreAffairesTotal, commissionAgence, facturationAnnulee };
+  }, [periodFilteredRows, missionsEnCours, facturationData]);
 
   const debitRows = useMemo(
     () => facturationData.filter((row) =>
@@ -2949,7 +2960,10 @@ export default function VueGlobale() {
             </article>
             <article className="fg-global-kpi green">
               <p className="fg-global-kpi-title">CHIFFRE D'AFFAIRES</p>
-              <p className="fg-global-kpi-value">{money(globalKpis.chiffreAffaires)}</p>
+              <p className="fg-global-kpi-value">
+                {money(globalKpis.chiffreAffaires)}
+                <span className="fg-global-kpi-value-total">CA total : {money(globalKpis.chiffreAffairesTotal)}</span>
+              </p>
               <p className="fg-global-kpi-subtitle">paiements reçus des clients</p>
             </article>
             <article className="fg-global-kpi green">

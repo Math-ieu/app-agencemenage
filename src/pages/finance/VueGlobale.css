@@ -125,6 +125,15 @@
   color: #102f2f;
 }
 
+.fg-global-kpi-value-total {
+  display: block;
+  font-size: 0.8rem;
+  color: #7a8f8e;
+  font-weight: 500;
+  margin-top: 0.35rem;
+  line-height: 1.3;
+}
+
 .fg-global-kpi-subtitle {
   margin: 0.35rem 0 0;
   font-size: 0.82rem;
