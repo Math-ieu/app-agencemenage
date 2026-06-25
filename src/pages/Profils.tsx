@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAgents, deleteAgent, getDemandes } from '../api/client';
-import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2 } from 'lucide-react';
+import { getAgents, deleteAgent, getDemandes, getUsers, updateAgent, sendProfilToDemande } from '../api/client';
+import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2, Send } from 'lucide-react';
 import { Agent } from '../types';
 import { encodeId } from '../utils/obfuscation';
 import AddProfileModal from './ProfilEditModal';
@@ -9,6 +9,16 @@ import { useToastStore } from '../store/toast';
 import { PROFIL_FILTER_TABS } from '../lib/profil-form-constants';
 import { useAuthStore } from '../store/auth';
 import { checkPermission, hasPermission } from '../utils/permissions';
+import { renderStatusBadge } from '../utils/statusUtils';
+
+const C = {
+  teal: '#037265',
+  coral: '#E16E53',
+  orange: '#F0A24A',
+  tan: '#D1A784',
+  sage: '#B7D9C6',
+  lime: '#BADF00',
+};
 
 const TABS = PROFIL_FILTER_TABS.map(tab => ({ id: tab.value, label: tab.label }));
 
@@ -98,6 +108,128 @@ export default function Profils() {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // Nouvelles variables d'état pour l'assignation et la postulation
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [showPostulerModal, setShowPostulerModal] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [allDemandes, setAllDemandes] = useState<any[]>([]);
+  const [demandesLoading, setDemandesLoading] = useState(false);
+  const [demandesSearch, setDemandesSearch] = useState('');
+  const [selectedDemande, setSelectedDemande] = useState<any | null>(null);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (hasPermission(user, 'assigner_charge_profil')) {
+      getUsers().then(res => {
+        const list = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+        setUsersList(list);
+      }).catch(console.error);
+    }
+  }, [user]);
+
+  const getFilteredUsers = (currentAssignedId: any) => {
+    const parsedCurrentId = currentAssignedId ? String(currentAssignedId) : null;
+    return usersList.filter(u => 
+      u.role === 'charge_operations' || 
+      u.role === 'responsable_operations' || 
+      u.role === 'admin' ||
+      String(u.id) === parsedCurrentId
+    );
+  };
+
+  const handleAssignChange = async (agentId: number, userIdStr: string) => {
+    const userId = userIdStr ? parseInt(userIdStr, 10) : null;
+    try {
+      await updateAgent(agentId, { assigned_to: userId });
+      addToast('Assignation mise à jour avec succès', 'success');
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast("Erreur lors de la mise à jour de l'assignation", 'error');
+    }
+  };
+
+  // Fetch all demandes when Postuler modal opens
+  useEffect(() => {
+    if (!showPostulerModal) return;
+    setDemandesLoading(true);
+    getDemandes({ no_page: 'true' })
+      .then(res => {
+        const data = res.data;
+        setAllDemandes(Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []));
+      })
+      .catch(console.error)
+      .finally(() => setDemandesLoading(false));
+  }, [showPostulerModal]);
+
+  const filteredDemandes = useMemo(() => {
+    return allDemandes.filter(d => {
+      if (d.statut === 'en_attente' || d.statut === 'pres_terminee' || d.statut === 'termine') return false;
+      
+      const facturation = d.formulaire_data?.facturation || {};
+      const statutUi = facturation.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
+      
+      const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || facturation.facturation_annulee;
+      if (isAnnule) {
+        const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(facturation.profil_sera_paye);
+        if (profilSeraPaye) {
+          let allProfilesPaid = false;
+          const parts = d.parts_repartition || facturation.parts_repartition || d.formulaire_data?.parts_repartition || [];
+          if (Array.isArray(parts) && parts.length > 0) {
+            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
+          } else {
+            allProfilesPaid = Boolean(facturation.part_profil_versee);
+          }
+          if (!allProfilesPaid) {
+            if (!demandesSearch) return true;
+            const q = demandesSearch.toLowerCase();
+            return (
+              String(d.id).includes(q) ||
+              (d.client_name || '').toLowerCase().includes(q) ||
+              (d.service || '').toLowerCase().includes(q) ||
+              (d.client_phone || '').includes(q)
+            );
+          }
+        }
+        return false;
+      }
+
+      if (statutUi === 'paye') return false;
+
+      if (!demandesSearch) return true;
+      const q = demandesSearch.toLowerCase();
+      return (
+        String(d.id).includes(q) ||
+        (d.client_name || '').toLowerCase().includes(q) ||
+        (d.service || '').toLowerCase().includes(q) ||
+        (d.client_phone || '').includes(q)
+      );
+    });
+  }, [allDemandes, demandesSearch]);
+
+  const handleEnvoyerProfil = async () => {
+    if (!selectedAgent || !selectedDemande) return;
+    setSending(true);
+    try {
+      await sendProfilToDemande(selectedDemande.id, selectedAgent.id);
+      addToast(`Profil envoyé pour la demande #${selectedDemande.id} avec succès !`, 'success');
+      setShowPostulerModal(false);
+      setSelectedDemande(null);
+      setSelectedAgent(null);
+      setDemandesSearch('');
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.response?.data?.error || "Erreur lors de l'envoi du profil.";
+      addToast(errMsg, 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const getStatutBadge = (statut: string, cao?: boolean) => {
+    return renderStatusBadge(statut, cao);
+  };
 
   const hasActiveFilters = Boolean(dateDebut || dateFin);
 
@@ -340,6 +472,7 @@ export default function Profils() {
                 <th>Nationalité</th>
                 <th>CIN</th>
                 <th>Quartier / Ville</th>
+                <th>Chargé</th>
                 <th>Disponibilité</th>
                 <th>Langue</th>
                 <th>Action</th>
@@ -375,6 +508,27 @@ export default function Profils() {
                     </div>
                   </td>
                   <td>
+                    {hasPermission(user, 'assigner_charge_profil') ? (
+                      <select
+                        value={agent.assigned_to || ''}
+                        onChange={(e) => handleAssignChange(agent.id, e.target.value)}
+                        className="text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 outline-none text-slate-700 font-medium focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                        style={{ maxWidth: '140px' }}
+                      >
+                        <option value="">Non assigné</option>
+                        {getFilteredUsers(agent.assigned_to).map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.full_name || `${u.first_name} ${u.last_name}`}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-slate-600 text-sm font-medium">
+                        {agent.assigned_to_name || 'Non assigné'}
+                      </span>
+                    )}
+                  </td>
+                  <td>
                     {busyAgentIds.has(agent.id) ? (
                       <span className="badge badge-status-annule" style={{ backgroundColor: '#f59e0b', color: 'white' }}>
                         Occupé (Mission)
@@ -399,6 +553,25 @@ export default function Profils() {
                         <User size={14} className="mr-2" />
                         Compte Profil
                       </button>
+                      {hasPermission(user, 'postuler_demande') && (
+                        <button
+                          type="button"
+                          className="actions-cell-btn py-1.5 px-3"
+                          disabled={user?.role === 'charge_operations' && Number(agent.assigned_to) !== Number(user?.id)}
+                          onClick={() => {
+                            setSelectedAgent(agent);
+                            setShowPostulerModal(true);
+                          }}
+                          style={{
+                            opacity: (user?.role === 'charge_operations' && Number(agent.assigned_to) !== Number(user?.id)) ? 0.5 : 1,
+                            cursor: (user?.role === 'charge_operations' && Number(agent.assigned_to) !== Number(user?.id)) ? 'not-allowed' : 'pointer'
+                          }}
+                          title={user?.role === 'charge_operations' && Number(agent.assigned_to) !== Number(user?.id) ? "Ce profil ne vous est pas assigné" : "Postuler ce profil à une demande"}
+                        >
+                          <Send size={14} className="mr-2" />
+                          Postuler
+                        </button>
+                      )}
                       {!agent.is_blacklisted && hasPermission(user, 'supprimer_profil') && (
                         <button
                           type="button"
@@ -416,11 +589,186 @@ export default function Profils() {
               ))}
               {agents.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="empty-row text-center py-12 text-slate-400">Aucun profil trouvé.</td>
+                  <td colSpan={13} className="empty-row text-center py-12 text-slate-400">Aucun profil trouvé.</td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal de postulation */}
+      {showPostulerModal && selectedAgent && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 200, backdropFilter: 'blur(2px)',
+          }}
+          onClick={() => { if (!selectedDemande) { setShowPostulerModal(false); } }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'white', borderRadius: 16, width: '100%', maxWidth: 660,
+              maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.25)', overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', margin: 0 }}>
+                {selectedDemande ? 'Aperçu avant envoi' : 'Postuler — Choisir une demande'}
+              </h2>
+              <button
+                onClick={() => { setShowPostulerModal(false); setSelectedDemande(null); setSelectedAgent(null); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 22, lineHeight: 1 }}
+              >×</button>
+            </div>
+
+            {!selectedDemande ? (
+              /* ── Step 1: Liste des demandes ── */
+              <>
+                {/* Search */}
+                <div style={{ padding: '16px 24px', borderBottom: '1px solid #f1f5f9' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                    <input
+                      autoFocus
+                      value={demandesSearch}
+                      onChange={e => setDemandesSearch(e.target.value)}
+                      placeholder="Rechercher par nom, service, numéro..."
+                      style={{
+                        width: '100%', height: 44, paddingLeft: 38, paddingRight: 12,
+                        border: '2px solid #0d9488', borderRadius: 10, fontSize: 14,
+                        outline: 'none', boxSizing: 'border-box', color: '#1e293b',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* List */}
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {demandesLoading ? (
+                    <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Chargement...</div>
+                  ) : filteredDemandes.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontStyle: 'italic' }}>Aucune demande trouvée.</div>
+                  ) : filteredDemandes.map(d => {
+                    const isAlreadyAssigned = d.profils_envoyes?.some((p: any) => p.id === selectedAgent.id);
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => !isAlreadyAssigned && setSelectedDemande(d)}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '14px 24px', borderBottom: '1px solid #f8fafc',
+                          cursor: isAlreadyAssigned ? 'not-allowed' : 'pointer',
+                          opacity: isAlreadyAssigned ? 0.75 : 1,
+                          transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={e => { if (!isAlreadyAssigned) e.currentTarget.style.background = '#f8fafc'; }}
+                        onMouseLeave={e => { if (!isAlreadyAssigned) e.currentTarget.style.background = 'white'; }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>#{d.id}</span>
+                            <span style={{ fontWeight: 700, color: '#1e293b', fontSize: 15 }}>{d.client_name || 'Client inconnu'}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b' }}>
+                            <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>{d.segment === 'particulier' ? 'PARTICULIER' : 'ENTREPRISE'}</span>
+                            <span>•</span>
+                            <span>{d.client_details?.city || d.formulaire_data?.ville || 'N/A'}</span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          {isAlreadyAssigned && (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#d97706', backgroundColor: '#fffbeb', padding: '2px 8px', borderRadius: 6, border: '1px solid #fef3c7' }}>
+                              Déjà affecté
+                            </span>
+                          )}
+                          {getStatutBadge(d.statut, d.cao)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              /* ── Step 2: Confirmation ── */
+              <div style={{ padding: 24, overflowY: 'auto' }}>
+                {/* Back */}
+                <button
+                  onClick={() => setSelectedDemande(null)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#475569', fontWeight: 600, fontSize: 14, marginBottom: 20 }}
+                >
+                  ← Retour à la liste
+                </button>
+
+                {/* Demande card */}
+                <div style={{ background: '#f8fafc', borderRadius: 12, padding: '16px 20px', marginBottom: 24 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Demande sélectionnée</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8' }}>#{selectedDemande.id}</span>
+                    <span style={{ fontWeight: 700, color: '#1e293b', fontSize: 16 }}>{selectedDemande.client_name || 'Client inconnu'}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 4, background: selectedDemande.segment === 'particulier' ? '#dbeafe' : '#f3e8ff', color: selectedDemande.segment === 'particulier' ? '#1e40af' : '#6b21a8' }}>
+                      {selectedDemande.segment === 'particulier' ? 'SPP' : 'SPE'}
+                    </span>
+                    <span>•</span>
+                    <span>{selectedDemande.client_details?.city || selectedDemande.formulaire_data?.ville || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* Agent preview */}
+                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Profil à envoyer</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: C.teal, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 20, flexShrink: 0 }}>
+                    {`${selectedAgent.last_name?.[0] || ''}${selectedAgent.first_name?.[0] || ''}`.toUpperCase()}
+                  </div>
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: 17, color: '#1e293b', margin: 0 }}>{selectedAgent.last_name} {selectedAgent.first_name}</p>
+                    <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>{selectedAgent.type_profil}</p>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: 28 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#475569' }}>
+                    <span>📞</span> {selectedAgent.phone}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#475569' }}>
+                    <span>📍</span> {selectedAgent.neighborhood || '—'}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#475569' }}>
+                    <span>📅</span> {selectedAgent.experience_years} an(s) {selectedAgent.experience_months} mois d’expérience
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#475569' }}>
+                    <span>👤</span> {selectedAgent.nationality || '—'}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                  <button
+                    onClick={() => { setShowPostulerModal(false); setSelectedDemande(null); setSelectedAgent(null); }}
+                    style={{ padding: '10px 20px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleEnvoyerProfil}
+                    disabled={sending}
+                    style={{
+                      padding: '10px 24px', backgroundColor: C.teal, color: 'white', border: 'none', borderRadius: 8,
+                      fontWeight: 600, fontSize: 14, cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.7 : 1,
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}
+                  >
+                    {sending ? 'Envoi...' : 'Confirmer & Envoyer'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

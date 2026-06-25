@@ -37,6 +37,8 @@ export type PermissionKey =
   | 'desactiver_profil'
   | 'blacklister_agents'
   | 'supprimer_profil'
+  | 'postuler_demande'
+  | 'assigner_charge_profil'
   // Listing clients
   | 'consulter_clients'
   | 'consulter_compte_client'
@@ -159,7 +161,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
     // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil",
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
     // Historique
@@ -189,7 +191,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
     // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil",
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
     // Historique
@@ -219,7 +221,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
     // Listing profils
-    "consulter_agents",
+    "consulter_agents", "postuler_demande",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients",
     // Historique
@@ -247,7 +249,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
     // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil",
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil", "postuler_demande",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
     // Historique
@@ -271,7 +273,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Demandes en attente
     "creer_demande", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande",
     // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents",
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "note_operationnelle",
     // Historique
@@ -297,7 +299,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     // Demandes en attente
     "creer_demande", "consulter_demandes",
     // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels",
+    "consulter_agents", "consulter_docs_confidentiels", "postuler_demande",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "note_operationnelle",
     // Historique
@@ -406,7 +408,15 @@ export const checkPermission = (
 export const isExemptFromOwnership = (user: User | null): boolean => {
   if (!user) return false;
   const role = (user.role || '').toLowerCase().trim();
-  return ['admin', 'moderateur', 'modérateur', 'responsable commercial', 'responsable_commercial'].includes(role);
+  return [
+    'admin',
+    'moderateur',
+    'modérateur',
+    'responsable commercial',
+    'responsable_commercial',
+    'responsable des opérations',
+    'responsable_operations'
+  ].includes(role);
 };
 
 export const hasPermissionWithContext = (

@@ -77,6 +77,8 @@ export interface Agent {
   updated_at: string;
   is_assigned_active?: boolean;
   is_blacklisted?: boolean;
+  assigned_to?: number | null;
+  assigned_to_name?: string | null;
 }
 
 export interface Demande {
