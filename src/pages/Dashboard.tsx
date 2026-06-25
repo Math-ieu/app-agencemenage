@@ -164,6 +164,15 @@ const toStartCase = (value: string): string =>
 
 const formatAuditFieldName = (fieldName: string): string => AUDIT_FIELD_LABELS[fieldName] || toStartCase(fieldName);
 
+const abbreviateName = (fullName: string | undefined): string => {
+  if (!fullName) return '—';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length <= 1) return fullName;
+  const firstName = parts[0];
+  const lastInitial = parts[parts.length - 1][0].toUpperCase();
+  return `${firstName} ${lastInitial}.`;
+};
+
 const getAuditChangedFieldsSummary = (log: AuditLogItem): string | null => {
   const rawChanges = log.extra_data?.changes;
   if (!rawChanges || typeof rawChanges !== 'object') return null;
@@ -1683,6 +1692,7 @@ export default function Dashboard() {
                   <tr>
                     <th></th>
                     <th>Com</th>
+                    <th>Ops</th>
                     <th>Date d'interv.</th>
                     <th>Statut besoin</th>
                     <th>Nom du client</th>
@@ -1755,6 +1765,7 @@ export default function Dashboard() {
                         )}
                       </td>
                       <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
+                      <td>{abbreviateName(d.assigned_to_operations_name)}</td>
                       <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</td>
                       <td>
                         {renderStatusBadge(d.statut, d.cao)}
