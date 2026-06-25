@@ -313,8 +313,15 @@ export default function LesSuivis() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [freqFilter, setFreqFilter] = useState('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [dateTo, setDateTo] = useState(() => {
+    const today = new Date();
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+  });
 
   // Filters Tab 2
   const [periodFilter, setPeriodFilter] = useState<'mois-en-cours' | 'mois-dernier' | 'annee-en-cours' | 'tous' | 'personnalise'>('mois-en-cours');
@@ -437,6 +444,7 @@ export default function LesSuivis() {
     let montantPaye = rawMontantPaye * ratio;
     if (montantPaye === 0) {
       if (paiement === 'paye') montantPaye = montant;
+      else if (paiement === 'partiellement_paye') montantPaye = 0;
     }
 
     let montantEncaisseProfil = item.montant_encaisse_profil !== undefined ? Number(item.montant_encaisse_profil) : 0;
@@ -637,7 +645,9 @@ export default function LesSuivis() {
       paiement,
       statut,
       reglementInterne,
-      montantPaye: paiement === 'paye' ? montant : 0,
+      montantPaye: paiement === 'paye'
+        ? (Number(facturationData.montant_verse) || montant)
+        : (paiement === 'partiellement_paye' ? (Number(facturationData.montant_verse) || 0) : 0),
       montantEncaisseProfil: encaissePar === 'Profil' && paiement === 'paye' ? montant : 0,
       datePaiement: facturationData.date_paiement ? formatDateFR(facturationData.date_paiement) : (paiement === 'non_paye' ? '—' : formatDateFR(demande.date_intervention || demande.created_at)),
       modePaiementReel: modeLabelFromCode(demande.mode_paiement) || '—',
@@ -792,6 +802,26 @@ export default function LesSuivis() {
         const dateB = parseFrenchDate(b.date)?.getTime() || 0;
         return dateB - dateA;
       });
+
+    // Group by subscription and identify primary vs secondary rows
+    const subscriptionGroups = new Map<number, FacturationRow[]>();
+    for (const row of allMappedRows) {
+      const subId = row.parentDemandeId || (row.frequency === 'abonnement' ? row.demandeId : null);
+      if (subId) {
+        if (!subscriptionGroups.has(subId)) {
+          subscriptionGroups.set(subId, []);
+        }
+        subscriptionGroups.get(subId)!.push(row);
+      }
+    }
+
+    for (const groupRows of subscriptionGroups.values()) {
+      for (const row of groupRows) {
+        const isRoot = !row.parentDemandeId;
+        row.isSubscriptionPrimary = isRoot;
+        row.isSubscriptionSecondary = !isRoot;
+      }
+    }
 
     setFacturationData(allMappedRows);
     setAgentsList(agents);
@@ -984,7 +1014,7 @@ export default function LesSuivis() {
     return result;
   }, [facturationData, agentsList]);
 
-  // Tab 1 Calculations: KPI Totals
+  // Tab 1 Calculations: KPI Totals (filtered by date range)
   const kpiStats = useMemo(() => {
     let totalCa = 0;
     let totalPartAgence = 0;
@@ -992,7 +1022,16 @@ export default function LesSuivis() {
     let unpaidPartAgence = 0;
     let unpaidPartProfil = 0;
 
-    facturationData.forEach((row) => {
+    const isInDateRange = (row: FacturationRow): boolean => {
+      const rowDate = parseFrenchDate(row.date);
+      if (!rowDate) return false;
+      const rowIso = getISODateLocal(rowDate);
+      if (dateFrom && rowIso < dateFrom) return false;
+      if (dateTo && rowIso > dateTo) return false;
+      return true;
+    };
+
+    facturationData.filter(isInDateRange).forEach((row) => {
       const isCancelled =
         row.statut === 'Facturation annulée' ||
         row.statut === 'Intervention annulée' ||
@@ -1001,9 +1040,10 @@ export default function LesSuivis() {
         row.statutPaiementUi === 'intervention_gratuite';
 
       if (!isCancelled) {
-        const subInfo = getSubInfo(row);
-        if (!subInfo || subInfo.isFirst) {
-          totalCa += row.montant;
+        if (!row.isSubscriptionSecondary) {
+          if (row.paiement !== 'non_paye') {
+            totalCa += (row.montantPaye ?? 0);
+          }
           totalPartAgence += row.partAgence;
           
           const isProfilePaid = row.partProfilVersee || row.reglementInterne === 'Réglé';
@@ -1014,23 +1054,21 @@ export default function LesSuivis() {
       }
     });
 
-    expandedRows.forEach((row) => {
+    expandedRows.filter(isInDateRange).forEach((row) => {
       const isCredit = isCreditRow(row);
       const isDebit = isDebitRow(row);
 
       if (isCredit) {
         const isPaid = row.partProfilVersee ?? row._partProfilVersee;
         if (!isPaid && row.reglementInterne !== 'Réglé') {
-          const subInfo = getSubInfo(row);
-          if (!subInfo || subInfo.isFirst) {
+          if (!row.isSubscriptionSecondary) {
             unpaidPartProfil += row.partProfil;
           }
         }
       } else if (isDebit) {
         const isPaid = row.partAgenceReversee ?? row._partAgenceReversee;
         if (!isPaid && row.reglementInterne !== 'Réglé') {
-          const subInfo = getSubInfo(row);
-          if (!subInfo || subInfo.isFirst) {
+          if (!row.isSubscriptionSecondary) {
             unpaidPartAgence += row.partAgence;
           }
         }
@@ -1044,7 +1082,7 @@ export default function LesSuivis() {
       unpaidPartAgence,
       unpaidPartProfil
     };
-  }, [facturationData, expandedRows, getSubInfo]);
+  }, [facturationData, expandedRows, getSubInfo, dateFrom, dateTo]);
 
   // Tab 1: Filtered Rows
   const filteredRows = useMemo(() => {
@@ -1781,7 +1819,7 @@ export default function LesSuivis() {
                   <div className="ls-kpi-item">
                     <span className="ls-kpi-item-value">{money(kpiStats.totalCa)}</span>
                     <span className="ls-kpi-item-label">Chiffre d'affaires total</span>
-                    <span className="ls-kpi-item-sub">Part agence + Part profil (hors annulées)</span>
+                    <span className="ls-kpi-item-sub">paiements reçus des clients</span>
                   </div>
                   <div className="ls-kpi-item">
                     <span className="ls-kpi-item-value">{money(kpiStats.totalPartAgence)}</span>
