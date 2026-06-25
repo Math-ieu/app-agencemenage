@@ -230,8 +230,12 @@ export const updateClient = (id: number, data: Record<string, unknown>) =>
 export const deleteClient = (id: number) =>
   apiClient.delete(`/api/clients/${id}/`);
 
-export const affecterClient = (id: number, commercial_id: number) =>
-  apiClient.post(`/api/clients/${id}/affecter/`, { commercial_id });
+export const affecterClient = (id: number, commercial_id: number | null, assigned_by_name?: string, notes?: string) =>
+  apiClient.post(`/api/clients/${id}/affecter/`, { commercial_id, assigned_by_name, notes });
+
+export const getClientAssignments = (id: number) =>
+  apiClient.get(`/api/clients/${id}/assignments/`);
+
 
 // ─── Agents/Profils ───────────────────────────────────────────────────────────
 export const getAgents = (params?: Record<string, string | number>) =>

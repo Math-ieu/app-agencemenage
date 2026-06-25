@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { encodeId } from '../utils/obfuscation';
-import { getClients, getUsers, updateClient, deleteClient, affecterClient } from '../api/client';
+import { getClients, getUsers, updateClient, deleteClient, affecterClient, getClientAssignments } from '../api/client';
 import { renderStatusBadge } from '../utils/statusUtils';
 import { useAuthStore } from '../store/auth';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
@@ -10,7 +10,7 @@ import { User } from '../types';
 import {
   Search, Settings, MoreVertical,
   RotateCw, Calendar, ChevronDown,
-  User as UserIcon, MessageSquare, UserPlus, Slash, Trash2, XCircle, Save
+  User as UserIcon, MessageSquare, UserPlus, Slash, Trash2, XCircle, Save, History, Clock
 } from 'lucide-react';
 
 interface LatestDemande {
@@ -246,21 +246,61 @@ export default function Clients() {
     }
   }, [user]);
 
-  const handleAffecter = async (clientId: number, commercialId: number) => {
+  const [assignmentHistory, setAssignmentHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [selectedCommercialId, setSelectedCommercialId] = useState<number | null>(null);
+  const [assignedByName, setAssignedByName] = useState('');
+  const [assignmentNotes, setAssignmentNotes] = useState('');
+  const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false);
+
+  useEffect(() => {
+    if (showAssignmentModal) {
+      setLoadingHistory(true);
+      getClientAssignments(showAssignmentModal)
+        .then(res => {
+          setAssignmentHistory(res.data || []);
+        })
+        .catch(err => {
+          console.error('Error fetching assignment history:', err);
+          addToast("Impossible de charger l'historique des affectations", 'error');
+        })
+        .finally(() => {
+          setLoadingHistory(false);
+        });
+
+      const clientObj = clients.find(c => c.id === showAssignmentModal);
+      setSelectedCommercialId(clientObj?.assigned_commercial || null);
+      setAssignedByName(user?.full_name || '');
+      setAssignmentNotes('');
+    } else {
+      setAssignmentHistory([]);
+      setSelectedCommercialId(null);
+      setAssignedByName('');
+      setAssignmentNotes('');
+    }
+  }, [showAssignmentModal, clients, user]);
+
+  const handleAffecterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showAssignmentModal) return;
+
     const isAllowed = checkPermission(user, 'affecter_commercial').allowed || checkPermission(user, 'affectation_client').allowed;
     if (!isAllowed) {
       addToast('Action non autorisée', 'error');
       return;
     }
+
+    setIsSubmittingAssignment(true);
     try {
-      await affecterClient(clientId, commercialId);
-      addToast('Client affecté avec succès', 'success');
+      await affecterClient(showAssignmentModal, selectedCommercialId, assignedByName, assignmentNotes);
+      addToast('Affectation enregistrée avec succès', 'success');
       fetchData();
       setShowAssignmentModal(null);
-      setActiveDropdown(null);
     } catch (err) {
-      console.error('Error affecting client:', err);
-      addToast("Erreur lors de l'affectation", 'error');
+      console.error('Error in assignment:', err);
+      addToast("Erreur lors de l'enregistrement de l'affectation", 'error');
+    } finally {
+      setIsSubmittingAssignment(false);
     }
   };
 
@@ -829,61 +869,206 @@ export default function Clients() {
       )}
 
       {/* Modal Affectation */}
-      {showAssignmentModal && (
-        <div className="modal-overlay z-[110]" onClick={() => setShowAssignmentModal(null)}>
-          <div
-            className="modal-content max-w-[500px]"
-            onClick={e => e.stopPropagation()}
-            style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}
-          >
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-800">Affectation</h2>
-                <p className="text-slate-500 text-sm mt-1">Sélectionnez le commercial pour ce client</p>
-              </div>
-              <button className="p-2 hover:bg-slate-100 rounded-full transition-colors" onClick={() => setShowAssignmentModal(null)}>
-                <XCircle size={24} className="text-slate-400" />
-              </button>
-            </div>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-              {commerciaux && commerciaux.length > 0 ? (
-                commerciaux.map(comm => {
-                  const initials = (comm.full_name || `${comm.first_name} ${comm.last_name}`).split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2);
-                  return (
-                    <button
-                      key={comm.id}
-                      onClick={() => handleAffecter(showAssignmentModal, comm.id)}
-                      className="w-full flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50 transition-all text-left group"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-lg group-hover:bg-teal-600 group-hover:text-white transition-colors">
-                        {initials}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-bold text-slate-700 group-hover:text-teal-900">{comm.full_name || `${comm.first_name} ${comm.last_name}`}</div>
-                        <div className="text-xs text-slate-400">Commercial Agence</div>
-                      </div>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="bg-teal-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Choisir</div>
-                      </div>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                  <UserPlus size={40} className="mx-auto text-slate-300 mb-3" />
-                  <p className="text-slate-500 font-medium">Aucun commercial trouvé</p>
-                  <p className="text-slate-400 text-xs mt-1">Veuillez d'abord créer des commerciaux dans le système.</p>
+      {showAssignmentModal && (() => {
+        const clientObj = clients.find(c => c.id === showAssignmentModal);
+        const clientName = clientObj ? clientObj.display_name : '';
+        const currentAssignment = assignmentHistory.find(h => h.commercial === clientObj?.assigned_commercial);
+        const currentCreatedBy = currentAssignment ? currentAssignment.assigned_by_name_display : '—';
+        const currentAssignDate = currentAssignment 
+          ? new Date(currentAssignment.created_at).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            })
+          : '—';
+
+        return (
+          <div className="modal-overlay z-[110]" onClick={() => setShowAssignmentModal(null)}>
+            <div
+              className="modal-content max-w-[600px] w-full animate-in fade-in zoom-in-95 duration-200"
+              onClick={e => e.stopPropagation()}
+              style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: 0, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', border: 'none' }}
+            >
+              {/* Header */}
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#ccfbf1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0d9488' }}>
+                    <UserIcon size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+                      Commercial affecté — {clientName}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#64748b', marginTop: '2px' }}>
+                      Gérez l'affectation commerciale du client et consultez l'historique chronologique des changements.
+                    </p>
+                  </div>
                 </div>
-              )}
-            </div>
-            <div className="mt-8 flex justify-end">
-              <button className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 transition-colors" onClick={() => setShowAssignmentModal(null)}>
-                Annuler
-              </button>
+                <button
+                  onClick={() => setShowAssignmentModal(null)}
+                  style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'white'; }}
+                >
+                  <XCircle size={16} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: '24px' }}>
+                {/* Current Assignment Summary Card */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', padding: '16px', marginBottom: '24px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Commercial actuel</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155' }}>
+                      {clientObj?.assigned_commercial_name || 'Non affecté'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Créé par</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155' }}>{currentCreatedBy}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Date d'affectation</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155' }}>{currentAssignDate}</div>
+                  </div>
+                </div>
+
+                {/* Form Modifier l'affectation */}
+                <form onSubmit={handleAffecterSubmit}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0f766e', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px', marginBottom: '16px' }}>
+                    Modifier l'affectation
+                  </h3>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Sélectionner un commercial</label>
+                      <select
+                        value={selectedCommercialId || ''}
+                        onChange={(e) => setSelectedCommercialId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                        style={{ width: '100%', height: '42px', padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', color: '#334155', backgroundColor: 'white', outline: 'none', cursor: 'pointer' }}
+                        onFocus={e => { e.currentTarget.style.borderColor = '#0d9488'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.15)'; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'none'; }}
+                      >
+                        <option value="">Choisir...</option>
+                        {commerciaux.map(comm => (
+                          <option key={comm.id} value={comm.id}>
+                            {comm.full_name || `${comm.first_name} ${comm.last_name}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Effectué par (optionnel)</label>
+                      <input
+                        type="text"
+                        placeholder="Votre nom"
+                        value={assignedByName}
+                        onChange={(e) => setAssignedByName(e.target.value)}
+                        style={{ width: '100%', height: '42px', padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', color: '#334155', backgroundColor: 'white', outline: 'none', boxSizing: 'border-box' }}
+                        onFocus={e => { e.currentTarget.style.borderColor = '#0d9488'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.15)'; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'none'; }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Note / Motif (optionnel)</label>
+                    <input
+                      type="text"
+                      placeholder="Motif de la réaffectation, contexte..."
+                      value={assignmentNotes}
+                      onChange={(e) => setAssignmentNotes(e.target.value)}
+                      style={{ width: '100%', height: '42px', padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', color: '#334155', backgroundColor: 'white', outline: 'none', boxSizing: 'border-box' }}
+                      onFocus={e => { e.currentTarget.style.borderColor = '#0d9488'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.15)'; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'none'; }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '16px', marginBottom: '16px' }}>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingAssignment}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 20px',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color: 'white',
+                        backgroundColor: '#0f766e',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={e => { if (!isSubmittingAssignment) e.currentTarget.style.backgroundColor = '#0d9488'; }}
+                      onMouseLeave={e => { if (!isSubmittingAssignment) e.currentTarget.style.backgroundColor = '#0f766e'; }}
+                    >
+                      <Save size={16} />
+                      <span>Enregistrer l'affectation</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* History Section */}
+                <div>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 700, color: '#0f766e', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px', marginBottom: '12px', marginTop: '24px' }}>
+                    <History size={16} />
+                    <span>Historique des affectations</span>
+                  </h3>
+
+                  {loadingHistory ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+                      <div className="spinner" />
+                    </div>
+                  ) : assignmentHistory.length === 0 ? (
+                    <div style={{ border: '1px dashed #cbd5e1', borderRadius: '12px', padding: '24px', textAlign: 'center', color: '#94a3b8', backgroundColor: '#fafafa', fontSize: '13px' }}>
+                      Aucun changement enregistré.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }} className="custom-scrollbar">
+                      {assignmentHistory.map((h, i) => (
+                        <div key={h.id || i} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '10px', border: '1px solid #f1f5f9', backgroundColor: '#f8fafc', fontSize: '12px', textAlign: 'left' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#e2e8f0', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Clock size={14} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontWeight: 700, color: '#334155' }}>
+                                {h.commercial_name ? `Affecté à : ${h.commercial_name}` : 'Désaffecté'}
+                              </span>
+                              <span style={{ color: '#94a3b8' }}>
+                                {new Date(h.created_at).toLocaleString('fr-FR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            <div style={{ color: '#64748b', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <span>Effectué par : <strong style={{ color: '#475569' }}>{h.assigned_by_name_display}</strong></span>
+                              {h.notes && (
+                                <p style={{ margin: '4px 0 0 0', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white', color: '#475569', fontStyle: 'italic' }}>
+                                  Note : {h.notes}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
