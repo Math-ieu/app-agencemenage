@@ -10,12 +10,18 @@ export interface StatusInfo {
   badgeClass: string;
 }
 
-export const getStatusInfo = (statut: string, cao?: boolean): StatusInfo => {
+export const getStatusInfo = (statut: string, cao?: boolean | 'reporte'): StatusInfo => {
   const s = (statut || '').toLowerCase().trim();
 
   switch (s) {
     case 'en_cours':
-      if (cao) {
+      if (cao === 'reporte') {
+        return {
+          label: 'Reportée',
+          badgeClass: 'badge-orange'
+        };
+      }
+      if (cao === true) {
         return { 
           label: 'Confirmé', 
           badgeClass: 'badge-green' 
@@ -78,7 +84,7 @@ export const getStatusInfo = (statut: string, cao?: boolean): StatusInfo => {
 /**
  * Helper to render the standardized status badge.
  */
-export const renderStatusBadge = (statut: string, cao?: boolean) => {
+export const renderStatusBadge = (statut: string, cao?: boolean | 'reporte') => {
   const { label, badgeClass } = getStatusInfo(statut, cao);
   return <span className={`badge ${badgeClass}`}>{label}</span>;
 };

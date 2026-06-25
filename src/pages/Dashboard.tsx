@@ -525,7 +525,7 @@ export default function Dashboard() {
       const enCours = results.filter(d => !!d);
       const enCoursParticulier = enCours.filter(d => d.segment === 'particulier').length;
       const enCoursEntreprise = enCours.filter(d => d.segment === 'entreprise').length;
-      const enCoursNouveau = enCours.filter(d => !d.cao).length;
+      const enCoursNouveau = enCours.filter(d => d.cao !== true).length;
 
       const counts = allResults
         .filter(d => d.statut !== 'annule')
@@ -553,13 +553,13 @@ export default function Dashboard() {
 
   const getRowClass = (d: Demande) => {
     const classes = [];
-    if (!d.cao && d.date_intervention && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000) {
+    if (d.cao !== true && d.date_intervention && new Date(d.date_intervention).getTime() - new Date().getTime() < 86400000) {
       classes.push('row-alert');
     }
 
     // Color according to demand status (statut)
     if (d.statut === 'en_cours') {
-      if (blinkNouveau && !d.cao) classes.push('blink-animation');
+      if (blinkNouveau && d.cao !== true) classes.push('blink-animation');
       else classes.push('row-status-nouveau');
     }
     else if (d.statut === 'en_attente') classes.push('row-status-attente');
@@ -602,10 +602,10 @@ export default function Dashboard() {
           return;
         }
 
-        // Reste dans le dashboard (statut en_cours) mais CAO redevient "NON" (Nouveau besoin en UI)
+        // Reste dans le dashboard (statut en_cours) et CAO devient "reporte"
         await updateDemande(demande.id, {
           statut: 'en_cours',
-          cao: false,
+          cao: 'reporte',
           date_intervention: caoPostponedDate,
           heure_intervention: caoPostponedTime,
           note_operationnel: caoNote || '',
@@ -1815,8 +1815,10 @@ export default function Dashboard() {
                         ) : 'Non'}
                       </td>
                       <td>
-                        {d.cao ? (
+                        {d.cao === true ? (
                           <span className="badge badge-green">Oui</span>
+                        ) : d.cao === 'reporte' ? (
+                          <span className="badge badge-orange">Reporté</span>
                         ) : (
                           <span className="badge badge-red animate-pulse">Non</span>
                         )}
@@ -3750,7 +3752,7 @@ export default function Dashboard() {
                         const option = PAYMENT_STATUS_OPTIONS.find(o => o.value === statutUi);
                         return option ? option.label : (selectedDemande.statut_paiement_label || selectedDemande.statut_paiement || 'Non payé');
                       })()}</div>
-                      <div className="detail-item"><span>CAO:</span> {selectedDemande.cao ? 'Confirmé' : 'Non confirmé'}</div>
+                      <div className="detail-item"><span>CAO:</span> {selectedDemande.cao === true ? 'Confirmé' : selectedDemande.cao === 'reporte' ? 'Reporté' : 'Non confirmé'}</div>
                     </div>
                   </div>
 

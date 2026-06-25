@@ -657,6 +657,14 @@ export default function ClientDetails() {
     setSemaines(semaines.map(w => {
       if (w.id === weekId) {
         const joursCopy = { ...w.jours };
+        const dayDateStr = getDayDate(w.date_debut, day);
+        const assocD = joursCopy[day]?.demande_id 
+          ? demandes.find(d => d.id === joursCopy[day].demande_id)
+          : (latest ? demandes.find(d => d.parent_demande === latest.id && d.date_intervention === dayDateStr) : null);
+        if (assocD && ['pres_terminee', 'termine', 'annule'].includes(assocD.statut)) {
+          return w;
+        }
+
         if (field === 'selected' && value === false) {
           joursCopy[day] = {
             selected: false,
@@ -702,7 +710,7 @@ export default function ClientDetails() {
     try {
       const [clientRes, demandesRes, feedbacksRes, actionLogsRes] = await Promise.all([
         getClient(realId),
-        getDemandes({ client: realId.toString() }).catch(err => {
+        getDemandes({ client: realId.toString(), no_page: 'true' }).catch(err => {
           console.warn('Error fetching client demands:', err);
           return { data: [] };
         }),
@@ -1636,20 +1644,21 @@ export default function ClientDetails() {
                                 const assocDemand = dayConfig.demande_id 
                                   ? demandes.find(d => d.id === dayConfig.demande_id)
                                   : (latest ? demandes.find(d => d.parent_demande === latest.id && d.date_intervention === dayDateStr) : null);
-                                const isTerminee = !!(assocDemand && ['pres_terminee', 'termine'].includes(assocDemand.statut));
+                                const isLocked = !!(assocDemand && ['pres_terminee', 'termine', 'annule'].includes(assocDemand.statut));
+                                const isReportee = !!(assocDemand && assocDemand.cao === 'reporte');
                                 return (
                                   <div key={day.key} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.3fr 1.3fr 2.2fr', gap: 12, alignItems: 'center' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: isTerminee ? 'not-allowed' : 'pointer', userSelect: 'none' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: isLocked ? 'not-allowed' : 'pointer', userSelect: 'none' }}>
                                       <input
                                         type="checkbox"
                                         checked={dayConfig.selected || false}
                                         onChange={(e) => updateWeekDayField(week.id, day.key, 'selected', e.target.checked)}
-                                        disabled={isTerminee}
+                                        disabled={isLocked}
                                         style={{
-                                          width: 16, height: 16, accentColor: C.teal, cursor: isTerminee ? 'not-allowed' : 'pointer'
+                                          width: 16, height: 16, accentColor: C.teal, cursor: isLocked ? 'not-allowed' : 'pointer'
                                         }}
                                       />
-                                      <span style={{ fontSize: 13, fontWeight: 600, color: isTerminee ? '#94a3b8' : '#475569' }}>
+                                      <span style={{ fontSize: 13, fontWeight: 600, color: isLocked ? '#94a3b8' : '#475569' }}>
                                         {day.label}
                                       </span>
                                     </label>
@@ -1657,7 +1666,7 @@ export default function ClientDetails() {
                                     <div>
                                       <input
                                         type="time"
-                                        disabled={!dayConfig.selected || isTerminee}
+                                        disabled={!dayConfig.selected || isLocked}
                                         value={dayConfig.heure_debut ? dayConfig.heure_debut.slice(0, 5) : ''}
                                         onChange={(e) => updateWeekDayField(week.id, day.key, 'heure_debut', e.target.value)}
                                         placeholder="--:--"
@@ -1669,8 +1678,8 @@ export default function ClientDetails() {
                                           fontSize: 13,
                                           outline: 'none',
                                           color: '#334155',
-                                          opacity: dayConfig.selected && !isTerminee ? 1 : 0.4,
-                                          background: dayConfig.selected && !isTerminee ? 'white' : '#f8fafc'
+                                          opacity: dayConfig.selected && !isLocked ? 1 : 0.4,
+                                          background: dayConfig.selected && !isLocked ? 'white' : '#f8fafc'
                                         }}
                                       />
                                     </div>
@@ -1678,7 +1687,7 @@ export default function ClientDetails() {
                                     <div>
                                       <input
                                         type="time"
-                                        disabled={!dayConfig.selected || isTerminee}
+                                        disabled={!dayConfig.selected || isLocked}
                                         value={dayConfig.heure_fin ? dayConfig.heure_fin.slice(0, 5) : ''}
                                         onChange={(e) => updateWeekDayField(week.id, day.key, 'heure_fin', e.target.value)}
                                         placeholder="--:--"
@@ -1720,6 +1729,15 @@ export default function ClientDetails() {
                                                   fontSize: 12, fontWeight: 700, color: '#15803d'
                                                 }}>
                                                   ✓ Terminée
+                                                </span>
+                                              ) : isReportee ? (
+                                                <span style={{
+                                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                  backgroundColor: '#e0f2fe', border: '1px solid #38bdf8',
+                                                  borderRadius: 8, padding: '4px 10px',
+                                                  fontSize: 12, fontWeight: 700, color: '#0369a1'
+                                                }}>
+                                                  Reportée
                                                 </span>
                                               ) : (
                                                 <span style={{

@@ -135,7 +135,7 @@ export interface Demande {
     agent_name: string;
     link: string;
   }>;
-  cao: boolean;
+  cao: boolean | 'reporte';
   prochaine_alerte_cao?: string;
   note_commercial?: string;
   note_operationnel?: string;
