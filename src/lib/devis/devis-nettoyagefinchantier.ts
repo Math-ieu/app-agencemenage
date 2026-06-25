@@ -414,7 +414,7 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
         "Cordialement, L'équipe Agence Ménage — 05 22 20 02 39",
       ]
     : [
-        `Bonjour ${data.client.nom},`,
+        `Bonjour Madame / Monsieur ${data.client.nom},`,
         '',
         "Merci de faire appel à Agence Ménage ! Vous trouverez ci-joint notre proposition pour le nettoyage de votre bien en fin de chantier.",
         '',

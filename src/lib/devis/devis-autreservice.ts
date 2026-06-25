@@ -272,7 +272,7 @@ export function genererDevisAutreService(data: DevisAutreServiceData, logoBase64
   doc.setFontSize(10.5);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const msgLines = [
-    `Bonjour ${data.client.nom},`,
+    `Bonjour Madame / Monsieur ${data.client.nom},`,
     '',
     `Suite à notre échange, veuillez trouver ci-dessous notre proposition tarifaire pour notre prestation sur mesure : "${data.objet}". Notre équipe de professionnels veillera à respecter l'ensemble des consignes formulées ci-dessus.`,
     '',

@@ -396,7 +396,7 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   doc.setFontSize(10);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const msgLines = [
-    `Bonjour ${data.client.interlocuteur},`,
+    `Bonjour Madame / Monsieur ${data.client.interlocuteur},`,
     '',
     isAbonnement 
       ? "Suite à notre échange, nous vous adressons notre proposition pour l'entretien régulier de vos locaux."

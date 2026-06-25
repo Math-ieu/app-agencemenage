@@ -469,7 +469,7 @@ async function genererDevisPostSinistre(data: DevisPostSinistreData, logoBase64?
         "Cordialement, L'équipe Agence Ménage — 05 22 20 02 39",
       ]
     : [
-        `Bonjour ${data.client.nom},`,
+        `Bonjour Madame / Monsieur ${data.client.nom},`,
         '',
         "Nous avons bien pris note de votre situation. Toute l'équipe Agence Ménage se mobilise pour intervenir dans les meilleurs délais.",
         '',

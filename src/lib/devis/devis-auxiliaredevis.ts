@@ -425,7 +425,7 @@ async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: st
   y += 8;
 
   // ==================== MESSAGE D'ACCOMPAGNEMENT ====================
-  const message = data.message || `Bonjour ${data.client.donneurOrdre},
+  const message = data.message || `Bonjour Madame / Monsieur ${data.client.donneurOrdre},
 
 Merci de faire confiance à Agence Ménage pour l'accompagnement de votre proche. Vous trouverez ci-joint notre proposition adaptée à votre situation.
 

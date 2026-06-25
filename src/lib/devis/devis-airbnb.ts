@@ -343,7 +343,7 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
   doc.setFontSize(10.5);
   doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const msgLines = [
-    `Bonjour ${data.client.nom},`,
+    `Bonjour Madame / Monsieur ${data.client.nom},`,
     '',
     "Merci de faire appel à Agence Ménage ! Vous trouverez ci-joint notre proposition pour l'entretien de votre bien Airbnb, afin de remettre votre logement en état après chaque départ de voyageur.",
     '',

@@ -344,7 +344,7 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
   if (y > pageHeight - 50) { doc.addPage(); y = 24; }
   doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(TEXT[0], TEXT[1], TEXT[2]);
   const msg = [
-    `Bonjour ${data.client.nom},`,
+    `Bonjour Madame / Monsieur ${data.client.nom},`,
     "",
     data.isAbonnement
       ? `Merci de faire appel à Agence Ménage ! Vous trouverez ci-joint votre devis d'abonnement pour un ${serviceLabel.toLowerCase()} — entretien régulier de votre domicile.`
