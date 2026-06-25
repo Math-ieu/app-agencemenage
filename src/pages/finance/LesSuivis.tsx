@@ -863,9 +863,29 @@ export default function LesSuivis() {
     const index = subRows.findIndex(r => r.missionId === row.missionId && r.demandeId === row.demandeId && r.date === row.date);
     if (index === -1) return null;
     
+    let total = subRows.length;
+    const parentRow = facturationData.find(r => r.demandeId === parentId && !r.parentDemandeId);
+    const parentDemande = parentRow?.originalDemande || (row.parentDemandeId ? null : row.originalDemande);
+    const weeks = parentDemande?.planning?.semaines;
+    if (weeks && Array.isArray(weeks)) {
+      let plannedCount = 0;
+      weeks.forEach(w => {
+        if (w.jours) {
+          Object.keys(w.jours).forEach(dayKey => {
+            if (w.jours[dayKey]?.selected) {
+              plannedCount++;
+            }
+          });
+        }
+      });
+      if (plannedCount > 0) {
+        total = Math.max(subRows.length, plannedCount);
+      }
+    }
+    
     return {
       rank: index + 1,
-      total: subRows.length,
+      total: total,
       isFirst: index === 0
     };
   }, [facturationData]);

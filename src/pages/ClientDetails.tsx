@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   getClient, getDemandes, getFeedbacks, getClientActionLogs,
@@ -945,6 +945,8 @@ export default function ClientDetails() {
     return `${rank}ème intervention`;
   };
 
+  const parentDemandes = useMemo(() => demandes.filter(d => !d.parent_demande), [demandes]);
+
   /* ═══ Render ═══ */
   return (
     <div style={{ background: '#F8F9FA', minHeight: '100vh', paddingBottom: 64, fontFamily: 'Inter, sans-serif' }}>
@@ -1059,15 +1061,15 @@ export default function ClientDetails() {
         </Accordion>
 
         {/* ── 2. Historique Fidélité ── */}
-        <Accordion title="Historique Fidélité" icon={<Heart size={18} />} isOpen={openSections.fidelite} onToggle={() => toggle('fidelite')} color={C.coral} badge={demandes.length}>
-          {demandes.length === 0 ? <EmptyState text="Aucune demande trouvée." /> : (
+        <Accordion title="Historique Fidélité" icon={<Heart size={18} />} isOpen={openSections.fidelite} onToggle={() => toggle('fidelite')} color={C.coral} badge={parentDemandes.length}>
+          {parentDemandes.length === 0 ? <EmptyState text="Aucune demande trouvée." /> : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
                   <Th>Date</Th><Th>Nom du service</Th><Th>Intervention</Th><Th>Profils proposés</Th><Th>Segment</Th><Th>Statut</Th><Th>Paiement</Th><Th center>Actions</Th>
                 </tr></thead>
                 <tbody>
-                  {demandes.map(d => (
+                  {parentDemandes.map(d => (
                     <React.Fragment key={d.id}>
                       <tr style={{ borderBottom: '1px solid #f8fafc' }}>
                         <Td>{new Date(d.created_at).toLocaleDateString('fr-FR')}</Td>
