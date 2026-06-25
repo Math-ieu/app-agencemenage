@@ -125,6 +125,7 @@ export default function LaCaisse() {
   const [editingMovementId, setEditingMovementId] = useState<number | null>(null);
   const [savingMovement, setSavingMovement] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
   const [selectedOperationType, setSelectedOperationType] = useState('Entrée');
   const [isOperationMenuOpen, setIsOperationMenuOpen] = useState(false);
@@ -671,7 +672,6 @@ export default function LaCaisse() {
   };
 
   const handleDeleteMovement = async (id: number) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce mouvement ?")) return;
     try {
       await deleteCaisseMouvement(id);
       await Promise.all([fetchRows(), fetchStats()]);
@@ -969,7 +969,7 @@ export default function LaCaisse() {
                                   <button type="button" className="icon-btn" title="Modifier" onClick={() => openEditMovementModal(row)}>
                                     <Pencil size={14} />
                                   </button>
-                                  <button type="button" className="icon-btn lc-delete-btn" title="Supprimer" onClick={() => handleDeleteMovement(row.id)}>
+                                  <button type="button" className="icon-btn lc-delete-btn" title="Supprimer" onClick={() => setDeleteConfirmId(row.id)}>
                                     <Trash2 size={14} />
                                   </button>
                                 </>
@@ -1117,26 +1117,41 @@ export default function LaCaisse() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id}>
-                      <td>{row.date}</td>
-                      <td><span className={`lc-type-pill ${row.typeCode === 'sortie' ? 'lc-type-pill-sortie' : ''}`}>{row.type}</span></td>
-                      <td className="lc-libelle">{row.libelle}</td>
-                      <td>{row.client}</td>
-                      <td>{row.modePaiement}</td>
-                      <td className={`lc-amount ${row.typeCode === 'sortie' ? 'lc-amount-out' : ''}`}>{row.montant}</td>
-                      <td>{row.utilisateur}</td>
-                      <td>{row.document}</td>
-                      <td>
-                        {((row.typeCode === 'sortie' && hasPermission(user, 'sorties_caisse')) ||
-                          (row.typeCode !== 'sortie' && hasPermission(user, 'mouvements_caisse'))) && (
-                            <button type="button" className="icon-btn" title="Modifier" onClick={() => openEditMovementModal(row)}>
-                              <Pencil size={14} />
-                            </button>
+                  {rows.map((row) => {
+                    const isAuto = row.categorie.toLowerCase().includes('auto');
+                    return (
+                      <tr key={row.id}>
+                        <td>{row.date}</td>
+                        <td><span className={`lc-type-pill ${row.typeCode === 'sortie' ? 'lc-type-pill-sortie' : ''}`}>{row.type}</span></td>
+                        <td className="lc-libelle">{row.libelle}</td>
+                        <td>{row.client}</td>
+                        <td>{row.modePaiement}</td>
+                        <td className={`lc-amount ${row.typeCode === 'sortie' ? 'lc-amount-out' : ''}`}>{row.montant}</td>
+                        <td>{row.utilisateur}</td>
+                        <td>{row.document}</td>
+                        <td>
+                          {isAuto ? (
+                            <span className="lc-action-auto">Auto</span>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              {(((row.typeCode === 'sortie' && hasPermission(user, 'sorties_caisse')) ||
+                                (row.typeCode !== 'sortie' && hasPermission(user, 'mouvements_caisse'))) ||
+                                hasPermission(user, 'creer_mouvements_tresorerie')) && (
+                                <>
+                                  <button type="button" className="icon-btn" title="Modifier" onClick={() => openEditMovementModal(row)}>
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button type="button" className="icon-btn lc-delete-btn" title="Supprimer" onClick={() => setDeleteConfirmId(row.id)}>
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {!loadingRows && rows.length === 0 && (
                     <tr>
                       <td colSpan={9} className="empty-row">Aucun mouvement trouvé.</td>
@@ -1148,6 +1163,58 @@ export default function LaCaisse() {
           </section>
         </>
       ) : null)}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteConfirmId !== null && (
+        <div className="lc-modal-overlay" onClick={() => setDeleteConfirmId(null)}>
+          <div className="lc-modal" style={{ width: 'min(100%, 420px)' }} onClick={(e) => e.stopPropagation()}>
+            <header className="lc-modal-header" style={{ borderBottom: '1px solid #fee2e2', background: '#fff5f5' }}>
+              <h3 style={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem' }}>
+                <Trash2 size={18} />
+                <span>Confirmation de suppression</span>
+              </h3>
+              <button type="button" className="lc-modal-close" onClick={() => setDeleteConfirmId(null)}>
+                <X size={18} />
+              </button>
+            </header>
+            <div className="lc-modal-body" style={{ padding: '1.5rem', textAlign: 'center', background: '#ffffff' }}>
+              <p style={{ fontSize: '0.95rem', color: '#1e293b', margin: 0, fontWeight: 500 }}>
+                Êtes-vous sûr de vouloir supprimer ce mouvement ?
+              </p>
+              <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '8px', margin: '8px 0 0 0' }}>
+                Cette action est irréversible et effacera définitivement cette transaction de la caisse.
+              </p>
+            </div>
+            <footer className="lc-modal-footer" style={{ borderTop: '1px solid #f1f5f9', background: '#f8fafc' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setDeleteConfirmId(null)}>
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  minWidth: '92px',
+                  minHeight: '38px',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '0.875rem'
+                }}
+                onClick={async () => {
+                  const id = deleteConfirmId;
+                  setDeleteConfirmId(null);
+                  await handleDeleteMovement(id);
+                }}
+              >
+                Supprimer
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
 
       {/* MOVEMENT DIALOG MODAL */}
       {showMovementModal && (
