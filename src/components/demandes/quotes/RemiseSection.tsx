@@ -42,7 +42,6 @@ export default function RemiseSection({ isAbo, segment, montantBase, value, onCh
         const raw = Array.isArray(res?.data) ? res.data : (res?.data?.results || []);
         const opts: PromoOption[] = raw
           .filter((p: any) => p.status === "active" && !p.archived)
-          .filter((p: any) => !p.segment || p.segment === "tous" || p.segment === segment || (segment === undefined))
           .map((p: any) => {
             const isPct = p.reduction_type === "pourcentage";
             const val = Number(p.reduction) || 0;
@@ -62,6 +61,15 @@ export default function RemiseSection({ isAbo, segment, montantBase, value, onCh
 
   const economie10 = Math.round(montantBase * 0.10);
   const economieEtendue = Math.round(montantBase * (value.etenduePct / 100));
+
+  const displayedPromos = [...promos];
+  if (value.promoCode && !displayedPromos.some(p => p.code === value.promoCode)) {
+    displayedPromos.push({
+      code: value.promoCode,
+      pct: value.promoPct || 0,
+      label: `${value.promoCode} (${value.promoPct ? `−${value.promoPct}%` : 'Réduction'})`,
+    });
+  }
 
   return (
     <div style={{ marginTop: 16, borderTop: "1px dashed var(--border-color)", paddingTop: 14 }}>
@@ -108,13 +116,13 @@ export default function RemiseSection({ isAbo, segment, montantBase, value, onCh
           <select
             value={value.promoCode}
             onChange={e => {
-              const opt = promos.find(p => p.code === e.target.value);
+              const opt = displayedPromos.find(p => p.code === e.target.value);
               set({ promoCode: opt?.code || "", promoPct: opt?.pct || 0 });
             }}
             style={s.input as any}
           >
             <option value="">Aucun</option>
-            {promos.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+            {displayedPromos.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
           </select>
         </div>
       </div>

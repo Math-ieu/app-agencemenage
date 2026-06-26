@@ -498,6 +498,10 @@ const buildMenageBureauxData = (demande: Demande): DevisMenageBureauxData => {
       prixProduits,
     },
     ...getAdvanceFields(form),
+    isAbonnement: demande.frequency === 'abonnement' || form.frequency === 'subscription' || form.frequency === 'abonnement',
+    codePromo: form.code_promo || undefined,
+    codePromoPct: toNumber(form.code_promo_pct || 0),
+    total1erMois: toNumber(form.montant_1er_mois || 0) || undefined,
   };
 };
 

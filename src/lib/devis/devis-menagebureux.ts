@@ -17,7 +17,7 @@ interface DevisMenageBureauxData {
     email: string;
     adresse: string;
   };
-  prestations: Array<{ designation: string; montant: number | string }>;
+  prestations: Array<{ designation: string; montant: number | string; isReduction?: boolean }>;
   details: {
     dureeParSession: number; // heures
     nbIntervenantes: number;
@@ -31,6 +31,10 @@ interface DevisMenageBureauxData {
   avancePourcentage?: number;
   avanceFixe?: number;
   avancePaiement?: number;
+  isAbonnement?: boolean;
+  codePromo?: string;
+  codePromoPct?: number;
+  total1erMois?: number;
 }
 
 // Données d'exemple (correspondant au devis original)
@@ -71,7 +75,7 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   const BORDER: [number, number, number] = [226, 232, 240];
   let y = 24;
 
-  const isAbonnement = data.details.nbPassagesParMois > 1;
+  const isAbonnement = data.isAbonnement !== undefined ? data.isAbonnement : (data.details.nbPassagesParMois > 1);
 
   const formatAmount = (value: number | string) =>
     typeof value === 'number' ? `${formatNumber(value)} DH` : value;
@@ -192,16 +196,30 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
   doc.line(margin, y + 2.5, right, y + 2.5);
   y += 7;
 
-  const rows = data.prestations.map((item) => ({
-    label: item.designation,
-    value: formatAmount(item.montant),
-  }));
   const totalHT = data.prestations.reduce((sum, item) => {
     if (typeof item.montant === 'number') {
       return sum + item.montant;
     }
     return sum;
   }, 0);
+
+  const linesToRender = [...data.prestations];
+  if (isAbonnement && data.codePromo && data.total1erMois !== undefined && data.total1erMois < totalHT) {
+    const economy = Math.round(totalHT - data.total1erMois);
+    if (economy > 0) {
+      linesToRender.push({
+        designation: `Remise code promo 1er mois -${data.codePromoPct || 0}%`,
+        montant: -economy,
+        isReduction: true
+      });
+    }
+  }
+
+  const rows = linesToRender.map((item) => ({
+    label: item.designation,
+    value: formatAmount(item.montant),
+    isReduction: item.isReduction,
+  }));
 
   const col1 = margin + 2;
   const col2 = right - 40;
@@ -223,19 +241,58 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
       doc.setFillColor(250, 250, 250);
       doc.rect(margin, y, tableWidth, rowHeight, 'F');
     }
-    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    if (row.isReduction) {
+      doc.setTextColor(21, 128, 61); // green text
+    } else {
+      doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    }
     doc.text(row.label, col1, y + 5.5, { maxWidth: col2 - col1 - 4 });
     doc.text(row.value, right - 5, y + 5.5, { align: 'right' });
     y += rowHeight;
   });
 
-  doc.setFillColor(BLUE[0], BLUE[1], BLUE[2]);
-  doc.rect(margin, y, tableWidth, rowHeight, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TOTAL HT', col1, y + 5.5);
-  doc.text(`${formatNumber(totalHT)} DH`, right - 5, y + 5.5, { align: 'right' });
-  y += rowHeight + 6;
+  if (isAbonnement && data.codePromo && data.total1erMois !== undefined && data.total1erMois < totalHT) {
+    // Case B: Code Promo active
+    // TOTAL 1ER MOIS
+    doc.setFillColor(26, 92, 76);
+    doc.rect(margin, y, tableWidth, rowHeight, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL 1ER MOIS', col1, y + 5.5);
+    doc.text(`${formatNumber(data.total1erMois)} DH`, right - 5, y + 5.5, { align: 'right' });
+    y += rowHeight;
+
+    // Tarif mensuel à partir du 2ème mois
+    doc.setFillColor(254, 249, 195);
+    doc.rect(margin, y, tableWidth, rowHeight, 'F');
+    doc.setTextColor(113, 63, 18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Tarif mensuel à partir du 2ème mois', col1, y + 5.5);
+    doc.text(`${formatNumber(totalHT)} DH`, right - 5, y + 5.5, { align: 'right' });
+    y += rowHeight + 6;
+  } else {
+    // Case A: No Code Promo or non-subscription
+    doc.setFillColor(BLUE[0], BLUE[1], BLUE[2]);
+    doc.rect(margin, y, tableWidth, rowHeight, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.text(isAbonnement ? 'TOTAL MENSUEL HT' : 'TOTAL HT', col1, y + 5.5);
+    doc.text(`${formatNumber(totalHT)} DH`, right - 5, y + 5.5, { align: 'right' });
+    y += rowHeight + 6;
+  }
+
+  // ─── Code promo 1er mois (uniquement en ponctuel si applicable) ───
+  if (!isAbonnement && data.codePromo && data.total1erMois !== undefined && data.total1erMois < totalHT) {
+    doc.setFillColor(254, 252, 232);
+    doc.rect(margin, y - 4, tableWidth, 14, 'F');
+    doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(133, 77, 14);
+    doc.text(`Offre — code ${data.codePromo} (-${data.codePromoPct || 0}%)`, margin + 4, y + 1.5);
+    doc.text(`${formatNumber(data.total1erMois)} DH`, right - 5, y + 1.5, { align: 'right' });
+    doc.setFont('helvetica', 'normal').setFontSize(8.5);
+    doc.text(`Tarif de base : ${formatNumber(totalHT)} DH`, margin + 4, y + 7.5);
+    doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    y += 16;
+  }
 
   if (data.avanceActive) {
     doc.setFillColor(239, 246, 255);

@@ -460,7 +460,7 @@ export default function DemandesEnAttente() {
         const clientPhone = d.client_phone || d.formulaire_data?.whatsapp_phone || '';
         const matchesSearch = !search || clientName.toLowerCase().includes(search.toLowerCase()) || clientPhone.includes(search);
         const matchesSegment = !segment || d.segment === segment;
-        const matchesService = !prestation || d.service === prestation;
+        const matchesService = !prestation || normalizeServiceLabel(d.service) === normalizeServiceLabel(prestation);
         let matchesDate = true;
         if (dateDebut || dateFin) {
           const demandeDate = new Date(d.created_at);

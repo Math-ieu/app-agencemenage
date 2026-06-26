@@ -205,9 +205,10 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
   const pricePerPassage = Math.round(laborPerPassage * (1 - remisePct / 100));
   // Brief : les options sont des lignes flat (une seule fois), y compris en abonnement
   const optionsTotal = optionsPerPassage;
-  const total = laborAfterDiscount + optionsTotal;
+  const baseTotal = laborAfterDiscount + optionsTotal;
   const promoMontant = remise.promoCode ? Math.round(laborAfterDiscount * (remise.promoPct / 100)) : 0;
-  const total1erMois = total - promoMontant;
+  const total = baseTotal - promoMontant;
+  const total1erMois = baseTotal - promoMontant;
 
   useEffect(() => {
     if (!onPrestationsChange) return;
@@ -316,8 +317,8 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
 
       <ResultBar
         detail={isAbo
-          ? `${heures}h × ${personnes} agent(s) × 60 DH × 0,90 (${getCadenceLabel(subFrequency)}) = ${fmt(pricePerPassage)} DH/passage × ${nbPassages}${optionsPerPassage > 0 ? ` + options ${fmt(optionsTotal)} DH` : ""}`
-          : `${heures}h × ${personnes} agent(s) × 60 DH${optionsPerPassage > 0 ? ` + options ${fmt(optionsPerPassage)} DH` : ""}`}
+          ? `${heures}h × ${personnes} agent(s) × 60 DH × 0,90 (${getCadenceLabel(subFrequency)}) = ${fmt(pricePerPassage)} DH/passage × ${nbPassages}${optionsPerPassage > 0 ? ` + options ${fmt(optionsTotal)} DH` : ""}${promoMontant > 0 ? ` · 1er mois : ${fmt(total1erMois)} DH (promo)` : ""}`
+          : `${heures}h × ${personnes} agent(s) × 60 DH${optionsPerPassage > 0 ? ` + options ${fmt(optionsPerPassage)} DH` : ""}${promoMontant > 0 ? ` − ${fmt(promoMontant)} DH promo` : ""}`}
         total={`${fmt(total)} DH`} label={isAbo ? "Total mensuel HT" : "Total intervention HT"} />
     </div>
   );
