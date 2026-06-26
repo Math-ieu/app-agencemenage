@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAgents, deleteAgent, getDemandes, getUsers, updateAgent } from '../api/client';
-import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2 } from 'lucide-react';
+import { getAgents, deleteAgent, getDemandes, getUsers, affecterAgent, getAgentAssignments } from '../api/client';
+import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2, MoreVertical, UserPlus, History, Clock, Save } from 'lucide-react';
 import { Agent } from '../types';
 import { encodeId } from '../utils/obfuscation';
 import AddProfileModal from './ProfilEditModal';
@@ -103,6 +103,14 @@ export default function Profils() {
 
   // Nouvelles variables d'état pour l'assignation et la postulation
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
+  const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
+  const [assignmentHistory, setAssignmentHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [assignedByName, setAssignedByName] = useState('');
+  const [assignmentNotes, setAssignmentNotes] = useState('');
+  const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false);
 
   useEffect(() => {
     if (hasPermission(user, 'assigner_charge_profil')) {
@@ -117,21 +125,72 @@ export default function Profils() {
     const parsedCurrentId = currentAssignedId ? String(currentAssignedId) : null;
     return usersList.filter(u => 
       u.role === 'charge_operations' || 
-      u.role === 'responsable_operations' || 
-      u.role === 'admin' ||
       String(u.id) === parsedCurrentId
     );
   };
 
-  const handleAssignChange = async (agentId: number, userIdStr: string) => {
-    const userId = userIdStr ? parseInt(userIdStr, 10) : null;
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (target.closest && target.closest('.dropdown-container')) {
+        return;
+      }
+      setActiveDropdown(null);
+    };
+    
+    if (activeDropdown !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeDropdown]);
+
+  useEffect(() => {
+    if (showAssignmentModal) {
+      setLoadingHistory(true);
+      getAgentAssignments(showAssignmentModal)
+        .then(res => {
+          setAssignmentHistory(res.data || []);
+        })
+        .catch(err => {
+          console.error('Error fetching agent assignment history:', err);
+          addToast("Impossible de charger l'historique des affectations", 'error');
+        })
+        .finally(() => {
+          setLoadingHistory(false);
+        });
+
+      const agentObj = agents.find(a => a.id === showAssignmentModal);
+      setSelectedUserId(agentObj?.assigned_to || null);
+      setAssignedByName(user?.full_name || '');
+      setAssignmentNotes('');
+    } else {
+      setAssignmentHistory([]);
+      setSelectedUserId(null);
+      setAssignedByName('');
+      setAssignmentNotes('');
+    }
+  }, [showAssignmentModal, agents, user, addToast]);
+
+  const handleAffecterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showAssignmentModal) return;
+
+    if (!hasPermission(user, 'assigner_charge_profil')) {
+      addToast('Action non autorisée', 'error');
+      return;
+    }
+
+    setIsSubmittingAssignment(true);
     try {
-      await updateAgent(agentId, { assigned_to: userId });
-      addToast('Assignation mise à jour avec succès', 'success');
+      await affecterAgent(showAssignmentModal, selectedUserId, assignedByName, assignmentNotes);
+      addToast('Affectation enregistrée avec succès', 'success');
       await fetchData();
+      setShowAssignmentModal(null);
     } catch (err) {
-      console.error(err);
-      addToast("Erreur lors de la mise à jour de l'assignation", 'error');
+      console.error('Error in agent assignment:', err);
+      addToast("Erreur lors de l'enregistrement de l'affectation", 'error');
+    } finally {
+      setIsSubmittingAssignment(false);
     }
   };
 
@@ -414,25 +473,9 @@ export default function Profils() {
                     </div>
                   </td>
                   <td>
-                    {hasPermission(user, 'assigner_charge_profil') ? (
-                      <select
-                        value={agent.assigned_to || ''}
-                        onChange={(e) => handleAssignChange(agent.id, e.target.value)}
-                        className="text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1 outline-none text-slate-700 font-medium focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                        style={{ maxWidth: '140px' }}
-                      >
-                        <option value="">Non assigné</option>
-                        {getFilteredUsers(agent.assigned_to).map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.full_name || `${u.first_name} ${u.last_name}`}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-slate-600 text-sm font-medium">
-                        {agent.assigned_to_name || 'Non assigné'}
-                      </span>
-                    )}
+                    <span className="text-slate-600 text-sm font-medium">
+                      {agent.assigned_to_name || 'Non assigné'}
+                    </span>
                   </td>
                   <td>
                     {busyAgentIds.has(agent.id) ? (
@@ -451,25 +494,52 @@ export default function Profils() {
                     </span>
                   </td>
                   <td>
-                    <div className="table-inline-actions">
-                      <button
-                        className="actions-cell-btn py-1.5 px-3"
-                        onClick={() => navigate(`/profils/${encodeId(agent.id)}`)}
-                      >
-                        <User size={14} className="mr-2" />
-                        Compte Profil
+                    <div className="dropdown-container">
+                      <button className="btn-more" onClick={() => setActiveDropdown(activeDropdown === agent.id ? null : agent.id)}>
+                        <MoreVertical size={18} />
                       </button>
+                      {activeDropdown === agent.id && (
+                        <div className="dropdown-menu" style={{ minWidth: '160px', right: 0, left: 'auto' }}>
+                          <button
+                            className="dropdown-item"
+                            onClick={() => {
+                              navigate(`/profils/${encodeId(agent.id)}`);
+                              setActiveDropdown(null);
+                            }}
+                          >
+                            <User size={16} className="dropdown-item-icon" />
+                            <span>Compte Profil</span>
+                          </button>
 
-                      {!agent.is_blacklisted && hasPermission(user, 'supprimer_profil') && (
-                        <button
-                          type="button"
-                          className="table-delete-icon-btn"
-                          title="Supprimer le profil"
-                          aria-label="Supprimer le profil"
-                          onClick={() => handleDeleteAgent(agent)}
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                          {hasPermission(user, 'assigner_charge_profil') && (
+                            <button
+                              className="dropdown-item"
+                              onClick={() => {
+                                setShowAssignmentModal(agent.id);
+                                setActiveDropdown(null);
+                              }}
+                            >
+                              <UserPlus size={16} className="dropdown-item-icon" />
+                              <span>Affectation</span>
+                            </button>
+                          )}
+
+                          {!agent.is_blacklisted && hasPermission(user, 'supprimer_profil') && (
+                            <>
+                              <div className="dropdown-divider"></div>
+                              <button
+                                className="dropdown-item dropdown-item-danger"
+                                onClick={() => {
+                                  handleDeleteAgent(agent);
+                                  setActiveDropdown(null);
+                                }}
+                              >
+                                <Trash2 size={16} className="dropdown-item-icon" />
+                                <span>Supprimer</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
                   </td>
@@ -485,6 +555,209 @@ export default function Profils() {
         </div>
       )}
 
+      {/* Modal Affectation */}
+      {showAssignmentModal && (() => {
+        const agentObj = agents.find(a => a.id === showAssignmentModal);
+        const agentName = agentObj ? `${agentObj.first_name} ${agentObj.last_name}` : '';
+        const currentAssignment = (agentObj && agentObj.assigned_to) 
+          ? assignmentHistory.find(h => h.assigned_to === agentObj.assigned_to) 
+          : null;
+        const currentCreatedBy = currentAssignment ? currentAssignment.assigned_by_name_display : '—';
+        const currentAssignDate = currentAssignment 
+          ? new Date(currentAssignment.created_at).toLocaleDateString('fr-FR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            })
+          : '—';
+
+        return (
+          <div className="modal-overlay z-[110]" onClick={() => setShowAssignmentModal(null)}>
+            <div
+              className="modal-content max-w-[600px] w-full animate-in fade-in zoom-in-95 duration-200"
+              onClick={e => e.stopPropagation()}
+              style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: 0, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', border: 'none' }}
+            >
+              {/* Header */}
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#ccfbf1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0d9488' }}>
+                    <User size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+                      Chargé d'opérations affecté — {agentName}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#64748b', marginTop: '2px' }}>
+                      Gérez l'affectation du chargé d'opérations pour ce profil et consultez l'historique chronologique des changements.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAssignmentModal(null)}
+                  style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = 'white'; }}
+                >
+                  <XCircle size={16} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: '24px' }}>
+                {/* Current Assignment Summary Card */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', padding: '16px', marginBottom: '24px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Chargé actuel</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155' }}>
+                      {agentObj?.assigned_to_name || 'Non affecté'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Créé par</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155' }}>{currentCreatedBy}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Date d'affectation</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155' }}>{currentAssignDate}</div>
+                  </div>
+                </div>
+
+                {/* Form Modifier l'affectation */}
+                <form onSubmit={handleAffecterSubmit}>
+                  <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0f766e', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px', marginBottom: '16px' }}>
+                    Modifier l'affectation
+                  </h3>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Sélectionner un chargé</label>
+                      <select
+                        value={selectedUserId || ''}
+                        onChange={(e) => setSelectedUserId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                        style={{ width: '100%', height: '42px', padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', color: '#334155', backgroundColor: 'white', outline: 'none', cursor: 'pointer' }}
+                        onFocus={e => { e.currentTarget.style.borderColor = '#0d9488'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.15)'; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'none'; }}
+                      >
+                        <option value="">Choisir...</option>
+                        {getFilteredUsers(agentObj?.assigned_to).map(u => (
+                          <option key={u.id} value={u.id}>
+                            {u.full_name || `${u.first_name} ${u.last_name}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Effectué par (optionnel)</label>
+                      <input
+                        type="text"
+                        placeholder="Votre nom"
+                        value={assignedByName}
+                        onChange={(e) => setAssignedByName(e.target.value)}
+                        style={{ width: '100%', height: '42px', padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', color: '#334155', backgroundColor: 'white', outline: 'none', boxSizing: 'border-box' }}
+                        onFocus={e => { e.currentTarget.style.borderColor = '#0d9488'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.15)'; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'none'; }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Note / Motif (optionnel)</label>
+                    <input
+                      type="text"
+                      placeholder="Motif de la réaffectation, contexte..."
+                      value={assignmentNotes}
+                      onChange={(e) => setAssignmentNotes(e.target.value)}
+                      style={{ width: '100%', height: '42px', padding: '0 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '14px', color: '#334155', backgroundColor: 'white', outline: 'none', boxSizing: 'border-box' }}
+                      onFocus={e => { e.currentTarget.style.borderColor = '#0d9488'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 148, 136, 0.15)'; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'none'; }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '16px', marginBottom: '16px' }}>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingAssignment}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 20px',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color: 'white',
+                        backgroundColor: '#0f766e',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={e => { if (!isSubmittingAssignment) e.currentTarget.style.backgroundColor = '#0d9488'; }}
+                      onMouseLeave={e => { if (!isSubmittingAssignment) e.currentTarget.style.backgroundColor = '#0f766e'; }}
+                    >
+                      <Save size={16} />
+                      <span>Enregistrer l'affectation</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* History Section */}
+                <div>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 700, color: '#0f766e', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px', marginBottom: '12px', marginTop: '24px' }}>
+                    <History size={16} />
+                    <span>Historique des affectations</span>
+                  </h3>
+
+                  {loadingHistory ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+                      <div className="spinner" />
+                    </div>
+                  ) : assignmentHistory.length === 0 ? (
+                    <div style={{ border: '1px dashed #cbd5e1', borderRadius: '12px', padding: '24px', textAlign: 'center', color: '#94a3b8', backgroundColor: '#fafafa', fontSize: '13px' }}>
+                      Aucun changement enregistré.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }} className="custom-scrollbar">
+                      {assignmentHistory.map((h, i) => (
+                        <div key={h.id || i} style={{ display: 'flex', gap: '12px', padding: '12px', borderRadius: '10px', border: '1px solid #f1f5f9', backgroundColor: '#f8fafc', fontSize: '12px', textAlign: 'left' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#e2e8f0', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Clock size={14} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <span style={{ fontWeight: 700, color: '#334155' }}>
+                                {h.assigned_to ? `Affecté à : ${h.assigned_to_name}` : 'Désaffecté'}
+                              </span>
+                              <span style={{ color: '#94a3b8' }}>
+                                {new Date(h.created_at).toLocaleString('fr-FR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                            <div style={{ color: '#64748b', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <span>Effectué par : <strong style={{ color: '#475569' }}>{h.assigned_by_name_display}</strong></span>
+                              {h.notes && (
+                                <p style={{ margin: '4px 0 0 0', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white', color: '#475569', fontStyle: 'italic' }}>
+                                  Note : {h.notes}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

@@ -1702,6 +1702,7 @@ export default function Dashboard() {
                     <th>Nb d'heures</th>
                     <th>Profils envoyés</th>
                     <th>Option sup.</th>
+                    <th>Promo</th>
                     <th>CAO</th>
                     <th>Tarif total</th>
                     <th>Statut paie.</th>
@@ -1813,6 +1814,15 @@ export default function Dashboard() {
                         ) : d.avec_produit ? (
                           <span className="text-sm">Oui ({d.tarif_produit} MAD)</span>
                         ) : 'Non'}
+                      </td>
+                      <td>
+                        {d.promo_code ? (
+                          <span className="badge badge-green" title={d.promo_code_name}>
+                            Oui ({d.promo_code_code})
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94a3b8' }}>Non</span>
+                        )}
                       </td>
                       <td>
                         {d.cao === true ? (

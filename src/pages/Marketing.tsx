@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Megaphone, Ticket, TrendingUp, Plus, Trash2, Pencil, Send, Copy, Archive, ArchiveRestore } from 'lucide-react';
+import { Megaphone, Ticket, TrendingUp, Plus, Trash2, Pencil, Send, Copy, Archive, ArchiveRestore, Mail } from 'lucide-react';
 import { TYPES_GESTE, SEGMENTS_CLIENT } from '@/lib/marketing-constants';
-import { getDemandes, getPromoCodes, createPromoCode, deletePromoCode, updatePromoCode, getCommercialGestures, createCommercialGesture, deleteCommercialGesture, updateCommercialGesture, getCampaigns, createCampaign, deleteCampaign, updateCampaign, getUsers } from '@/api/client';
+import { getDemandes, getPromoCodes, createPromoCode, deletePromoCode, updatePromoCode, getCommercialGestures, createCommercialGesture, deleteCommercialGesture, updateCommercialGesture, getCampaigns, createCampaign, deleteCampaign, updateCampaign, sendCampaign, getUsers } from '@/api/client';
 import { useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import { hasPermission } from '../utils/permissions';
 import type { Demande } from '@/types';
-import { CreateOffreModal, type PromoFormState } from './marketing/CreateOffreModal';
+import { CreateOffreSimpleModal, type PromoFormState } from './marketing/CreateOffreSimpleModal';
+import { CreateOffreBdModal } from './marketing/CreateOffreBdModal';
 import { CreateGesteModal, type GesteFormState } from './marketing/CreateGesteModal';
 import { CreateCampagneModal, type CampagneFormState } from './marketing/CreateCampagneModal';
 import './Marketing.css';
@@ -19,6 +20,7 @@ interface PromoCodeItem {
   id: number;
   name: string;
   code: string;
+  promo_type?: 'simple' | 'bd';
   reduction: number;
   reduction_type: 'pourcentage' | 'montant_fixe';
   segment: SegmentLabel;
@@ -28,8 +30,13 @@ interface PromoCodeItem {
   status: 'brouillon' | 'active' | 'desactivee' | 'expiree';
   customer_status: string;
   uses: number;
+  limit_uses?: number;
+  one_use_per_client?: boolean;
   generated_revenue: number;
   archived: boolean;
+  message_promotionnel?: string;
+  services?: string[];
+  canaux?: string[];
 }
 
 interface CommercialGestureItem {
@@ -139,6 +146,7 @@ export default function Marketing() {
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
 
   const [showCreatePromo, setShowCreatePromo] = useState(false);
+  const [showPromoTypeDropdown, setShowPromoTypeDropdown] = useState(false);
   const [showCreateGesture, setShowCreateGesture] = useState(false);
   const [showCreateCampaign, setShowCreateCampaign] = useState(false);
   const [demandes, setDemandes] = useState<Demande[]>([]);
@@ -163,6 +171,7 @@ export default function Marketing() {
     nom: '',
     statut: 'brouillon',
     code_promo: '',
+    promo_type: 'simple',
     type_reduction: 'pourcentage',
     valeur_reduction: '',
     segment_client: 'particulier',
@@ -173,6 +182,8 @@ export default function Marketing() {
     date_debut: toInputDate(new Date()),
     date_fin: '',
     date_indeterminee: false,
+    limit_uses: '',
+    one_use_per_client: false,
   });
 
   const [gestureForm, setGestureForm] = useState<GesteFormState>({
@@ -297,7 +308,34 @@ export default function Marketing() {
     });
   }, [campaigns, campagneCibleFilter, campagneDateFrom, campagneDateTo, showArchived]);
 
-  const createPromo = () => {
+  const copyWhatsAppMessage = async (item: PromoCodeItem) => {
+    const reductionStr = item.reduction_type === 'montant_fixe' ? `${item.reduction} MAD` : `-${item.reduction}%`;
+    const defaultMsg = `Bonjour,\n\nProfitez de notre offre spéciale *${item.name}* ! 🎉\n\nBénéficiez de *${reductionStr}* de réduction sur vos prochaines prestations de ménage en utilisant le code promo : *${item.code}*.\n\nRéservez directement sur notre site web : https://agencemenage.ma/reserver\n\nÀ très vite ! ✨`;
+    const message = item.message_promotionnel ? item.message_promotionnel : defaultMsg;
+    try {
+      await navigator.clipboard.writeText(message);
+      addToast("Message WhatsApp copié !", 'success');
+    } catch {
+      addToast("Impossible de copier le message WhatsApp.", 'error');
+    }
+  };
+
+  const copyEmailMessage = async (item: PromoCodeItem) => {
+    const reductionStr = item.reduction_type === 'montant_fixe' ? `${item.reduction} MAD` : `-${item.reduction}%`;
+    const subject = `Offre spéciale : ${reductionStr} sur vos prestations avec Agence Ménage ! 🎉`;
+    const defaultEmailBody = `Bonjour,\n\nNous avons le plaisir de vous proposer une offre exclusive : **${item.name}** !\n\nBénéficiez de **${reductionStr}** de réduction sur votre prochaine prestation de ménage en utilisant le code promotionnel suivant lors de votre réservation :\n\n👉 Code Promo : **${item.code}**\n\nPour en profiter, il vous suffit de saisir ce code dans notre formulaire de réservation en ligne : https://agencemenage.ma/reserver\n\nCette offre est valable pour une durée limitée.\n\nNous restons à votre entière disposition pour toute question.\n\nCordialement,\nL'équipe Agence Ménage\nhttps://agencemenage.ma`;
+    const message = item.message_promotionnel 
+      ? `Objet : ${subject}\n\n${item.message_promotionnel}`
+      : `Objet : ${subject}\n\n${defaultEmailBody}`;
+    try {
+      await navigator.clipboard.writeText(message);
+      addToast("Email promotionnel copié !", 'success');
+    } catch {
+      addToast("Impossible de copier l'email.", 'error');
+    }
+  };
+
+  const createPromo = (forcedStatus?: string) => {
     if (!promoForm.nom.trim() || !promoForm.code_promo.trim()) return;
     const codeUpper = promoForm.code_promo.trim().toUpperCase();
     const customerLabel = STATUTS_CLIENT_MAP[promoForm.statut_client] || promoForm.statut_client;
@@ -305,26 +343,30 @@ export default function Marketing() {
     const payload = {
       name: promoForm.nom.trim(),
       code: codeUpper,
+      promo_type: promoForm.promo_type || 'simple',
       reduction: Number(promoForm.valeur_reduction || 0),
       reduction_type: promoForm.type_reduction,
       segment: promoForm.segment_client,
       valid_from: promoForm.date_debut,
       valid_until: promoForm.date_indeterminee ? null : promoForm.date_fin || null,
-      status: promoForm.statut,
+      status: forcedStatus || promoForm.statut,
       customer_status: customerLabel,
       services: promoForm.services,
       canaux: promoForm.canaux,
       message_promotionnel: promoForm.message_promotionnel,
+      limit_uses: promoForm.limit_uses ? Number(promoForm.limit_uses) : null,
+      one_use_per_client: promoForm.one_use_per_client,
     };
 
     if (editingPromoId) {
       updatePromoCode(editingPromoId, payload).then((res) => {
         setPromoCodes((prev) => prev.map((x) => x.id === editingPromoId ? res.data : x));
         setPromoForm({
-          nom: '', statut: 'brouillon', code_promo: '', type_reduction: 'pourcentage',
+          nom: '', statut: 'brouillon', code_promo: '', promo_type: 'simple', type_reduction: 'pourcentage',
           valeur_reduction: '', segment_client: 'particulier', statut_client: 'tous',
           services: [], canaux: [], message_promotionnel: '',
           date_debut: toInputDate(new Date()), date_fin: '', date_indeterminee: false,
+          limit_uses: '', one_use_per_client: false,
         });
         setEditingPromoId(null);
         setShowCreatePromo(false);
@@ -333,10 +375,11 @@ export default function Marketing() {
       createPromoCode(payload).then((res) => {
         setPromoCodes((prev) => [res.data, ...prev]);
         setPromoForm({
-          nom: '', statut: 'brouillon', code_promo: '', type_reduction: 'pourcentage',
+          nom: '', statut: 'brouillon', code_promo: '', promo_type: 'simple', type_reduction: 'pourcentage',
           valeur_reduction: '', segment_client: 'particulier', statut_client: 'tous',
           services: [], canaux: [], message_promotionnel: '',
           date_debut: toInputDate(new Date()), date_fin: '', date_indeterminee: false,
+          limit_uses: '', one_use_per_client: false,
         });
         setShowCreatePromo(false);
       }).catch(console.error);
@@ -507,8 +550,9 @@ export default function Marketing() {
   const copyCode = async (code: string) => {
     try {
       await navigator.clipboard.writeText(code);
+      addToast(`Code promo "${code}" copié !`, 'success');
     } catch {
-      // noop
+      addToast("Impossible de copier le code promo.", 'error');
     }
   };
 
@@ -544,12 +588,103 @@ export default function Marketing() {
         <button type="button" className={activeTab === 'campagnes' ? 'active active-campagnes' : ''} onClick={() => setActiveTab('campagnes')}>Campagnes</button>
       </div>
 
-      <div className="mk-section-head">
+      <div className="mk-section-head" style={{ position: 'relative' }}>
         <h2>{tabTitle}</h2>
         {canCreate && (
-          <button type="button" className="btn btn-primary" onClick={onCreateClick}>
-            <Plus size={16} /> {createLabel}
-          </button>
+          activeTab === 'codes' ? (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setShowPromoTypeDropdown(!showPromoTypeDropdown)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Plus size={16} /> Créer un code promo
+              </button>
+              {showPromoTypeDropdown && (
+                <div
+                  className="dropdown-menu"
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    backgroundColor: '#fff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    zIndex: 100,
+                    marginTop: '0.5rem',
+                    minWidth: '200px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <button
+                    type="button"
+                    style={{
+                      padding: '0.75rem 1rem',
+                      border: 'none',
+                      background: 'none',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      color: '#1e293b',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    onClick={() => {
+                      setShowPromoTypeDropdown(false);
+                      setPromoForm({
+                        nom: '', statut: 'brouillon', code_promo: '', promo_type: 'simple', type_reduction: 'pourcentage',
+                        valeur_reduction: '', segment_client: 'particulier', statut_client: 'tous',
+                        services: [], canaux: [], message_promotionnel: '',
+                        date_debut: toInputDate(new Date()), date_fin: '', date_indeterminee: false,
+                        limit_uses: '', one_use_per_client: false,
+                      });
+                      setShowCreatePromo(true);
+                    }}
+                  >
+                    Code promo simple
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      padding: '0.75rem 1rem',
+                      border: 'none',
+                      background: 'none',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      color: '#1e293b',
+                      transition: 'background-color 0.2s',
+                      borderTop: '1px solid #f1f5f9'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    onClick={() => {
+                      setShowPromoTypeDropdown(false);
+                      setPromoForm({
+                        nom: '', statut: 'brouillon', code_promo: '', promo_type: 'bd', type_reduction: 'pourcentage',
+                        valeur_reduction: '', segment_client: 'particulier', statut_client: 'tous',
+                        services: [], canaux: [], message_promotionnel: '',
+                        date_debut: toInputDate(new Date()), date_fin: '', date_indeterminee: false,
+                        limit_uses: '', one_use_per_client: false,
+                      });
+                      setShowCreatePromo(true);
+                    }}
+                  >
+                    Code promo - BD
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button type="button" className="btn btn-primary" onClick={onCreateClick}>
+              <Plus size={16} /> {createLabel}
+            </button>
+          )
         )}
       </div>
 
@@ -596,6 +731,7 @@ export default function Marketing() {
                 <tr>
                   <th>Date création</th>
                   <th>Nom de la promo</th>
+                  <th>Type</th>
                   <th>Code</th>
                   <th>Réduction</th>
                   <th>Segment</th>
@@ -610,6 +746,11 @@ export default function Marketing() {
                   <tr key={item.id}>
                     <td>{fmtDate(item.created_at || item.valid_from)}</td>
                     <td>{item.name}</td>
+                    <td>
+                      <span style={{ textTransform: 'capitalize', fontWeight: 500, color: item.promo_type === 'bd' ? '#7c3aed' : '#0891b2' }}>
+                        {item.promo_type === 'bd' ? 'BD' : 'Simple'}
+                      </span>
+                    </td>
                     <td>
                       <button className="mk-code-chip" onClick={() => copyCode(item.code)}>
                         {item.code} <Copy size={12} />
@@ -627,15 +768,32 @@ export default function Marketing() {
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {hasPermission(user, 'creer_code_promo') && (
                         <div style={{ display: 'flex', gap: '4px' }}>
+                          {item.promo_type === 'bd' && (
+                            <>
+                              <button className="icon-btn" title="Copier le message WhatsApp" onClick={() => copyWhatsAppMessage(item)} style={{ color: '#8b5cf6' }}>
+                                <Copy size={14} />
+                              </button>
+                              <button className="icon-btn" title="Copier l'email promotionnel" onClick={() => copyEmailMessage(item)} style={{ color: '#0ea5e9' }}>
+                                <Mail size={14} />
+                              </button>
+                            </>
+                          )}
                           <button className="icon-btn" title="Modifier" onClick={() => {
                             setPromoForm({
                               nom: item.name, statut: item.status, code_promo: item.code,
+                              promo_type: item.promo_type || 'simple',
                               type_reduction: item.reduction_type || 'pourcentage',
                               valeur_reduction: String(item.reduction),
                               segment_client: item.segment,
                               statut_client: Object.entries(STATUTS_CLIENT_MAP).find(([, v]) => v === item.customer_status)?.[0] || 'tous',
-                              services: [], canaux: [], message_promotionnel: '',
-                              date_debut: item.valid_from, date_fin: item.valid_until, date_indeterminee: !item.valid_until,
+                              services: item.services || [],
+                              canaux: item.canaux || [],
+                              message_promotionnel: item.message_promotionnel || '',
+                              date_debut: item.valid_from,
+                              date_fin: item.valid_until || '',
+                              date_indeterminee: !item.valid_until,
+                              limit_uses: item.limit_uses !== undefined && item.limit_uses !== null ? String(item.limit_uses) : '',
+                              one_use_per_client: !!item.one_use_per_client,
                             });
                             setEditingPromoId(item.id);
                             setShowCreatePromo(true);
@@ -858,7 +1016,22 @@ export default function Marketing() {
                           }}>
                             <Pencil size={14} />
                           </button>
-                          <button className="icon-btn" title="Envoyer">
+                          <button
+                            className="icon-btn"
+                            title="Envoyer la campagne"
+                            style={{ color: '#059669' }}
+                            onClick={() => {
+                              if (window.confirm("Êtes-vous sûr de vouloir envoyer cette campagne à tous les destinataires par email ?")) {
+                                sendCampaign(item.id).then((res) => {
+                                  setCampaigns((prev) => prev.map((x) => x.id === item.id ? { ...x, status: 'envoyee', broadcast_date: res.data.broadcast_date || x.broadcast_date } : x));
+                                  addToast(res.data.message || "Campagne envoyée avec succès !", 'success');
+                                }).catch((err) => {
+                                  const errMsg = err.response?.data?.message || "Une erreur est survenue lors de l'envoi.";
+                                  addToast(errMsg, 'error');
+                                });
+                              }
+                            }}
+                          >
                             <Send size={14} />
                           </button>
                           <button className="icon-btn" title={item.archived ? 'Désarchiver' : 'Archiver'} onClick={() => {
@@ -893,8 +1066,17 @@ export default function Marketing() {
         </>
       )}
 
-      {showCreatePromo && (
-        <CreateOffreModal
+      {showCreatePromo && promoForm.promo_type === 'simple' && (
+        <CreateOffreSimpleModal
+          form={promoForm}
+          setForm={setPromoForm}
+          onClose={closeModals}
+          onSubmit={createPromo}
+        />
+      )}
+
+      {showCreatePromo && promoForm.promo_type === 'bd' && (
+        <CreateOffreBdModal
           form={promoForm}
           setForm={setPromoForm}
           onClose={closeModals}

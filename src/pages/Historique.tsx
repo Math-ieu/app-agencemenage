@@ -23,6 +23,9 @@ interface Demande {
   profil_name: string;
   motif: string;
   cao?: boolean;
+  promo_code?: number | null;
+  promo_code_name?: string;
+  promo_code_code?: string;
 }
 
 const getSegmentLabel = (segment: string): string => {
@@ -184,6 +187,7 @@ export default function Historique() {
                 <th>Segment</th>
                 <th>Profil</th>
                 <th>Statut besoin</th>
+                <th>Promo</th>
                 <th>Statut paiement</th>
                 <th>Motif</th>
               </tr>
@@ -216,6 +220,15 @@ export default function Historique() {
                     ) : (d.profil_name || '—')}
                   </td>
                   <td>{getStatutBesoinBadge(d)}</td>
+                  <td>
+                    {d.promo_code ? (
+                      <span className="badge badge-green" title={d.promo_code_name}>
+                        Oui ({d.promo_code_code})
+                      </span>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>Non</span>
+                    )}
+                  </td>
                   <td>{getStatutPaiementBadge(d)}</td>
                   <td>
                     {d.motif || '—'}
@@ -224,7 +237,7 @@ export default function Historique() {
               ))}
               {demandes.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="empty-row">Aucun historique trouvé.</td>
+                  <td colSpan={10} className="empty-row">Aucun historique trouvé.</td>
                 </tr>
               )}
             </tbody>

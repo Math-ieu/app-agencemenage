@@ -61,6 +61,7 @@ export const SERVICES_PARTICULIER = [
   "Ménage standard",
   "Grand ménage",
   "Ménage Air BnB",
+  "Nettoyage post-déménagement",
   "Ménage fin de chantier",
   "Auxiliaire de vie",
   "Ménage post-sinistre",

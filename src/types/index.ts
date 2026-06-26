@@ -152,6 +152,9 @@ export interface Demande {
   parent_demande?: number | null;
   part_agence?: number;
   parts_repartition?: any[];
+  promo_code?: number | null;
+  promo_code_name?: string;
+  promo_code_code?: string;
   created_at: string;
 }
 

@@ -245,6 +245,12 @@ export const getAgent = (id: number) => apiClient.get(`/api/agents/${id}/`);
 
 export const getAgentHistory = (id: number) => apiClient.get(`/api/agents/${id}/history/`);
 
+export const affecterAgent = (id: number, assigned_to_id: number | null, assigned_by_name?: string, notes?: string) =>
+  apiClient.post(`/api/agents/${id}/affecter/`, { assigned_to_id, assigned_by_name, notes });
+
+export const getAgentAssignments = (id: number) =>
+  apiClient.get(`/api/agents/${id}/assignments/`);
+
 export const createAgent = (data: FormData | Record<string, unknown>) => {
   const isFormData = data instanceof FormData;
   return apiClient.post('/api/agents/', data, {
@@ -394,6 +400,7 @@ export const getCampaigns = (params?: Record<string, unknown>) => apiClient.get(
 export const createCampaign = (data: Record<string, unknown>) => apiClient.post('/api/marketing/campagnes/', data);
 export const updateCampaign = (id: number, data: Record<string, unknown>) => apiClient.patch(`/api/marketing/campagnes/${id}/`, data);
 export const deleteCampaign = (id: number) => apiClient.delete(`/api/marketing/campagnes/${id}/`);
+export const sendCampaign = (id: number) => apiClient.post(`/api/marketing/campagnes/${id}/send/`);
 
 export const getClientActionLogs = (id: number) => apiClient.get(`/api/clients/${id}/action_logs/`);
 

@@ -1530,6 +1530,14 @@ export default function DemandesEnAttente() {
                             d.formulaire_data?.additionalServices?.baiesVitrees && 'Baies Vitrées',
                           ].filter(Boolean).join(', ') || 'Aucun'}
                         </span></div>
+                        {d.promo_code && (
+                          <div className="detail-item" style={{ gridColumn: 'span 2' }}>
+                            <span className="detail-label">Code promo :</span>
+                            <span className="detail-value text-green-600 fw-bold" style={{ color: '#16a34a' }}>
+                              Oui — {d.promo_code_name} ({d.promo_code_code})
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
