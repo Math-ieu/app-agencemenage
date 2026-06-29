@@ -1771,7 +1771,7 @@ export default function LesSuivis() {
         hours,
         row.originalDemande?.formulaire_data?.planning?.hourly_rate ? `${row.originalDemande?.formulaire_data?.planning?.hourly_rate} DH/h` : '30 DH/h',
         `${row.partProfil} DH`,
-        `${row.partAgence} DH`,
+        row.isFirstProfileOfRow === false ? '—' : `${row.partAgence} DH`,
         (() => {
           if (row.isFirstProfileOfRow === false) {
             return '—';
@@ -2054,6 +2054,9 @@ export default function LesSuivis() {
                             </td>
                             <td className="ls-val-bold ls-val-blue">
                               {(() => {
+                                if (row.isFirstProfileOfRow === false) {
+                                  return '—';
+                                }
                                 const hasPartsRepartition = Array.isArray(row.parts_repartition) && row.parts_repartition.length > 0;
                                 const hasExplicitPartAgence = row.partAgence > 0;
                                 if (!hasPartsRepartition && !hasExplicitPartAgence) return '—';
