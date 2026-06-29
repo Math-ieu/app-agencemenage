@@ -41,8 +41,10 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'commercial_paye_client', apiValue: 'partiel', label: 'Commercial payé / client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
-  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Annulé' },
+  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Facturation annulée' },
   { value: 'intervention_gratuite', apiValue: 'intervention_gratuite', label: 'Intervention gratuite' },
+  { value: 'intervention_annulee', apiValue: 'intervention_annulee', label: 'Intervention annulée' },
+  { value: 'reporte', apiValue: 'reporte', label: 'Reportée' },
 ];
 
 // Workflow des statuts de devis (brief). Champ backend dédié Demande.devis_statut,

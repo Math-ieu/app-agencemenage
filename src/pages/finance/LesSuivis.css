@@ -573,15 +573,16 @@
   border-radius: 50%;
 }
 
-.ls-switch input:checked + .ls-slider {
+.ls-switch input:checked+.ls-slider {
   background-color: #0f766e;
 }
 
-.ls-switch input:checked + .ls-slider:before {
+.ls-switch input:checked+.ls-slider:before {
   transform: translateX(20px);
 }
 
-.ls-text-input, .ls-textarea {
+.ls-text-input,
+.ls-textarea {
   width: 100%;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
@@ -591,7 +592,8 @@
   outline: none;
 }
 
-.ls-text-input:focus, .ls-textarea:focus {
+.ls-text-input:focus,
+.ls-textarea:focus {
   border-color: #94a3b8;
 }
 

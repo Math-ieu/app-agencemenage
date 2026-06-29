@@ -97,6 +97,8 @@ interface FacturationRow {
   frequency?: string | null;
   isSubscriptionPrimary?: boolean;
   isSubscriptionSecondary?: boolean;
+  subscriptionDenominator?: number;
+  subscriptionInterventionCA?: number;
   // New fields from Dashboard
   annulationRaison?: string;
   profilSeraPaye?: boolean;
@@ -264,7 +266,7 @@ const getPaymentUiLabel = (uiCode: string | undefined): string => {
     paiement_partiel: 'Paiement partiel',
     paiement_en_attente: 'Paiement en attente',
     non_confirme: 'Non confirmé',
-    facturation_annulee: 'Annulé',
+    facturation_annulee: 'Facturation annulée',
     intervention_gratuite: 'Intervention gratuite',
   };
   return labels[uiCode] || uiCode.replace(/_/g, ' ');
@@ -362,8 +364,26 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
 };
 
 const getCommissionAgenceEncaissee = (row: FacturationRow, _forKpi = false): number => {
-  if (row.statutPaiementUi === 'facturation_annulee' || row.statutPaiementUi === 'Facturation annulée' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite') {
+  const isCanceled = row.statutPaiementUi === 'facturation_annulee' || 
+                     row.statutPaiementUi === 'Facturation annulée' || 
+                     row.statut === 'Facturation annulée' || 
+                     row.statut === 'Intervention annulée';
+  
+  const isGratuit = row.statutPaiementUi === 'intervention_gratuite' || 
+                    row.statut === 'Intervention gratuite';
+
+  if (isCanceled) {
+    const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement' || row.parentDemandeId;
+    if (isSub) {
+      const interventionCA = row.subscriptionInterventionCA || 0;
+      const profilePart = Number(row.montantProfilAnnulation || row.partProfil || 0);
+      return -(interventionCA + (row.profilSeraPaye ? profilePart : 0));
+    }
     return row.profilSeraPaye ? -(Number(row.montantProfilAnnulation) || 0) : 0;
+  }
+
+  if (isGratuit) {
+    return 0;
   }
 
   // If this is a secondary intervention of an subscription, client paid 0.
@@ -579,11 +599,8 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 
   const missionStatus = item.statut;
   const isGratuit = rawStatutPaiementUi === 'intervention_gratuite';
-  const isInterventionAnnulee = missionStatus === 'annulee' || (demande as any)?.statut === 'annule';
-  const isFacturationAnnulee = !isInterventionAnnulee && !isGratuit && (
-    facturationData.facturation_annulee === true ||
-    rawStatutPaiementUi === 'facturation_annulee'
-  );
+  const isFacturationAnnulee = !isGratuit && facturationData.facturation_annulee === true;
+  const isInterventionAnnulee = !isFacturationAnnulee && (missionStatus === 'annulee' || (demande as any)?.statut === 'annule');
 
   const statut: FacturationRow['statut'] =
     isGratuit
@@ -768,11 +785,8 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
         : 'non_paye';
 
   const isGratuit = rawStatutPaiementUi === 'intervention_gratuite';
-  const isInterventionAnnulee = demande.statut === 'annule';
-  const isFacturationAnnulee = !isInterventionAnnulee && !isGratuit && (
-    facturationData.facturation_annulee === true ||
-    rawStatutPaiementUi === 'facturation_annulee'
-  );
+  const isFacturationAnnulee = !isGratuit && facturationData.facturation_annulee === true;
+  const isInterventionAnnulee = !isFacturationAnnulee && (demande.statut === 'annule');
 
   const statut: FacturationRow['statut'] =
     isGratuit ? 'Intervention gratuite' :
@@ -1120,10 +1134,33 @@ export default function VueGlobale() {
     }
 
     for (const groupRows of subscriptionGroups.values()) {
+      const parentRow = groupRows.find(r => !r.parentDemandeId) || groupRows[0];
+      const parentDemande = parentRow?.originalDemande;
+      const weeks = parentDemande?.planning?.semaines;
+      
+      let totalPlanned = 0;
+      if (weeks && Array.isArray(weeks)) {
+        weeks.forEach(week => {
+          if (week.jours) {
+            Object.keys(week.jours).forEach(dayKey => {
+              if (week.jours[dayKey]?.selected) {
+                totalPlanned++;
+              }
+            });
+          }
+        });
+      }
+      
+      const denominator = totalPlanned > 0 ? totalPlanned : groupRows.length;
+      const parentMontant = Number(parentDemande?.montant || parentRow?.montant || 0);
+      const interventionCA = denominator > 0 ? parentMontant / denominator : 0;
+
       for (const row of groupRows) {
         const isRoot = !row.parentDemandeId;
         row.isSubscriptionPrimary = isRoot;
         row.isSubscriptionSecondary = !isRoot;
+        row.subscriptionDenominator = denominator;
+        row.subscriptionInterventionCA = Number(interventionCA.toFixed(2));
       }
     }
 
@@ -1597,12 +1634,24 @@ export default function VueGlobale() {
       row.statutPaiementUi === 'intervention_gratuite'
     );
 
-    const chiffreAffaires = activeRows
+    const subCancellations = cancelledRows.filter(row => {
+      const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement' || row.parentDemandeId;
+      return isSub && (row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée');
+    });
+    const totalSubCancellationsCA = subCancellations.reduce((sum, row) => sum + (row.subscriptionInterventionCA || 0), 0);
+
+    const chiffreAffaires = Math.max(0, activeRows
       .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
-      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
+      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0) - totalSubCancellationsCA);
 
     const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row, true), 0);
     const pertes = cancelledRows.reduce((sum, row) => {
+      const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement' || row.parentDemandeId;
+      if (isSub) {
+        const interventionCA = row.subscriptionInterventionCA || 0;
+        const profilePart = Number(row.montantProfilAnnulation || row.partProfil || 0);
+        return sum + interventionCA + (row.profilSeraPaye ? profilePart : 0);
+      }
       const loss = Number(row.montantProfilAnnulation || 0);
       return sum + (row.profilSeraPaye ? loss : 0);
     }, 0);
@@ -1621,7 +1670,7 @@ export default function VueGlobale() {
         { value: 'commercial_paye_client', apiValue: 'commercial_paye_client', label: 'Commercial payé / client' },
         { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
         { value: 'paye', apiValue: 'integral', label: 'Payé' },
-        { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Annulé' },
+        { value: 'facturation_annulee', apiValue: 'non_paye', label: 'Facturation annulée' },
       ];
       if (fallback && options.some((option) => option.value === fallback)) return fallback;
       if (facturationAnnulee) return 'facturation_annulee';
@@ -1671,9 +1720,16 @@ export default function VueGlobale() {
     );
 
     const missions = missionsEnCours.length;
-    const chiffreAffaires = activeRows
+
+    const subCancellations = cancelledRows.filter(row => {
+      const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement' || row.parentDemandeId;
+      return isSub && (row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée');
+    });
+    const totalSubCancellationsCA = subCancellations.reduce((sum, row) => sum + (row.subscriptionInterventionCA || 0), 0);
+
+    const chiffreAffaires = Math.max(0, activeRows
       .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
-      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
+      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0) - totalSubCancellationsCA);
 
     const unfilteredActiveRows = facturationData.filter((row) => 
       row.statut !== 'Facturation annulée' && 
@@ -1682,38 +1738,66 @@ export default function VueGlobale() {
       row.statutPaiementUi !== 'facturation_annulee' && 
       row.statutPaiementUi !== 'intervention_gratuite'
     );
-    const chiffreAffairesTotal = unfilteredActiveRows
+
+    const unfilteredCancelledRows = facturationData.filter((row) => 
+      row.statut === 'Facturation annulée' || 
+      row.statut === 'Intervention annulée' || 
+      row.statut === 'Intervention gratuite' || 
+      row.statutPaiementUi === 'facturation_annulee' || 
+      row.statutPaiementUi === 'intervention_gratuite'
+    );
+
+    const unfilteredSubCancellations = unfilteredCancelledRows.filter(row => {
+      const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement' || row.parentDemandeId;
+      return isSub && (row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée');
+    });
+    const totalUnfilteredSubCancellationsCA = unfilteredSubCancellations.reduce((sum, row) => sum + (row.subscriptionInterventionCA || 0), 0);
+
+    const chiffreAffairesTotal = Math.max(0, unfilteredActiveRows
       .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
-      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0);
+      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0) - totalUnfilteredSubCancellationsCA);
 
     // Commission brute (hors annulations)
     const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row, true), 0);
 
-    // Perte = total payé au profil pour les facturations annulées
-    const facturationAnnulee = cancelledRows
-      .reduce((sum, row) => {
-        const loss = Number(row.montantProfilAnnulation || 0);
-        return sum + (row.profilSeraPaye ? loss : 0);
-      }, 0);
+    // Perte = total payé au profil pour les facturations annulées + subscription intervention CA and profile part
+    const losses = cancelledRows.reduce((sum, row) => {
+      const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement' || row.parentDemandeId;
+      if (isSub) {
+        const interventionCA = row.subscriptionInterventionCA || 0;
+        const profilePart = Number(row.montantProfilAnnulation || row.partProfil || 0);
+        return sum + interventionCA + (row.profilSeraPaye ? profilePart : 0);
+      }
+      const loss = Number(row.montantProfilAnnulation || 0);
+      return sum + (row.profilSeraPaye ? loss : 0);
+    }, 0);
 
     // Commission nette = brute - pertes
-    const commissionAgence = commissionBrute - facturationAnnulee;
+    const commissionAgence = commissionBrute - losses;
 
-    return { missions, chiffreAffaires, chiffreAffairesTotal, commissionAgence, facturationAnnulee };
+    return { missions, chiffreAffaires, chiffreAffairesTotal, commissionAgence, facturationAnnulee: losses };
   }, [periodFilteredRows, missionsEnCours, facturationData]);
 
   const debitRows = useMemo(
     () => facturationData.filter((row) =>
       row.reglementInterne !== 'Réglé' &&
-      row.statut !== 'Facturation annulée' &&
-      row.statut !== 'Intervention annulée' &&
-      row.statutPaiementUi !== 'facturation_annulee' &&
       row.statut !== 'Intervention gratuite' &&
       row.statutPaiementUi !== 'intervention_gratuite' &&
-      (row.statutPaiementUi === 'profil_paye_client' ||
-        row.statutPaiementUi === 'Profil payé / Client' ||
-        (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
-        (!row.statutPaiementUi && row.encaissePar === 'Profil'))
+      (
+        (
+          row.statut !== 'Facturation annulée' &&
+          row.statut !== 'Intervention annulée' &&
+          row.statutPaiementUi !== 'facturation_annulee' &&
+          (row.statutPaiementUi === 'profil_paye_client' ||
+            row.statutPaiementUi === 'Profil payé / Client' ||
+            (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
+            (!row.statutPaiementUi && row.encaissePar === 'Profil'))
+        ) ||
+        (
+          (row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'facturation_annulee') &&
+          row.encaissePar === 'Profil'
+        )
+      )
     ),
     [facturationData]
   );
@@ -1749,13 +1833,14 @@ export default function VueGlobale() {
       (row.statutPaiementUi === 'agence_payee_client' ||
         row.statutPaiementUi === 'Agence payée / Client' ||
         (row.statutPaiementUi === 'paye' && row.encaissePar === 'Agence') ||
-        (row.statutPaiementUi === 'facturation_annulee' && row.profilSeraPaye) ||
-        (row.statutPaiementUi === 'Facturation annulée' && row.profilSeraPaye) ||
-        (row.statut === 'Facturation annulée' && row.profilSeraPaye) ||
-        (row.statut === 'Intervention annulée' && row.profilSeraPaye) ||
         row.statutPaiementUi === 'intervention_gratuite' ||
         row.statut === 'Intervention gratuite' ||
-        (!row.statutPaiementUi && row.encaissePar === 'Agence'))
+        (!row.statutPaiementUi && row.encaissePar === 'Agence') ||
+        (
+          (row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'facturation_annulee') &&
+          row.profilSeraPaye &&
+          row.encaissePar === 'Agence'
+        ))
     ),
     [facturationData]
   );
@@ -2388,11 +2473,11 @@ export default function VueGlobale() {
       }
     }
 
-    if (row.missionId) {
-      const originalFormData = row.originalDemande?.formulaire_data || {};
-      const facturation = originalFormData.facturation || {};
-      const isCancelled = facturation.statut_paiement_ui === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee' || facturation.statut_paiement_ui === 'intervention_gratuite' || row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite';
+    const originalFormData = row.originalDemande?.formulaire_data || {};
+    const facturation = originalFormData.facturation || {};
+    const isCancelled = facturation.statut_paiement_ui === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statutPaiementUi === 'facturation_annulee' || facturation.statut_paiement_ui === 'intervention_gratuite' || row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite';
 
+    if (row.missionId) {
       await updateMission(row.missionId, {
         part_agence_reversee: allPaid,
         date_remise_agence: allPaid ? todayIso : null,
@@ -2405,9 +2490,6 @@ export default function VueGlobale() {
     }
 
     if (row.demandeId && row.originalDemande) {
-      const originalFormData = row.originalDemande.formulaire_data || {};
-      const facturation = originalFormData.facturation || {};
-
       await updateDemande(row.demandeId, {
         formulaire_data: {
           ...originalFormData,
@@ -2421,8 +2503,10 @@ export default function VueGlobale() {
               part_profil_versee: true,
               date_versement_profil: facturation.date_versement_profil || todayIso
             } : {}),
-            // Sync statut Dashboard : Payé ou retour à Profil payé / Client
-            statut_paiement_ui: allPaid ? 'paye' : 'profil_paye_client',
+            // Sync statut Dashboard : Keep facturation_annulee / intervention_gratuite or set to paye / profil_paye_client
+            statut_paiement_ui: isCancelled
+              ? (facturation.statut_paiement_ui === 'intervention_gratuite' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'intervention_gratuite' : 'facturation_annulee')
+              : (allPaid ? 'paye' : 'profil_paye_client'),
           }
         },
         // Sync champ API : integral ou partiel
@@ -3482,7 +3566,7 @@ export default function VueGlobale() {
                       statusContent = 'Payé';
                     } else {
                       statusPillClass = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'fg-pill-pale-green' : 'fg-pill-pale-red';
-                      statusContent = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'Intervention gratuite' : (row.statut === 'Intervention annulée' ? 'Intervention annulée' : 'Annulé');
+                      statusContent = row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'Intervention gratuite' : (row.statut === 'Intervention annulée' ? 'Intervention annulée' : 'Facturation annulée');
                     }
                   } else if (row.statutPaiementUi === 'paye' || row.paiement === 'paye') {
                     statusPillClass = 'fg-pill-pale-green';

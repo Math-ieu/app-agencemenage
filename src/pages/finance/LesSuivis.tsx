@@ -61,6 +61,8 @@ interface FacturationRow {
   frequency?: string | null;
   isSubscriptionPrimary?: boolean;
   isSubscriptionSecondary?: boolean;
+  subscriptionDenominator?: number;
+  subscriptionInterventionCA?: number;
   // New fields from Dashboard
   annulationRaison?: string;
   profilSeraPaye?: boolean;
@@ -184,7 +186,7 @@ const getPaymentUiLabel = (uiCode: string | undefined): string => {
     paiement_partiel: 'Paiement partiel',
     paiement_en_attente: 'Paiement en attente',
     non_confirme: 'Non confirmé',
-    facturation_annulee: 'Annulé',
+    facturation_annulee: 'Facturation annulée',
     intervention_gratuite: 'Intervention gratuite',
   };
   return labels[uiCode] || uiCode.replace(/_/g, ' ');
@@ -197,7 +199,7 @@ const getRealPaymentStatusLabel = (row: FacturationRow): string => {
     if (row.profilSeraPaye && (row.reglementInterne === 'Réglé' || row.partProfilVersee === true)) {
       return 'Payé';
     }
-    return uiVal === 'intervention_gratuite' || statut === 'Intervention gratuite' ? 'Intervention gratuite' : (statut === 'Intervention annulée' ? 'Intervention annulée' : 'Annulé');
+    return uiVal === 'intervention_gratuite' || statut === 'Intervention gratuite' ? 'Intervention gratuite' : (statut === 'Intervention annulée' ? 'Intervention annulée' : 'Facturation annulée');
   }
   if (uiVal === 'paye' || row.paiement === 'paye') {
     return 'Payé';
@@ -407,11 +409,8 @@ export default function LesSuivis() {
 
     const missionStatus = item.statut;
     const isGratuit = rawStatutPaiementUi === 'intervention_gratuite';
-    const isInterventionAnnulee = missionStatus === 'annulee' || demande?.statut === 'annule';
-    const isFacturationAnnulee = !isInterventionAnnulee && !isGratuit && (
-      facturationData.facturation_annulee === true ||
-      rawStatutPaiementUi === 'facturation_annulee'
-    );
+    const isFacturationAnnulee = !isGratuit && facturationData.facturation_annulee === true;
+    const isInterventionAnnulee = !isFacturationAnnulee && (missionStatus === 'annulee' || demande?.statut === 'annule');
 
     const statut: FacturationRow['statut'] =
       isGratuit
@@ -610,11 +609,8 @@ export default function LesSuivis() {
           : 'non_paye';
 
     const isGratuit = rawStatutPaiementUi === 'intervention_gratuite';
-    const isInterventionAnnulee = demande.statut === 'annule';
-    const isFacturationAnnulee = !isInterventionAnnulee && !isGratuit && (
-      facturationData.facturation_annulee === true ||
-      rawStatutPaiementUi === 'facturation_annulee'
-    );
+    const isFacturationAnnulee = !isGratuit && facturationData.facturation_annulee === true;
+    const isInterventionAnnulee = !isFacturationAnnulee && (demande.statut === 'annule');
 
     const statut: FacturationRow['statut'] =
       isGratuit ? 'Intervention gratuite' :
@@ -820,10 +816,33 @@ export default function LesSuivis() {
     }
 
     for (const groupRows of subscriptionGroups.values()) {
+      const parentRow = groupRows.find(r => !r.parentDemandeId) || groupRows[0];
+      const parentDemande = parentRow?.originalDemande;
+      const weeks = parentDemande?.planning?.semaines;
+      
+      let totalPlanned = 0;
+      if (weeks && Array.isArray(weeks)) {
+        weeks.forEach(week => {
+          if (week.jours) {
+            Object.keys(week.jours).forEach(dayKey => {
+              if (week.jours[dayKey]?.selected) {
+                totalPlanned++;
+              }
+            });
+          }
+        });
+      }
+      
+      const denominator = totalPlanned > 0 ? totalPlanned : groupRows.length;
+      const parentMontant = Number(parentDemande?.montant || parentRow?.montant || 0);
+      const interventionCA = denominator > 0 ? parentMontant / denominator : 0;
+
       for (const row of groupRows) {
         const isRoot = !row.parentDemandeId;
         row.isSubscriptionPrimary = isRoot;
         row.isSubscriptionSecondary = !isRoot;
+        row.subscriptionDenominator = denominator;
+        row.subscriptionInterventionCA = Number(interventionCA.toFixed(2));
       }
     }
 
@@ -852,20 +871,12 @@ export default function LesSuivis() {
     const parentId = row.originalDemande?.parent_demande || row.originalDemande?.id || row.demandeId;
     if (!parentId) return null;
 
-    const rowDate = parseFrenchDate(row.date);
-    if (!rowDate) return null;
-    const year = rowDate.getFullYear();
-    const month = rowDate.getMonth();
-
     const subRows = facturationData
       .filter(r => {
         const rIsSub = r.frequency === 'abonnement' || r.originalDemande?.frequency === 'abonnement';
         if (!rIsSub) return false;
         const rParentId = r.originalDemande?.parent_demande || r.originalDemande?.id || r.demandeId;
-        if (rParentId !== parentId) return false;
-
-        const rDate = parseFrenchDate(r.date);
-        return rDate && rDate.getFullYear() === year && rDate.getMonth() === month;
+        return Number(rParentId) === Number(parentId);
       })
       .sort((a, b) => {
         const dateA = parseFrenchDate(a.date)?.getTime() || 0;
@@ -876,62 +887,29 @@ export default function LesSuivis() {
     const index = subRows.findIndex(r => r.missionId === row.missionId && r.demandeId === row.demandeId && r.date === row.date);
     if (index === -1) return null;
     
-    let total = subRows.length;
-    const parentRow = facturationData.find(r => r.demandeId === parentId && !r.parentDemandeId);
+    const parentRow = facturationData.find(r => Number(r.demandeId) === Number(parentId) && !r.parentDemandeId);
     const parentDemande = demandsMap.get(Number(parentId)) || parentRow?.originalDemande || (row.parentDemandeId ? null : row.originalDemande);
     const weeks = parentDemande?.planning?.semaines;
     
-    let perWeekCount = 0;
-    if (weeks && Array.isArray(weeks) && weeks.length > 0) {
-      const refWeek = weeks[0];
-      if (refWeek?.jours) {
-        Object.keys(refWeek.jours).forEach(dayKey => {
-          if (refWeek.jours[dayKey]?.selected) {
-            perWeekCount++;
-          }
-        });
-      }
-    }
-    
-    if (perWeekCount === 0) {
-      const freqLabel = parentDemande?.frequency_label || row.originalDemande?.frequency_label || '';
-      const freq = freqLabel.toLowerCase();
-      if (freq.includes('/sem') || freq.includes('semaine') || freq.includes('sem')) {
-        perWeekCount = parseInt(freq, 10) || 0;
-      } else if (freq === 'quotidien') {
-        perWeekCount = 7;
-      }
+    let totalPlanned = 0;
+    if (weeks && Array.isArray(weeks)) {
+      weeks.forEach(week => {
+        if (week.jours) {
+          Object.keys(week.jours).forEach(dayKey => {
+            if (week.jours[dayKey]?.selected) {
+              totalPlanned++;
+            }
+          });
+        }
+      });
     }
 
-    let weeksCount = 0;
-    const tempDate = new Date(year, month, 1);
-    while (tempDate.getMonth() === month) {
-      if (tempDate.getDay() === 1) { // Monday
-        weeksCount++;
-      }
-      tempDate.setDate(tempDate.getDate() + 1);
-    }
-    if (weeksCount === 0) weeksCount = 4;
-
-    let monthlyPlannedCount = 0;
-    if (perWeekCount > 0) {
-      monthlyPlannedCount = perWeekCount * weeksCount;
-    } else {
-      const freqLabel = parentDemande?.frequency_label || row.originalDemande?.frequency_label || '';
-      const freq = freqLabel.toLowerCase();
-      if (freq.includes('/mois')) {
-        monthlyPlannedCount = parseInt(freq, 10) || 1;
-      }
-    }
-
-    if (monthlyPlannedCount > 0) {
-      total = Math.max(subRows.length, monthlyPlannedCount);
-    }
+    const total = totalPlanned > 0 ? totalPlanned : subRows.length;
     
     return {
       rank: index + 1,
       total: total,
-      isFirst: index === 0
+      isFirst: !row.parentDemandeId
     };
   }, [facturationData, demandsMap]);
 
@@ -1121,8 +1099,16 @@ export default function LesSuivis() {
             totalPartProfil += row.partProfil;
           }
         }
+      } else {
+        const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement' || row.parentDemandeId;
+        const isTrueCancellation = row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée';
+        if (isSub && isTrueCancellation) {
+          totalCa -= (row.subscriptionInterventionCA || 0);
+        }
       }
     });
+
+    totalCa = Math.max(0, totalCa);
 
     expandedRows.filter(isInDateRange).forEach((row) => {
       const isCredit = isCreditRow(row);
@@ -1693,7 +1679,9 @@ export default function LesSuivis() {
                   part_profil_versee: true,
                   date_versement_profil: facturation.date_versement_profil || todayIso
                 } : {}),
-                statut_paiement_ui: allPaid ? 'paye' : 'profil_paye_client',
+                statut_paiement_ui: isCancelled
+                  ? (facturation.statut_paiement_ui === 'intervention_gratuite' || selectedRow.statutPaiementUi === 'intervention_gratuite' || selectedRow.statut === 'Intervention gratuite' ? 'intervention_gratuite' : 'facturation_annulee')
+                  : (allPaid ? 'paye' : 'profil_paye_client'),
               }
             },
             statut_paiement: allPaid ? 'integral' : 'partiel',

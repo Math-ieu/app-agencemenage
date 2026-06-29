@@ -115,8 +115,17 @@ export const getPaymentStatusInfo = (statutUi: string | undefined, legacyStatut?
   if (s === 'paiement_en_attente' || s === 'acompte' || s === 'paiement en attente') {
     return { label: 'Paiement en attente', badgeClass: 'badge-orange' };
   }
-  if (s === 'facturation_annulee' || s === 'facturation annulée' || s === 'facturation annulee' || s === 'annule' || s === 'annulée') {
-    return { label: 'Annulé', badgeClass: 'badge-red' };
+  if (s === 'facturation_annulee' || s === 'facturation annulée' || s === 'facturation annulee') {
+    return { label: 'Facturation annulée', badgeClass: 'badge-red' };
+  }
+  if (s === 'intervention_annulee' || s === 'intervention annulée' || s === 'intervention annulee') {
+    return { label: 'Intervention annulée', badgeClass: 'badge-red' };
+  }
+  if (s === 'reporte' || s === 'reportée' || s === 'reporte_annule' || s === 'reporté_annulé' || s === 'reportée/annulée') {
+    return { label: 'Reportée / Annulée', badgeClass: 'badge-orange' };
+  }
+  if (s === 'annule' || s === 'annulée') {
+    return { label: 'Annulée', badgeClass: 'badge-red' };
   }
   if (s === 'intervention_gratuite') {
     return { label: 'Intervention gratuite', badgeClass: 'badge-green' };

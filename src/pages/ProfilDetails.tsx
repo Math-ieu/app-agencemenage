@@ -444,7 +444,17 @@ export default function ProfilDetails() {
 
   const renderPaymentStatus = (demande: any, sourceData: any) => {
     const facturation = demande.formulaire_data?.facturation || {};
-    const rawStatutPaiementUi = facturation.statut_paiement_ui || sourceData.paiement_client_statut || (demande.statut_paiement === 'integral' ? 'paye' : demande.statut_paiement === 'acompte' ? 'paiement_en_attente' : demande.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
+    let rawStatutPaiementUi = facturation.statut_paiement_ui || sourceData.paiement_client_statut;
+    
+    if (facturation.facturation_annulee === true) {
+      rawStatutPaiementUi = 'facturation_annulee';
+    } else if (demande.statut === 'annule') {
+      rawStatutPaiementUi = 'intervention_annulee';
+    } else if (demande.cao === 'reporte') {
+      rawStatutPaiementUi = 'reporte';
+    } else if (!rawStatutPaiementUi) {
+      rawStatutPaiementUi = (demande.statut_paiement === 'integral' ? 'paye' : demande.statut_paiement === 'acompte' ? 'paiement_en_attente' : demande.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
+    }
     
     return renderPaymentStatusBadge(rawStatutPaiementUi);
   };

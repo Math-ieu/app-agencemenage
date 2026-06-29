@@ -20,7 +20,7 @@ interface LatestDemande {
   statut_paiement_ui?: string;
   facturation_annulee?: boolean;
   commercial: string | null;
-  cao?: boolean;
+  cao?: boolean | 'reporte';
   created_at: string;
   frequency?: string;
 }
@@ -55,8 +55,10 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'commercial_paye_client', apiValue: 'partiel', label: 'Commercial payé / client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
-  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Annulé' },
+  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Facturation annulée' },
   { value: 'intervention_gratuite', apiValue: 'intervention_gratuite', label: 'Intervention gratuite' },
+  { value: 'intervention_annulee', apiValue: 'intervention_annulee', label: 'Intervention annulée' },
+  { value: 'reporte', apiValue: 'reporte', label: 'Reportée' },
 ];
 
 const TABS = [
@@ -402,9 +404,14 @@ export default function Clients() {
     const facturationAnnulee = Boolean(latest.facturation_annulee);
     
     let statutUi = latest.statut_paiement_ui;
-    if (!statutUi) {
-      if (facturationAnnulee) statutUi = 'facturation_annulee';
-      else if (statutPaiement === 'integral') statutUi = 'paye';
+    if (facturationAnnulee) {
+      statutUi = 'facturation_annulee';
+    } else if (latest.statut === 'annule') {
+      statutUi = 'intervention_annulee';
+    } else if (latest.cao === 'reporte') {
+      statutUi = 'reporte';
+    } else if (!statutUi) {
+      if (statutPaiement === 'integral') statutUi = 'paye';
       else if (statutPaiement === 'acompte') statutUi = 'paiement_en_attente';
       else if (statutPaiement === 'partiel') statutUi = 'paiement_partiel';
       else statutUi = 'non_confirme';
@@ -414,9 +421,9 @@ export default function Clients() {
     const label = option ? option.label : 'Non payé';
 
     let badgeClass = 'badge-red';
-    if (statutUi === 'paye' || statutUi === 'integral') badgeClass = 'badge-green';
-    else if (['agence_payee_client', 'profil_paye_client', 'paiement_partiel', 'paiement_en_attente'].includes(statutUi)) badgeClass = 'badge-orange';
-    else if (statutUi === 'facturation_annulee') badgeClass = 'badge-red';
+    if (statutUi === 'paye' || statutUi === 'integral' || statutUi === 'intervention_gratuite') badgeClass = 'badge-green';
+    else if (['agence_payee_client', 'profil_paye_client', 'paiement_partiel', 'paiement_en_attente', 'reporte'].includes(statutUi)) badgeClass = 'badge-orange';
+    else if (statutUi === 'facturation_annulee' || statutUi === 'intervention_annulee') badgeClass = 'badge-red';
 
     return <span className={`badge ${badgeClass}`}>{label}</span>;
   };

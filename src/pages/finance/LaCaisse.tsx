@@ -302,8 +302,8 @@ export default function LaCaisse() {
           const fact = dem?.formulaire_data?.facturation || {};
           const rawStatus = fact.statut_paiement_ui || m.paiement_client_statut || (dem?.statut_paiement === 'integral' ? 'paye' : dem?.statut_paiement === 'acompte' ? 'paiement_en_attente' : dem?.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
           const isGratuit = rawStatus === 'intervention_gratuite';
-          const isInterventionAnnulee = m.statut === 'annulee' || dem?.statut === 'annule';
-          const isFacturationAnnulee = !isInterventionAnnulee && !isGratuit && (fact.facturation_annulee === true || rawStatus === 'facturation_annulee');
+          const isFacturationAnnulee = !isGratuit && fact.facturation_annulee === true;
+          const isInterventionAnnulee = !isFacturationAnnulee && (m.statut === 'annulee' || dem?.statut === 'annule');
           const statut = isGratuit ? 'Intervention gratuite' : isInterventionAnnulee ? 'Intervention annulée' : isFacturationAnnulee ? 'Facturation annulée' : 'Confirmée';
           const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
           const partProfilVersee = encaissePar === 'Agence' ? Boolean(m.part_profil_versee) : Boolean(m.part_agence_reversee);
@@ -362,8 +362,8 @@ export default function LaCaisse() {
           const fact = d?.formulaire_data?.facturation || {};
           const rawStatus = fact.statut_paiement_ui || d.statut_paiement_ui || (d.statut_paiement === 'integral' ? 'paye' : d.statut_paiement === 'acompte' ? 'paiement_en_attente' : d.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_confirme');
           const isGratuit = rawStatus === 'intervention_gratuite';
-          const isInterventionAnnulee = d.statut === 'annule';
-          const isFacturationAnnulee = !isInterventionAnnulee && !isGratuit && (fact.facturation_annulee === true || rawStatus === 'facturation_annulee');
+          const isFacturationAnnulee = !isGratuit && fact.facturation_annulee === true;
+          const isInterventionAnnulee = !isFacturationAnnulee && (d.statut === 'annule');
           const statut = isGratuit ? 'Intervention gratuite' : isInterventionAnnulee ? 'Intervention annulée' : isFacturationAnnulee ? 'Facturation annulée' : 'Confirmée';
           const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
           const partProfilVersee = encaissePar === 'Agence' ? Boolean(fact.part_profil_versee) : Boolean(fact.part_agence_reversee);

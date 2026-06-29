@@ -582,7 +582,17 @@ export default function ClientDetails() {
 
   const renderPaymentStatus = (demande: any) => {
     const facturation = demande.formulaire_data?.facturation || {};
-    const rawStatutPaiementUi = facturation.statut_paiement_ui || (demande.statut_paiement === 'integral' ? 'paye' : demande.statut_paiement === 'acompte' ? 'paiement_en_attente' : demande.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
+    let rawStatutPaiementUi = facturation.statut_paiement_ui;
+    
+    if (facturation.facturation_annulee === true) {
+      rawStatutPaiementUi = 'facturation_annulee';
+    } else if (demande.statut === 'annule') {
+      rawStatutPaiementUi = 'intervention_annulee';
+    } else if (demande.cao === 'reporte') {
+      rawStatutPaiementUi = 'reporte';
+    } else if (!rawStatutPaiementUi) {
+      rawStatutPaiementUi = (demande.statut_paiement === 'integral' ? 'paye' : demande.statut_paiement === 'acompte' ? 'paiement_en_attente' : demande.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
+    }
     
     return renderPaymentStatusBadge(rawStatutPaiementUi);
   };
@@ -908,6 +918,75 @@ export default function ClientDetails() {
     }
   };
 
+  const getMostRecentSubDemande = (d: any) => {
+    if (d.frequency !== 'abonnement') return d;
+    const parentId = d.parent_demande || d.id;
+    const subDemands = demandes.filter(x => x.id === parentId || x.parent_demande === parentId);
+    if (subDemands.length === 0) return d;
+
+    const parseFrenchDate = (value?: string): Date | null => {
+      if (!value) return null;
+      if (value.includes('-')) {
+        const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+      const [day, month, year] = value.split('/');
+      if (!year || !month || !day) return null;
+      const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const sorted = [...subDemands].sort((a, b) => {
+      const dateA = parseFrenchDate(a.date_intervention || a.formulaire_data?.date_intervention || a.created_at)?.getTime() || 0;
+      const dateB = parseFrenchDate(b.date_intervention || b.formulaire_data?.date_intervention || b.created_at)?.getTime() || 0;
+      return dateB - dateA;
+    });
+
+    return sorted[0] || d;
+  };
+
+  const getSubscriptionProfiles = (d: any) => {
+    if (d.frequency !== 'abonnement') {
+      return (d.profils_envoyes || []).map((p: any) => ({
+        id: p.id,
+        full_name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+        ranks: []
+      }));
+    }
+
+    const parentId = d.parent_demande || d.id;
+    const subDemands = demandes
+      .filter(x => x.id === parentId || x.parent_demande === parentId)
+      .sort((a, b) => {
+        const dateA = a.date_intervention || a.created_at;
+        const dateB = b.date_intervention || b.created_at;
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+        return 0;
+      });
+
+    const profilesMap = new Map<number, any>();
+
+    subDemands.forEach((sd, idx) => {
+      const rank = idx + 1;
+      const env = sd.profils_envoyes || [];
+      env.forEach((p: any) => {
+        if (!p.id) return;
+        const pId = Number(p.id);
+        if (!profilesMap.has(pId)) {
+          profilesMap.set(pId, {
+            id: pId,
+            full_name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+            ranks: []
+          });
+        }
+        profilesMap.get(pId)!.ranks.push(rank);
+      });
+    });
+
+    return Array.from(profilesMap.values());
+  };
+
   const parentDemandes = useMemo(() => demandes.filter(d => !d.parent_demande), [demandes]);
 
   /* ── Loading / Not found ── */
@@ -1071,52 +1150,75 @@ export default function ClientDetails() {
                   <Th>Date</Th><Th>Nom du service</Th><Th>Intervention</Th><Th>Profils proposés</Th><Th>Segment</Th><Th>Statut</Th><Th>Paiement</Th><Th center>Actions</Th>
                 </tr></thead>
                 <tbody>
-                  {parentDemandes.map(d => (
-                    <React.Fragment key={d.id}>
-                      <tr style={{ borderBottom: '1px solid #f8fafc' }}>
-                        <Td>{new Date(d.created_at).toLocaleDateString('fr-FR')}</Td>
-                        <Td bold color="#1e293b">{d.service}</Td>
-                        <Td>{getInterventionLabel(d)}</Td>
-                        <Td>
-                          {(d.profils_envoyes?.length ?? 0) > 0 ? (
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                              {d.profils_envoyes?.map(p => (
-                                <Link 
-                                  key={p.id} 
-                                  to={`/profils/${encodeId(p.id)}`} 
-                                  style={{ 
-                                    textDecoration: 'none',
-                                    padding: '2px 8px',
-                                    backgroundColor: '#f1f5f9',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: 6,
-                                    fontSize: 12,
-                                    color: C.teal,
-                                    fontWeight: 600,
-                                    display: 'inline-flex',
-                                    alignItems: 'center'
-                                  }}
-                                  title={p.full_name}
-                                >
-                                  {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()}
-                                </Link>
-                              ))}
-                            </div>
-                          ) : (
-                            <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>
-                          )}
-                        </Td>
-                        <Td>
-                          <Badge bg={d.segment === 'entreprise' ? C.lime : C.teal} color="white">
-                            {d.segment === 'entreprise' ? 'Entreprise' : 'Particulier'}
-                          </Badge>
-                        </Td>
-                        <Td>
-                          {renderStatusBadge(d.statut, d.cao)}
-                        </Td>
-                        <Td>
-                          {renderPaymentStatus(d)}
-                        </Td>
+                  {parentDemandes.map(d => {
+                    const latestD = getMostRecentSubDemande(d);
+                    return (
+                      <React.Fragment key={d.id}>
+                        <tr style={{ borderBottom: '1px solid #f8fafc' }}>
+                          <Td>{new Date(d.created_at).toLocaleDateString('fr-FR')}</Td>
+                          <Td bold color="#1e293b">{d.service}</Td>
+                          <Td>{d.frequency === 'abonnement' ? '—' : getInterventionLabel(d)}</Td>
+                          <Td>
+                            {(() => {
+                              const subProfs = getSubscriptionProfiles(d);
+                              if (subProfs.length > 0) {
+                                return (
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    {subProfs.map((p: any) => (
+                                      <div key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                        <Link 
+                                          to={`/profils/${encodeId(p.id)}`} 
+                                          style={{ 
+                                            textDecoration: 'none',
+                                            padding: '2px 8px',
+                                            backgroundColor: '#f1f5f9',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: 6,
+                                            fontSize: 12,
+                                            color: C.teal,
+                                            fontWeight: 600,
+                                            display: 'inline-flex',
+                                            alignItems: 'center'
+                                          }}
+                                          title={p.full_name}
+                                        >
+                                          {p.full_name}
+                                        </Link>
+                                        {p.ranks.map((r: number) => (
+                                          <span 
+                                            key={r}
+                                            style={{
+                                              padding: '1px 5px',
+                                              backgroundColor: C.teal,
+                                              color: 'white',
+                                              borderRadius: 4,
+                                              fontSize: 9,
+                                              fontWeight: 'bold',
+                                              lineHeight: 1
+                                            }}
+                                          >
+                                            {r}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              }
+                              return <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>;
+                            })()}
+                          </Td>
+                          <Td>
+                            <Badge bg={d.segment === 'entreprise' ? C.lime : C.teal} color="white">
+                              {d.segment === 'entreprise' ? 'Entreprise' : 'Particulier'}
+                            </Badge>
+                          </Td>
+                          <Td>
+                            {renderStatusBadge(latestD.statut, latestD.cao)}
+                          </Td>
+                          <Td>
+                            {renderPaymentStatus(latestD)}
+                          </Td>
                         <Td center>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
                             <button 
@@ -1200,8 +1302,9 @@ export default function ClientDetails() {
                           </div>
                         </Td>
                       </tr>
-                    </React.Fragment>
-                  ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -63,8 +63,10 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: 'commercial_paye_client', apiValue: 'partiel', label: 'Commercial payé / client' },
   { value: 'paiement_partiel', apiValue: 'partiel', label: 'Paiement partiel' },
   { value: 'paye', apiValue: 'integral', label: 'Payé' },
-  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Annulé' },
+  { value: 'facturation_annulee', apiValue: 'facturation_annulee', label: 'Facturation annulée' },
   { value: 'intervention_gratuite', apiValue: 'intervention_gratuite', label: 'Intervention gratuite' },
+  { value: 'intervention_annulee', apiValue: 'intervention_annulee', label: 'Intervention annulée' },
+  { value: 'reporte', apiValue: 'reporte', label: 'Reportée' },
 ];
 
 const getPaymentUiValue = (statutPaiement: string, facturationAnnulee: boolean, fallback?: string): string => {
@@ -290,23 +292,59 @@ export default function Dashboard() {
     const parentId = d.parent_demande || d.id;
     if (!parentId) return null;
 
-    const subDemands = demandes
-      .filter(x => (x.frequency === 'abonnement' || !!x.parent_demande) && (x.id === parentId || x.parent_demande === parentId))
+    const parseFrenchDate = (value?: string): Date | null => {
+      if (!value) return null;
+      if (value.includes('-')) {
+        const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+      const [day, month, year] = value.split('/');
+      if (!year || !month || !day) return null;
+      const parsed = new Date(`${year}-${month}-${day}T00:00:00`);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const list = allDemandes.length > 0 ? allDemandes : demandes;
+
+    // Get all demands of this subscription sorted chronologically overall
+    const subDemands = list
+      .filter(x => {
+        const isXSub = x.frequency === 'abonnement' || !!x.parent_demande;
+        if (!isXSub) return false;
+        const xParentId = x.parent_demande || x.id;
+        return Number(xParentId) === Number(parentId);
+      })
       .sort((a, b) => {
-        const dateA = a.date_intervention || a.created_at;
-        const dateB = b.date_intervention || b.created_at;
-        if (dateA < dateB) return -1;
-        if (dateA > dateB) return 1;
-        return 0;
+        const dateA = parseFrenchDate(a.date_intervention || a.formulaire_data?.date_intervention || a.created_at)?.getTime() || 0;
+        const dateB = parseFrenchDate(b.date_intervention || b.formulaire_data?.date_intervention || b.created_at)?.getTime() || 0;
+        return dateA - dateB;
       });
 
-    const index = subDemands.findIndex(x => x.id === d.id);
+    const index = subDemands.findIndex(x => Number(x.id) === Number(d.id));
     if (index === -1) return null;
+
+    const parentDemande = list.find(x => Number(x.id) === Number(parentId)) || d;
+    const weeks = parentDemande?.planning?.semaines;
+
+    let totalPlanned = 0;
+    if (weeks && Array.isArray(weeks)) {
+      weeks.forEach(week => {
+        if (week.jours) {
+          Object.keys(week.jours).forEach(dayKey => {
+            if (week.jours[dayKey]?.selected) {
+              totalPlanned++;
+            }
+          });
+        }
+      });
+    }
+
+    const total = totalPlanned > 0 ? totalPlanned : subDemands.length;
 
     return {
       rank: index + 1,
-      total: subDemands.length,
-      isFirst: index === 0
+      total: total,
+      isFirst: !d.parent_demande
     };
   };
 
@@ -1847,7 +1885,7 @@ export default function Dashboard() {
                                 );
                               } else {
                                 return (
-                                  <p className="price-main">Intervention {subInfo.rank}/{subInfo.total} — Abonnement</p>
+                                  <p className="price-main">Abonnement {subInfo.rank}/{subInfo.total}</p>
                                 );
                               }
                             }
@@ -2217,7 +2255,7 @@ export default function Dashboard() {
                             if (subInfo.isFirst) {
                               return `${typeof d.prix === 'number' && d.prix > 0 ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD — Abonnement`;
                             } else {
-                              return `Intervention ${subInfo.rank}/${subInfo.total} — Abonnement`;
+                              return `Abonnement ${subInfo.rank}/${subInfo.total}`;
                             }
                           }
                           return typeof d.prix === 'number' && d.prix > 0 ? `${d.prix.toLocaleString('fr-FR')} MAD` : (d.prix && d.prix !== '0' ? `${d.prix} MAD` : '—');
@@ -2838,6 +2876,9 @@ export default function Dashboard() {
                               const optionsToRender = PAYMENT_STATUS_OPTIONS.filter(o => {
                                 if (o.value === 'intervention_gratuite') {
                                   return isInterventionGratuiteActive;
+                                }
+                                if (o.value === 'intervention_annulee' || o.value === 'reporte') {
+                                  return false;
                                 }
                                 return true;
                               });
