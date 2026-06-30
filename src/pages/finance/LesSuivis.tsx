@@ -280,6 +280,63 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
   return row.partAgence;
 };
 
+const isRowEncaisseEtValide = (row: FacturationRow): boolean => {
+  const isCancelled =
+    row.statut === 'Facturation annulée' ||
+    row.statut === 'Intervention annulée' ||
+    row.statutPaiementUi === 'facturation_annulee' ||
+    row.statut === 'Intervention gratuite' ||
+    row.statutPaiementUi === 'intervention_gratuite';
+
+  if (isCancelled) return false;
+
+  return (
+    row.statut === 'Payé' ||
+    row.statutPaiementUi === 'paye' ||
+    row.statutPaiementUi === 'integral' ||
+    row.paiement === 'paye'
+  );
+};
+
+const getSubscriptionDeductions = (parentDemandeId: number, allRows: FacturationRow[]): number => {
+  return allRows.reduce((sum, r) => {
+    if (
+      r.isSubscriptionSecondary &&
+      Number(r.parentDemandeId) === Number(parentDemandeId) &&
+      r.statut !== 'Facturation annulée' &&
+      r.statut !== 'Intervention annulée' &&
+      r.statutPaiementUi !== 'facturation_annulee' &&
+      r.statut !== 'Intervention gratuite' &&
+      r.statutPaiementUi !== 'intervention_gratuite'
+    ) {
+      return sum + r.partProfil;
+    }
+    return sum;
+  }, 0);
+};
+
+const getRowCommercialStats = (row: FacturationRow, allRows: FacturationRow[]) => {
+  if (row.isSubscriptionSecondary) {
+    return { ca: 0, partAgence: 0 };
+  }
+
+  if (row.frequency === 'abonnement' || row.isSubscriptionPrimary) {
+    const parentId = row.demandeId;
+    if (parentId) {
+      const deductions = getSubscriptionDeductions(parentId, allRows);
+      return {
+        ca: Math.max(0, row.montant - deductions),
+        partAgence: Math.max(0, row.partAgence - deductions)
+      };
+    }
+  }
+
+  return {
+    ca: row.montant,
+    partAgence: row.partAgence
+  };
+};
+
 export default function LesSuivis() {
   const { user } = useAuthStore();
   const addToast = useToastStore((state) => state.addToast);
@@ -1231,14 +1288,7 @@ export default function LesSuivis() {
     }
 
     const rowsInPeriod = facturationData.filter((row) => {
-      const isCancelled =
-        row.statut === 'Facturation annulée' ||
-        row.statut === 'Intervention annulée' ||
-        row.statutPaiementUi === 'facturation_annulee' ||
-        row.statut === 'Intervention gratuite' ||
-        row.statutPaiementUi === 'intervention_gratuite';
-
-      if (isCancelled) return false;
+      if (!isRowEncaisseEtValide(row)) return false;
 
       const rDate = parseFrenchDate(row.date);
       if (!rDate) return false;
@@ -1249,29 +1299,33 @@ export default function LesSuivis() {
       return true;
     });
 
-    const statsMap = new Map<string, { name: string; ca: number; dossiers: number }>();
+    const statsMap = new Map<string, { name: string; ca: number; dossiers: number; commission: number }>();
     
     commerciauxList.forEach((c) => {
       const fullName = `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.username || 'Commercial';
-      statsMap.set(fullName, { name: fullName, ca: 0, dossiers: 0 });
+      statsMap.set(fullName, { name: fullName, ca: 0, dossiers: 0, commission: 0 });
     });
 
     rowsInPeriod.forEach((row) => {
       const commName = row.commercialName || '—';
       if (commName !== '—') {
         if (!statsMap.has(commName)) {
-          statsMap.set(commName, { name: commName, ca: 0, dossiers: 0 });
+          statsMap.set(commName, { name: commName, ca: 0, dossiers: 0, commission: 0 });
         }
         const data = statsMap.get(commName)!;
-        const subInfo = getSubInfo(row);
-        if (!subInfo || subInfo.isFirst) {
-          data.ca += row.montant;
+        
+        const { ca, partAgence } = getRowCommercialStats(row, facturationData);
+        data.ca += ca;
+        data.commission += partAgence;
+        
+        if (!row.isSubscriptionSecondary) {
+          data.dossiers += 1;
         }
-        data.dossiers += 1;
       }
     });
 
     let list = Array.from(statsMap.values());
+    const overallTeamCA = list.reduce((sum, item) => sum + item.ca, 0);
 
     if (commercialFilter !== 'all') {
       list = list.filter((item) => item.name === commercialFilter);
@@ -1279,15 +1333,15 @@ export default function LesSuivis() {
 
     const totalCA = list.reduce((sum, item) => sum + item.ca, 0);
     const totalDossiers = list.reduce((sum, item) => sum + item.dossiers, 0);
-    const commissionAgence = totalCA * 0.03; // 3% commission
+    const commissionAgence = list.reduce((sum, item) => sum + item.commission, 0);
 
     const sortedList = list
       .map((item) => {
-        const pct = totalCA > 0 ? (item.ca / totalCA) * 100 : 0;
+        const pct = overallTeamCA > 0 ? (item.ca / overallTeamCA) * 100 : 0;
         return {
           ...item,
           pct,
-          commission: item.ca * 0.03, // 3%
+          commission: item.commission,
         };
       })
       .sort((a, b) => b.ca - a.ca);
@@ -1301,7 +1355,7 @@ export default function LesSuivis() {
       commissionAgence,
       activeCount,
     };
-  }, [facturationData, periodFilter, commercialFilter, commerciauxList, commDateFrom, commDateTo, getSubInfo]);
+  }, [facturationData, periodFilter, commercialFilter, commerciauxList, commDateFrom, commDateTo]);
 
   // Tab 2 Calculations: Selected Commercial Detail Breakdown
   const selectedCommercialDetail = useMemo(() => {
@@ -1332,14 +1386,7 @@ export default function LesSuivis() {
     }
 
     const commRows = facturationData.filter((row) => {
-      const isCancelled =
-        row.statut === 'Facturation annulée' ||
-        row.statut === 'Intervention annulée' ||
-        row.statutPaiementUi === 'facturation_annulee' ||
-        row.statut === 'Intervention gratuite' ||
-        row.statutPaiementUi === 'intervention_gratuite';
-
-      if (isCancelled) return false;
+      if (!isRowEncaisseEtValide(row)) return false;
       if (row.commercialName !== selectedCommercialName) return false;
 
       const rDate = parseFrenchDate(row.date);
@@ -1352,13 +1399,10 @@ export default function LesSuivis() {
     });
 
     const totalRealisation = commRows.reduce((sum, r) => {
-      const subInfo = getSubInfo(r);
-      if (!subInfo || subInfo.isFirst) {
-        return sum + r.montant;
-      }
-      return sum;
+      const { ca } = getRowCommercialStats(r, facturationData);
+      return sum + ca;
     }, 0);
-    const totalDossiers = commRows.length;
+    const totalDossiers = commRows.filter(r => !r.isSubscriptionSecondary).length;
     
     const activeMonthsSet = new Set<string>();
     commRows.forEach((r) => {
@@ -1390,29 +1434,22 @@ export default function LesSuivis() {
 
     const teamCAMap = new Map<string, number>();
     facturationData.forEach((row) => {
-      const isCancelled =
-        row.statut === 'Facturation annulée' ||
-        row.statut === 'Intervention annulée' ||
-        row.statutPaiementUi === 'facturation_annulee' ||
-        row.statut === 'Intervention gratuite' ||
-        row.statutPaiementUi === 'intervention_gratuite';
-
-      if (isCancelled) return;
+      if (!isRowEncaisseEtValide(row)) return;
 
       const rDate = parseFrenchDate(row.date);
       if (!rDate) return;
+
+      if (startDate && rDate < startDate) return;
+      if (endDate && rDate > endDate) return;
 
       const mKey = formatMonthFR(rDate);
       const qKey = formatQuarterFR(rDate);
       const yKey = formatYearFR(rDate);
 
-      const subInfo = getSubInfo(row);
-      if (!subInfo || subInfo.isFirst) {
-        const ca = row.partProfil + row.partAgence;
-        teamCAMap.set(mKey, (teamCAMap.get(mKey) || 0) + ca);
-        teamCAMap.set(qKey, (teamCAMap.get(qKey) || 0) + ca);
-        teamCAMap.set(yKey, (teamCAMap.get(yKey) || 0) + ca);
-      }
+      const { ca } = getRowCommercialStats(row, facturationData);
+      teamCAMap.set(mKey, (teamCAMap.get(mKey) || 0) + ca);
+      teamCAMap.set(qKey, (teamCAMap.get(qKey) || 0) + ca);
+      teamCAMap.set(yKey, (teamCAMap.get(yKey) || 0) + ca);
     });
 
     const groupByPeriod = (
@@ -1427,11 +1464,12 @@ export default function LesSuivis() {
             groups.set(key, { realisation: 0, dossiers: 0, commAgence: 0 });
           }
           const g = groups.get(key)!;
-          const subInfo = getSubInfo(r);
-          const ca = (!subInfo || subInfo.isFirst) ? r.montant : 0;
+          const { ca, partAgence } = getRowCommercialStats(r, facturationData);
           g.realisation += ca;
-          g.dossiers += 1;
-          g.commAgence += ca * 0.03;
+          if (!r.isSubscriptionSecondary) {
+            g.dossiers += 1;
+          }
+          g.commAgence += partAgence;
         }
       });
 
@@ -1459,7 +1497,7 @@ export default function LesSuivis() {
       parTrimestre,
       parAnnee,
     };
-  }, [facturationData, selectedCommercialName, periodFilter, commDateFrom, commDateTo, getSubInfo]);
+  }, [facturationData, selectedCommercialName, periodFilter, commDateFrom, commDateTo]);
 
   // Open Edit status modal
   const handleOpenEdit = (row: FacturationRow) => {
@@ -1792,15 +1830,14 @@ export default function LesSuivis() {
   };
 
   const exportCommerciauxCsv = () => {
-    const headers = ['Rang', 'Commercial', 'CA Realise', 'Part de l equipe', 'Nombre de dossiers', 'Commission Agence (3%)'];
+    const headers = ['Rang', 'Commercial', "Chiffre d'affaires réalisé", 'Taux de contribution (%)', 'Commission agence'];
 
     const rows = commercialPerformance.ranking.map((item, idx) => [
       idx + 1,
       item.name,
-      `${item.ca} DH`,
+      `${item.ca.toFixed(2)} DH`,
       `${item.pct.toFixed(2)}%`,
-      item.dossiers,
-      `${item.commission} DH`,
+      `${item.commission.toFixed(2)} DH`,
     ]);
 
     const csvContent =
@@ -2452,7 +2489,7 @@ export default function LesSuivis() {
                       </div>
                       <div className="ls-comm-kpi-info">
                         <h4>{money(commercialPerformance.commissionAgence)}</h4>
-                        <p>Commission agence (3%)</p>
+                        <p>Commission agence</p>
                       </div>
                     </div>
                   </div>
@@ -2490,7 +2527,7 @@ export default function LesSuivis() {
                           
                           <div className="ls-ranking-progress-wrap">
                             <div className="ls-ranking-progress-header">
-                              <span className="ls-ranking-progress-label">Contribution</span>
+                              <span className="ls-ranking-progress-label">Taux de contribution (%)</span>
                               <span className="ls-ranking-progress-val">{item.pct.toFixed(2)}%</span>
                             </div>
                             <div className="ls-progress-bar">
@@ -2498,17 +2535,13 @@ export default function LesSuivis() {
                             </div>
                           </div>
 
-                          <div className="ls-ranking-stats">
+                          <div className="ls-ranking-stats" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
                             <div className="ls-ranking-stat-item">
-                              <span className="ls-ranking-stat-label">CA Réalisé</span>
+                              <span className="ls-ranking-stat-label">Chiffre d'affaires réalisé</span>
                               <span className="ls-ranking-stat-val">{money(item.ca)}</span>
                             </div>
                             <div className="ls-ranking-stat-item">
-                              <span className="ls-ranking-stat-label">Dossiers</span>
-                              <span className="ls-ranking-stat-val">{item.dossiers}</span>
-                            </div>
-                            <div className="ls-ranking-stat-item">
-                              <span className="ls-ranking-stat-label">Commission</span>
+                              <span className="ls-ranking-stat-label">Commission agence</span>
                               <span className="ls-ranking-stat-val commission">{money(item.commission)}</span>
                             </div>
                           </div>
@@ -2529,10 +2562,9 @@ export default function LesSuivis() {
                         <thead>
                           <tr>
                             <th>Commercial</th>
-                            <th>CA Réalisé</th>
-                            <th>Taux</th>
-                            <th>Dossiers</th>
-                            <th>Commission Agence</th>
+                            <th>Chiffre d'affaires réalisé</th>
+                            <th>Commission agence</th>
+                            <th>Taux de contribution (%)</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2558,21 +2590,20 @@ export default function LesSuivis() {
                                   </div>
                                 </td>
                                 <td className="ls-val-bold">{money(item.ca)}</td>
+                                <td className="ls-val-bold" style={{ color: '#059669' }}>
+                                  {money(item.commission)}
+                                </td>
                                 <td>
                                   <span className="ls-pill gray" style={{ backgroundColor: '#fce7f3', color: '#be185d', fontWeight: 'bold' }}>
                                     {item.pct.toFixed(2)}%
                                   </span>
-                                </td>
-                                <td>{item.dossiers}</td>
-                                <td className="ls-val-bold" style={{ color: '#059669' }}>
-                                  {money(item.commission)}
                                 </td>
                               </tr>
                             );
                           })}
                           {commercialPerformance.ranking.length === 0 && (
                             <tr>
-                              <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                              <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
                                 Aucune donnée disponible.
                               </td>
                             </tr>
