@@ -189,6 +189,57 @@ async function genererDevis(data: DevisData, logoBase64?: string, signatureBase6
   }
   y += 6;
 
+  // ==================== PRESTATIONS INCLUSES ====================
+  doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+  doc.text('PRESTATIONS INCLUSES', margin, y);
+  y += 4;
+  doc.setDrawColor(226, 232, 240).setLineWidth(0.2).line(margin, y, right, y);
+  y += 5;
+
+  const inclusions = [
+    "Évacuation des poussières et résidus de chantier",
+    "Nettoyage des sols : balayage, aspiration et lavage",
+    "Dépoussiérage et nettoyage des surfaces, murs et plinthes accessibles",
+    "Nettoyage des vitres intérieures accessibles et leurs encadrements",
+    "Désinfection des sanitaires",
+    "Nettoyage de la cuisine",
+    "Nettoyage des escaliers, balcons, terrasses et espaces accessibles"
+  ];
+
+  doc.setFont('helvetica', 'normal').setFontSize(9.5).setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+  inclusions.forEach(item => {
+    doc.setFont('helvetica', 'bold').setTextColor(BLUE[0], BLUE[1], BLUE[2]);
+    doc.text("✓", margin + 2, y);
+    doc.setFont('helvetica', 'normal').setTextColor(TEXT[0], TEXT[1], TEXT[2]);
+    const wrappedItem = doc.splitTextToSize(item, contentWidth - 8);
+    doc.text(wrappedItem, margin + 8, y);
+    y += Math.max(5, wrappedItem.length * 4.5) + 1.5;
+  });
+  y += 4;
+
+  // Warning note below checklist
+  const warningText = "Terrasse et rooftop inclus dans le forfait au même taux au m². Seules les vitres intérieures accessibles sont incluses. Toute autre tâche n'est pas incluse.";
+  const wrappedWarning = doc.splitTextToSize(warningText, contentWidth - 16);
+  const warningBoxHeight = wrappedWarning.length * 4.5 + 4;
+
+  doc.setFillColor(254, 243, 199); // Fond jaune/orange clair `#fef3c7`
+  doc.roundedRect(margin, y, contentWidth, warningBoxHeight, 1, 1, 'F');
+  
+  // Draw warning triangle vector
+  const triX = margin + 4;
+  const triY = y + 4.5;
+  doc.setFillColor(146, 64, 14); // Orange foncé
+  doc.triangle(triX, triY, triX + 2, triY - 3.5, triX + 4, triY, 'F');
+
+  doc.setFont('helvetica', 'bold').setFontSize(8.5).setTextColor(146, 64, 14); // Texte orange foncé `#92400e`
+  doc.text(wrappedWarning, margin + 12, y + 4.5);
+  y += warningBoxHeight + 10;
+
+  // Page break to Page 2
+  doc.addPage();
+  y = 24;
+
+
   // Table — DÉTAIL DE LA PRESTATION
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
