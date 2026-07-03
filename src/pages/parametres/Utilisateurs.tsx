@@ -46,7 +46,7 @@ const PERMISSIONS = [
   { key: "annulation_demande", label: "Annulation de la demande", group: "Tableau de bord" },
   { key: "note_operationnelle_dashboard", label: "Note opérationnelle", group: "Tableau de bord" },
   { key: "note_commerciale_dashboard", label: "Note commercial", group: "Tableau de bord" },
-  { key: "assigner_charge_operation", label: "Assigner à un chargé opération", group: "Tableau de bord" },
+  // { key: "assigner_charge_operation", label: "Assigner à un chargé opération", group: "Tableau de bord" },
   { key: "application_taux_horaire_standard", label: "Application de taux horaire standard", group: "Tableau de bord" },
   { key: "taux_horaire_exceptionnel", label: "Taux horaire exceptionnel", group: "Tableau de bord" },
   { key: "taux_forfaitaire", label: "Taux forfaitaire", group: "Tableau de bord" },

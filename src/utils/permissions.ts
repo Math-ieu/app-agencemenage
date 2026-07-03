@@ -415,7 +415,9 @@ export const isExemptFromOwnership = (user: User | null): boolean => {
     'responsable commercial',
     'responsable_commercial',
     'responsable des opérations',
-    'responsable_operations'
+    'responsable_operations',
+    'charge_operations',
+    'chargée des opérations'
   ].includes(role);
 };
 

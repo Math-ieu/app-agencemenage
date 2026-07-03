@@ -1945,16 +1945,7 @@ export default function Dashboard() {
                               </button>
                             )}
 
-                            {hasPermission(user, 'assigner_charge_operation') && (
-                              <button className="menu-item" style={{ color: '#0f766e' }} onClick={() => {
-                                setShowOpsAssignmentModal(d.id);
-                                setActiveMoreMenu(null);
-                              }}>
-                                <UserPlus size={16} /> Assigner au chargé d'opération
-                              </button>
-                            )}
-
-                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
+                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
 
                             {hasPermissionWithContext(user, 'editer_besoin_agence', d) && (
                               <>
@@ -2126,16 +2117,7 @@ export default function Dashboard() {
                               </button>
                             )}
 
-                            {hasPermission(user, 'assigner_charge_operation') && (
-                              <button className="menu-item" style={{ color: '#0f766e' }} onClick={() => {
-                                setShowOpsAssignmentModal(d.id);
-                                setActiveMoreMenu(null);
-                              }}>
-                                <UserPlus size={16} /> Assigner au chargé d'opération
-                              </button>
-                            )}
-
-                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation')) && <div className="menu-divider" />}
+                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
 
                             {hasPermissionWithContext(user, 'editer_besoin_agence', d) && (
                               <>
