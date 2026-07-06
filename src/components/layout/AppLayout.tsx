@@ -129,7 +129,9 @@ export default function AppLayout() {
         <div className="mobile-header-logo">
           <img src={logoUrl} alt="Agence Ménage" style={{ maxHeight: '40px' }} />
         </div>
-        <div style={{ width: 24 }}></div> {/* Spacer for alignment */}
+        <div className="mobile-header-actions" style={{ display: 'flex', alignItems: 'center' }}>
+          <NotificationBell />
+        </div>
       </div>
 
       {/* Overlay for mobile sidebar */}
@@ -258,18 +260,7 @@ export default function AppLayout() {
 
       {/* Main content */}
       <main className="main-content">
-        <header style={{ 
-          height: '60px', 
-          backgroundColor: '#fff', 
-          borderBottom: '1px solid #e2e8f0', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'flex-end', 
-          padding: '0 24px',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10
-        }}>
+        <header className="main-header">
           <NotificationBell />
         </header>
         <Outlet />

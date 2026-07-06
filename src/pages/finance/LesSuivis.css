@@ -890,3 +890,65 @@
   align-items: center;
   gap: 0.75rem;
 }
+
+/* ── RESPONSIVE DESIGN — LES SUIVIS ────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .ls-kpi-banner-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .ls-comm-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ls-ranking-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .ls-details-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .ls-kpi-banner-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ls-kpi-item {
+    border-right: none;
+    border-bottom: 1px solid #334155;
+    padding-bottom: 0.5rem;
+    padding-right: 0;
+  }
+  .ls-kpi-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .ls-comm-kpis {
+    grid-template-columns: 1fr;
+  }
+  .ls-ranking-grid {
+    grid-template-columns: 1fr;
+  }
+  .ls-page {
+    padding: 1rem 0.75rem;
+  }
+  .ls-tabs-container {
+    width: 100%;
+  }
+  .ls-tab-btn {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .ls-kpi-banner-grid {
+    grid-template-columns: 1fr;
+  }
+  .ls-kpi-item {
+    padding-right: 0;
+  }
+  .ls-ranking-stats {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+}

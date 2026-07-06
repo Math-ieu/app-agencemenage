@@ -409,6 +409,19 @@ body {
   position: relative;
 }
 
+.main-header {
+  height: 60px;
+  background-color: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
 .mobile-header {
   display: none;
   align-items: center;
@@ -467,6 +480,10 @@ body {
     flex-direction: column;
   }
 
+  .main-header {
+    display: none !important;
+  }
+
   .mobile-header {
     display: flex;
   }
@@ -507,6 +524,7 @@ body {
   justify-content: space-between;
   padding: 0 1.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
 }
 
 .logo {
@@ -579,6 +597,7 @@ body {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .nav-item::before {
@@ -636,6 +655,7 @@ body {
 .nav-group {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .nav-parent {
@@ -767,6 +787,7 @@ body {
   flex-direction: column;
   gap: 0.75rem;
   background: rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
 }
 
 .user-info {
@@ -946,38 +967,6 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
-}
-
-/* Page Layout specific responsive fixes */
-@media (max-width: 1024px) {
-  .page {
-    padding: 1.5rem 1rem;
-  }
-
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-}
-
-@media (max-width: 640px) {
-  .page-actions {
-    width: 100%;
-  }
-
-  .page-actions .btn {
-    flex: 1;
-  }
-
-  .filters-bar {
-    flex-direction: column;
-  }
-
-  .search-box,
-  .filter-select {
-    width: 100%;
-  }
 }
 
 
@@ -5353,6 +5342,12 @@ input:checked+.slider:before {
     padding: 1.5rem 1rem;
   }
 
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 1.25rem;
@@ -5479,6 +5474,26 @@ input:checked+.slider:before {
     padding: 1rem;
     flex-direction: column;
     gap: 0.75rem;
+  }
+}
+
+/* ── 3.5. MOBILE VIEW (≤640px) ─────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .page-actions {
+    width: 100%;
+  }
+
+  .page-actions .btn {
+    flex: 1;
+  }
+
+  .filters-bar {
+    flex-direction: column;
+  }
+
+  .search-box,
+  .filter-select {
+    width: 100%;
   }
 }
 

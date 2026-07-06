@@ -480,6 +480,27 @@ export default function LoginPage() {
           width: 2px !important;
           height: 20px !important;
         }
+
+        @media (max-width: 480px) {
+          .lp-card {
+            padding: 32px 20px;
+            max-width: 90%;
+            border-radius: 16px;
+          }
+          .lp-title {
+            font-size: 26px;
+          }
+          .lp-subtitle {
+            font-size: 13px;
+          }
+          .lp-modal-card {
+            padding: 32px 20px;
+            border-radius: 16px;
+          }
+          .lp-modal-title {
+            font-size: 22px;
+          }
+        }
       `}</style>
 
       <div className="lp-root">
