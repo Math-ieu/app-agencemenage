@@ -10,7 +10,7 @@ import {
   ChevronDown, User, FileText,
   MessageSquare, History, ArrowLeft, RefreshCw, Slash,
   Eye, Star, Clock, Heart, AlertCircle, FileDown,
-  XCircle, Send, Download, CheckCircle, X, Check, Trash2, Plus
+  XCircle, Send, Download, CheckCircle, X, Check, Trash2, Plus, Calendar
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
 import { checkPermission, hasPermission, hasPermissionWithClientContext } from '../utils/permissions';
@@ -129,12 +129,13 @@ function Accordion({ title, icon, children, isOpen, onToggle, color, badge }: Ac
 
 /* ─── Info Field ─── */
 function InfoField({ label, value }: { label: string; value?: string | number | null }) {
+  const isEmail = label.toLowerCase() === 'email';
   return (
     <div style={{ padding: '8px 0' }}>
       <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
         {label}
       </p>
-      <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 15, textTransform: 'capitalize' }}>
+      <p style={{ fontWeight: 700, color: '#1e293b', fontSize: 15, textTransform: isEmail ? 'none' : 'capitalize' }}>
         {value || '—'}
       </p>
     </div>
@@ -227,7 +228,7 @@ const formatFrequencyLabel = (val?: string): string => {
 const getOneMonthLater = (dateStr: string): string => {
   if (!dateStr) return '';
   const date = new Date(dateStr);
-  date.setMonth(date.getMonth() + 1);
+  date.setDate(date.getDate() + 29); // start date + 29 days is 30 days total
   return date.toISOString().split('T')[0];
 };
 
@@ -314,13 +315,15 @@ const calculateEndTime = (start: string, durationHours: number): string => {
   return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
 };
 
-const generateDefaultWeeks = (
+const generateWeeksForMonth = (
   startDateStr: string,
   endDateStr: string,
   joursIntervention: string[],
   heureDebut: string,
   nbHeures: number,
   frequencyLabel: string,
+  monthIndex: number,
+  startWeekIndex: number,
   parentDemandeId?: number
 ): any[] => {
   if (!startDateStr || !endDateStr) return [];
@@ -339,7 +342,7 @@ const generateDefaultWeeks = (
 
   const weeks: any[] = [];
   let currentMonday = getMonday(start);
-  let weekIndex = 1;
+  let weekIndex = startWeekIndex;
 
   while (currentMonday <= end) {
     const weekDebut = currentMonday.toISOString().split('T')[0];
@@ -371,7 +374,8 @@ const generateDefaultWeeks = (
       date_debut: weekDebut,
       date_fin: weekFin,
       termine: false,
-      jours
+      jours,
+      mois: monthIndex
     });
 
     weekIndex++;
@@ -379,6 +383,49 @@ const generateDefaultWeeks = (
   }
 
   return weeks;
+};
+
+const generateDefaultWeeks = (
+  startDateStr: string,
+  endDateStr: string,
+  joursIntervention: string[],
+  heureDebut: string,
+  nbHeures: number,
+  frequencyLabel: string,
+  parentDemandeId?: number
+): any[] => {
+  return generateWeeksForMonth(
+    startDateStr,
+    endDateStr,
+    joursIntervention,
+    heureDebut,
+    nbHeures,
+    frequencyLabel,
+    1,
+    1,
+    parentDemandeId
+  );
+};
+
+const getMonthDateRange = (weeks: any[]) => {
+  const startDates = weeks.map(w => w.date_debut).filter(Boolean);
+  const endDates = weeks.map(w => w.date_fin).filter(Boolean);
+  if (startDates.length === 0) return '';
+  const minStart = startDates.reduce((min, d) => d < min ? d : min, startDates[0]);
+  const maxEnd = endDates.reduce((max, d) => d > max ? d : max, endDates[0]);
+  
+  const formatDate = (s: string) => {
+    const parts = s.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return s;
+  };
+  return `(du ${formatDate(minStart)} au ${formatDate(maxEnd)})`;
+};
+
+const formatDateFR = (s: string) => {
+  const parts = s.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return s;
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -448,6 +495,8 @@ export default function ClientDetails() {
   const [semaines, setSemaines] = useState<any[]>([]);
   const [openWeekIds, setOpenWeekIds] = useState<string[]>([]);
   const [frequencyLabel, setFrequencyLabel] = useState('2/sem');
+  const [deleteMonthConfirm, setDeleteMonthConfirm] = useState(false);
+  const [monthToDelete, setMonthToDelete] = useState<number | null>(null);
 
   useEffect(() => {
     if (latest) {
@@ -455,10 +504,18 @@ export default function ClientDetails() {
       const hd = latest.planning?.heure_debut ? latest.planning.heure_debut.slice(0, 5) : (latest.heure_intervention ? latest.heure_intervention.slice(0, 5) : '09:00');
       const hf = latest.planning?.heure_fin ? latest.planning.heure_fin.slice(0, 5) : '11:00';
       const db = latest.planning?.date_debut || latest.date_intervention || '';
-      const df = latest.planning?.date_fin || (db ? getOneMonthLater(db) : '');
+      const s = latest.planning?.semaines || [];
+      let df = latest.planning?.date_fin || (db ? getOneMonthLater(db) : '');
+      
+      if (s && s.length > 0) {
+        const lastWeek = s[s.length - 1];
+        if (lastWeek && lastWeek.date_fin) {
+          df = lastWeek.date_fin;
+        }
+      }
+
       const statut = latest.planning?.statut || 'en_cours';
       const notes = latest.planning?.notes || '';
-      const s = latest.planning?.semaines || [];
 
       setJoursIntervention(ji);
       setHeureDebut(hd);
@@ -469,11 +526,22 @@ export default function ClientDetails() {
       setPlanningNotes(notes);
 
       if (s && s.length > 0) {
-        setSemaines(s);
+        const normalized = s.map((w: any) => ({ ...w, mois: w.mois || 1 }));
+        setSemaines(normalized);
+        if (statut === 'en_cours') {
+          checkAndAutoRenew(normalized, db, hd, ji, latest.id);
+        }
       } else if (db && df) {
         const dur = Number(latest.nb_heures || latest.formulaire_data?.duree || 2);
         const fl = normalizeFrequence(latest.frequency_label) || '2/sem';
-        setSemaines(generateDefaultWeeks(db, df, ji, hd, dur, fl, latest.id));
+        const defaultWeeks = generateDefaultWeeks(db, df, ji, hd, dur, fl, latest.id);
+        setSemaines(defaultWeeks);
+        if (defaultWeeks.length > 0) {
+          const lastW = defaultWeeks[defaultWeeks.length - 1];
+          if (lastW && lastW.date_fin) {
+            setDateFin(lastW.date_fin);
+          }
+        }
       } else {
         setSemaines([]);
       }
@@ -491,6 +559,165 @@ export default function ClientDetails() {
       setFrequencyLabel('2/sem');
     }
   }, [latest]);
+
+  const checkAndAutoRenew = async (
+    currentWeeks: any[],
+    db: string,
+    hd: string,
+    ji: string[],
+    demandeId: number
+  ) => {
+    if (!currentWeeks || currentWeeks.length === 0) return;
+    
+    let maxMonth = 1;
+    let maxDateFin = '';
+    let maxWeekLabelIndex = 0;
+    
+    currentWeeks.forEach(w => {
+      const m = w.mois || 1;
+      if (m > maxMonth) maxMonth = m;
+      if (w.date_fin && w.date_fin > maxDateFin) maxDateFin = w.date_fin;
+      
+      const match = (w.label || '').match(/Semaine\s+(\d+)/i);
+      if (match) {
+        const idx = parseInt(match[1], 10);
+        if (idx > maxWeekLabelIndex) maxWeekLabelIndex = idx;
+      }
+    });
+    
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    const weeksOfMaxMonth = currentWeeks.filter(w => (w.mois || 1) === maxMonth);
+    const allWeeksCompleted = weeksOfMaxMonth.length > 0 && weeksOfMaxMonth.every(w => w.termine);
+    const timeHasPassed = maxDateFin && todayStr > maxDateFin;
+    
+    if (allWeeksCompleted || timeHasPassed) {
+      const nextMonthIndex = maxMonth + 1;
+      const startWeekLabelIndex = maxWeekLabelIndex + 1;
+      
+      let startStr = db;
+      if (maxDateFin) {
+        const d = new Date(maxDateFin);
+        d.setDate(d.getDate() + 1);
+        startStr = d.toISOString().split('T')[0];
+      }
+      
+      const dStart = new Date(startStr);
+      const dEnd = new Date(dStart.getTime());
+      dEnd.setDate(dEnd.getDate() + 29);
+      const endStr = dEnd.toISOString().split('T')[0];
+      
+      const dur = Number(latest?.nb_heures || latest?.formulaire_data?.duree || 2);
+      const fl = normalizeFrequence(latest?.frequency_label) || '2/sem';
+      
+      const newWeeks = generateWeeksForMonth(
+        startStr,
+        endStr,
+        ji,
+        hd,
+        dur,
+        fl,
+        nextMonthIndex,
+        startWeekLabelIndex
+      );
+      
+      const updatedSemaines = [...currentWeeks, ...newWeeks];
+      
+      try {
+        const fallbackHeureDebut = hd;
+        const fallbackHeureFin = heureFin || '11:00';
+        
+        const lastNewWeek = newWeeks[newWeeks.length - 1];
+        const finalEndStr = (lastNewWeek && lastNewWeek.date_fin) ? lastNewWeek.date_fin : endStr;
+
+        const data = {
+          jours_intervention: ji,
+          heure_debut: fallbackHeureDebut ? (fallbackHeureDebut.length === 5 ? `${fallbackHeureDebut}:00` : fallbackHeureDebut) : null,
+          heure_fin: fallbackHeureFin ? (fallbackHeureFin.length === 5 ? `${fallbackHeureFin}:00` : fallbackHeureFin) : null,
+          date_debut: db,
+          date_fin: finalEndStr,
+          statut: 'en_cours',
+          notes: planningNotes || '',
+          semaines: updatedSemaines,
+        };
+        
+        await Promise.all([
+          savePlanning(demandeId, data),
+          updateDemande(demandeId, { frequency_label: fl })
+        ]);
+        
+        setSemaines(updatedSemaines);
+        setDateFin(finalEndStr);
+        
+        addToast(`Renouvellement automatique : Le Mois ${nextMonthIndex} a été planifié automatiquement (du ${formatDateFR(startStr)} au ${formatDateFR(finalEndStr)}).`, "info");
+      } catch (err) {
+        console.error("Failed to auto-renew planning:", err);
+      }
+    }
+  };
+
+  const handleAddMonth = () => {
+    if (!latest) return;
+    let maxMonth = 0;
+    let maxDateFin = '';
+    let maxWeekLabelIndex = 0;
+    
+    semaines.forEach(w => {
+      const m = w.mois || 1;
+      if (m > maxMonth) maxMonth = m;
+      if (w.date_fin && w.date_fin > maxDateFin) maxDateFin = w.date_fin;
+      
+      const match = (w.label || '').match(/Semaine\s+(\d+)/i);
+      if (match) {
+        const idx = parseInt(match[1], 10);
+        if (idx > maxWeekLabelIndex) maxWeekLabelIndex = idx;
+      }
+    });
+    
+    const nextMonthIndex = maxMonth + 1;
+    const startWeekLabelIndex = maxWeekLabelIndex + 1;
+    
+    let startStr = dateDebut;
+    if (maxDateFin) {
+      const d = new Date(maxDateFin);
+      d.setDate(d.getDate() + 1);
+      startStr = d.toISOString().split('T')[0];
+    }
+    
+    if (!startStr) {
+      addToast("Veuillez définir une date de début pour l'abonnement d'abord.", "error");
+      return;
+    }
+    
+    const dStart = new Date(startStr);
+    const dEnd = new Date(dStart.getTime());
+    dEnd.setDate(dEnd.getDate() + 29);
+    const endStr = dEnd.toISOString().split('T')[0];
+    
+    const dur = Number(latest?.nb_heures || latest?.formulaire_data?.duree || 2);
+    const newWeeks = generateWeeksForMonth(
+      startStr,
+      endStr,
+      joursIntervention,
+      heureDebut,
+      dur,
+      frequencyLabel,
+      nextMonthIndex,
+      startWeekLabelIndex
+    );
+    
+    const lastNewWeek = newWeeks[newWeeks.length - 1];
+    const finalEndStr = (lastNewWeek && lastNewWeek.date_fin) ? lastNewWeek.date_fin : endStr;
+    
+    setSemaines([...semaines, ...newWeeks]);
+    setDateFin(finalEndStr);
+    
+    if (newWeeks.length > 0) {
+      setOpenWeekIds([...openWeekIds, newWeeks[0].id]);
+    }
+    
+    addToast(`Mois ${nextMonthIndex} ajouté avec succès (du ${formatDateFR(startStr)} au ${formatDateFR(finalEndStr)}). N'oubliez pas d'enregistrer le planning !`, "success");
+  };
 
   const handleSavePlanning = async () => {
     if (!latest) return;
@@ -621,27 +848,125 @@ export default function ClientDetails() {
     }
   };
 
-  const handleAddWeek = () => {
-    const nextIndex = semaines.length + 1;
-    const newId = Math.random().toString(36).substr(2, 9);
-    const newWeek = {
-      id: newId,
-      label: `Semaine ${nextIndex}`,
-      date_debut: '',
-      date_fin: '',
-      termine: false,
-      jours: {
-        lundi: { selected: false, heure_debut: '', heure_fin: '' },
-        mardi: { selected: false, heure_debut: '', heure_fin: '' },
-        mercredi: { selected: false, heure_debut: '', heure_fin: '' },
-        jeudi: { selected: false, heure_debut: '', heure_fin: '' },
-        vendredi: { selected: false, heure_debut: '', heure_fin: '' },
-        samedi: { selected: false, heure_debut: '', heure_fin: '' },
-        dimanche: { selected: false, heure_debut: '', heure_fin: '' },
+  const handleAddWeekToMonth = (monthIndex: number) => {
+    if (!latest) return;
+    
+    const monthWeeks = semaines.filter(w => (w.mois || 1) === monthIndex);
+    let defaultStart = '';
+    let defaultEnd = '';
+    
+    if (monthWeeks.length > 0) {
+      // Find the last week's end date in this month
+      const lastWeekOfThisMonth = monthWeeks.reduce((last, w) => {
+        if (!last.date_fin) return w;
+        if (!w.date_fin) return last;
+        return w.date_fin > last.date_fin ? w : last;
+      }, monthWeeks[0]);
+      
+      if (lastWeekOfThisMonth.date_fin) {
+        const d = new Date(lastWeekOfThisMonth.date_fin);
+        d.setDate(d.getDate() + 1);
+        defaultStart = d.toISOString().split('T')[0];
+        
+        const dEnd = new Date(d.getTime());
+        dEnd.setDate(dEnd.getDate() + 6);
+        defaultEnd = dEnd.toISOString().split('T')[0];
       }
-    };
-    setSemaines([...semaines, newWeek]);
-    setOpenWeekIds([...openWeekIds, newId]);
+    } else {
+      // If the month is empty, let's determine start date from previous month or dateDebut
+      let prevMaxDateFin = '';
+      semaines.forEach(w => {
+        if ((w.mois || 1) < monthIndex && w.date_fin && w.date_fin > prevMaxDateFin) {
+          prevMaxDateFin = w.date_fin;
+        }
+      });
+      
+      if (prevMaxDateFin) {
+        const d = new Date(prevMaxDateFin);
+        d.setDate(d.getDate() + 1);
+        defaultStart = d.toISOString().split('T')[0];
+      } else {
+        defaultStart = dateDebut;
+      }
+      
+      if (defaultStart) {
+        const d = new Date(defaultStart);
+        const dEnd = new Date(d.getTime());
+        dEnd.setDate(dEnd.getDate() + 6);
+        defaultEnd = dEnd.toISOString().split('T')[0];
+      }
+    }
+
+    let newWeek: any;
+    if (defaultStart && defaultEnd) {
+      const dur = Number(latest?.nb_heures || latest?.formulaire_data?.duree || 2);
+      const fl = normalizeFrequence(latest?.frequency_label) || '2/sem';
+      const weeksGenerated = generateWeeksForMonth(
+        defaultStart,
+        defaultEnd,
+        joursIntervention,
+        heureDebut,
+        dur,
+        fl,
+        monthIndex,
+        1
+      );
+      if (weeksGenerated.length > 0) {
+        newWeek = weeksGenerated[0];
+      }
+    }
+    
+    // Fallback if weeks generation didn't yield a week or dates weren't available
+    if (!newWeek) {
+      const newId = Math.random().toString(36).substr(2, 9);
+      newWeek = {
+        id: newId,
+        label: `Semaine`,
+        date_debut: defaultStart || '',
+        date_fin: defaultEnd || '',
+        termine: false,
+        mois: monthIndex,
+        jours: {
+          lundi: { selected: false, heure_debut: '', heure_fin: '' },
+          mardi: { selected: false, heure_debut: '', heure_fin: '' },
+          mercredi: { selected: false, heure_debut: '', heure_fin: '' },
+          jeudi: { selected: false, heure_debut: '', heure_fin: '' },
+          vendredi: { selected: false, heure_debut: '', heure_fin: '' },
+          samedi: { selected: false, heure_debut: '', heure_fin: '' },
+          dimanche: { selected: false, heure_debut: '', heure_fin: '' },
+        }
+      };
+    }
+
+    // Insert the week right after the last week of this month.
+    const newSemaines: any[] = [];
+    let inserted = false;
+    
+    semaines.forEach(w => {
+      newSemaines.push(w);
+      if (monthWeeks.length > 0 && w.id === monthWeeks[monthWeeks.length - 1].id) {
+        newSemaines.push(newWeek);
+        inserted = true;
+      }
+    });
+    
+    if (!inserted) {
+      let insertIdx = 0;
+      for (let i = 0; i < semaines.length; i++) {
+        if ((semaines[i].mois || 1) <= monthIndex) {
+          insertIdx = i + 1;
+        }
+      }
+      newSemaines.splice(insertIdx, 0, newWeek);
+    }
+    
+    const reindexedSemaines = newSemaines.map((w, idx) => ({
+      ...w,
+      label: `Semaine ${idx + 1}`
+    }));
+    
+    setSemaines(reindexedSemaines);
+    setOpenWeekIds([...openWeekIds, newWeek.id]);
   };
 
   const handleDeleteWeek = (weekId: string) => {
@@ -652,6 +977,49 @@ export default function ClientDetails() {
     }));
     setSemaines(reindexed);
     setOpenWeekIds(openWeekIds.filter(id => id !== weekId));
+  };
+
+  const handleRequestDeleteMonth = (monthIndex: number) => {
+    setMonthToDelete(monthIndex);
+    setDeleteMonthConfirm(true);
+  };
+
+  const executeDeleteMonth = () => {
+    if (monthToDelete === null) return;
+    
+    const filteredSemaines = semaines.filter(w => (w.mois || 1) !== monthToDelete);
+    
+    // Shift subsequent month indices
+    const normalizedSemaines = filteredSemaines.map(w => {
+      const m = w.mois || 1;
+      if (m > monthToDelete) {
+        return { ...w, mois: m - 1 };
+      }
+      return w;
+    });
+
+    const reindexedSemaines = normalizedSemaines.map((w, idx) => ({
+      ...w,
+      label: `Semaine ${idx + 1}`
+    }));
+
+    let newDateFin = dateDebut;
+    if (reindexedSemaines.length > 0) {
+      const maxDateFin = reindexedSemaines.reduce((max, w) => {
+        if (!max) return w.date_fin || '';
+        if (!w.date_fin) return max;
+        return w.date_fin > max ? w.date_fin : max;
+      }, '');
+      if (maxDateFin) {
+        newDateFin = maxDateFin;
+      }
+    }
+
+    setSemaines(reindexedSemaines);
+    setDateFin(newDateFin);
+    setDeleteMonthConfirm(false);
+    setMonthToDelete(null);
+    addToast(`Le Mois ${monthToDelete} a été supprimé avec succès. N'oubliez pas d'enregistrer le planning !`, "success");
   };
 
   const updateWeekField = (weekId: string, field: string, value: any) => {
@@ -1134,7 +1502,7 @@ export default function ClientDetails() {
             <InfoField label="SEGMENT" value={client.segment} />
             <InfoField label="TÉLÉPHONE DIRECT" value={client.phone} />
             <InfoField label="WHATSAPP" value={client.whatsapp} />
-            <InfoField label="EMAIL" value={client.email} />
+            <InfoField label="EMAIL" value={client.email ? client.email.toLowerCase() : ''} />
             <InfoField label="VILLE" value={client.city || 'Casablanca'} />
             <InfoField label="QUARTIER" value={client.neighborhood} />
             <InfoField label="ADRESSE" value={client.address} />
@@ -1561,9 +1929,17 @@ export default function ClientDetails() {
                         setDateDebut(newStart);
                         if (newStart) {
                           const newEnd = getOneMonthLater(newStart);
-                          setDateFin(newEnd);
                           const dur = Number(latest?.nb_heures || latest?.formulaire_data?.duree || 2);
-                          setSemaines(generateDefaultWeeks(newStart, newEnd, joursIntervention, heureDebut, dur, frequencyLabel, latest.id));
+                          const defaultWeeks = generateDefaultWeeks(newStart, newEnd, joursIntervention, heureDebut, dur, frequencyLabel, latest.id);
+                          setSemaines(defaultWeeks);
+                          if (defaultWeeks.length > 0) {
+                            const lastW = defaultWeeks[defaultWeeks.length - 1];
+                            if (lastW && lastW.date_fin) {
+                              setDateFin(lastW.date_fin);
+                            }
+                          } else {
+                            setDateFin(newEnd);
+                          }
                         }
                       }}
                       style={{
@@ -1592,7 +1968,14 @@ export default function ClientDetails() {
                         setDateFin(newEnd);
                         if (dateDebut && newEnd) {
                           const dur = Number(latest?.nb_heures || latest?.formulaire_data?.duree || 2);
-                          setSemaines(generateDefaultWeeks(dateDebut, newEnd, joursIntervention, heureDebut, dur, frequencyLabel, latest.id));
+                          const defaultWeeks = generateDefaultWeeks(dateDebut, newEnd, joursIntervention, heureDebut, dur, frequencyLabel, latest.id);
+                          setSemaines(defaultWeeks);
+                          if (defaultWeeks.length > 0) {
+                            const lastW = defaultWeeks[defaultWeeks.length - 1];
+                            if (lastW && lastW.date_fin) {
+                              setDateFin(lastW.date_fin);
+                            }
+                          }
                         }
                       }}
                       style={{
@@ -1617,299 +2000,361 @@ export default function ClientDetails() {
                   </span>
                   <button
                     type="button"
-                    onClick={handleAddWeek}
+                    onClick={handleAddMonth}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '6px 14px', border: '1px solid #cbd5e1', borderRadius: 8,
-                      background: 'white', color: C.teal, fontSize: 13, fontWeight: 700,
+                      padding: '6px 14px', border: `1px solid ${C.teal}`, borderRadius: 8,
+                      background: C.teal, color: 'white', fontSize: 13, fontWeight: 700,
                       cursor: 'pointer'
                     }}
                   >
-                    <Plus size={15} /> Ajouter une semaine
+                    <Calendar size={15} /> Ajouter le mois suivant
                   </button>
                 </div>
 
-                {/* Weeks configurations list */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {semaines.map((week) => {
-                    const isOpen = openWeekIds.includes(week.id);
-                    return (
-                      <div key={week.id} style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', background: '#fafbfc' }}>
-                        {/* Week Header */}
-                        <div 
-                          onClick={() => toggleWeekOpen(week.id)}
-                          style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: '12px 18px', background: '#f8fafc', borderBottom: isOpen ? '1px solid #e2e8f0' : 'none',
-                            cursor: 'pointer', userSelect: 'none'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <ChevronDown 
-                              size={16} 
-                              style={{ 
-                                color: '#64748b', 
-                                transition: 'transform 0.2s', 
-                                transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' 
-                              }} 
-                            />
-                            <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>
-                              {week.label} <span style={{ fontWeight: 500, color: '#64748b', marginLeft: 6 }}>— {getSelectedDaysSummary(week)}</span>
-                            </span>
-                          </div>
-                          
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} onClick={e => e.stopPropagation()}>
-                            {/* Status Checkbox Badge */}
-                            <label 
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: 6,
-                                backgroundColor: week.termine ? '#dcfce7' : 'white',
-                                border: week.termine ? '1px solid #10b981' : '1px solid #cbd5e1',
-                                borderRadius: 8, padding: '4px 10px', cursor: 'pointer',
-                                fontSize: 12, fontWeight: 700, color: week.termine ? '#15803d' : '#475569',
-                                userSelect: 'none',
-                                transition: 'all 0.15s'
-                              }}
-                            >
-                              <input 
-                                type="checkbox"
-                                checked={week.termine || false}
-                                onChange={(e) => updateWeekField(week.id, 'termine', e.target.checked)}
-                                style={{ width: 14, height: 14, cursor: 'pointer', accentColor: week.termine ? '#10b981' : '#475569' }}
-                              />
-                              {week.termine ? 'Terminé' : 'En cours'}
-                            </label>
-                            
-                            {/* Delete Button */}
-                            <button 
-                              type="button"
-                              onClick={() => handleDeleteWeek(week.id)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: 4 }}
-                              title="Supprimer cette semaine"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
-                        
-                        {/* Week Content */}
-                        {isOpen && (
-                          <div style={{ padding: '20px 24px', background: 'white' }}>
-                            {/* Date range inputs */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-                              <div>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Du</span>
-                                <input
-                                  type="date"
-                                  value={week.date_debut || ''}
-                                  onChange={(e) => updateWeekField(week.id, 'date_debut', e.target.value)}
-                                  style={{
-                                    width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: 8,
-                                    fontSize: 13,
-                                    fontWeight: 500,
-                                    outline: 'none',
-                                    color: '#334155'
-                                  }}
-                                />
-                              </div>
-                              <div>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Au</span>
-                                <input
-                                  type="date"
-                                  value={week.date_fin || ''}
-                                  onChange={(e) => updateWeekField(week.id, 'date_fin', e.target.value)}
-                                  style={{
-                                    width: '100%',
-                                    padding: '8px 12px',
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: 8,
-                                    fontSize: 13,
-                                    fontWeight: 500,
-                                    outline: 'none',
-                                    color: '#334155'
-                                  }}
-                                />
-                              </div>
-                            </div>
-                            
-                            {/* Days checklist */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                              {[
-                                { label: 'Lundi', key: 'lundi' },
-                                { label: 'Mardi', key: 'mardi' },
-                                { label: 'Mercredi', key: 'mercredi' },
-                                { label: 'Jeudi', key: 'jeudi' },
-                                { label: 'Vendredi', key: 'vendredi' },
-                                { label: 'Samedi', key: 'samedi' },
-                                { label: 'Dimanche', key: 'dimanche' }
-                              ].map(day => {
-                                const dayConfig = week.jours?.[day.key] || { selected: false, heure_debut: '', heure_fin: '', demande_id: null };
-                                const dayDateStr = getDayDate(week.date_debut, day.key);
-                                const assocDemand = dayConfig.demande_id 
-                                  ? demandes.find(d => d.id === dayConfig.demande_id)
-                                  : (latest ? demandes.find(d => d.parent_demande === latest.id && d.date_intervention === dayDateStr) : null);
-                                const isLocked = !!(assocDemand && ['pres_terminee', 'termine', 'annule'].includes(assocDemand.statut));
-                                const isReportee = !!(assocDemand && assocDemand.cao === 'reporte');
-                                return (
-                                  <div key={day.key} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.3fr 1.3fr 2.2fr', gap: 12, alignItems: 'center' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: isLocked ? 'not-allowed' : 'pointer', userSelect: 'none' }}>
-                                      <input
-                                        type="checkbox"
-                                        checked={dayConfig.selected || false}
-                                        onChange={(e) => updateWeekDayField(week.id, day.key, 'selected', e.target.checked)}
-                                        disabled={isLocked}
-                                        style={{
-                                          width: 16, height: 16, accentColor: C.teal, cursor: isLocked ? 'not-allowed' : 'pointer'
-                                        }}
-                                      />
-                                      <span style={{ fontSize: 13, fontWeight: 600, color: isLocked ? '#94a3b8' : '#475569' }}>
-                                        {day.label}
-                                      </span>
-                                    </label>
-                                    
-                                    <div>
-                                      <input
-                                        type="time"
-                                        disabled={!dayConfig.selected || isLocked}
-                                        value={dayConfig.heure_debut ? dayConfig.heure_debut.slice(0, 5) : ''}
-                                        onChange={(e) => updateWeekDayField(week.id, day.key, 'heure_debut', e.target.value)}
-                                        placeholder="--:--"
-                                        style={{
-                                          width: '100%',
-                                          padding: '6px 10px',
-                                          border: '1px solid #cbd5e1',
-                                          borderRadius: 6,
-                                          fontSize: 13,
-                                          outline: 'none',
-                                          color: '#334155',
-                                          opacity: dayConfig.selected && !isLocked ? 1 : 0.4,
-                                          background: dayConfig.selected && !isLocked ? 'white' : '#f8fafc'
-                                        }}
-                                      />
-                                    </div>
-                                    
-                                    <div>
-                                      <input
-                                        type="time"
-                                        disabled={!dayConfig.selected || isLocked}
-                                        value={dayConfig.heure_fin ? dayConfig.heure_fin.slice(0, 5) : ''}
-                                        onChange={(e) => updateWeekDayField(week.id, day.key, 'heure_fin', e.target.value)}
-                                        placeholder="--:--"
-                                        style={{
-                                          width: '100%',
-                                          padding: '6px 10px',
-                                          border: '1px solid #cbd5e1',
-                                          borderRadius: 6,
-                                          fontSize: 13,
-                                          outline: 'none',
-                                          color: '#334155',
-                                          opacity: dayConfig.selected ? 1 : 0.4,
-                                          background: dayConfig.selected ? 'white' : '#f8fafc'
-                                        }}
-                                      />
-                                    </div>
+                {/* Weeks configurations list grouped by Month */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {(() => {
+                    const weeksByMonth: Record<number, any[]> = {};
+                    semaines.forEach(w => {
+                      const m = w.mois || 1;
+                      if (!weeksByMonth[m]) {
+                        weeksByMonth[m] = [];
+                      }
+                      weeksByMonth[m].push(w);
+                    });
 
-                                    {/* Action button & status column */}
-                                    <div>
-                                      {dayConfig.selected && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                          {assocDemand ? (
-                                            <>
-                                              {/* Status Badge */}
-                                              {assocDemand.statut === 'annule' ? (
-                                                <span style={{
-                                                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                  backgroundColor: '#fee2e2', border: '1px solid #ef4444',
-                                                  borderRadius: 8, padding: '4px 10px',
-                                                  fontSize: 12, fontWeight: 700, color: '#ef4444'
-                                                }}>
-                                                  Annulée
-                                                </span>
-                                              ) : ['pres_terminee', 'termine'].includes(assocDemand.statut) ? (
-                                                <span style={{
-                                                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                  backgroundColor: '#dcfce7', border: '1px solid #10b981',
-                                                  borderRadius: 8, padding: '4px 10px',
-                                                  fontSize: 12, fontWeight: 700, color: '#15803d'
-                                                }}>
-                                                  ✓ Terminée
-                                                </span>
-                                              ) : isReportee ? (
-                                                <span style={{
-                                                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                  backgroundColor: '#e0f2fe', border: '1px solid #38bdf8',
-                                                  borderRadius: 8, padding: '4px 10px',
-                                                  fontSize: 12, fontWeight: 700, color: '#0369a1'
-                                                }}>
-                                                  Reportée
-                                                </span>
-                                              ) : (
-                                                <span style={{
-                                                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                  backgroundColor: '#fef3c7', border: '1px solid #d97706',
-                                                  borderRadius: 8, padding: '4px 10px',
-                                                  fontSize: 12, fontWeight: 700, color: '#b45309'
-                                                }}>
-                                                  En cours
-                                                </span>
-                                              )}
-                                              {/* Demand created notice */}
-                                              <span style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8', opacity: 0.7 }}>
-                                                Demande créée
-                                              </span>
-                                            </>
-                                          ) : (
-                                            /* Create demand button */
-                                            <button
-                                              type="button"
-                                              onClick={() => handleCreatePlanningIntervention(
-                                                week.id,
-                                                day.key,
-                                                dayDateStr,
-                                                dayConfig.heure_debut
-                                              )}
-                                              style={{
-                                                padding: '4px 10px',
-                                                border: `1px solid ${C.teal}`,
-                                                borderRadius: 8,
-                                                background: 'white',
-                                                color: C.teal,
-                                                fontSize: 12,
-                                                fontWeight: 700,
-                                                cursor: 'pointer',
-                                                transition: 'all 0.15s',
-                                                outline: 'none',
-                                              }}
-                                              onMouseEnter={(e) => {
-                                                e.currentTarget.style.backgroundColor = `${C.teal}10`;
-                                              }}
-                                              onMouseLeave={(e) => {
-                                                e.currentTarget.style.backgroundColor = 'white';
-                                              }}
-                                            >
-                                              Créer la demande
-                                            </button>
-                                          )}
-                                        </div>
-                                      )}
+                    const sortedMonthKeys = Object.keys(weeksByMonth).sort((a, b) => Number(a) - Number(b));
+
+                    if (sortedMonthKeys.length === 0) {
+                      return (
+                        <div style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 12, color: '#64748b', fontSize: 14 }}>
+                          Aucune semaine d'intervention ajoutée. Cliquez sur le bouton "Ajouter le mois suivant" ci-dessus pour commencer à planifier.
+                        </div>
+                      );
+                    }
+
+                    return sortedMonthKeys.map(monthKey => {
+                      const mNum = Number(monthKey);
+                      const monthWeeks = weeksByMonth[mNum];
+                      return (
+                        <div key={mNum} style={{ border: '1px solid #cbd5e1', borderRadius: 12, padding: 16, backgroundColor: '#f8fafc' }}>
+                          {/* Month Header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid #e2e8f0', paddingBottom: 8 }}>
+                            <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <Calendar size={16} color={C.teal} />
+                              Mois {mNum} <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>{getMonthDateRange(monthWeeks)}</span>
+                            </h4>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <button
+                                type="button"
+                                onClick={() => handleAddWeekToMonth(mNum)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 4,
+                                  padding: '4px 10px', border: '1px solid #cbd5e1', borderRadius: 6,
+                                  background: 'white', color: C.teal, fontSize: 12, fontWeight: 700,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <Plus size={13} /> Ajouter une semaine
+                              </button>
+                              
+                              <button
+                                type="button"
+                                onClick={() => handleRequestDeleteMonth(mNum)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 4,
+                                  padding: '4px 10px', border: '1px solid #fee2e2', borderRadius: 6,
+                                  background: '#fef2f2', color: '#ef4444', fontSize: 12, fontWeight: 700,
+                                  cursor: 'pointer'
+                                }}
+                                title="Supprimer ce mois"
+                              >
+                                <Trash2 size={13} /> Supprimer ce mois
+                              </button>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {monthWeeks.map((week) => {
+                              const isOpen = openWeekIds.includes(week.id);
+                              return (
+                                <div key={week.id} style={{ border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', background: 'white' }}>
+                                  {/* Week Header */}
+                                  <div 
+                                    onClick={() => toggleWeekOpen(week.id)}
+                                    style={{
+                                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                      padding: '12px 18px', background: '#f8fafc', borderBottom: isOpen ? '1px solid #e2e8f0' : 'none',
+                                      cursor: 'pointer', userSelect: 'none'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                      <ChevronDown 
+                                        size={16} 
+                                        style={{ 
+                                          color: '#64748b', 
+                                          transition: 'transform 0.2s', 
+                                          transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' 
+                                        }} 
+                                      />
+                                      <span style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>
+                                        {week.label} <span style={{ fontWeight: 500, color: '#64748b', marginLeft: 6 }}>— {getSelectedDaysSummary(week)}</span>
+                                      </span>
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} onClick={e => e.stopPropagation()}>
+                                      {/* Status Checkbox Badge */}
+                                      <label 
+                                        style={{
+                                          display: 'flex', alignItems: 'center', gap: 6,
+                                          backgroundColor: week.termine ? '#dcfce7' : 'white',
+                                          border: week.termine ? '1px solid #10b981' : '1px solid #cbd5e1',
+                                          borderRadius: 8, padding: '4px 10px', cursor: 'pointer',
+                                          fontSize: 12, fontWeight: 700, color: week.termine ? '#15803d' : '#475569',
+                                          userSelect: 'none',
+                                          transition: 'all 0.15s'
+                                        }}
+                                      >
+                                        <input 
+                                          type="checkbox"
+                                          checked={week.termine || false}
+                                          onChange={(e) => updateWeekField(week.id, 'termine', e.target.checked)}
+                                          style={{ width: 14, height: 14, cursor: 'pointer', accentColor: week.termine ? '#10b981' : '#475569' }}
+                                        />
+                                        {week.termine ? 'Terminé' : 'En cours'}
+                                      </label>
+                                      
+                                      {/* Delete Button */}
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleDeleteWeek(week.id)}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', display: 'flex', padding: 4 }}
+                                        title="Supprimer cette semaine"
+                                      >
+                                        <Trash2 size={16} />
+                                      </button>
                                     </div>
                                   </div>
-                                );
-                              })}
-                            </div>
+                                  
+                                  {/* Week Content */}
+                                  {isOpen && (
+                                    <div style={{ padding: '20px 24px', background: 'white' }}>
+                                      {/* Date range inputs */}
+                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                                        <div>
+                                          <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Du</span>
+                                          <input
+                                            type="date"
+                                            value={week.date_debut || ''}
+                                            onChange={(e) => updateWeekField(week.id, 'date_debut', e.target.value)}
+                                            style={{
+                                              width: '100%',
+                                              padding: '8px 12px',
+                                              border: '1px solid #cbd5e1',
+                                              borderRadius: 8,
+                                              fontSize: 13,
+                                              fontWeight: 500,
+                                              outline: 'none',
+                                              color: '#334155'
+                                            }}
+                                          />
+                                        </div>
+                                        <div>
+                                          <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Au</span>
+                                          <input
+                                            type="date"
+                                            value={week.date_fin || ''}
+                                            onChange={(e) => updateWeekField(week.id, 'date_fin', e.target.value)}
+                                            style={{
+                                              width: '100%',
+                                              padding: '8px 12px',
+                                              border: '1px solid #cbd5e1',
+                                              borderRadius: 8,
+                                              fontSize: 13,
+                                              fontWeight: 500,
+                                              outline: 'none',
+                                              color: '#334155'
+                                            }}
+                                          />
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Days checklist */}
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                        {[
+                                          { label: 'Lundi', key: 'lundi' },
+                                          { label: 'Mardi', key: 'mardi' },
+                                          { label: 'Mercredi', key: 'mercredi' },
+                                          { label: 'Jeudi', key: 'jeudi' },
+                                          { label: 'Vendredi', key: 'vendredi' },
+                                          { label: 'Samedi', key: 'samedi' },
+                                          { label: 'Dimanche', key: 'dimanche' }
+                                        ].map(day => {
+                                          const dayConfig = week.jours?.[day.key] || { selected: false, heure_debut: '', heure_fin: '', demande_id: null };
+                                          const dayDateStr = getDayDate(week.date_debut, day.key);
+                                          const assocDemand = dayConfig.demande_id 
+                                            ? demandes.find(d => d.id === dayConfig.demande_id)
+                                            : (latest ? demandes.find(d => d.parent_demande === latest.id && d.date_intervention === dayDateStr) : null);
+                                          const isLocked = !!(assocDemand && ['pres_terminee', 'termine', 'annule'].includes(assocDemand.statut));
+                                          const isReportee = !!(assocDemand && assocDemand.cao === 'reporte');
+                                          return (
+                                            <div key={day.key} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.3fr 1.3fr 2.2fr', gap: 12, alignItems: 'center' }}>
+                                              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: isLocked ? 'not-allowed' : 'pointer', userSelect: 'none' }}>
+                                                <input
+                                                  type="checkbox"
+                                                  checked={dayConfig.selected || false}
+                                                  onChange={(e) => updateWeekDayField(week.id, day.key, 'selected', e.target.checked)}
+                                                  disabled={isLocked}
+                                                  style={{
+                                                    width: 16, height: 16, accentColor: C.teal, cursor: isLocked ? 'not-allowed' : 'pointer'
+                                                  }}
+                                                />
+                                                <span style={{ fontSize: 13, fontWeight: 600, color: isLocked ? '#94a3b8' : '#475569' }}>
+                                                  {day.label}
+                                                </span>
+                                              </label>
+                                              
+                                              <div>
+                                                <input
+                                                  type="time"
+                                                  disabled={!dayConfig.selected || isLocked}
+                                                  value={dayConfig.heure_debut ? dayConfig.heure_debut.slice(0, 5) : ''}
+                                                  onChange={(e) => updateWeekDayField(week.id, day.key, 'heure_debut', e.target.value)}
+                                                  placeholder="--:--"
+                                                  style={{
+                                                    width: '100%',
+                                                    padding: '6px 10px',
+                                                    border: '1px solid #cbd5e1',
+                                                    borderRadius: 6,
+                                                    fontSize: 13,
+                                                    outline: 'none',
+                                                    color: '#334155',
+                                                    opacity: dayConfig.selected && !isLocked ? 1 : 0.4,
+                                                    background: dayConfig.selected && !isLocked ? 'white' : '#f8fafc'
+                                                  }}
+                                                />
+                                              </div>
+                                              
+                                              <div>
+                                                <input
+                                                  type="time"
+                                                  disabled={!dayConfig.selected || isLocked}
+                                                  value={dayConfig.heure_fin ? dayConfig.heure_fin.slice(0, 5) : ''}
+                                                  onChange={(e) => updateWeekDayField(week.id, day.key, 'heure_fin', e.target.value)}
+                                                  placeholder="--:--"
+                                                  style={{
+                                                    width: '100%',
+                                                    padding: '6px 10px',
+                                                    border: '1px solid #cbd5e1',
+                                                    borderRadius: 6,
+                                                    fontSize: 13,
+                                                    outline: 'none',
+                                                    color: '#334155',
+                                                    opacity: dayConfig.selected ? 1 : 0.4,
+                                                    background: dayConfig.selected ? 'white' : '#f8fafc'
+                                                  }}
+                                                />
+                                              </div>
+                                              
+                                              {/* Action button & status column */}
+                                              <div>
+                                                {dayConfig.selected && (
+                                                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                    {assocDemand ? (
+                                                      <>
+                                                        {/* Status Badge */}
+                                                        {assocDemand.statut === 'annule' ? (
+                                                          <span style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                            backgroundColor: '#fee2e2', border: '1px solid #ef4444',
+                                                            borderRadius: 8, padding: '4px 10px',
+                                                            fontSize: 12, fontWeight: 700, color: '#ef4444'
+                                                          }}>
+                                                            Annulée
+                                                          </span>
+                                                        ) : ['pres_terminee', 'termine'].includes(assocDemand.statut) ? (
+                                                          <span style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                            backgroundColor: '#dcfce7', border: '1px solid #10b981',
+                                                            borderRadius: 8, padding: '4px 10px',
+                                                            fontSize: 12, fontWeight: 700, color: '#15803d'
+                                                          }}>
+                                                            ✓ Terminée
+                                                          </span>
+                                                        ) : isReportee ? (
+                                                          <span style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                            backgroundColor: '#e0f2fe', border: '1px solid #38bdf8',
+                                                            borderRadius: 8, padding: '4px 10px',
+                                                            fontSize: 12, fontWeight: 700, color: '#0369a1'
+                                                          }}>
+                                                            Reportée
+                                                          </span>
+                                                        ) : (
+                                                          <span style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                            backgroundColor: '#fef3c7', border: '1px solid #d97706',
+                                                            borderRadius: 8, padding: '4px 10px',
+                                                            fontSize: 12, fontWeight: 700, color: '#b45309'
+                                                          }}>
+                                                            En cours
+                                                          </span>
+                                                        )}
+                                                        {/* Demand created notice */}
+                                                        <span style={{ fontSize: 11, fontWeight: 500, color: '#94a3b8', opacity: 0.7 }}>
+                                                          Demande créée
+                                                        </span>
+                                                      </>
+                                                    ) : (
+                                                      /* Create demand button */
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleCreatePlanningIntervention(
+                                                          week.id,
+                                                          day.key,
+                                                          dayDateStr,
+                                                          dayConfig.heure_debut
+                                                        )}
+                                                        style={{
+                                                          padding: '4px 10px',
+                                                          border: `1px solid ${C.teal}`,
+                                                          borderRadius: 8,
+                                                          background: 'white',
+                                                          color: C.teal,
+                                                          fontSize: 12,
+                                                          fontWeight: 700,
+                                                          cursor: 'pointer',
+                                                          transition: 'all 0.15s',
+                                                          outline: 'none',
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                          e.currentTarget.style.backgroundColor = `${C.teal}10`;
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                          e.currentTarget.style.backgroundColor = 'white';
+                                                        }}
+                                                      >
+                                                        Créer la demande
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {semaines.length === 0 && (
-                    <div style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 12, color: '#64748b', fontSize: 14 }}>
-                      Aucune semaine d'intervention ajoutée. Cliquez sur le bouton "Ajouter une semaine" ci-dessus pour commencer à planifier.
-                    </div>
-                  )}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
 
                 {/* Notes de planification */}
@@ -2433,6 +2878,18 @@ export default function ClientDetails() {
             </div>
           </div>
         </div>
+      )}
+
+      {deleteMonthConfirm && monthToDelete !== null && (
+        <ConfirmDialog
+          isOpen={deleteMonthConfirm}
+          onOpenChange={setDeleteMonthConfirm}
+          title={`Supprimer le Mois ${monthToDelete} ?`}
+          description={`Voulez-vous vraiment supprimer le Mois ${monthToDelete} de la planification ? Toutes les semaines d'intervention rattachées à ce mois seront supprimées définitivement. Les mois restants suivants seront ré-indexés.`}
+          confirmLabel="Supprimer le mois"
+          onConfirm={executeDeleteMonth}
+          variant="danger"
+        />
       )}
 
       {showBlacklistConfirm && client && (
