@@ -33,7 +33,17 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
     if (demande.frequency === "abonnement") return "subscription";
     return "oneshot";
   });
-  const [joursSemaine, setJoursSemaine] = useState<number>(() => Number(data.jours_par_semaine || 2));
+  const [joursSemaine, setJoursSemaine] = useState<number>(() => {
+    const rawJours = Number(data.jours_par_semaine);
+    if (rawJours && rawJours > 0) return rawJours;
+    const freqVal = data.frequence || demande.frequency_label || "";
+    if (freqVal.includes("/sem")) {
+      const parts = freqVal.split("/");
+      const num = parseInt(parts[0]);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    return 2;
+  });
 
   const [opts, setOpts] = useState(() => ({
     produits: Boolean(data.produits),

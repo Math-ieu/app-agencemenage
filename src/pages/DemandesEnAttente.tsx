@@ -386,6 +386,12 @@ export default function DemandesEnAttente() {
       if (demande.prix !== undefined) payload.prix = demande.prix;
       if (demande.nb_heures !== undefined) payload.nb_heures = demande.nb_heures;
       if (demande.nb_intervenants !== undefined) payload.nb_intervenants = demande.nb_intervenants;
+      if (demande.frequency !== undefined) payload.frequency = demande.frequency;
+      if (demande.frequency_label !== undefined) payload.frequency_label = demande.frequency_label;
+      if (demande.service !== undefined) payload.service = demande.service;
+      if (demande.mode_paiement !== undefined) payload.mode_paiement = demande.mode_paiement;
+      if (demande.statut_paiement !== undefined) payload.statut_paiement = demande.statut_paiement;
+      if (demande.avance_paiement !== undefined) payload.avance_paiement = demande.avance_paiement;
       await updateDemande(demande.id, payload);
 
       if (type === 'devis') {
@@ -535,6 +541,12 @@ export default function DemandesEnAttente() {
       if (demande.prix !== undefined) payload.prix = demande.prix;
       if (demande.nb_heures !== undefined) payload.nb_heures = demande.nb_heures;
       if (demande.nb_intervenants !== undefined) payload.nb_intervenants = demande.nb_intervenants;
+      if (demande.frequency !== undefined) payload.frequency = demande.frequency;
+      if (demande.frequency_label !== undefined) payload.frequency_label = demande.frequency_label;
+      if (demande.service !== undefined) payload.service = demande.service;
+      if (demande.mode_paiement !== undefined) payload.mode_paiement = demande.mode_paiement;
+      if (demande.statut_paiement !== undefined) payload.statut_paiement = demande.statut_paiement;
+      if (demande.avance_paiement !== undefined) payload.avance_paiement = demande.avance_paiement;
       await updateDemande(demande.id, payload);
 
       let mediaUrl: string | undefined = undefined;
@@ -888,6 +900,30 @@ export default function DemandesEnAttente() {
     const isAuxiliaire = selectedServiceKey.includes('auxiliaire de vie') || selectedService.toLowerCase().includes('auxiliaire');
     const cleanerCount = isAuxiliaire ? (formData.nb_personnel || 1) : (formData.nb_intervenants || 1);
 
+    const uiSubFreqMap: Record<string, string> = {
+      "1/sem": "1foisParSemaine",
+      "2/sem": "2foisParSemaine",
+      "3/sem": "3foisParSemaine",
+      "4/sem": "4foisParSemaine",
+      "5/sem": "5foisParSemaine",
+      "6/sem": "6foisParSemaine",
+      "7/sem": "7foisParSemaine",
+      "1/mois": "1foisParMois",
+      "2/mois": "2foisParMois",
+      "3/mois": "3foisParMois",
+      "4/mois": "4foisParMois",
+    };
+
+    let joursParSemaine = 0;
+    if (formData.frequence && formData.frequence.includes('/sem')) {
+      const parts = formData.frequence.split('/');
+      joursParSemaine = parseInt(parts[0]) || 0;
+    } else if (formData.frequence === 'quotidien') {
+      joursParSemaine = 7;
+    }
+
+    const mappedSubFrequency = uiSubFreqMap[formData.frequence || ''] || (formData.frequence === 'quotidien' ? 'quotidien' : undefined);
+
     const formulaire_data = {
       ...(baseDemande?.formulaire_data || {}),
       facturation: {
@@ -981,7 +1017,9 @@ export default function DemandesEnAttente() {
       avance_type: formData.avance_type,
       avance_pourcentage: formData.avance_pourcentage,
       avance_fixe: formData.avance_fixe,
-      frequence: formData.frequence
+      frequence: formData.frequence,
+      jours_par_semaine: joursParSemaine,
+      subFrequency: mappedSubFrequency
     };
 
     return {
@@ -1067,6 +1105,30 @@ export default function DemandesEnAttente() {
 
       const isAuxiliaire = selectedServiceKey.includes('auxiliaire de vie') || selectedService.toLowerCase().includes('auxiliaire');
       const cleanerCount = isAuxiliaire ? (formData.nb_personnel || 1) : (formData.nb_intervenants || 1);
+
+      const uiSubFreqMap: Record<string, string> = {
+        "1/sem": "1foisParSemaine",
+        "2/sem": "2foisParSemaine",
+        "3/sem": "3foisParSemaine",
+        "4/sem": "4foisParSemaine",
+        "5/sem": "5foisParSemaine",
+        "6/sem": "6foisParSemaine",
+        "7/sem": "7foisParSemaine",
+        "1/mois": "1foisParMois",
+        "2/mois": "2foisParMois",
+        "3/mois": "3foisParMois",
+        "4/mois": "4foisParMois",
+      };
+
+      let joursParSemaine = 0;
+      if (formData.frequence && formData.frequence.includes('/sem')) {
+        const parts = formData.frequence.split('/');
+        joursParSemaine = parseInt(parts[0]) || 0;
+      } else if (formData.frequence === 'quotidien') {
+        joursParSemaine = 7;
+      }
+
+      const mappedSubFrequency = uiSubFreqMap[formData.frequence || ''] || (formData.frequence === 'quotidien' ? 'quotidien' : undefined);
 
       const payload = {
         client_name: clientDisplayName,
@@ -1185,7 +1247,9 @@ export default function DemandesEnAttente() {
           avance_type: formData.avance_type,
           avance_pourcentage: formData.avance_pourcentage,
           avance_fixe: formData.avance_fixe,
-          frequence: formData.frequence
+          frequence: formData.frequence,
+          jours_par_semaine: joursParSemaine,
+          subFrequency: mappedSubFrequency
         }
       };
 
@@ -1268,6 +1332,7 @@ export default function DemandesEnAttente() {
             ? ((patch.frequency === 'subscription' || patch.frequency === 'abonnement') ? 'abonnement' : 'oneshot') 
             : d.frequency,
           frequency_label: patch.frequence !== undefined ? patch.frequence : d.frequency_label,
+          service: patch.custom_service_type !== undefined ? patch.custom_service_type : d.service,
           formulaire_data: {
             ...(d.formulaire_data || {}),
             ...updatedPatch
@@ -1303,6 +1368,13 @@ export default function DemandesEnAttente() {
           : 'oneshot';
       }
       if (patch.frequence !== undefined) payload.frequency_label = patch.frequence;
+
+      if (patch.custom_service_type !== undefined) {
+        payload.service = patch.custom_service_type;
+      }
+      if (patch.service !== undefined) {
+        payload.service = patch.service;
+      }
 
       await updateDemande(demandeId, payload);
     } catch (e) {

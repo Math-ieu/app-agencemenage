@@ -30,6 +30,20 @@ const PLACEMENT_FREQUENCES = [
   { value: "4foisParMois", label: "4 fois par mois" },
 ];
 
+const uiSubFreqMap: Record<string, string> = {
+  "1/sem": "1foisParSemaine",
+  "2/sem": "2foisParSemaine",
+  "3/sem": "3foisParSemaine",
+  "4/sem": "4foisParSemaine",
+  "5/sem": "5foisParSemaine",
+  "6/sem": "6foisParSemaine",
+  "7/sem": "7foisParSemaine",
+  "1/mois": "1foisParMois",
+  "2/mois": "2foisParMois",
+  "3/mois": "3foisParMois",
+  "4/mois": "4foisParMois",
+};
+
 interface PlacementQuoteProps {
   demande: any;
   onPrestationsChange?: (prestations: QuotePrestationLine[], total: number, extra?: Record<string, any>) => void;
@@ -60,7 +74,11 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const [ferie, setFerie] = useState(Boolean(data.ferie || data.majoration_ferie));
   const [tenue, setTenue] = useState(data.tenue_travail !== undefined ? Boolean(data.tenue_travail) : true);
   const [frequency, setFrequency] = useState(data.frequency || "oneshot");
-  const [subFrequency, setSubFrequency] = useState(data.subFrequency || "1foisParSemaine");
+  const [subFrequency, setSubFrequency] = useState(() => {
+    if (data.subFrequency) return data.subFrequency;
+    const freqVal = data.frequence || demande.frequency_label || "";
+    return uiSubFreqMap[freqVal] || "1foisParSemaine";
+  });
 
   const jm = frequency === "subscription" ? (visitsMap[subFrequency] * 4) : parseFloat(js);
   const hm = hj * jm;
@@ -187,7 +205,11 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const [eng, setEng] = useState(data.engagement_mois === 12 ? "0.10" : data.engagement_mois === 6 ? "0.05" : "0");
   const [ferie, setFerie] = useState(Boolean(data.ferie || data.majoration_ferie));
   const [frequency, setFrequency] = useState(data.frequency || "oneshot");
-  const [subFrequency, setSubFrequency] = useState(data.subFrequency || "1foisParSemaine");
+  const [subFrequency, setSubFrequency] = useState(() => {
+    if (data.subFrequency) return data.subFrequency;
+    const freqVal = data.frequence || demande.frequency_label || "";
+    return uiSubFreqMap[freqVal] || "1foisParSemaine";
+  });
 
   const nbS = Math.max(nb, 2);
   const jm = frequency === "subscription" ? (visitsMap[subFrequency] * 4) : parseFloat(js);

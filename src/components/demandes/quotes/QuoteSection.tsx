@@ -174,13 +174,28 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
         avanceMontant = avanceFixe;
       }
     }
+    const extra = extraDataRef.current || {};
+    const finalFrequency = extra.frequency !== undefined
+      ? ((extra.frequency === 'subscription' || extra.frequency === 'abonnement') ? 'abonnement' : 'oneshot')
+      : (demande.frequency || 'oneshot');
+    const finalFrequencyLabel = extra.frequence !== undefined
+      ? extra.frequence
+      : (extra.frequency_label !== undefined ? extra.frequency_label : (demande.frequency_label || ''));
+    const finalService = extra.custom_service_type !== undefined
+      ? extra.custom_service_type
+      : (extra.service !== undefined ? extra.service : demande.service);
+
     // Inject the calculator prestations into the demande before preview
     const enrichedDemande = {
       ...demande,
       prix: totalDevis,
+      frequency: finalFrequency,
+      frequency_label: finalFrequencyLabel,
+      service: finalService,
+      avance_paiement: avanceMontant,
       formulaire_data: {
         ...(demande.formulaire_data || {}),
-        ...extraDataRef.current,
+        ...extra,
         prestations: prestationsRef.current.length > 0 ? prestationsRef.current : undefined,
         total: totalDevis || undefined,
         avance_active: avanceActive,
@@ -204,12 +219,27 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
         avanceMontant = avanceFixe;
       }
     }
+    const extra = extraDataRef.current || {};
+    const finalFrequency = extra.frequency !== undefined
+      ? ((extra.frequency === 'subscription' || extra.frequency === 'abonnement') ? 'abonnement' : 'oneshot')
+      : (demande.frequency || 'oneshot');
+    const finalFrequencyLabel = extra.frequence !== undefined
+      ? extra.frequence
+      : (extra.frequency_label !== undefined ? extra.frequency_label : (demande.frequency_label || ''));
+    const finalService = extra.custom_service_type !== undefined
+      ? extra.custom_service_type
+      : (extra.service !== undefined ? extra.service : demande.service);
+
     const enrichedDemande = {
       ...demande,
       prix: totalDevis,
+      frequency: finalFrequency,
+      frequency_label: finalFrequencyLabel,
+      service: finalService,
+      avance_paiement: avanceMontant,
       formulaire_data: {
         ...(demande.formulaire_data || {}),
-        ...extraDataRef.current,
+        ...extra,
         prestations: prestationsRef.current.length > 0 ? prestationsRef.current : undefined,
         total: totalDevis || undefined,
         avance_active: avanceActive,
@@ -224,15 +254,15 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
 
   const getComponent = () => {
     if (demande.formulaire_data?.is_autre_service === true || service.includes("autre service") || service.includes("autre_service")) {
-      return <AutreServiceQuote demande={demande} onPrestationsChange={handlePrestationsChange} formData={formData} setFormData={setFormData} onUpdateDemandeData={patch => onUpdateDemandeData?.(demande.id, patch)} />;
+      return <AutreServiceQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} formData={formData} setFormData={setFormData} onUpdateDemandeData={patch => onUpdateDemandeData?.(demande.id, patch)} />;
     }
-    if (service.includes("air bnb") || service.includes("airbnb")) return <AirbnbQuote demande={demande} onPrestationsChange={handlePrestationsChange} formData={formData} setFormData={setFormData} onUpdateDemandeData={patch => onUpdateDemandeData?.(demande.id, patch)} />;
-    if (service.includes("chantier")) return <ChantierQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
-    if (service.includes("auxiliaire")) return <AuxvieQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
-    if (service.includes("sinistre")) return <SinistreQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
-    if (service.includes("bureaux")) return <BureauxQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
-    if (service.includes("placement") || service.includes("gestion")) return <PlacementQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
-    if (service.includes("standard") || service.includes("grand")) return <StandardQuote demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("air bnb") || service.includes("airbnb")) return <AirbnbQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} formData={formData} setFormData={setFormData} onUpdateDemandeData={patch => onUpdateDemandeData?.(demande.id, patch)} />;
+    if (service.includes("chantier")) return <ChantierQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("auxiliaire")) return <AuxvieQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("sinistre")) return <SinistreQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("bureaux")) return <BureauxQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("placement") || service.includes("gestion")) return <PlacementQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("standard") || service.includes("grand")) return <StandardQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
     return null;
   };
 
