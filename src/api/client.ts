@@ -188,19 +188,21 @@ export const confirmerClient = (id: number) =>
 export const nouveauClient = (id: number) =>
   apiClient.post(`/api/demandes/${id}/nouveau_client/`);
 
-export const generateDocument = (id: number, type: 'devis' | 'png' | 'facture') =>
-  apiClient.post(`/api/demandes/${id}/generate_document/`, { type });
+export const generateDocument = (id: number, type: 'devis' | 'png' | 'facture', monthIndex?: number) =>
+  apiClient.post(`/api/demandes/${id}/generate_document/`, { type, month_index: monthIndex });
 
 export const sendWhatsApp = (
   id: number,
   type: 'devis' | 'png' | 'facture' | 'cao_profil' | 'feedback',
   profileAgentId?: number,
-  mediaUrl?: string
+  mediaUrl?: string,
+  monthIndex?: number
 ) =>
   apiClient.post(`/api/demandes/${id}/send_whatsapp/`, {
     type,
     ...(profileAgentId ? { profile_agent_id: profileAgentId } : {}),
     ...(mediaUrl ? { media_url: mediaUrl } : {}),
+    ...(monthIndex ? { month_index: monthIndex } : {}),
   });
 
 /**

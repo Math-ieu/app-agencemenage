@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   getClient, getDemandes, getFeedbacks, getClientActionLogs,
   updateDemande, fetchSecureDocBlob, updateClient, savePlanning,
-  createPlanningIntervention
+  createPlanningIntervention, generateDocument, sendWhatsApp
 } from '../api/client';
 import { decodeId, encodeId } from '../utils/obfuscation';
 import {
@@ -641,15 +641,45 @@ export default function ClientDetails() {
           semaines: updatedSemaines,
         };
         
+        const prevWeeksCount = nextMonthIndex - 1;
+        const originalMonthlyPrice = prevWeeksCount > 0 ? Number(latest?.prix || 0) / prevWeeksCount : Number(latest?.prix || 0);
+        const newPrice = originalMonthlyPrice * nextMonthIndex;
+        
+        const updatedFormData = latest?.formulaire_data ? { ...latest.formulaire_data } : {};
+        if (updatedFormData.facturation) {
+          const fact = { ...updatedFormData.facturation };
+          const tva_active = !!fact.tva_active;
+          fact.montant_ttc = newPrice;
+          fact.montant_ht = tva_active ? Math.round((newPrice / 1.2) * 100) / 100 : newPrice;
+          fact.montant = newPrice;
+          updatedFormData.facturation = fact;
+        }
+
         await Promise.all([
           savePlanning(demandeId, data),
-          updateDemande(demandeId, { frequency_label: fl })
+          updateDemande(demandeId, { 
+            frequency_label: fl,
+            prix: newPrice,
+            formulaire_data: updatedFormData
+          })
         ]);
         
         setSemaines(updatedSemaines);
         setDateFin(finalEndStr);
         
         addToast(`Renouvellement automatique : Le Mois ${nextMonthIndex} a été planifié automatiquement (du ${formatDateFR(startStr)} au ${formatDateFR(finalEndStr)}).`, "info");
+        
+        // Auto-generate invoice and send it to client
+        try {
+          addToast(`Génération automatique de la facture pour le Mois ${nextMonthIndex}...`, "info");
+          await generateDocument(demandeId, 'facture', nextMonthIndex);
+          
+          addToast(`Envoi automatique de la facture au client via WhatsApp...`, "info");
+          await sendWhatsApp(demandeId, 'facture', undefined, undefined, nextMonthIndex);
+          addToast(`Facture du Mois ${nextMonthIndex} envoyée au client avec succès.`, "success");
+        } catch (invoiceErr) {
+          console.error("Failed to auto-generate or send invoice during renew:", invoiceErr);
+        }
       } catch (err) {
         console.error("Failed to auto-renew planning:", err);
       }
@@ -756,6 +786,44 @@ export default function ClientDetails() {
         ? Array.from(allSelectedDays) 
         : joursIntervention;
 
+      // --- CALCUL DU NOUVEAU PRIX CUMULE & DES INFOS DE FACTURATION ---
+      let newPrice = Number(latest.prix || 0);
+      let prevMaxMonth = 0;
+      let maxMonth = 1;
+      
+      const prevWeeks = latest.planning?.semaines || [];
+      prevWeeks.forEach((w: any) => {
+        if (w.mois && w.mois > prevMaxMonth) {
+          prevMaxMonth = w.mois;
+        }
+      });
+      if (prevMaxMonth === 0 && prevWeeks.length > 0) {
+        prevMaxMonth = 1;
+      }
+      
+      semaines.forEach(w => {
+        if (w.mois && w.mois > maxMonth) {
+          maxMonth = w.mois;
+        }
+      });
+      
+      const originalMonthlyPrice = prevMaxMonth > 0
+        ? Number(latest.prix || 0) / prevMaxMonth
+        : Number(latest.prix || 0);
+        
+      newPrice = originalMonthlyPrice * maxMonth;
+
+      // Update formulaire_data.facturation if present
+      const updatedFormData = latest.formulaire_data ? { ...latest.formulaire_data } : {};
+      if (updatedFormData.facturation) {
+        const fact = { ...updatedFormData.facturation };
+        const tva_active = !!fact.tva_active;
+        fact.montant_ttc = newPrice;
+        fact.montant_ht = tva_active ? Math.round((newPrice / 1.2) * 100) / 100 : newPrice;
+        fact.montant = newPrice;
+        updatedFormData.facturation = fact;
+      }
+
       const data = {
         jours_intervention: joursInterventionFallback,
         heure_debut: fallbackHeureDebut ? (fallbackHeureDebut.length === 5 ? `${fallbackHeureDebut}:00` : fallbackHeureDebut) : null,
@@ -769,10 +837,30 @@ export default function ClientDetails() {
       
       await Promise.all([
         savePlanning(latest.id, data),
-        updateDemande(latest.id, { frequency_label: frequencyLabel })
+        updateDemande(latest.id, { 
+          frequency_label: frequencyLabel,
+          prix: newPrice,
+          formulaire_data: updatedFormData
+        })
       ]);
       
       addToast("Planning d'abonnement mis à jour avec succès", 'success');
+      
+      // If a new month was registered, automatically generate and send invoice!
+      if (maxMonth > prevMaxMonth && prevMaxMonth > 0) {
+        try {
+          addToast(`Génération automatique de la facture pour le Mois ${maxMonth}...`, "info");
+          await generateDocument(latest.id, 'facture', maxMonth);
+          
+          addToast(`Envoi automatique de la facture au client via WhatsApp...`, "info");
+          await sendWhatsApp(latest.id, 'facture', undefined, undefined, maxMonth);
+          addToast(`Facture du Mois ${maxMonth} envoyée au client avec succès.`, "success");
+        } catch (err) {
+          console.error("Failed to auto-generate or send invoice:", err);
+          addToast("Erreur lors de la génération ou de l'envoi automatique de la facture", "error");
+        }
+      }
+      
       await fetchData();
     } catch (err) {
       console.error(err);

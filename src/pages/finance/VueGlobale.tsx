@@ -99,6 +99,7 @@ interface FacturationRow {
   isSubscriptionSecondary?: boolean;
   subscriptionDenominator?: number;
   subscriptionInterventionCA?: number;
+  subscriptionMonth?: number | null;
   // New fields from Dashboard
   annulationRaison?: string;
   profilSeraPaye?: boolean;
@@ -700,6 +701,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     dateRemiseAgence: item.date_remise_agence || '—',
     parentDemandeId: (demande as any)?.parent_demande || (demande as any)?.parent_demande_id || null,
     frequency: (demande as any)?.frequency || null,
+    subscriptionMonth: (demande as any)?.formulaire_data?.subscription_month || null,
     // New fields
     annulationRaison: (demande as any)?.annulation_raison || item.annulation_raison || facturationData.annulation_raison,
     profilSeraPaye: (demande as any)?.profil_sera_paye !== undefined ? (demande as any).profil_sera_paye : item.profil_sera_paye,
@@ -834,6 +836,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     dateRemiseAgence: facturationData.date_remise_agence || '—',
     parentDemandeId: demande?.parent_demande || demande?.parent_demande_id || null,
     frequency: demande?.frequency || null,
+    subscriptionMonth: demande?.formulaire_data?.subscription_month || null,
     annulationRaison: demande.annulation_raison || demande.motif || facturationData.annulation_raison,
     profilSeraPaye: demande.profil_sera_paye !== undefined ? demande.profil_sera_paye : facturationData.profil_sera_paye,
     montantProfilAnnulation: Number(demande.montant_profil_annulation || facturationData.montant_profil_annulation || 0),
@@ -2821,7 +2824,7 @@ export default function VueGlobale() {
         row.profil,
         row.service,
         row.segment,
-        row.isSubscriptionSecondary ? 'Abonnement' : ttc,
+        row.isSubscriptionSecondary ? `Abonnement (Mois ${row.subscriptionMonth || 1})` : ttc,
         row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 && paid === 0 ? '—' : paid),
         row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 ? '—' : ecart),
         row.partAgence,
@@ -2863,7 +2866,7 @@ export default function VueGlobale() {
         <td>${row.profil}</td>
         <td>${row.service}</td>
         <td>${row.segment}</td>
-        <td>${row.isSubscriptionSecondary ? 'Abonnement' : money(ttc)}</td>
+        <td>${row.isSubscriptionSecondary ? `Abonnement (Mois ${row.subscriptionMonth || 1})` : money(ttc)}</td>
         <td>${row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 && paid === 0 ? '—' : money(paid))}</td>
         <td>${row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 ? '—' : money(ecart))}</td>
       </tr>`;
@@ -3603,7 +3606,7 @@ export default function VueGlobale() {
                         {row.service}
                         {row.isSubscriptionSecondary && (
                           <span style={{ fontSize: '0.75rem', color: '#0f5f5b', display: 'block', fontWeight: 600 }}>
-                            Inclus dans l'abonnement
+                            Inclus dans l'abonnement {row.subscriptionMonth ? `(Mois ${row.subscriptionMonth})` : ''}
                           </span>
                         )}
                         {row.isSubscriptionPrimary && (

@@ -1828,7 +1828,14 @@ export default function Dashboard() {
                       <td>
                         {[d.formulaire_data?.quartier || d.client_neighborhood, d.formulaire_data?.ville || d.client_city].filter(Boolean).join(', ') || d.neighborhood_city || '—'}
                       </td>
-                      <td>{d.service}</td>
+                      <td>
+                        {d.service}
+                        {d.parent_demande && d.formulaire_data?.subscription_month && (
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: '#0f5f5b', fontWeight: 600 }}>
+                            Abonnement (Mois {d.formulaire_data.subscription_month})
+                          </span>
+                        )}
+                      </td>
                       <td>
                         <span className={`badge ${d.segment === 'particulier' ? 'badge-spp' : 'badge-spe'}`}>
                           {d.segment === 'particulier' ? 'SPP' : 'SPE'}
