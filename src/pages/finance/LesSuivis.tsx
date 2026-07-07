@@ -63,6 +63,7 @@ interface FacturationRow {
   isSubscriptionSecondary?: boolean;
   subscriptionDenominator?: number;
   subscriptionInterventionCA?: number;
+  subscriptionMonth?: number | null;
   // New fields from Dashboard
   annulationRaison?: string;
   profilSeraPaye?: boolean;
@@ -576,6 +577,7 @@ export default function LesSuivis() {
       dateRemiseAgence: item.date_remise_agence || facturationData.date_remise_agence || '—',
       parentDemandeId: demande?.parent_demande || demande?.parent_demande_id || null,
       frequency: demande?.frequency || null,
+      subscriptionMonth: demande?.formulaire_data?.subscription_month || null,
       annulationRaison: demande?.annulation_raison || item.annulation_raison || facturationData.annulation_raison,
       profilSeraPaye: demande?.profil_sera_paye !== undefined ? demande.profil_sera_paye : item.profil_sera_paye,
       montantProfilAnnulation: Number(demande?.montant_profil_annulation || item.montant_profil_annulation || facturationData.montant_profil_annulation || 0) * ratio,
@@ -714,6 +716,7 @@ export default function LesSuivis() {
       dateRemiseAgence: facturationData.date_remise_agence || '—',
       parentDemandeId: demande.parent_demande || demande.parent_demande_id || null,
       frequency: demande.frequency || null,
+      subscriptionMonth: demande?.formulaire_data?.subscription_month || null,
       annulationRaison: demande.annulation_raison || facturationData.annulation_raison,
       profilSeraPaye: demande.profil_sera_paye !== undefined ? demande.profil_sera_paye : facturationData.profil_sera_paye,
       montantProfilAnnulation: Number(demande.montant_profil_annulation || facturationData.montant_profil_annulation || 0),
@@ -894,12 +897,32 @@ export default function LesSuivis() {
       const parentMontant = Number(parentDemande?.montant || parentRow?.montant || 0);
       const interventionCA = denominator > 0 ? parentMontant / denominator : 0;
 
+      const monthGroups = new Map<number, FacturationRow[]>();
       for (const row of groupRows) {
-        const isRoot = !row.parentDemandeId;
-        row.isSubscriptionPrimary = isRoot;
-        row.isSubscriptionSecondary = !isRoot;
-        row.subscriptionDenominator = denominator;
-        row.subscriptionInterventionCA = Number(interventionCA.toFixed(2));
+        const m = row.subscriptionMonth || 1;
+        if (!monthGroups.has(m)) {
+          monthGroups.set(m, []);
+        }
+        monthGroups.get(m)!.push(row);
+      }
+
+      for (const [, rows] of monthGroups.entries()) {
+        const sorted = [...rows].sort((a, b) => {
+          const dateA = parseFrenchDate(a.date)?.getTime() || 0;
+          const dateB = parseFrenchDate(b.date)?.getTime() || 0;
+          if (dateA !== dateB) return dateA - dateB;
+          return (a.demandeId || 0) - (b.demandeId || 0);
+        });
+        const rootRow = rows.find(r => !r.parentDemandeId);
+        const primaryRow = rootRow || sorted[0];
+
+        for (const row of rows) {
+          const isPrimary = row === primaryRow;
+          row.isSubscriptionPrimary = isPrimary;
+          row.isSubscriptionSecondary = !isPrimary;
+          row.subscriptionDenominator = denominator;
+          row.subscriptionInterventionCA = Number(interventionCA.toFixed(2));
+        }
       }
     }
 
@@ -1147,7 +1170,11 @@ export default function LesSuivis() {
       if (!isCancelled) {
         if (!row.isSubscriptionSecondary) {
           if (row.paiement !== 'non_paye') {
-            totalCa += (row.montantPaye ?? 0);
+            if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+              totalCa += row.montant;
+            } else {
+              totalCa += (row.montantPaye ?? 0);
+            }
           }
           totalPartAgence += row.partAgence;
           

@@ -1158,12 +1158,32 @@ export default function VueGlobale() {
       const parentMontant = Number(parentDemande?.montant || parentRow?.montant || 0);
       const interventionCA = denominator > 0 ? parentMontant / denominator : 0;
 
+      const monthGroups = new Map<number, FacturationRow[]>();
       for (const row of groupRows) {
-        const isRoot = !row.parentDemandeId;
-        row.isSubscriptionPrimary = isRoot;
-        row.isSubscriptionSecondary = !isRoot;
-        row.subscriptionDenominator = denominator;
-        row.subscriptionInterventionCA = Number(interventionCA.toFixed(2));
+        const m = row.subscriptionMonth || 1;
+        if (!monthGroups.has(m)) {
+          monthGroups.set(m, []);
+        }
+        monthGroups.get(m)!.push(row);
+      }
+
+      for (const [, rows] of monthGroups.entries()) {
+        const sorted = [...rows].sort((a, b) => {
+          const dateA = parseFrenchDate(a.date)?.getTime() || 0;
+          const dateB = parseFrenchDate(b.date)?.getTime() || 0;
+          if (dateA !== dateB) return dateA - dateB;
+          return (a.demandeId || 0) - (b.demandeId || 0);
+        });
+        const rootRow = rows.find(r => !r.parentDemandeId);
+        const primaryRow = rootRow || sorted[0];
+
+        for (const row of rows) {
+          const isPrimary = row === primaryRow;
+          row.isSubscriptionPrimary = isPrimary;
+          row.isSubscriptionSecondary = !isPrimary;
+          row.subscriptionDenominator = denominator;
+          row.subscriptionInterventionCA = Number(interventionCA.toFixed(2));
+        }
       }
     }
 
@@ -1732,7 +1752,12 @@ export default function VueGlobale() {
 
     const chiffreAffaires = Math.max(0, activeRows
       .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
-      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0) - totalSubCancellationsCA);
+      .reduce((sum, row) => {
+        if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+          return sum + row.montant;
+        }
+        return sum + (row.montantPaye ?? 0);
+      }, 0) - totalSubCancellationsCA);
 
     const unfilteredActiveRows = facturationData.filter((row) => 
       row.statut !== 'Facturation annulée' && 
@@ -1758,7 +1783,12 @@ export default function VueGlobale() {
 
     const chiffreAffairesTotal = Math.max(0, unfilteredActiveRows
       .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
-      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0) - totalUnfilteredSubCancellationsCA);
+      .reduce((sum, row) => {
+        if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+          return sum + row.montant;
+        }
+        return sum + (row.montantPaye ?? 0);
+      }, 0) - totalUnfilteredSubCancellationsCA);
 
     // Commission brute (hors annulations)
     const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row, true), 0);

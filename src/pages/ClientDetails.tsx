@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   getClient, getDemandes, getFeedbacks, getClientActionLogs,
-  updateDemande, fetchSecureDocBlob, updateClient, savePlanning,
+  updateDemande, deleteDemande, fetchSecureDocBlob, updateClient, savePlanning,
   createPlanningIntervention, generateDocument, sendWhatsApp
 } from '../api/client';
 import { decodeId, encodeId } from '../utils/obfuscation';
@@ -1072,15 +1072,44 @@ export default function ClientDetails() {
     setDeleteMonthConfirm(true);
   };
 
-  const executeDeleteMonth = () => {
-    if (monthToDelete === null) return;
+  const executeDeleteMonth = async () => {
+    if (monthToDelete === null || !latest) return;
+
+    const targetMonth = monthToDelete;
+
+    // 1. Identify demands to delete and demands to reindex
+    const demandsToDelete = demandes.filter(
+      d => Number(d.parent_demande) === Number(latest.id) && d.formulaire_data?.subscription_month === targetMonth
+    );
+    const demandsToReindex = demandes.filter(
+      d => Number(d.parent_demande) === Number(latest.id) && d.formulaire_data?.subscription_month && d.formulaire_data.subscription_month > targetMonth
+    );
+
+    // 2. Update local state immediately for snappy UI
+    setDemandes(prev => {
+      const afterDelete = prev.filter(
+        d => !(Number(d.parent_demande) === Number(latest.id) && d.formulaire_data?.subscription_month === targetMonth)
+      );
+      return afterDelete.map(d => {
+        if (Number(d.parent_demande) === Number(latest.id) && d.formulaire_data?.subscription_month && d.formulaire_data.subscription_month > targetMonth) {
+          return {
+            ...d,
+            formulaire_data: {
+              ...d.formulaire_data,
+              subscription_month: d.formulaire_data.subscription_month - 1
+            }
+          };
+        }
+        return d;
+      });
+    });
+
+    const filteredSemaines = semaines.filter(w => (w.mois || 1) !== targetMonth);
     
-    const filteredSemaines = semaines.filter(w => (w.mois || 1) !== monthToDelete);
-    
-    // Shift subsequent month indices
+    // Shift subsequent month indices in semaines state
     const normalizedSemaines = filteredSemaines.map(w => {
       const m = w.mois || 1;
-      if (m > monthToDelete) {
+      if (m > targetMonth) {
         return { ...w, mois: m - 1 };
       }
       return w;
@@ -1107,7 +1136,28 @@ export default function ClientDetails() {
     setDateFin(newDateFin);
     setDeleteMonthConfirm(false);
     setMonthToDelete(null);
-    addToast(`Le Mois ${monthToDelete} a été supprimé avec succès. N'oubliez pas d'enregistrer le planning !`, "success");
+
+    // 3. Make API calls to sync with backend
+    try {
+      // Delete demands of the deleted month
+      await Promise.all(demandsToDelete.map(d => deleteDemande(d.id)));
+
+      // Reindex subsequent months
+      await Promise.all(demandsToReindex.map(d => {
+        const currentMonth = d.formulaire_data?.subscription_month || 1;
+        return updateDemande(d.id, {
+          formulaire_data: {
+            ...(d.formulaire_data || {}),
+            subscription_month: currentMonth - 1
+          }
+        });
+      }));
+
+      addToast(`Le Mois ${targetMonth} a été supprimé ainsi que toutes ses interventions avec succès. N'oubliez pas d'enregistrer le planning !`, "success");
+    } catch (error) {
+      console.error("Failed to delete or reindex demands on month deletion:", error);
+      addToast("Erreur lors de la suppression des interventions du mois sur le serveur", "error");
+    }
   };
 
   const updateWeekField = (weekId: string, field: string, value: any) => {

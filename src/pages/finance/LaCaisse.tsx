@@ -41,6 +41,19 @@ const categories = [
 const todayInputDate = (): string => new Date().toISOString().slice(0, 10);
 const moneyFormatter = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const parseFrenchDate = (value?: string): Date | null => {
+  if (!value) return null;
+  if (value.includes('-')) {
+    const d = new Date(`${value}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const [day, month, year] = value.split('/');
+  if (!year || !month || !day) return null;
+  const d = new Date(`${year}-${month}-${day}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
 const paymentCodeToLabel = (value: string): 'Espèces' | 'Virement' | 'Chèque' | 'Paiement agence' => {
   if (value === 'virement') return 'Virement';
   if (value === 'cheque') return 'Chèque';
@@ -353,6 +366,7 @@ export default function LaCaisse() {
             montantAgenceDoitProfil: Number(fact.montant_agence_doit_profil || 0) * ratio,
             isSubscriptionPrimary: false,
             isSubscriptionSecondary: false,
+            subscriptionMonth: dem.formulaire_data?.subscription_month || null,
             profilId,
             profil: m.agent_detail ? (m.agent_detail.full_name || `${m.agent_detail.first_name || ''} ${m.agent_detail.last_name || ''}`).trim() : '—',
             parts_repartition: parts,
@@ -409,6 +423,7 @@ export default function LaCaisse() {
             montantAgenceDoitProfil: Number(fact.montant_agence_doit_profil || 0),
             isSubscriptionPrimary: false,
             isSubscriptionSecondary: false,
+            subscriptionMonth: d.formulaire_data?.subscription_month || null,
             profilId: d.profil_id || null,
             profil: d.profil_name || '—',
             parts_repartition: fact.parts_repartition || d.parts_repartition || [],
@@ -429,10 +444,30 @@ export default function LaCaisse() {
       }
 
       for (const groupRows of subscriptionGroups.values()) {
+        const monthGroups = new Map<number, any[]>();
         for (const row of groupRows) {
-          const isRoot = !row.parentDemandeId;
-          row.isSubscriptionPrimary = isRoot;
-          row.isSubscriptionSecondary = !isRoot;
+          const m = row.subscriptionMonth || 1;
+          if (!monthGroups.has(m)) {
+            monthGroups.set(m, []);
+          }
+          monthGroups.get(m)!.push(row);
+        }
+
+        for (const [, rows] of monthGroups.entries()) {
+          const sorted = [...rows].sort((a, b) => {
+            const dateA = parseFrenchDate(a.date)?.getTime() || 0;
+            const dateB = parseFrenchDate(b.date)?.getTime() || 0;
+            if (dateA !== dateB) return dateA - dateB;
+            return (a.demandeId || 0) - (b.demandeId || 0);
+          });
+          const rootRow = rows.find(r => !r.parentDemandeId);
+          const primaryRow = rootRow || sorted[0];
+
+          for (const row of rows) {
+            const isPrimary = row === primaryRow;
+            row.isSubscriptionPrimary = isPrimary;
+            row.isSubscriptionSecondary = !isPrimary;
+          }
         }
       }
 
@@ -557,7 +592,11 @@ export default function LaCaisse() {
         if (row.isSubscriptionSecondary) continue;
 
         if (row.paiement !== 'non_paye') {
-          totalCA += (row.montantPaye ?? 0);
+          if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+            totalCA += row.montant;
+          } else {
+            totalCA += (row.montantPaye ?? 0);
+          }
         }
         totalPartAgence += row.partAgence;
       }
