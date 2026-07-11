@@ -10,7 +10,7 @@ import {
   ChevronDown, User, FileText,
   MessageSquare, History, ArrowLeft,
   Download, Eye, Star, Briefcase, ShieldAlert, CheckCircle,
-  ClipboardCheck, Search, Send, PlusCircle, AlertTriangle, Image
+  ClipboardCheck, Search, Send, PlusCircle, AlertTriangle, Image, Pause
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
@@ -179,7 +179,7 @@ export default function ProfilDetails() {
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [operatorNotes, setOperatorNotes] = useState('');
+  const [recruiterNotes, setRecruiterNotes] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [activeSubscriptionCounts, setActiveSubscriptionCounts] = useState<Map<number, number>>(new Map());
 
@@ -196,6 +196,10 @@ export default function ProfilDetails() {
   const [history, setHistory] = useState<any[]>([]);
   const [historySearch, setHistorySearch] = useState('');
   const [showBlacklistConfirm, setShowBlacklistConfirm] = useState(false);
+  const [showPauseDropdown, setShowPauseDropdown] = useState(false);
+  const [showStandbyModal, setShowStandbyModal] = useState(false);
+  const [standbyDays, setStandbyDays] = useState(7);
+  const [showResumeConfirm, setShowResumeConfirm] = useState(false);
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     info: true,
@@ -229,7 +233,7 @@ export default function ProfilDetails() {
       ]);
 
       setAgent(agentRes.data);
-      setOperatorNotes(agentRes.data.operator_notes || '');
+      setRecruiterNotes(agentRes.data.recruiter_notes || '');
 
       const fetchAllMissions = async (params: Record<string, string | number>) => {
         const rows: any[] = [];
@@ -397,6 +401,61 @@ export default function ProfilDetails() {
       addToast(`Erreur lors du changement de statut de la blacklist`, 'error');
     } finally {
       setShowBlacklistConfirm(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (target.closest && target.closest('.pause-dropdown-container')) {
+        return;
+      }
+      setShowPauseDropdown(false);
+    };
+    if (showPauseDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPauseDropdown]);
+
+  const handleTogglePause = () => {
+    if (!agent) return;
+    const perm = checkPermission(user, 'edit_candidat');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
+    if (agent.statut === 'stand_by') {
+      setShowResumeConfirm(true);
+    } else {
+      setShowStandbyModal(true);
+      setStandbyDays(7);
+    }
+  };
+
+  const confirmStandby = async () => {
+    if (!agent) return;
+    try {
+      await updateAgent(agent.id, { statut: 'stand_by', standby_days: standbyDays } as any);
+      addToast('Profil mis en pause avec succès !', 'success');
+      setShowStandbyModal(false);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast('Erreur lors de la mise en pause du profil.', 'error');
+    }
+  };
+
+  const confirmResume = async () => {
+    if (!agent) return;
+    try {
+      await updateAgent(agent.id, { statut: 'active', standby_days: null, standby_until: null } as any);
+      addToast('Profil réactivé avec succès !', 'success');
+      setShowResumeConfirm(false);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast('Erreur lors de la réactivation du profil.', 'error');
     }
   };
 
@@ -597,11 +656,11 @@ export default function ProfilDetails() {
     }
     setSaving(true);
     try {
-      await updateAgent(agent.id, { operator_notes: operatorNotes } as any);
-      addToast('Notes enregistrées avec succès !', 'success');
+      await updateAgent(agent.id, { recruiter_notes: recruiterNotes } as any);
+      addToast('Remarques enregistrées avec succès !', 'success');
     } catch (err) {
       console.error(err);
-      addToast('Erreur lors de l\'enregistrement des notes.', 'error');
+      addToast('Erreur lors de l\'enregistrement des remarques.', 'error');
     } finally {
       setSaving(false);
     }
@@ -918,9 +977,40 @@ export default function ProfilDetails() {
                       <Star size={12} fill="#D97706" /> {agent.average_rating}/5
                     </Badge>
                   )}
-                  <Badge bg="#DCFCE7" color="#166534">
-                    {agent.statut === 'disponible' ? 'Disponible' : 'Indisponible'}
-                  </Badge>
+                  <span className={`badge ${
+                    agent.statut === 'nouveau' ? 'badge-blue' :
+                    agent.statut === 'active' ? 'badge-lime' :
+                    agent.statut === 'blacklist' ? 'badge-red' :
+                    agent.statut === 'stand_by' ? 'badge-orange' :
+                    agent.statut === 'en_conge' ? 'badge-purple' :
+                    agent.statut === 'malade' ? 'badge-red' :
+                    'badge-gray'
+                  }`} style={{ fontSize: '11px', padding: '2px 10px', fontWeight: 700, borderRadius: 99 }}>
+                    {agent.statut === 'nouveau' ? 'Nouveau' :
+                     agent.statut === 'active' ? 'Active' :
+                     agent.statut === 'blacklist' ? 'Blacklisté' :
+                     agent.statut === 'stand_by' ? `Stand by (${agent.standby_days || 0}j)` :
+                     agent.statut === 'en_conge' ? 'En congé' :
+                     agent.statut === 'malade' ? 'Malade' :
+                     agent.statut || 'Nouveau'}
+                  </span>
+                  
+                  <span className={`badge ${
+                    agent.disponibilite_intervention === 'disponible' ? 'badge-lime' :
+                    agent.disponibilite_intervention === 'occupee' ? 'badge-orange' :
+                    'badge-red'
+                  }`} style={{ 
+                    fontSize: '11px', 
+                    padding: '2px 10px',
+                    fontWeight: 700,
+                    borderRadius: 99,
+                    backgroundColor: agent.disponibilite_intervention === 'occupee' ? '#f59e0b' : undefined,
+                    color: agent.disponibilite_intervention === 'occupee' ? 'white' : undefined,
+                  }}>
+                    {agent.disponibilite_intervention === 'disponible' ? 'Disponible' :
+                     agent.disponibilite_intervention === 'occupee' ? 'Occupé (Mission)' :
+                     'Non disponible'}
+                  </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>
@@ -986,21 +1076,92 @@ export default function ProfilDetails() {
               </button>
             )}
             {hasPermission(user, 'blacklister_agents') && (
-              <button
-                onClick={handleToggleBlacklist}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 18px',
-                  border: agent?.is_blacklisted ? '1px solid #cbd5e1' : '1px solid #FEB2B2',
-                  borderRadius: 8,
-                  background: agent?.is_blacklisted ? '#f1f5f9' : '#FFF5F5',
-                  color: agent?.is_blacklisted ? '#475569' : '#C53030',
-                  fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                }}
-              >
-                {agent?.is_blacklisted ? <CheckCircle size={16} color="#10b981" /> : <ShieldAlert size={16} />}
-                {agent?.is_blacklisted ? 'Déblacklister' : 'Blacklister'}
-              </button>
+              <div className="pause-dropdown-container relative" style={{ display: 'inline-block' }}>
+                <button
+                  onClick={() => setShowPauseDropdown(!showPauseDropdown)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 18px',
+                    border: '1px solid #FEB2B2',
+                    borderRadius: 8,
+                    background: '#FFF5F5',
+                    color: '#C53030',
+                    fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  <Pause size={16} />
+                  Mise en pause
+                </button>
+
+                {showPauseDropdown && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: '4px',
+                      width: '150px',
+                      backgroundColor: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                      zIndex: 100,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <button
+                      onClick={() => {
+                        setShowPauseDropdown(false);
+                        handleToggleBlacklist();
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        width: '100%',
+                        padding: '10px 14px',
+                        border: 'none',
+                        background: 'none',
+                        textAlign: 'left',
+                        fontSize: '13px',
+                        color: '#334155',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <ShieldAlert size={14} className="text-red-500" />
+                      <span>{agent.is_blacklisted ? 'Déblacklister' : 'Blacklisté'}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowPauseDropdown(false);
+                        handleTogglePause();
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        width: '100%',
+                        padding: '10px 14px',
+                        border: 'none',
+                        background: 'none',
+                        textAlign: 'left',
+                        fontSize: '13px',
+                        color: '#334155',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <Pause size={14} className="text-amber-500" />
+                      <span>{agent.statut === 'stand_by' ? 'Reprendre' : 'Stand-by'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -1011,6 +1172,7 @@ export default function ProfilDetails() {
         {/* ── 1. Informations du profil ── */}
         <Accordion title="Informations du profil" icon={<User size={18} />} isOpen={openSections.info} onToggle={() => toggle('info')} color={C.teal}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px 32px' }}>
+            <InfoField label="DATE D'ENREGISTREMENT" value={agent.registration_date ? new Date(agent.registration_date).toLocaleDateString('fr-FR') : undefined} />
             <InfoField label="NOM" value={agent.last_name} />
             <InfoField label="PRÉNOM" value={agent.first_name} />
             <InfoField label="SEXE" value={agent.gender === 'femme' ? 'Femme' : 'Homme'} />
@@ -1028,23 +1190,61 @@ export default function ProfilDetails() {
             <InfoField label="NIVEAU D'ÉTUDE" value={agent.education_level} />
             <InfoField label="EXPÉRIENCE TOTALE" value={`${agent.experience_years} an(s) ${agent.experience_months} mois`} />
             <InfoField label="TYPE DE PROFIL" value={agent.type_profil} />
-            <InfoField label="FORMATION REQUISE" value={agent.training_details} />
             <InfoField label="SAIT LIRE ET ÉCRIRE" value={agent.can_read_write ? 'Oui' : 'Non'} />
             <InfoField label="MALADIE / HANDICAP" value={agent.health_issues} />
             <InfoField label="PRÉSENTATION PHYSIQUE" value={agent.physical_appearance} />
             <InfoField label="CORPULENCE" value={agent.corpulence} />
+            <InfoField label="ALLERGIE AUX ANIMAUX" value={agent.allergy_animals ? 'Oui' : 'Non'} />
+            <InfoField label="POINTURE DE CHAUSSURES" value={agent.shoe_size} />
+            <InfoField label="FUME" value={agent.is_smoking ? 'Oui' : 'Non'} />
+            {agent.statut === 'stand_by' && (
+              <InfoField label="STANDBY JUSQU'AU" value={agent.standby_until ? new Date(agent.standby_until).toLocaleDateString('fr-FR') : 'Non définie'} />
+            )}
+            {agent.statut === 'en_conge' && (
+              <InfoField label="CONGÉ DE / À" value={agent.leave_start && agent.leave_end ? `${new Date(agent.leave_start).toLocaleDateString('fr-FR')} au ${new Date(agent.leave_end).toLocaleDateString('fr-FR')}` : 'Non définie'} />
+            )}
           </div>
 
           <div style={{ marginTop: 24 }}>
             <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
-              DISPONIBILITÉS
+              CALENDRIER DE DISPONIBILITÉ
             </p>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12, marginBottom: 20 }}>
+              {['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'].map(day => {
+                const dayData = agent.availability_calendar?.[day];
+                const active = dayData?.active;
+                return (
+                  <div key={day} style={{ 
+                    padding: '12px', 
+                    borderRadius: 10, 
+                    border: '1px solid',
+                    borderColor: active ? '#b7d9c6' : '#e2e8f0',
+                    background: active ? '#f0fff4' : '#f8fafc',
+                    textAlign: 'center',
+                    opacity: active ? 1 : 0.6,
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                  }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, textTransform: 'capitalize', color: active ? '#2f855a' : '#64748b' }}>
+                      {day}
+                    </div>
+                    <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600, color: active ? '#276749' : '#94a3b8' }}>
+                      {active ? `${dayData.start} - ${dayData.end}` : 'Non disponible'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+              DISPONIBILITÉS ADDITIONNELLES
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {agent.avail_emergencies && <Badge bg="#EBF8FF" color="#2B6CB0">Urgences</Badge>}
-              {agent.avail_day && <Badge bg="#F0FFF4" color="#2F855A">Journée (7h-18h)</Badge>}
               {agent.avail_evening && <Badge bg="#FAF5FF" color="#6B46C1">Soirée (après 18h)</Badge>}
-              {agent.avail_7_7 && <Badge bg="#F0FFF4" color="#2F855A">7j/7</Badge>}
               {agent.avail_holidays && <Badge bg="#FFF5F5" color="#C53030">Jours fériés</Badge>}
+              {!agent.avail_emergencies && !agent.avail_evening && !agent.avail_holidays && (
+                <span style={{ fontSize: 13, fontStyle: 'italic', color: '#94a3b8' }}>Aucune</span>
+              )}
             </div>
           </div>
 
@@ -1067,13 +1267,13 @@ export default function ProfilDetails() {
           </div>
         </Accordion>
 
-        {/* ── 2. Avis opérateur sur le profil ── */}
-        <Accordion title="Avis opérateur sur le profil" icon={<MessageSquare size={18} />} isOpen={openSections.notes} onToggle={() => toggle('notes')} color={C.sage}>
+        {/* ── 2. Remarque du recruteur ── */}
+        <Accordion title="Remarque du recruteur" icon={<MessageSquare size={18} />} isOpen={openSections.notes} onToggle={() => toggle('notes')} color={C.sage}>
           <textarea
             style={{ width: '100%', minHeight: 120, padding: 16, border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 14, outline: 'none', marginBottom: 16, resize: 'vertical' }}
-            value={operatorNotes}
-            onChange={(e) => setOperatorNotes(e.target.value)}
-            placeholder="Saisir un avis sur ce profil..."
+            value={recruiterNotes}
+            onChange={(e) => setRecruiterNotes(e.target.value)}
+            placeholder="Saisir une remarque sur ce profil..."
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button
@@ -1095,62 +1295,34 @@ export default function ProfilDetails() {
         {/* ── 3. Média ── */}
         {hasPermission(user, 'consulter_docs_confidentiels') && (
           <Accordion title="Média" icon={<Eye size={18} />} isOpen={openSections.media} onToggle={() => toggle('media')} color={C.teal}>
-            <div className="media-layout-grid">
-              {/* Photo */}
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>PHOTO DE PROFIL</p>
-                <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {agent.photo ? <img src={agent.photo} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} /> : <User size={40} color="#cbd5e1" />}
+            <div className="media-layout-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 20 }}>
+              {[
+                { label: 'PHOTO DE PROFIL 1', file: agent.photo, isImage: true, name: 'Photo1' },
+                { label: 'PHOTO DE PROFIL 2', file: agent.photo2, isImage: true, name: 'Photo2' },
+                { label: 'CIN RECTO', file: agent.cin_file, isImage: false, name: 'CIN_Recto' },
+                { label: 'CIN VERSO', file: agent.cin_verso_file, isImage: false, name: 'CIN_Verso' },
+                { label: 'ATTESTATION', file: agent.attestation_file, isImage: false, name: 'Attestation' },
+                { label: 'FICHE ANTROPOMÉTRIQUE', file: agent.fiche_antropometrique, isImage: false, name: 'Fiche_Antropometrique' },
+              ].map(({ label, file, isImage, name }) => (
+                <div key={label} style={{ textAlign: 'center', position: 'relative' }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
+                  <div style={{ width: 130, height: 130, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                    {isImage ? (
+                      file ? <img src={file} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <User size={40} color="#cbd5e1" />
+                    ) : (
+                      getMediaIcon(file, <FileText size={40} color={file ? C.teal : "#cbd5e1"} />)
+                    )}
+                    {file && (
+                      <div style={{ position: 'absolute', top: 5, right: 5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 2, display: 'flex', border: '2px solid white' }}>
+                        <CheckCircle size={12} />
+                      </div>
+                    )}
+                  </div>
+                  <button disabled={!file} onClick={() => file && handleDownload(file, `${name}_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 14px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: file ? 'pointer' : 'not-allowed' }}>
+                    <Download size={12} /> {file ? 'Télécharger' : 'Indisponible'}
+                  </button>
                 </div>
-                <button onClick={() => agent.photo && handleDownload(agent.photo, `Photo_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: '#475569', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                  <Download size={14} /> Télécharger
-                </button>
-              </div>
-              {/* CIN */}
-              <div style={{ textAlign: 'center', position: 'relative' }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>CIN</p>
-                <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                  {getMediaIcon(agent.cin_file, <FileText size={40} color={agent.cin_file ? C.teal : "#cbd5e1"} />)}
-                  {agent.cin_file && (
-                    <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
-                      <CheckCircle size={14} />
-                    </div>
-                  )}
-                </div>
-                <button disabled={!agent.cin_file} onClick={() => agent.cin_file && handleDownload(agent.cin_file, `CIN_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.cin_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.cin_file ? 'pointer' : 'not-allowed' }}>
-                  <Download size={14} /> {agent.cin_file ? 'Télécharger' : 'Indisponible'}
-                </button>
-              </div>
-              {/* Attestation */}
-              <div style={{ textAlign: 'center', position: 'relative' }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>ATTESTATION</p>
-                <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                  {getMediaIcon(agent.attestation_file, <ClipboardCheck size={40} color={agent.attestation_file ? C.teal : "#cbd5e1"} />)}
-                  {agent.attestation_file && (
-                    <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
-                      <CheckCircle size={14} />
-                    </div>
-                  )}
-                </div>
-                <button disabled={!agent.attestation_file} onClick={() => agent.attestation_file && handleDownload(agent.attestation_file, `Attestation_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.attestation_file ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.attestation_file ? 'pointer' : 'not-allowed' }}>
-                  <Download size={14} /> {agent.attestation_file ? 'Télécharger' : 'Indisponible'}
-                </button>
-              </div>
-              {/* Fiche Antropométrique */}
-              <div style={{ textAlign: 'center', position: 'relative' }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 16, textTransform: 'uppercase' }}>FICHE ANTROPOMÉTRIQUE</p>
-                <div style={{ width: 120, height: 120, margin: '0 auto 16px', background: '#f1f5f9', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                  {getMediaIcon(agent.fiche_antropometrique, <FileText size={40} color={agent.fiche_antropometrique ? C.teal : "#cbd5e1"} />)}
-                  {agent.fiche_antropometrique && (
-                    <div style={{ position: 'absolute', top: -5, right: -5, background: '#10B981', color: 'white', borderRadius: '50%', padding: 4, display: 'flex', border: '2px solid white' }}>
-                      <CheckCircle size={14} />
-                    </div>
-                  )}
-                </div>
-                <button disabled={!agent.fiche_antropometrique} onClick={() => agent.fiche_antropometrique && handleDownload(agent.fiche_antropometrique, `Fiche_Antropometrique_${agent.full_name || agent.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 auto', padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 8, background: 'white', color: agent.fiche_antropometrique ? '#475569' : '#cbd5e1', fontSize: 12, fontWeight: 700, cursor: agent.fiche_antropometrique ? 'pointer' : 'not-allowed' }}>
-                  <Download size={14} /> {agent.fiche_antropometrique ? 'Télécharger' : 'Indisponible'}
-                </button>
-              </div>
+              ))}
             </div>
           </Accordion>
         )}
@@ -1525,7 +1697,78 @@ export default function ProfilDetails() {
           variant={agent.is_blacklisted ? "success" : "danger"}
         />
       )}
+      {showResumeConfirm && agent && (
+        <ConfirmDialog
+          isOpen={showResumeConfirm}
+          onOpenChange={setShowResumeConfirm}
+          title="Reprendre l'activité ?"
+          description={`Voulez-vous vraiment réactiver le profil ${agent.last_name || ''} ${agent.first_name || ''} ? Il ne sera plus en stand-by.`}
+          confirmLabel="Confirmer"
+          onConfirm={confirmResume}
+          variant="success"
+        />
+      )}
 
+      {showStandbyModal && agent && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 300, backdropFilter: 'blur(2px)',
+          }}
+        >
+          <div
+            style={{
+              background: 'white', borderRadius: 12, width: '100%', maxWidth: 400,
+              padding: 24, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              position: 'relative'
+            }}
+          >
+            <button
+              onClick={() => setShowStandbyModal(false)}
+              style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 20 }}
+            >
+              &times;
+            </button>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 16px' }}>Mise en stand-by</h3>
+            
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Nombre de jours</label>
+              <input
+                type="number"
+                min="1"
+                value={standbyDays}
+                onChange={e => setStandbyDays(parseInt(e.target.value, 10) || 1)}
+                style={{
+                  width: '100%', height: 40, padding: '0 12px', border: '2px solid #0d9488',
+                  borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            
+            <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, margin: '0 0 24px' }}>
+              Le profil reviendra automatiquement en statut « Active » à l'expiration.
+            </p>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button
+                onClick={() => setShowStandbyModal(false)}
+                className="btn btn-secondary"
+                style={{ padding: '8px 16px', fontSize: 13 }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmStandby}
+                className="btn btn-primary"
+                style={{ padding: '8px 16px', fontSize: 13, backgroundColor: '#0d9488', border: 'none' }}
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

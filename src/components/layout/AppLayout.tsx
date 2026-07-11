@@ -12,7 +12,7 @@ import { NotificationBell } from './NotificationBell';
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Tableau de bord' },
   { to: '/demandes', icon: ClipboardList, label: 'Demandes en attente', badge: true },
-  { to: '/profils', icon: UserCheck, label: 'Listing profils' },
+  { to: '/profils', icon: UserCheck, label: 'Liste des femmes de ménage' },
   { to: '/clients', icon: Users, label: 'Listing clients' },
   { to: '/historique', icon: History, label: 'Historique' },
   {

@@ -39,11 +39,7 @@ const normalizePhysicalAppearance = (value: string): string => {
 
 const normalizeCorpulence = (value: string): string => {
   if (!value) return '';
-  const v = value.toLowerCase();
-  if (v === 'moyenne' || v === 'normale') return 'normale';
-  if (v === 'forte') return 'forte';
-  if (v === 'mince' || v === 'petite') return 'petite';
-  return value;
+  return value.toUpperCase();
 };
 
 export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Props) {
@@ -65,19 +61,36 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
     education_level: initialAgent?.education_level || '',
     experience_years: initialAgent?.experience_years ?? 0,
     experience_months: initialAgent?.experience_months ?? 0,
-    statut: initialAgent?.statut || 'disponible',
+    statut: initialAgent?.statut || 'nouveau',
+    disponibilite_intervention: initialAgent?.disponibilite_intervention || 'disponible',
     type_profil: initialAgent?.type_profil || '',
-    training_details: initialAgent?.training_details || '',
     can_read_write: initialAgent?.can_read_write ?? false,
     health_issues: initialAgent?.health_issues || '',
     physical_appearance: normalizePhysicalAppearance(initialAgent?.physical_appearance || ''),
     corpulence: normalizeCorpulence(initialAgent?.corpulence || ''),
+    allergy_animals: initialAgent?.allergy_animals ?? false,
+    shoe_size: initialAgent?.shoe_size || '',
+    is_smoking: initialAgent?.is_smoking ?? false,
+    availability_calendar: initialAgent?.availability_calendar || {
+      lundi: { active: true, start: '08:00', end: '18:00' },
+      mardi: { active: true, start: '08:00', end: '18:00' },
+      mercredi: { active: true, start: '08:00', end: '18:00' },
+      jeudi: { active: true, start: '08:00', end: '18:00' },
+      vendredi: { active: true, start: '08:00', end: '18:00' },
+      samedi: { active: true, start: '08:00', end: '18:00' },
+      dimanche: { active: false, start: '08:00', end: '18:00' }
+    },
     avail_emergencies: initialAgent?.avail_emergencies ?? false,
     avail_7_7: initialAgent?.avail_7_7 ?? false,
     avail_day: initialAgent?.avail_day ?? false,
     avail_holidays: initialAgent?.avail_holidays ?? false,
     avail_evening: initialAgent?.avail_evening ?? false,
-    operator_notes: initialAgent?.operator_notes || '',
+    recruiter_notes: initialAgent?.recruiter_notes || '',
+    registration_date: initialAgent?.registration_date || new Date().toISOString().split('T')[0],
+    standby_days: initialAgent?.standby_days || 0,
+    standby_until: initialAgent?.standby_until || '',
+    leave_start: initialAgent?.leave_start || '',
+    leave_end: initialAgent?.leave_end || '',
   });
 
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -91,15 +104,15 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
     tasks: [] as string[],
     has_allergies: false,
   });
-  const [files, setFiles] = useState<{ photo: File | null; photo2: File | null; photo3: File | null; cin_file: File | null; attestation_file: File | null; fiche_antropometrique: File | null }>({
-    photo: null, photo2: null, photo3: null, cin_file: null, attestation_file: null, fiche_antropometrique: null,
+  const [files, setFiles] = useState<{ photo: File | null; photo2: File | null; cin_file: File | null; cin_verso_file: File | null; attestation_file: File | null; fiche_antropometrique: File | null }>({
+    photo: null, photo2: null, cin_file: null, cin_verso_file: null, attestation_file: null, fiche_antropometrique: null,
   });
   const [clearedFiles, setClearedFiles] = useState<Record<string, boolean>>({});
   const [activePhoto, setActivePhoto] = useState<string>(initialAgent?.active_photo || 'photo');
 
   const photoInputRef = React.useRef<HTMLInputElement>(null);
   const photo2InputRef = React.useRef<HTMLInputElement>(null);
-  const photo3InputRef = React.useRef<HTMLInputElement>(null);
+  const cinVersoInputRef = React.useRef<HTMLInputElement>(null);
   const cinInputRef = React.useRef<HTMLInputElement>(null);
   const attestationInputRef = React.useRef<HTMLInputElement>(null);
   const antropometriqueInputRef = React.useRef<HTMLInputElement>(null);
@@ -121,24 +134,47 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
     const requiredFields = [
       'last_name', 'first_name', 'neighborhood', 'city', 'cin', 'birth_date',
       'gender', 'phone', 'whatsapp', 'situation', 'nationality',
-      'education_level', 'type_profil', 'training_details',
-      'health_issues', 'physical_appearance', 'corpulence', 'operator_notes',
+      'education_level', 'type_profil',
+      'health_issues', 'physical_appearance', 'corpulence',
     ];
     const newErrors: Record<string, boolean> = {};
     let hasError = false;
+    
     requiredFields.forEach(field => {
       if (!formData[field as keyof typeof formData]) { newErrors[field] = true; hasError = true; }
     });
+
+    if (formData.statut === 'stand_by' && !formData.standby_days) {
+      newErrors.standby_days = true;
+      hasError = true;
+    }
+    if (formData.statut === 'en_conge' && (!formData.leave_start || !formData.leave_end)) {
+      newErrors.leave_start = !formData.leave_start;
+      newErrors.leave_end = !formData.leave_end;
+      hasError = true;
+    }
+    
     if (formData.languages.length === 0) { newErrors.languages = true; hasError = true; }
+
+    const hasActiveDay = Object.values(formData.availability_calendar).some(day => day.active);
+    if (!hasActiveDay) {
+      newErrors.availability_calendar = true;
+      hasError = true;
+    }
+
     if (hasError) {
       setErrors(newErrors);
-      addToast('Veuillez remplir tous les champs obligatoires (*)', 'error');
+      if (newErrors.availability_calendar) {
+        addToast('Au moins un jour requis pour le calendrier de disponibilité.', 'error');
+      } else {
+        addToast('Veuillez remplir tous les champs obligatoires (*)', 'error');
+      }
       return;
     }
     try {
       const data = new FormData();
       Object.entries(formData).forEach(([key, value]) => {
-        data.append(key, key === 'languages' ? JSON.stringify(value) : String(value));
+        data.append(key, ['languages', 'availability_calendar'].includes(key) ? JSON.stringify(value) : String(value));
       });
       data.append('experiences_json', JSON.stringify(experiences));
       data.append('active_photo', activePhoto);
@@ -146,8 +182,8 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
       // Append new files
       if (files.photo) data.append('photo', files.photo);
       if (files.photo2) data.append('photo2', files.photo2);
-      if (files.photo3) data.append('photo3', files.photo3);
       if (files.cin_file) data.append('cin_file', files.cin_file);
+      if (files.cin_verso_file) data.append('cin_verso_file', files.cin_verso_file);
       if (files.attestation_file) data.append('attestation_file', files.attestation_file);
       if (files.fiche_antropometrique) data.append('fiche_antropometrique', files.fiche_antropometrique);
       
@@ -184,7 +220,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
           {/* Hidden file inputs */}
           <input type="file" ref={photoInputRef} accept="image/*" style={{ display: 'none' }} onChange={e => handleFileChange('photo', e)} />
           <input type="file" ref={photo2InputRef} accept="image/*" style={{ display: 'none' }} onChange={e => handleFileChange('photo2', e)} />
-          <input type="file" ref={photo3InputRef} accept="image/*" style={{ display: 'none' }} onChange={e => handleFileChange('photo3', e)} />
+          <input type="file" ref={cinVersoInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('cin_verso_file', e)} />
           <input type="file" ref={cinInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('cin_file', e)} />
           <input type="file" ref={attestationInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('attestation_file', e)} />
           <input type="file" ref={antropometriqueInputRef} style={{ display: 'none' }} onChange={e => handleFileChange('fiche_antropometrique', e)} />
@@ -192,9 +228,23 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
           {/* ── Informations personnelles ── */}
           <div className="form-section">
             <h3 className="section-title">
-              <User size={18} className="text-teal-600" />
+              <User size={18} className="text-slate-500" />
               Informations personnelles
             </h3>
+
+            <div className="form-grid grid-cols-3">
+              <div className="form-group">
+                <label>Date d'enregistrement</label>
+                <input type="text" value={formData.registration_date ? new Date(formData.registration_date).toLocaleDateString('fr-FR') : ''} disabled className="form-input bg-slate-50 text-slate-500 cursor-not-allowed" />
+              </div>
+              <div className="form-group">
+                <label>Type de profil <span className="text-red-500">*</span></label>
+                <select value={formData.type_profil} onChange={e => { setFormData({ ...formData, type_profil: e.target.value }); if (errors.type_profil) setErrors({ ...errors, type_profil: false }); }} className={`form-select ${errors.type_profil ? 'form-input-error' : ''}`}>
+                  <option value="">Choisir</option>
+                  {TYPES_PROFIL.map(option => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </div>
+            </div>
 
             <div className="form-grid grid-cols-3">
               <div className="form-group">
@@ -304,21 +354,44 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               </div>
             </div>
 
-            <div className="form-grid grid-cols-3">
+            <div className="form-grid grid-cols-2">
               <div className="form-group">
-                <label>Statut profil</label>
+                <label>Statut du profil</label>
                 <select value={formData.statut} onChange={e => setFormData({ ...formData, statut: e.target.value })} className="form-select">
                   {STATUT_PROFIL_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label>Type de profil <span className="text-red-500">*</span></label>
-                <select value={formData.type_profil} onChange={e => { setFormData({ ...formData, type_profil: e.target.value }); if (errors.type_profil) setErrors({ ...errors, type_profil: false }); }} className={`form-select ${errors.type_profil ? 'form-input-error' : ''}`}>
-                  <option value="">Choisir</option>
-                  {TYPES_PROFIL.map(option => <option key={option} value={option}>{option}</option>)}
+                <label>Disponibilité d'intervention</label>
+                <select value={formData.disponibilite_intervention} disabled className="form-select bg-slate-50 text-slate-500 cursor-not-allowed">
+                  <option value="disponible">Disponible</option>
+                  <option value="non_disponible">Non disponible</option>
+                  <option value="occupee">Occupée (en mission)</option>
                 </select>
               </div>
             </div>
+
+            {formData.statut === 'stand_by' && (
+              <div className="form-grid grid-cols-3 mt-2">
+                <div className="form-group">
+                  <label>Nombre de jours en standby <span className="text-red-500">*</span></label>
+                  <input type="number" min="1" value={formData.standby_days || ''} onChange={e => setFormData({ ...formData, standby_days: parseInt(e.target.value) || 0 })} className={`form-input ${errors.standby_days ? 'form-input-error' : ''}`} placeholder="Ex: 5" />
+                </div>
+              </div>
+            )}
+
+            {formData.statut === 'en_conge' && (
+              <div className="form-grid grid-cols-2 mt-2">
+                <div className="form-group">
+                  <label>Congé du <span className="text-red-500">*</span></label>
+                  <input type="date" value={formData.leave_start || ''} onChange={e => setFormData({ ...formData, leave_start: e.target.value })} className={`form-input ${errors.leave_start ? 'form-input-error' : ''}`} />
+                </div>
+                <div className="form-group">
+                  <label>au <span className="text-red-500">*</span></label>
+                  <input type="date" value={formData.leave_end || ''} onChange={e => setFormData({ ...formData, leave_end: e.target.value })} className={`form-input ${errors.leave_end ? 'form-input-error' : ''}`} />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── Caractéristiques ── */}
@@ -327,11 +400,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               <Plus size={18} className="text-teal-600" />
               Caractéristiques
             </h3>
-            <div className="form-group">
-              <label>Formation requise <span className="text-red-500">*</span></label>
-              <textarea value={formData.training_details} onChange={e => { setFormData({ ...formData, training_details: e.target.value }); if (errors.training_details) setErrors({ ...errors, training_details: false }); }} placeholder="Détails de la formation..." className={`form-textarea ${errors.training_details ? 'form-input-error' : ''}`} rows={3} />
-            </div>
-            <div className="form-grid grid-cols-3 mt-4">
+            <div className="form-grid grid-cols-3">
               <div className="form-group flex items-center pt-6">
                 <label className="checkbox-container">
                   <input type="checkbox" checked={formData.can_read_write} onChange={e => setFormData({ ...formData, can_read_write: e.target.checked })} />
@@ -350,7 +419,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                 </select>
               </div>
             </div>
-            <div className="form-grid grid-cols-3">
+            <div className="form-grid grid-cols-3 mt-4">
               <div className="form-group">
                 <label>Corpulence <span className="text-red-500">*</span></label>
                 <select value={formData.corpulence} onChange={e => { setFormData({ ...formData, corpulence: e.target.value }); if (errors.corpulence) setErrors({ ...errors, corpulence: false }); }} className={`form-select ${errors.corpulence ? 'form-input-error' : ''}`}>
@@ -358,62 +427,200 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                   {CORPULENCES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
+              <div className="form-group">
+                <label>Pointure de chaussures</label>
+                <input type="text" value={formData.shoe_size} onChange={e => setFormData({ ...formData, shoe_size: e.target.value })} placeholder="Ex: 38" className="form-input" />
+              </div>
+              <div className="form-group">
+                <label>Allergie aux animaux</label>
+                <div className="flex gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, allergy_animals: true })}
+                    className={`segmented-btn ${formData.allergy_animals ? 'active' : ''}`}
+                  >
+                    Oui
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, allergy_animals: false })}
+                    className={`segmented-btn ${!formData.allergy_animals ? 'active' : ''}`}
+                  >
+                    Non
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="form-grid grid-cols-3 mt-4">
+              <div className="form-group">
+                <label>Fume</label>
+                <div className="flex gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, is_smoking: true })}
+                    className={`segmented-btn ${formData.is_smoking ? 'active' : ''}`}
+                  >
+                    Oui
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, is_smoking: false })}
+                    className={`segmented-btn ${!formData.is_smoking ? 'active' : ''}`}
+                  >
+                    Non
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* ── Disponibilité ── */}
           <div className="form-section">
             <h3 className="section-title">
-              <Calendar size={18} className="text-teal-600" />
-              Disponibilité
+              <Calendar size={18} className="text-slate-500" />
+              Calendrier de disponibilité
             </h3>
-            <div className="form-grid grid-cols-3">
-              {[
-                { key: 'avail_emergencies', label: 'Disponible pour les urgences' },
-                { key: 'avail_day', label: 'Journée (7h–18h)' },
-                { key: 'avail_evening', label: 'Soirée (après 18h)' },
-                { key: 'avail_7_7', label: '7 jours / 7' },
-                { key: 'avail_holidays', label: 'Jours fériés' },
-              ].map(({ key, label }) => (
-                <label key={key} className="checkbox-container">
-                  <input type="checkbox" checked={formData[key as keyof typeof formData] as boolean} onChange={e => setFormData({ ...formData, [key]: e.target.checked })} />
-                  <span className="checkbox-label">{label}</span>
-                </label>
-              ))}
+            
+            <div className="form-group mb-6">
+              <div className={`border border-slate-200 rounded-lg overflow-hidden ${errors.availability_calendar ? 'border-red-500 bg-red-50/20' : ''}`}>
+                {['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'].map((day) => {
+                  const dayCal = formData.availability_calendar[day as keyof typeof formData.availability_calendar] || { active: false, start: '08:00', end: '18:00' };
+                  return (
+                    <div key={day} className={`scheduler-row ${dayCal.active ? 'active' : ''}`}>
+                      <div className="flex items-center gap-3">
+                        <div
+                          onClick={() => {
+                            const updatedCal = {
+                              ...formData.availability_calendar,
+                              [day]: { ...dayCal, active: !dayCal.active }
+                            };
+                            setFormData({ ...formData, availability_calendar: updatedCal });
+                            if (errors.availability_calendar) setErrors({ ...errors, availability_calendar: false });
+                          }}
+                          className={`switch-wrapper ${dayCal.active ? 'active' : ''}`}
+                        >
+                          <div className="switch-knob" />
+                        </div>
+                        <span className={`text-sm font-semibold capitalize w-24 transition-colors ${dayCal.active ? 'text-teal-800' : 'text-slate-400'}`}>
+                          {day}
+                        </span>
+                      </div>
+                      {dayCal.active ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="time"
+                            value={dayCal.start}
+                            onChange={(e) => {
+                              const updatedCal = {
+                                ...formData.availability_calendar,
+                                [day]: { ...dayCal, start: e.target.value }
+                              };
+                              setFormData({ ...formData, availability_calendar: updatedCal });
+                            }}
+                            className="form-input py-1 px-2 text-xs w-24 text-center"
+                            style={{ height: '34px', borderRadius: '6px' }}
+                          />
+                          <span className="text-xs text-slate-500">à</span>
+                          <input
+                            type="time"
+                            value={dayCal.end}
+                            onChange={(e) => {
+                              const updatedCal = {
+                                ...formData.availability_calendar,
+                                [day]: { ...dayCal, end: e.target.value }
+                              };
+                              setFormData({ ...formData, availability_calendar: updatedCal });
+                            }}
+                            className="form-input py-1 px-2 text-xs w-24 text-center"
+                            style={{ height: '34px', borderRadius: '6px' }}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 font-medium italic">Indisponible</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {errors.availability_calendar && (
+                <span className="text-xs text-red-500 mt-1 block">Au moins un jour requis.</span>
+              )}
             </div>
-            <div className="form-group mt-6">
-              <label>Note de l'opérateur <span className="text-red-500">*</span></label>
-              <textarea value={formData.operator_notes} onChange={e => { setFormData({ ...formData, operator_notes: e.target.value }); if (errors.operator_notes) setErrors({ ...errors, operator_notes: false }); }} placeholder="Remarques..." className={`form-textarea ${errors.operator_notes ? 'form-input-error' : ''}`} rows={3} />
+
+            <div className="form-group mt-5">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Disponibilités additionnelles</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'avail_emergencies', label: 'Disponible pour les urgences' },
+                  { key: 'avail_holidays', label: 'Jours fériés' },
+                  { key: 'avail_evening', label: 'Soirée (après 18h)' },
+                ].map(({ key, label }) => {
+                  const isActive = Boolean(formData[key as keyof typeof formData]);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, [key]: !isActive })}
+                      className={`tag-btn ${isActive ? 'tag-btn-active' : ''}`}
+                      style={{ borderRadius: '8px' }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Remarque du recruteur ── */}
+          <div className="form-section">
+            <h3 className="section-title">
+              <FileText size={18} className="text-slate-500" />
+              Remarque du recruteur
+            </h3>
+            <div className="form-group">
+              <textarea
+                value={formData.recruiter_notes}
+                onChange={e => setFormData({ ...formData, recruiter_notes: e.target.value })}
+                placeholder="Visible uniquement sur le profil interne et non sur la fiche envoyée au client..."
+                className="form-textarea"
+                rows={3}
+              />
             </div>
           </div>
 
           {/* ── Média ── */}
           <div className="form-section">
             <h3 className="section-title">
-              <Save size={18} className="text-teal-600" />
+              <Save size={18} className="text-slate-500" />
               Média (Documents et Photos)
             </h3>
             
             <div className="form-grid grid-cols-3 mb-6">
-              {['photo', 'photo2', 'photo3'].map((field, idx) => {
+              {[
+                { field: 'photo', label: 'Photo 1', isImage: true, icon: User, ref: photoInputRef },
+                { field: 'photo2', label: 'Photo 2', isImage: true, icon: User, ref: photo2InputRef },
+                { field: 'cin_file', label: 'CIN Recto', isImage: false, icon: Search, ref: cinInputRef },
+                { field: 'cin_verso_file', label: 'CIN Verso', isImage: false, icon: Search, ref: cinVersoInputRef },
+                { field: 'attestation_file', label: 'Attestation', isImage: false, icon: RotateCw, ref: attestationInputRef },
+                { field: 'fiche_antropometrique', label: 'Fiche antropométrique', isImage: false, icon: FileText, ref: antropometriqueInputRef },
+              ].map(({ field, label, isImage, icon: Icon, ref }) => {
                 const hasNewFile = Boolean(files[field as keyof typeof files]);
                 const existingFileUrl = initialAgent ? (initialAgent as any)[field] : null;
                 const isCleared = clearedFiles[field];
                 const hasFile = hasNewFile || (existingFileUrl && !isCleared);
-                const refs = { 'photo': photoInputRef, 'photo2': photo2InputRef, 'photo3': photo3InputRef };
-                const ref = refs[field as keyof typeof refs];
 
                 return (
-                  <div key={field} className="form-group flex flex-col">
+                  <div key={field} className="form-group flex flex-col mb-4">
                     <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">
-                      Photo {idx + 1} {hasFile && <span className="text-teal-500">✓</span>}
+                      {label} {hasFile && <span className="text-teal-500">✓</span>}
                     </label>
                     {hasFile ? (
                       <div className="flex items-center justify-between p-3 border border-teal-200 bg-teal-50 rounded-lg">
                         <div className="flex items-center gap-2 overflow-hidden">
-                          <User size={16} className="text-teal-600 flex-shrink-0" />
+                          <Icon size={16} className="text-teal-600 flex-shrink-0" />
                           <span className="text-xs text-slate-700 truncate">
-                            {hasNewFile ? files[field as keyof typeof files]!.name : 'Image existante'}
+                            {hasNewFile ? files[field as keyof typeof files]!.name : (isImage ? 'Image existante' : 'Document existant')}
                           </span>
                         </div>
                         <button
@@ -424,7 +631,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                               setFiles(prev => ({ ...prev, [field]: null }));
                             } else if (existingFileUrl) {
                               setClearedFiles(prev => ({ ...prev, [field]: true }));
-                              if (activePhoto === field) setActivePhoto('photo'); // Reset if active deleted
+                              if (activePhoto === field) setActivePhoto('photo');
                             }
                           }}
                         >
@@ -433,11 +640,11 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                       </div>
                     ) : (
                       <button type="button" className="upload-box w-full py-3" onClick={() => ref.current?.click()}>
-                        <User size={16} />
-                        <span className="text-xs">Choisir l'image</span>
+                        <Icon size={16} />
+                        <span className="text-xs">{isImage ? "Choisir l'image" : "Choisir un fichier"}</span>
                       </button>
                     )}
-                    {hasFile && (
+                    {isImage && hasFile && (
                       <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs text-slate-600">
                         <input 
                           type="radio" 
@@ -453,62 +660,13 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                 );
               })}
             </div>
-
-            <div className="form-grid grid-cols-3">
-              {[
-                { field: 'cin_file', label: 'CIN', icon: Search, ref: cinInputRef },
-                { field: 'attestation_file', label: 'Attestation', icon: RotateCw, ref: attestationInputRef },
-                { field: 'fiche_antropometrique', label: 'Fiche antropométrique', icon: FileText, ref: antropometriqueInputRef },
-              ].map(({ field, label, icon: Icon, ref }) => {
-                const hasNewFile = Boolean(files[field as keyof typeof files]);
-                const existingFileUrl = initialAgent ? (initialAgent as any)[field] : null;
-                const isCleared = clearedFiles[field];
-                const hasFile = hasNewFile || (existingFileUrl && !isCleared);
-
-                return (
-                  <div key={field} className="form-group flex flex-col">
-                    <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">
-                      {label} {hasFile && <span className="text-teal-500">✓</span>}
-                    </label>
-                    {hasFile ? (
-                      <div className="flex items-center justify-between p-3 border border-teal-200 bg-teal-50 rounded-lg">
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <Icon size={16} className="text-teal-600 flex-shrink-0" />
-                          <span className="text-xs text-slate-700 truncate">
-                            {hasNewFile ? files[field as keyof typeof files]!.name : 'Document existant'}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          className="text-red-400 hover:text-red-600 p-1"
-                          onClick={() => {
-                            if (hasNewFile) {
-                              setFiles(prev => ({ ...prev, [field]: null }));
-                            } else if (existingFileUrl) {
-                              setClearedFiles(prev => ({ ...prev, [field]: true }));
-                            }
-                          }}
-                        >
-                          <XCircle size={16} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button type="button" className="upload-box w-full py-3" onClick={() => ref.current?.click()}>
-                        <Icon size={16} />
-                        <span className="text-xs">Choisir un fichier</span>
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
           </div>
 
           {/* ── Expériences ── */}
           <div className="form-section">
             <div className="flex justify-between items-center mb-4">
               <h3 className="section-title mb-0">
-                <RotateCw size={18} className="text-teal-600" />
+                <RotateCw size={18} className="text-slate-500" />
                 Les expériences
               </h3>
               <button className="btn-premium btn-premium-outline btn-premium-sm" onClick={() => { if (!showExpForm) setShowExpForm(true); }}>

@@ -17,10 +17,12 @@ export const PRESENTATIONS_PHYSIQUES = [
 ] as const;
 
 export const CORPULENCES = [
-  { value: 'normale', label: 'Normale' },
-  { value: 'forte', label: 'Forte corpulence' },
-  { value: 'tres_forte', label: 'Très forte corpulence' },
-  { value: 'petite', label: 'Petite corpulence' },
+  { value: 'XS', label: 'XS' },
+  { value: 'S', label: 'S' },
+  { value: 'M', label: 'M' },
+  { value: 'L', label: 'L' },
+  { value: 'XL', label: 'XL' },
+  { value: '2XL', label: '2XL' },
 ] as const;
 
 export const TYPES_PROFIL = [
@@ -57,6 +59,10 @@ export const PROFIL_FILTER_TABS = [
 ] as const;
 
 export const STATUT_PROFIL_OPTIONS = [
-  { value: 'disponible', label: 'Disponible', color: 'bg-emerald-100 text-emerald-800' },
-  { value: 'non_disponible', label: 'Non disponible', color: 'bg-rose-100 text-rose-800' },
+  { value: 'nouveau', label: 'Nouveau', color: 'bg-blue-100 text-blue-800' },
+  { value: 'active', label: 'Active', color: 'bg-emerald-100 text-emerald-800' },
+  { value: 'blacklist', label: 'Blacklisté', color: 'bg-rose-100 text-rose-800' },
+  { value: 'stand_by', label: 'Stand by', color: 'bg-amber-100 text-amber-800' },
+  { value: 'en_conge', label: 'En congé', color: 'bg-purple-100 text-purple-800' },
+  { value: 'malade', label: 'Malade', color: 'bg-red-100 text-red-800' },
 ] as const;
