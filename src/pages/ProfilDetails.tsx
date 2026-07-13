@@ -420,7 +420,7 @@ export default function ProfilDetails() {
 
   const handleTogglePause = () => {
     if (!agent) return;
-    const perm = checkPermission(user, 'edit_candidat');
+    const perm = checkPermission(user, 'mettre_standby_profil');
     if (!perm.allowed) {
       addToast(perm.message || 'Action non autorisée', 'error');
       return;
@@ -1075,7 +1075,7 @@ export default function ProfilDetails() {
                 {isAgentBusy ? 'Déjà affecté' : 'Postuler'}
               </button>
             )}
-            {hasPermission(user, 'blacklister_agents') && (
+            {(hasPermission(user, 'blacklister_agents') || hasPermission(user, 'mettre_standby_profil')) && (
               <div className="pause-dropdown-container relative" style={{ display: 'inline-block' }}>
                 <button
                   onClick={() => setShowPauseDropdown(!showPauseDropdown)}
@@ -1109,56 +1109,60 @@ export default function ProfilDetails() {
                       overflow: 'hidden',
                     }}
                   >
-                    <button
-                      onClick={() => {
-                        setShowPauseDropdown(false);
-                        handleToggleBlacklist();
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        width: '100%',
-                        padding: '10px 14px',
-                        border: 'none',
-                        background: 'none',
-                        textAlign: 'left',
-                        fontSize: '13px',
-                        color: '#334155',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.15s',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <ShieldAlert size={14} className="text-red-500" />
-                      <span>{agent.is_blacklisted ? 'Déblacklister' : 'Blacklisté'}</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowPauseDropdown(false);
-                        handleTogglePause();
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        width: '100%',
-                        padding: '10px 14px',
-                        border: 'none',
-                        background: 'none',
-                        textAlign: 'left',
-                        fontSize: '13px',
-                        color: '#334155',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.15s',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <Pause size={14} className="text-amber-500" />
-                      <span>{agent.statut === 'stand_by' ? 'Reprendre' : 'Stand-by'}</span>
-                    </button>
+                    {hasPermission(user, 'blacklister_agents') && (
+                      <button
+                        onClick={() => {
+                          setShowPauseDropdown(false);
+                          handleToggleBlacklist();
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '10px 14px',
+                          border: 'none',
+                          background: 'none',
+                          textAlign: 'left',
+                          fontSize: '13px',
+                          color: '#334155',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.15s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <ShieldAlert size={14} className="text-red-500" />
+                        <span>{agent.is_blacklisted ? 'Déblacklister' : 'Blacklisté'}</span>
+                      </button>
+                    )}
+                    {hasPermission(user, 'mettre_standby_profil') && (
+                      <button
+                        onClick={() => {
+                          setShowPauseDropdown(false);
+                          handleTogglePause();
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '10px 14px',
+                          border: 'none',
+                          background: 'none',
+                          textAlign: 'left',
+                          fontSize: '13px',
+                          color: '#334155',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.15s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <Pause size={14} className="text-amber-500" />
+                        <span>{agent.statut === 'stand_by' ? 'Reprendre' : 'Stand-by'}</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

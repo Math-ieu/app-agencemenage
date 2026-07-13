@@ -91,9 +91,7 @@ export default function Profils() {
   const { addToast } = useToastStore();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dashboardDemandes, setDashboardDemandes] = useState<any[]>([]);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -134,6 +132,11 @@ export default function Profils() {
   }, [activePauseDropdown]);
 
   const handleToggleBlacklist = async (agent: Agent) => {
+    const perm = checkPermission(user, 'blacklister_agents');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     const isCurrentlyBlacklisted = agent.statut === 'blacklist' || agent.is_blacklisted;
     if (isCurrentlyBlacklisted) {
       if (!window.confirm(`Retirer ${agent.first_name} ${agent.last_name} de la blacklist ?`)) return;
@@ -159,6 +162,11 @@ export default function Profils() {
   };
 
   const handleTogglePause = (agent: Agent) => {
+    const perm = checkPermission(user, 'mettre_standby_profil');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     if (agent.statut === 'stand_by') {
       setSelectedAgentForResume(agent);
     } else {
@@ -300,16 +308,10 @@ export default function Profils() {
       if (filterSegment) params.segment = filterSegment;
       if (filterJourDispo) params.jour_dispo = filterJourDispo;
 
-      const [agentsRes, demandsRes] = await Promise.all([
-        getAgents(params),
-        getDemandes({ no_page: 'true' }).catch(() => ({ data: [] }))
-      ]);
-
+      const agentsRes = await getAgents(params);
       const agentsList = agentsRes.data.results || agentsRes.data || [];
-      const dashDemandes = Array.isArray(demandsRes?.data?.results) ? demandsRes.data.results : (Array.isArray(demandsRes?.data) ? demandsRes.data : []);
 
       setAgents(agentsList);
-      setDashboardDemandes(dashDemandes);
     } catch (err) {
       console.error('Error fetching agents:', err);
     } finally {
@@ -325,53 +327,6 @@ export default function Profils() {
     return 'non_confirme';
   };
 
-  const busyAgentIds = useMemo(() => {
-    const activeIds = new Set<number>();
-    for (const d of dashboardDemandes) {
-      if (d.statut === 'en_attente' || d.statut === 'pres_terminee' || d.statut === 'termine') continue;
-
-      const factDataDef = d.formulaire_data?.facturation || {};
-      const statutUi = factDataDef.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(factDataDef.facturation_annulee));
-
-      // Une demande n'est pas active si elle est payée
-      if (statutUi === 'paye') continue;
-
-      // Si elle est annulée, elle reste sur le dashboard si les profils doivent être payés et ne le sont pas entièrement
-      const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || factDataDef.facturation_annulee;
-      if (isAnnule) {
-        const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(factDataDef.profil_sera_paye);
-        if (profilSeraPaye) {
-          let allProfilesPaid = false;
-          const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
-          if (Array.isArray(parts) && parts.length > 0) {
-            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
-          } else {
-            allProfilesPaid = Boolean(factDataDef.part_profil_versee);
-          }
-          if (allProfilesPaid) continue;
-        } else {
-          continue;
-        }
-      }
-
-      // Collecter depuis profils_envoyes
-      if (Array.isArray(d.profils_envoyes)) {
-        for (const p of d.profils_envoyes) {
-          if (p.id) activeIds.add(p.id);
-        }
-      }
-
-      // Collecter aussi depuis parts_repartition (formulaire_data)
-      const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
-      if (Array.isArray(parts)) {
-        for (const part of parts) {
-          const pid = Number(part.profile_id);
-          if (pid) activeIds.add(pid);
-        }
-      }
-    }
-    return activeIds;
-  }, [dashboardDemandes]);
 
   useEffect(() => { 
     fetchData(); 
@@ -737,96 +692,102 @@ export default function Profils() {
                         <span>Affectation</span>
                       </button>
 
-                      <div className="pause-dropdown-container relative" style={{ display: 'inline-block' }}>
-                        <button
-                          onClick={() => setActivePauseDropdown(activePauseDropdown === agent.id ? null : agent.id)}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '6px 12px',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '8px',
-                            background: 'white',
-                            color: '#334155',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <Pause size={14} />
-                          <span>Mise en pause</span>
-                        </button>
-
-                        {activePauseDropdown === agent.id && (
-                          <div
+                      {(hasPermission(user, 'blacklister_agents') || hasPermission(user, 'mettre_standby_profil')) && (
+                        <div className="pause-dropdown-container relative" style={{ display: 'inline-block' }}>
+                          <button
+                            onClick={() => setActivePauseDropdown(activePauseDropdown === agent.id ? null : agent.id)}
                             style={{
-                              position: 'absolute',
-                              top: '100%',
-                              right: 0,
-                              marginTop: '4px',
-                              width: '140px',
-                              backgroundColor: 'white',
-                              border: '1px solid #e2e8f0',
-                              borderRadius: '6px',
-                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                              zIndex: 100,
-                              overflow: 'hidden',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '6px 12px',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '8px',
+                              background: 'white',
+                              color: '#334155',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
                             }}
                           >
-                            <button
-                              onClick={() => {
-                                setActivePauseDropdown(null);
-                                handleToggleBlacklist(agent);
-                              }}
+                            <Pause size={14} />
+                            <span>Mise en pause</span>
+                          </button>
+
+                          {activePauseDropdown === agent.id && (
+                            <div
                               style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                width: '100%',
-                                padding: '10px 12px',
-                                border: 'none',
-                                background: 'none',
-                                textAlign: 'left',
-                                fontSize: '13px',
-                                color: '#334155',
-                                cursor: 'pointer',
-                                transition: 'background-color 0.15s',
+                                position: 'absolute',
+                                top: '100%',
+                                right: 0,
+                                marginTop: '4px',
+                                width: '140px',
+                                backgroundColor: 'white',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+                                zIndex: 100,
+                                overflow: 'hidden',
                               }}
-                              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
                             >
-                              <Ban size={14} className="text-red-500" />
-                              <span>{agent.statut === 'blacklist' || agent.is_blacklisted ? 'Déblacklister' : 'Blacklisté'}</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                setActivePauseDropdown(null);
-                                handleTogglePause(agent);
-                              }}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                width: '100%',
-                                padding: '10px 12px',
-                                border: 'none',
-                                background: 'none',
-                                textAlign: 'left',
-                                fontSize: '13px',
-                                color: '#334155',
-                                cursor: 'pointer',
-                                transition: 'background-color 0.15s',
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                            >
-                              <Pause size={14} className="text-amber-500" />
-                              <span>{agent.statut === 'stand_by' ? 'Reprendre' : 'Stand-by'}</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                              {hasPermission(user, 'blacklister_agents') && (
+                                <button
+                                  onClick={() => {
+                                    setActivePauseDropdown(null);
+                                    handleToggleBlacklist(agent);
+                                  }}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    border: 'none',
+                                    background: 'none',
+                                    textAlign: 'left',
+                                    fontSize: '13px',
+                                    color: '#334155',
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.15s',
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                  <Ban size={14} className="text-red-500" />
+                                  <span>{agent.statut === 'blacklist' || agent.is_blacklisted ? 'Déblacklister' : 'Blacklisté'}</span>
+                                </button>
+                              )}
+                              {hasPermission(user, 'mettre_standby_profil') && (
+                                <button
+                                  onClick={() => {
+                                    setActivePauseDropdown(null);
+                                    handleTogglePause(agent);
+                                  }}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    border: 'none',
+                                    background: 'none',
+                                    textAlign: 'left',
+                                    fontSize: '13px',
+                                    color: '#334155',
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.15s',
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                  <Pause size={14} className="text-amber-500" />
+                                  <span>{agent.statut === 'stand_by' ? 'Reprendre' : 'Stand-by'}</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {!agent.is_blacklisted && hasPermission(user, 'supprimer_profil') && (
                         <button

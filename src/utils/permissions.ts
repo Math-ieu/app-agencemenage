@@ -29,12 +29,13 @@ export type PermissionKey =
   | 'traiter_demandes_affectees'
   | 'creer_valider_demande'
   | 'refuser_demande'
-  // Listing profils
+  // Liste des femmes de ménage
   | 'consulter_agents'
   | 'consulter_docs_confidentiels'
   | 'creer_agents'
   | 'modifier_agents'
   | 'desactiver_profil'
+  | 'mettre_standby_profil'
   | 'blacklister_agents'
   | 'supprimer_profil'
   | 'postuler_demande'
@@ -160,8 +161,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
-    // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil", "postuler_demande", "assigner_charge_profil",
+    // Liste des femmes de ménage
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "supprimer_profil", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
     // Historique
@@ -190,8 +191,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
-    // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil", "postuler_demande", "assigner_charge_profil",
+    // Liste des femmes de ménage
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "supprimer_profil", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
     // Historique
@@ -248,8 +249,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
-    // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil", "postuler_demande",
+    // Liste des femmes de ménage
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "supprimer_profil", "postuler_demande",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
     // Historique
@@ -272,8 +273,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard",
     // Demandes en attente
     "creer_demande", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande",
-    // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "postuler_demande", "assigner_charge_profil",
+    // Liste des femmes de ménage
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "note_operationnelle",
     // Historique

@@ -61,16 +61,17 @@ const PERMISSIONS = [
   { key: "creer_valider_demande", label: "Créer et valider une demande", group: "Demandes en attente" },
   { key: "refuser_demande", label: "Refuser / annuler une demande", group: "Demandes en attente" },
 
-  // Listing profils
-  { key: "consulter_agents", label: "Consulter le listing des profils (agents)", group: "Listing profils" },
-  { key: "consulter_docs_confidentiels", label: "Ouvrir la fiche profil & pièces jointes", group: "Listing profils" },
-  { key: "creer_agents", label: "Créer un nouveau profil", group: "Listing profils" },
-  { key: "modifier_agents", label: "Modifier / mettre à jour un profil", group: "Listing profils" },
-  { key: "desactiver_profil", label: "Désactiver / archiver un profil", group: "Listing profils" },
-  { key: "blacklister_agents", label: "Blacklister un profil", group: "Listing profils" },
-  { key: "supprimer_profil", label: "Supprimer un profil", group: "Listing profils" },
-  { key: "postuler_demande", label: "Postuler un profil à une demande", group: "Listing profils" },
-  { key: "assigner_charge_profil", label: "Assigner un chargé d'opérations à un profil", group: "Listing profils" },
+  // Liste des femmes de ménage
+  { key: "consulter_agents", label: "Consulter le listing des profils (agents)", group: "Liste des femmes de ménage" },
+  { key: "consulter_docs_confidentiels", label: "Ouvrir la fiche profil & pièces jointes", group: "Liste des femmes de ménage" },
+  { key: "creer_agents", label: "Créer un nouveau profil", group: "Liste des femmes de ménage" },
+  { key: "modifier_agents", label: "Modifier / mettre à jour un profil", group: "Liste des femmes de ménage" },
+  { key: "desactiver_profil", label: "Désactiver / archiver un profil", group: "Liste des femmes de ménage" },
+  { key: "mettre_standby_profil", label: "Mettre en stand-by / pause un profil", group: "Liste des femmes de ménage" },
+  { key: "blacklister_agents", label: "Blacklister un profil", group: "Liste des femmes de ménage" },
+  { key: "supprimer_profil", label: "Supprimer un profil", group: "Liste des femmes de ménage" },
+  { key: "postuler_demande", label: "Postuler un profil à une demande", group: "Liste des femmes de ménage" },
+  { key: "assigner_charge_profil", label: "Assigner un chargé d'opérations à un profil", group: "Liste des femmes de ménage" },
 
   // Listing clients
   { key: "consulter_clients", label: "Consulter le listing clients", group: "Listing clients" },
@@ -169,8 +170,8 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard", "taux_horaire_exceptionnel", "taux_forfaitaire",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
-    // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil", "postuler_demande", "assigner_charge_profil",
+    // Liste des femmes de ménage
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "supprimer_profil", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
     // Historique
@@ -227,8 +228,8 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard",
     // Demandes en attente
     "creer_demande", "creer_devis", "modifier_demande", "consulter_demandes", "affecter_commercial", "traiter_demandes_affectees", "creer_valider_demande", "refuser_demande",
-    // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "supprimer_profil", "postuler_demande",
+    // Liste des femmes de ménage
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "supprimer_profil", "postuler_demande",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
     // Historique
@@ -251,8 +252,8 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_dashboard", "consulter_compte_client_dashboard", "editer_besoin", "editer_besoin_agence", "confirmation_avant_operation", "supprimer_demande_dashboard", "facturation_annulee", "annulation_demande", "note_operationnelle_dashboard", "note_commerciale_dashboard", "assigner_charge_operation", "application_taux_horaire_standard",
     // Demandes en attente
     "creer_demande", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande",
-    // Listing profils
-    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "blacklister_agents", "postuler_demande", "assigner_charge_profil",
+    // Liste des femmes de ménage
+    "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "note_operationnelle",
     // Historique
