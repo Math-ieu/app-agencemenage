@@ -60,7 +60,7 @@ export const PROFIL_FILTER_TABS = [
 
 export const STATUT_PROFIL_OPTIONS = [
   { value: 'nouveau', label: 'Nouveau', color: 'bg-blue-100 text-blue-800' },
-  { value: 'active', label: 'Active', color: 'bg-emerald-100 text-emerald-800' },
+  { value: 'active', label: 'Active (Binômage)', color: 'bg-emerald-100 text-emerald-800' },
   { value: 'blacklist', label: 'Blacklisté', color: 'bg-rose-100 text-rose-800' },
   { value: 'stand_by', label: 'Stand by', color: 'bg-amber-100 text-amber-800' },
   { value: 'en_conge', label: 'En congé', color: 'bg-purple-100 text-purple-800' },

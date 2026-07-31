@@ -987,7 +987,7 @@ export default function ProfilDetails() {
                     'badge-gray'
                   }`} style={{ fontSize: '11px', padding: '2px 10px', fontWeight: 700, borderRadius: 99 }}>
                     {agent.statut === 'nouveau' ? 'Nouveau' :
-                     agent.statut === 'active' ? 'Active' :
+                     agent.statut === 'active' ? 'Active (Binômage)' :
                      agent.statut === 'blacklist' ? 'Blacklisté' :
                      agent.statut === 'stand_by' ? `Stand by (${agent.standby_days || 0}j)` :
                      agent.statut === 'en_conge' ? 'En congé' :
@@ -1072,7 +1072,7 @@ export default function ProfilDetails() {
                 title={isAgentBusy ? "Ce profil est déjà affecté à une prestation en cours" : ""}
               >
                 {isAgentBusy ? <AlertTriangle size={16} /> : <PlusCircle size={16} />}
-                {isAgentBusy ? 'Déjà affecté' : 'Postuler'}
+                {isAgentBusy ? 'Déjà affecté' : 'Affecter'}
               </button>
             )}
             {(hasPermission(user, 'blacklister_agents') || hasPermission(user, 'mettre_standby_profil')) && (
@@ -1191,7 +1191,6 @@ export default function ProfilDetails() {
             <InfoField label="SITUATION MATRIMONIALE" value={agent.situation} />
             <InfoField label="ENFANTS" value={agent.has_children ? 'Oui' : 'Non'} />
             <InfoField label="LANGUES" value={agent.languages?.join(', ')} />
-            <InfoField label="NIVEAU D'ÉTUDE" value={agent.education_level} />
             <InfoField label="EXPÉRIENCE TOTALE" value={`${agent.experience_years} an(s) ${agent.experience_months} mois`} />
             <InfoField label="TYPE DE PROFIL" value={agent.type_profil} />
             <InfoField label="SAIT LIRE ET ÉCRIRE" value={agent.can_read_write ? 'Oui' : 'Non'} />
@@ -1535,7 +1534,7 @@ export default function ProfilDetails() {
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', margin: 0 }}>
-                {selectedDemande ? 'Aperçu avant envoi' : 'Postuler — Choisir une demande'}
+                {selectedDemande ? 'Aperçu avant envoi' : 'Affecter — Choisir une demande'}
               </h2>
               <button
                 onClick={() => { setShowPostulerModal(false); setSelectedDemande(null); }}

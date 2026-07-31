@@ -10,7 +10,6 @@ import { Search, Plus, RotateCw, Calendar, User, Save, XCircle, FileText } from 
 import { useToastStore } from '../store/toast';
 import { Agent } from '../types';
 import {
-  NIVEAUX_ETUDE,
   SITUATIONS_MATRIMONIALES,
   NATIONALITES,
   PRESENTATIONS_PHYSIQUES,
@@ -65,11 +64,11 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
     disponibilite_intervention: initialAgent?.disponibilite_intervention || 'disponible',
     type_profil: initialAgent?.type_profil || '',
     can_read_write: initialAgent?.can_read_write ?? false,
-    health_issues: initialAgent?.health_issues || '',
+    health_issues: initialAgent?.health_issues || 'Non',
     physical_appearance: normalizePhysicalAppearance(initialAgent?.physical_appearance || ''),
     corpulence: normalizeCorpulence(initialAgent?.corpulence || ''),
     allergy_animals: initialAgent?.allergy_animals ?? false,
-    shoe_size: initialAgent?.shoe_size || '',
+    shoe_size: initialAgent?.shoe_size || '36',
     is_smoking: initialAgent?.is_smoking ?? false,
     availability_calendar: initialAgent?.availability_calendar || {
       lundi: { active: true, start: '08:00', end: '18:00' },
@@ -92,6 +91,36 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
     leave_start: initialAgent?.leave_start || '',
     leave_end: initialAgent?.leave_end || '',
   });
+
+  const [sameAsPhone, setSameAsPhone] = useState(() =>
+    Boolean(initialAgent?.phone && initialAgent?.whatsapp && initialAgent.phone === initialAgent.whatsapp)
+  );
+
+  const handlePhoneChange = (val: string) => {
+    setFormData(prev => ({
+      ...prev,
+      phone: val,
+      ...(sameAsPhone ? { whatsapp: val } : {}),
+    }));
+    if (errors.phone) setErrors(prev => ({ ...prev, phone: false }));
+    if (sameAsPhone && errors.whatsapp) setErrors(prev => ({ ...prev, whatsapp: false }));
+  };
+
+  const handleWhatsappChange = (val: string) => {
+    setFormData(prev => ({ ...prev, whatsapp: val }));
+    if (sameAsPhone && val !== formData.phone) {
+      setSameAsPhone(false);
+    }
+    if (errors.whatsapp) setErrors(prev => ({ ...prev, whatsapp: false }));
+  };
+
+  const handleSameAsPhoneToggle = (checked: boolean) => {
+    setSameAsPhone(checked);
+    if (checked) {
+      setFormData(prev => ({ ...prev, whatsapp: prev.phone }));
+      if (errors.whatsapp) setErrors(prev => ({ ...prev, whatsapp: false }));
+    }
+  };
 
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const { addToast } = useToastStore();
@@ -134,12 +163,12 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
     const requiredFields = [
       'last_name', 'first_name', 'neighborhood', 'city', 'cin', 'birth_date',
       'gender', 'phone', 'whatsapp', 'situation', 'nationality',
-      'education_level', 'type_profil',
+      'type_profil',
       'health_issues', 'physical_appearance', 'corpulence',
     ];
     const newErrors: Record<string, boolean> = {};
     let hasError = false;
-    
+
     requiredFields.forEach(field => {
       if (!formData[field as keyof typeof formData]) { newErrors[field] = true; hasError = true; }
     });
@@ -153,7 +182,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
       newErrors.leave_end = !formData.leave_end;
       hasError = true;
     }
-    
+
     if (formData.languages.length === 0) { newErrors.languages = true; hasError = true; }
 
     const hasActiveDay = Object.values(formData.availability_calendar).some(day => day.active);
@@ -178,7 +207,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
       });
       data.append('experiences_json', JSON.stringify(experiences));
       data.append('active_photo', activePhoto);
-      
+
       // Append new files
       if (files.photo) data.append('photo', files.photo);
       if (files.photo2) data.append('photo2', files.photo2);
@@ -186,7 +215,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
       if (files.cin_verso_file) data.append('cin_verso_file', files.cin_verso_file);
       if (files.attestation_file) data.append('attestation_file', files.attestation_file);
       if (files.fiche_antropometrique) data.append('fiche_antropometrique', files.fiche_antropometrique);
-      
+
       // Handle cleared files by sending empty strings
       Object.entries(clearedFiles).forEach(([key, isCleared]) => {
         if (isCleared && !files[key as keyof typeof files]) {
@@ -295,11 +324,17 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               </div>
               <div className="form-group">
                 <label>Téléphone <span className="text-red-500">*</span></label>
-                <input type="text" value={formData.phone} onChange={e => { setFormData({ ...formData, phone: e.target.value }); if (errors.phone) setErrors({ ...errors, phone: false }); }} className={`form-input ${errors.phone ? 'form-input-error' : ''}`} placeholder="06.." />
+                <input type="text" value={formData.phone} onChange={e => handlePhoneChange(e.target.value)} className={`form-input ${errors.phone ? 'form-input-error' : ''}`} placeholder="06.." />
               </div>
               <div className="form-group">
-                <label>WhatsApp <span className="text-red-500">*</span></label>
-                <input type="text" value={formData.whatsapp} onChange={e => { setFormData({ ...formData, whatsapp: e.target.value }); if (errors.whatsapp) setErrors({ ...errors, whatsapp: false }); }} className={`form-input ${errors.whatsapp ? 'form-input-error' : ''}`} placeholder="06.." />
+                <div className="flex items-center justify-between">
+                  <label>WhatsApp <span className="text-red-500">*</span></label>
+                  <label className="checkbox-container text-xs text-slate-600 flex items-center gap-1 cursor-pointer font-normal mb-1">
+                    <input type="checkbox" checked={sameAsPhone} onChange={e => handleSameAsPhoneToggle(e.target.checked)} />
+                    <span className="checkbox-label" style={{ fontSize: '11px', textTransform: 'none' }}>Identique au tél</span>
+                  </label>
+                </div>
+                <input type="text" value={formData.whatsapp} onChange={e => handleWhatsappChange(e.target.value)} className={`form-input ${errors.whatsapp ? 'form-input-error' : ''}`} placeholder="06.." />
               </div>
             </div>
 
@@ -336,14 +371,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               </div>
             </div>
 
-            <div className="form-grid grid-cols-3 mt-2">
-              <div className="form-group">
-                <label>Niveau d'étude <span className="text-red-500">*</span></label>
-                <select value={formData.education_level} onChange={e => { setFormData({ ...formData, education_level: e.target.value }); if (errors.education_level) setErrors({ ...errors, education_level: false }); }} className={`form-select ${errors.education_level ? 'form-input-error' : ''}`}>
-                  <option value="">Choisir</option>
-                  {NIVEAUX_ETUDE.map(option => <option key={option} value={option}>{option}</option>)}
-                </select>
-              </div>
+            <div className="form-grid grid-cols-2 mt-2">
               <div className="form-group">
                 <label>Expérience (années)</label>
                 <input type="number" min="0" value={formData.experience_years} onChange={e => setFormData({ ...formData, experience_years: parseInt(e.target.value) || 0 })} className="form-input" />
@@ -409,7 +437,22 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               </div>
               <div className="form-group">
                 <label>Maladie / Handicap <span className="text-red-500">*</span></label>
-                <input type="text" value={formData.health_issues} onChange={e => { setFormData({ ...formData, health_issues: e.target.value }); if (errors.health_issues) setErrors({ ...errors, health_issues: false }); }} placeholder="Saisir 'Aucun' si néant" className={`form-input ${errors.health_issues ? 'form-input-error' : ''}`} />
+                <div className="flex gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setFormData({ ...formData, health_issues: 'Oui' }); if (errors.health_issues) setErrors({ ...errors, health_issues: false }); }}
+                    className={`segmented-btn ${formData.health_issues === 'Oui' ? 'active' : ''}`}
+                  >
+                    Oui
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setFormData({ ...formData, health_issues: 'Non' }); if (errors.health_issues) setErrors({ ...errors, health_issues: false }); }}
+                    className={`segmented-btn ${formData.health_issues !== 'Oui' ? 'active' : ''}`}
+                  >
+                    Non
+                  </button>
+                </div>
               </div>
               <div className="form-group">
                 <label>Présentation physique <span className="text-red-500">*</span></label>
@@ -429,7 +472,11 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               </div>
               <div className="form-group">
                 <label>Pointure de chaussures</label>
-                <input type="text" value={formData.shoe_size} onChange={e => setFormData({ ...formData, shoe_size: e.target.value })} placeholder="Ex: 38" className="form-input" />
+                <select value={formData.shoe_size || '36'} onChange={e => setFormData({ ...formData, shoe_size: e.target.value })} className="form-select">
+                  {Array.from({ length: 16 }, (_, i) => 30 + i).map(size => (
+                    <option key={size} value={String(size)}>{size}</option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>Allergie aux animaux</label>
@@ -480,7 +527,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               <Calendar size={18} className="text-slate-500" />
               Calendrier de disponibilité
             </h3>
-            
+
             <div className="form-group mb-6">
               <div className={`border border-slate-200 rounded-lg overflow-hidden ${errors.availability_calendar ? 'border-red-500 bg-red-50/20' : ''}`}>
                 {['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'].map((day) => {
@@ -595,7 +642,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               <Save size={18} className="text-slate-500" />
               Média (Documents et Photos)
             </h3>
-            
+
             <div className="form-grid grid-cols-3 mb-6">
               {[
                 { field: 'photo', label: 'Photo 1', isImage: true, icon: User, ref: photoInputRef },
@@ -646,11 +693,11 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                     )}
                     {isImage && hasFile && (
                       <label className="flex items-center gap-2 mt-2 cursor-pointer text-xs text-slate-600">
-                        <input 
-                          type="radio" 
-                          name="active_photo" 
-                          checked={activePhoto === field} 
-                          onChange={() => setActivePhoto(field)} 
+                        <input
+                          type="radio"
+                          name="active_photo"
+                          checked={activePhoto === field}
+                          onChange={() => setActivePhoto(field)}
                           className="accent-teal-600"
                         />
                         Photo principale
@@ -671,7 +718,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
               </h3>
               <button className="btn-premium btn-premium-outline btn-premium-sm" onClick={() => { if (!showExpForm) setShowExpForm(true); }}>
                 <Plus size={16} />
-                Ajouter un poste
+                Ajouter une expérience
               </button>
             </div>
 

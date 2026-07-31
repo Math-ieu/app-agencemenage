@@ -446,7 +446,7 @@ export default function Profils() {
         >
           <option value="">Tous statuts</option>
           <option value="nouveau">Nouveau</option>
-          <option value="active">Active</option>
+          <option value="active">Active (Binômage)</option>
           <option value="blacklist">Blacklisté</option>
           <option value="stand_by">Stand by</option>
           <option value="en_conge">En congé</option>
@@ -608,7 +608,7 @@ export default function Profils() {
                       'badge-gray'
                     }`} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px' }}>
                       {agent.statut === 'nouveau' ? 'Nouveau' :
-                       agent.statut === 'active' ? 'Active' :
+                       agent.statut === 'active' ? 'Active (Binômage)' :
                        agent.statut === 'blacklist' ? 'Blacklisté' :
                        agent.statut === 'stand_by' ? 'Stand by' :
                        agent.statut === 'en_conge' ? 'En congé' :
