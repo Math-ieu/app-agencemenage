@@ -547,7 +547,7 @@ export default function Profils() {
       {loading ? (
         <div className="loading-state"><div className="spinner" /></div>
       ) : (
-        <div className="table-wrapper profils-table-wrap" style={{ minHeight: '320px', paddingBottom: '60px' }}>
+        <div className="table-wrapper profils-table-wrap" style={{ minHeight: '380px', paddingBottom: '120px' }}>
           <table className="data-table profils-table">
             <thead>
               <tr>
@@ -568,11 +568,9 @@ export default function Profils() {
               </tr>
             </thead>
             <tbody>
-              {agents.map((agent, index) => {
-                const isNearBottom = agents.length <= 4 || index >= agents.length - 2;
-                return (
-                  <tr
-                    key={agent.id}
+              {agents.map((agent) => (
+                <tr
+                  key={agent.id}
                   style={{
                     opacity: agent.is_blacklisted ? 0.5 : 1,
                     transition: 'opacity 0.2s ease',
@@ -713,11 +711,9 @@ export default function Profils() {
                             <div
                               style={{
                                 position: 'absolute',
-                                top: isNearBottom ? 'auto' : '100%',
-                                bottom: isNearBottom ? '100%' : 'auto',
+                                top: '100%',
                                 right: 0,
-                                marginTop: isNearBottom ? undefined : '6px',
-                                marginBottom: isNearBottom ? '6px' : undefined,
+                                marginTop: '6px',
                                 width: '140px',
                                 backgroundColor: 'white',
                                 border: '1px solid #cbd5e1',
@@ -808,8 +804,7 @@ export default function Profils() {
                     </div>
                   </td>
                 </tr>
-                );
-              })}
+              ))}
               {agents.length === 0 && (
                 <tr>
                   <td colSpan={14} className="empty-row text-center py-12 text-slate-400">Aucun profil trouvé.</td>
