@@ -547,7 +547,7 @@ export default function Profils() {
       {loading ? (
         <div className="loading-state"><div className="spinner" /></div>
       ) : (
-        <div className="table-wrapper profils-table-wrap">
+        <div className="table-wrapper profils-table-wrap" style={{ minHeight: '320px', paddingBottom: '60px' }}>
           <table className="data-table profils-table">
             <thead>
               <tr>
@@ -568,9 +568,11 @@ export default function Profils() {
               </tr>
             </thead>
             <tbody>
-              {agents.map((agent) => (
-                <tr
-                  key={agent.id}
+              {agents.map((agent, index) => {
+                const isNearBottom = agents.length <= 4 || index >= agents.length - 2;
+                return (
+                  <tr
+                    key={agent.id}
                   style={{
                     opacity: agent.is_blacklisted ? 0.5 : 1,
                     transition: 'opacity 0.2s ease',
@@ -711,15 +713,17 @@ export default function Profils() {
                             <div
                               style={{
                                 position: 'absolute',
-                                top: '100%',
+                                top: isNearBottom ? 'auto' : '100%',
+                                bottom: isNearBottom ? '100%' : 'auto',
                                 right: 0,
-                                marginTop: '4px',
+                                marginTop: isNearBottom ? undefined : '6px',
+                                marginBottom: isNearBottom ? '6px' : undefined,
                                 width: '140px',
                                 backgroundColor: 'white',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: '6px',
-                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-                                zIndex: 100,
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '8px',
+                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                                zIndex: 9999,
                                 overflow: 'hidden',
                               }}
                             >
@@ -804,7 +808,8 @@ export default function Profils() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {agents.length === 0 && (
                 <tr>
                   <td colSpan={14} className="empty-row text-center py-12 text-slate-400">Aucun profil trouvé.</td>
