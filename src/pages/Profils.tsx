@@ -650,22 +650,20 @@ export default function Profils() {
                     <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'nowrap' }}>
                       <button
                         onClick={() => navigate(`/profils/${encodeId(agent.id)}`)}
+                        title="Compte Profil"
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 6,
-                          padding: '6px 12px',
+                          justifyContent: 'center',
+                          padding: '8px',
                           border: '1px solid #cbd5e1',
                           borderRadius: '8px',
                           background: 'white',
                           color: '#334155',
-                          fontSize: '13px',
-                          fontWeight: 600,
                           cursor: 'pointer',
                         }}
                       >
-                        <User size={14} />
-                        <span>Compte Profil</span>
+                        <User size={16} />
                       </button>
 
                       <button
@@ -673,44 +671,40 @@ export default function Profils() {
                           setSelectedAgentForPostuler(agent);
                           setShowPostulerModal(true);
                         }}
+                        title="Affectation"
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 6,
-                          padding: '6px 12px',
+                          justifyContent: 'center',
+                          padding: '8px',
                           backgroundColor: '#0d9488',
                           color: 'white',
                           border: 'none',
                           borderRadius: '8px',
-                          fontSize: '13px',
-                          fontWeight: 600,
                           cursor: 'pointer',
                         }}
                       >
-                        <UserPlus size={14} />
-                        <span>Affectation</span>
+                        <UserPlus size={16} />
                       </button>
 
                       {(hasPermission(user, 'blacklister_agents') || hasPermission(user, 'mettre_standby_profil')) && (
                         <div className="pause-dropdown-container relative" style={{ display: 'inline-block' }}>
                           <button
                             onClick={() => setActivePauseDropdown(activePauseDropdown === agent.id ? null : agent.id)}
+                            title="Mise en pause"
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: 6,
-                              padding: '6px 12px',
+                              justifyContent: 'center',
+                              padding: '8px',
                               border: '1px solid #cbd5e1',
                               borderRadius: '8px',
                               background: 'white',
                               color: '#334155',
-                              fontSize: '13px',
-                              fontWeight: 600,
                               cursor: 'pointer',
                             }}
                           >
-                            <Pause size={14} />
-                            <span>Mise en pause</span>
+                            <Pause size={16} />
                           </button>
 
                           {activePauseDropdown === agent.id && (
