@@ -559,7 +559,7 @@ export default function Profils() {
                 <th>Situation</th>
                 <th>Nationalité</th>
                 <th>CIN</th>
-                <th>Quartier / Ville</th>
+                <th>Quartier /<br />Ville</th>
                 <th>Statut profil</th>
                 <th>Disponibilité<br />d'intervention</th>
                 <th>Fume</th>
