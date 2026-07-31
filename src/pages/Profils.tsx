@@ -116,6 +116,7 @@ export default function Profils() {
   const [selectedAgentForStandby, setSelectedAgentForStandby] = useState<Agent | null>(null);
   const [standbyDays, setStandbyDays] = useState(7);
   const [selectedAgentForResume, setSelectedAgentForResume] = useState<Agent | null>(null);
+  const [selectedAgentForBlacklist, setSelectedAgentForBlacklist] = useState<Agent | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -131,33 +132,31 @@ export default function Profils() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [activePauseDropdown]);
 
-  const handleToggleBlacklist = async (agent: Agent) => {
+  const handleToggleBlacklist = (agent: Agent) => {
     const perm = checkPermission(user, 'blacklister_agents');
     if (!perm.allowed) {
       addToast(perm.message || 'Action non autorisée', 'error');
       return;
     }
-    const isCurrentlyBlacklisted = agent.statut === 'blacklist' || agent.is_blacklisted;
-    if (isCurrentlyBlacklisted) {
-      if (!window.confirm(`Retirer ${agent.first_name} ${agent.last_name} de la blacklist ?`)) return;
-      try {
-        await updateAgent(agent.id, { statut: 'active', is_blacklisted: false } as any);
-        addToast('Profil retiré de la blacklist', 'success');
-        await fetchData();
-      } catch (err) {
-        console.error(err);
-        addToast('Erreur lors du retrait de la blacklist', 'error');
-      }
-    } else {
-      if (!window.confirm(`Ajouter ${agent.first_name} ${agent.last_name} à la blacklist ?`)) return;
-      try {
-        await updateAgent(agent.id, { statut: 'blacklist', is_blacklisted: true } as any);
-        addToast('Profil blacklisté', 'success');
-        await fetchData();
-      } catch (err) {
-        console.error(err);
-        addToast('Erreur lors du passage en blacklist', 'error');
-      }
+    setSelectedAgentForBlacklist(agent);
+  };
+
+  const confirmBlacklist = async () => {
+    if (!selectedAgentForBlacklist) return;
+    const isCurrentlyBlacklisted = selectedAgentForBlacklist.statut === 'blacklist' || selectedAgentForBlacklist.is_blacklisted;
+    const nextStatus = !isCurrentlyBlacklisted;
+    try {
+      await updateAgent(selectedAgentForBlacklist.id, {
+        statut: nextStatus ? 'blacklist' : 'active',
+        is_blacklisted: nextStatus,
+      } as any);
+      addToast(`Profil ${nextStatus ? 'blacklisté' : 'retiré de la blacklist'} avec succès`, 'success');
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      addToast('Erreur lors du changement de statut de la blacklist', 'error');
+    } finally {
+      setSelectedAgentForBlacklist(null);
     }
   };
 
@@ -1003,6 +1002,34 @@ export default function Profils() {
           confirmLabel="Confirmer"
           onConfirm={confirmResume}
           variant="success"
+        />
+      )}
+
+      {selectedAgentForBlacklist && (
+        <ConfirmDialog
+          isOpen={!!selectedAgentForBlacklist}
+          onOpenChange={() => setSelectedAgentForBlacklist(null)}
+          title={
+            selectedAgentForBlacklist.statut === 'blacklist' || selectedAgentForBlacklist.is_blacklisted
+              ? "Déblacklister le profil ?"
+              : "Blacklister le profil ?"
+          }
+          description={
+            selectedAgentForBlacklist.statut === 'blacklist' || selectedAgentForBlacklist.is_blacklisted
+              ? `Voulez-vous vraiment retirer le profil ${selectedAgentForBlacklist.last_name || ''} ${selectedAgentForBlacklist.first_name || ''} de la blacklist ? Il pourra de nouveau être affecté à des missions.`
+              : `Voulez-vous vraiment ajouter le profil ${selectedAgentForBlacklist.last_name || ''} ${selectedAgentForBlacklist.first_name || ''} à la blacklist ? Cela l'exclura de futures affectations.`
+          }
+          confirmLabel={
+            selectedAgentForBlacklist.statut === 'blacklist' || selectedAgentForBlacklist.is_blacklisted
+              ? "Déblacklister"
+              : "Blacklister"
+          }
+          onConfirm={confirmBlacklist}
+          variant={
+            selectedAgentForBlacklist.statut === 'blacklist' || selectedAgentForBlacklist.is_blacklisted
+              ? "success"
+              : "danger"
+          }
         />
       )}
 

@@ -2591,10 +2591,11 @@ export default function VueGlobale() {
 
     setIsSendingInvoice(true);
     try {
-      await sendWhatsApp(invoicePreview.demandeId, invoicePreview.type);
-      addToast('Facture envoyée au client', 'success');
-    } catch {
-      addToast('Erreur lors de l’envoi de la facture', 'error');
+      const res = await sendWhatsApp(invoicePreview.demandeId, invoicePreview.type);
+      addToast(res.data?.message || 'Facture envoyée au commercial responsable pour transfert', 'success');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Erreur lors de l’envoi de la facture';
+      addToast(errMsg, 'error');
     } finally {
       setIsSendingInvoice(false);
     }

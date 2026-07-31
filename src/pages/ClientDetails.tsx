@@ -674,9 +674,9 @@ export default function ClientDetails() {
           addToast(`Génération automatique de la facture pour le Mois ${nextMonthIndex}...`, "info");
           await generateDocument(demandeId, 'facture', nextMonthIndex);
           
-          addToast(`Envoi automatique de la facture au client via WhatsApp...`, "info");
-          await sendWhatsApp(demandeId, 'facture', undefined, undefined, nextMonthIndex);
-          addToast(`Facture du Mois ${nextMonthIndex} envoyée au client avec succès.`, "success");
+          addToast(`Envoi de la facture au commercial via WhatsApp...`, "info");
+          const res = await sendWhatsApp(demandeId, 'facture', undefined, undefined, nextMonthIndex);
+          addToast(res.data?.message || `Facture du Mois ${nextMonthIndex} envoyée au commercial responsable pour transfert.`, "success");
         } catch (invoiceErr) {
           console.error("Failed to auto-generate or send invoice during renew:", invoiceErr);
         }
@@ -852,9 +852,9 @@ export default function ClientDetails() {
           addToast(`Génération automatique de la facture pour le Mois ${maxMonth}...`, "info");
           await generateDocument(latest.id, 'facture', maxMonth);
           
-          addToast(`Envoi automatique de la facture au client via WhatsApp...`, "info");
-          await sendWhatsApp(latest.id, 'facture', undefined, undefined, maxMonth);
-          addToast(`Facture du Mois ${maxMonth} envoyée au client avec succès.`, "success");
+          addToast(`Envoi de la facture au commercial via WhatsApp...`, "info");
+          const res = await sendWhatsApp(latest.id, 'facture', undefined, undefined, maxMonth);
+          addToast(res.data?.message || `Facture du Mois ${maxMonth} envoyée au commercial responsable pour transfert.`, "success");
         } catch (err) {
           console.error("Failed to auto-generate or send invoice:", err);
           addToast("Erreur lors de la génération ou de l'envoi automatique de la facture", "error");

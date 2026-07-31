@@ -468,11 +468,12 @@ export default function Dashboard() {
     if (!showPreviewModal) return;
     setSendingWhatsApp(true);
     try {
-      await sendWhatsApp(showPreviewModal.demandeId, showPreviewModal.type);
-      addToast('Document envoyé via WhatsApp avec succès !', 'success');
-    } catch (err) {
+      const res = await sendWhatsApp(showPreviewModal.demandeId, showPreviewModal.type);
+      addToast(res.data?.message || 'Message envoyé au commercial responsable pour transfert au client !', 'success');
+    } catch (err: any) {
       console.error(err);
-      addToast("Erreur lors de l'envoi WhatsApp.", 'error');
+      const errMsg = err.response?.data?.error || "Erreur lors de l'envoi WhatsApp.";
+      addToast(errMsg, 'error');
     } finally {
       setSendingWhatsApp(false);
     }
@@ -751,13 +752,12 @@ export default function Dashboard() {
     setSendingCaoWhatsApp(true);
     try {
       const response = await sendWhatsApp(demande.id, 'cao_profil');
-      const sentCount = Number(response?.data?.sent_count || 0);
-      const totalCount = Number(response?.data?.total || demande.profils_envoyes.length || 0);
-      addToast(`${sentCount}/${totalCount} message(s) profil envoyé(s) via WhatsApp`, 'success');
+      addToast(response.data?.message || 'Fiches profil envoyées au commercial pour transfert au client !', 'success');
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      addToast('Erreur lors de l\'envoi WhatsApp de la candidature', 'error');
+      const errMsg = err.response?.data?.error || 'Erreur lors de l\'envoi WhatsApp de la candidature';
+      addToast(errMsg, 'error');
     } finally {
       setSendingCaoWhatsApp(false);
     }
@@ -1122,8 +1122,8 @@ export default function Dashboard() {
         try {
           const clientPhone = editFormData.client_whatsapp || editFormData.client_phone || previousFormData.whatsapp_phone;
           if (clientPhone) {
-            await sendWhatsApp(selectedDemande.id, 'feedback');
-            addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
+            const res = await sendWhatsApp(selectedDemande.id, 'feedback');
+            addToast(res.data?.message || 'Lien de satisfaction envoyé au commercial responsable', 'info');
           }
         } catch (waErr) {
           console.error("WhatsApp error:", waErr);

@@ -558,12 +558,13 @@ export default function DemandesEnAttente() {
       }
 
       addToast(`Envoi du ${type === 'devis' ? 'devis' : 'récapitulatif'} via WhatsApp...`, 'info');
-      await sendWhatsApp(demande.id, type, undefined, mediaUrl);
-      addToast('Document envoyé avec succès !', 'success');
+      const res = await sendWhatsApp(demande.id, type, undefined, mediaUrl);
+      addToast(res.data?.message || 'Message envoyé au commercial responsable pour transfert au client !', 'success');
       fetchDemandes();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      addToast("Erreur lors de l'envoi WhatsApp.", 'error');
+      const errMsg = error.response?.data?.error || "Erreur lors de l'envoi WhatsApp.";
+      addToast(errMsg, 'error');
     }
   };
 
@@ -571,16 +572,17 @@ export default function DemandesEnAttente() {
     if (!showPreviewModal) return;
     setSendingWhatsApp(true);
     try {
-      await sendWhatsApp(
+      const res = await sendWhatsApp(
         showPreviewModal.demandeId, 
         showPreviewModal.type, 
         undefined, 
         showPreviewModal.mediaUrl
       );
-      addToast('Document envoyé via WhatsApp avec succès !', 'success');
-    } catch (err) {
+      addToast(res.data?.message || 'Message envoyé au commercial responsable pour transfert au client !', 'success');
+    } catch (err: any) {
       console.error(err);
-      addToast("Erreur lors de l'envoi WhatsApp.", 'error');
+      const errMsg = err.response?.data?.error || "Erreur lors de l'envoi WhatsApp.";
+      addToast(errMsg, 'error');
     } finally {
       setSendingWhatsApp(false);
     }

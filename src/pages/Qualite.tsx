@@ -66,11 +66,12 @@ export default function Qualite() {
       return;
     }
     try {
-      addToast('Envoi du lien feedback WhatsApp...', 'info');
-      await sendWhatsApp(demandeId, 'feedback');
-      addToast('Lien WhatsApp envoyé avec succès !', 'success');
-    } catch (err) {
-      addToast('Erreur lors de l\'envoi WhatsApp', 'error');
+      addToast('Envoi du lien feedback WhatsApp au commercial...', 'info');
+      const res = await sendWhatsApp(demandeId, 'feedback');
+      addToast(res.data?.message || 'Lien WhatsApp envoyé au commercial responsable pour transfert !', 'success');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Erreur lors de l\'envoi WhatsApp';
+      addToast(errMsg, 'error');
     }
   };
 
