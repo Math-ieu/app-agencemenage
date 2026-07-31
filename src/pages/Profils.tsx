@@ -561,7 +561,7 @@ export default function Profils() {
                 <th>CIN</th>
                 <th>Quartier / Ville</th>
                 <th>Statut profil</th>
-                <th>Disponibilité d'intervention</th>
+                <th>Disponibilité<br />d'intervention</th>
                 <th>Fume</th>
                 <th>Langue</th>
                 <th style={{ textAlign: 'right' }}>Action</th>
