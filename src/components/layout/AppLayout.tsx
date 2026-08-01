@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, ClipboardList, Users, UserCheck, History,
+  LayoutDashboard, ClipboardList, Users, UserCheck, History, Calendar,
   DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X, Globe, ChevronDown
 } from 'lucide-react';
 import { useAuthStore, useNotificationStore } from '../../store/auth';
@@ -15,6 +15,7 @@ const navItems = [
   { to: '/profils', icon: UserCheck, label: 'Liste des femmes de ménage' },
   { to: '/clients', icon: Users, label: 'Listing clients' },
   { to: '/historique', icon: History, label: 'Historique' },
+  { to: '/gestion-abonnement', icon: Calendar, label: 'Gestion Abonnement' },
   {
     id: 'finance',
     icon: DollarSign,
@@ -96,6 +97,9 @@ export default function AppLayout() {
     }
     if (item.to === '/historique') {
       return hasPermission(user, 'consulter_historique_global') ? item : null;
+    }
+    if (item.to === '/gestion-abonnement') {
+      return hasPermission(user, 'consulter_demandes') || hasPermission(user, 'consulter_clients') ? item : item;
     }
     if (item.to === '/qualite') {
       return hasPermission(user, 'consulter_retours_qualite') ? item : null;

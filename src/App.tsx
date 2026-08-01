@@ -15,6 +15,7 @@ import DemandesEnAttente from './pages/DemandesEnAttente';
 import Clients from './pages/Clients';
 import Profils from './pages/Profils';
 import Historique from './pages/Historique';
+import GestionAbonnements from './pages/GestionAbonnements';
 import VueGlobale from './pages/finance/VueGlobale';
 import LesSuivis from './pages/finance/LesSuivis';
 import LaCaisse from './pages/finance/LaCaisse';
@@ -89,6 +90,7 @@ export default function App() {
           <Route path="profils/:id" element={<PermissionRoute permission="consulter_agents"><ProfilDetails /></PermissionRoute>} />
           <Route path="profils" element={<PermissionRoute permission="consulter_agents"><Profils /></PermissionRoute>} />
           <Route path="historique" element={<PermissionRoute permission="consulter_historique_global"><Historique /></PermissionRoute>} />
+          <Route path="gestion-abonnement" element={<PermissionRoute permission="consulter_demandes|consulter_clients"><GestionAbonnements /></PermissionRoute>} />
           <Route path="finance">
             <Route path="vue-globale" element={<PermissionRoute permission="voir_la_caisse"><VueGlobale /></PermissionRoute>} />
             <Route path="les-suivis" element={<PermissionRoute permission="consulter_dus_agences_profils|consulter_suivi_commerciaux"><LesSuivis /></PermissionRoute>} />

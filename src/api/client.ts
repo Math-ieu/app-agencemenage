@@ -419,6 +419,22 @@ export const updatePlanning = (demandeId: number, data: Record<string, unknown>)
 export const createPlanningIntervention = (demandeId: number, data: { date: string; time: string; week_id: string; day_key: string }) =>
   apiClient.post(`/api/demandes/${demandeId}/create_planning_intervention/`, data);
 
+// ─── Subscription Management ───────────────────────────────────────────────
+export const getAbonnementsVueEnsemble = (params?: Record<string, unknown>) =>
+  apiClient.get('/api/demandes/abonnements/vue-ensemble/', { params });
+
+export const getAbonnementsPlanningStats = (params?: Record<string, unknown>) =>
+  apiClient.get('/api/demandes/abonnements/planning-stats/', { params });
+
+export const getAbonnementsFacturation = (params?: Record<string, unknown>) =>
+  apiClient.get('/api/demandes/abonnements/facturation/', { params });
+
+export const toggleAbonnementSuspend = (demandeId: number, data?: { statut_mois_prochain?: string }) =>
+  apiClient.post(`/api/demandes/${demandeId}/abonnements/toggle-suspend/`, data);
+
+export const confirmAbonnementPaiement = (demandeId: number) =>
+  apiClient.post(`/api/demandes/${demandeId}/abonnements/confirm-paiement/`);
+
 // ─── App Notifications ────────────────────────────────────────────────────────
 export const getAppNotifications = () =>
   apiClient.get('/api/notifications/');
