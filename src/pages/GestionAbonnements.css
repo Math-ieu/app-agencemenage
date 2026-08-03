@@ -467,6 +467,12 @@
 }
 .ga-status-resilie .ga-badge-status-dot { background: #4b5563; }
 
+.ga-status-enattente {
+  background: #fef9c3;
+  color: #854d0e;
+}
+.ga-status-enattente .ga-badge-status-dot { background: #ca8a04; }
+
 /* Action Buttons */
 .ga-action-btns {
   display: flex;
@@ -1027,3 +1033,77 @@
 .ga-cal-badge-avenir { background: #0d9488; color: #ffffff; }
 .ga-cal-badge-effectue { background: #10b981; color: #ffffff; }
 .ga-cal-badge-annule { background: #ef4444; color: #ffffff; }
+
+/* Facturation Action Dropdown & Buttons */
+.ga-dropdown-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 0.375rem;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ga-dropdown-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.ga-action-dropdown-menu {
+  position: absolute;
+  right: 0.5rem;
+  top: calc(100% + 4px);
+  z-index: 50;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  min-width: 190px;
+  padding: 0.35rem 0;
+  text-align: left;
+}
+
+.ga-dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.825rem;
+  font-weight: 500;
+  color: #1e293b;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ga-dropdown-item:hover {
+  background: #f8fafc;
+}
+
+.ga-btn-file-facture {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ga-btn-file-facture:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
