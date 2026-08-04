@@ -179,6 +179,7 @@ export interface SubscriptionPlanning {
   statut: 'en_cours' | 'termine';
   notes?: string;
   notification_sent_dates?: string[];
+  nombre_passages_mois?: number;
   created_at?: string;
   updated_at?: string;
 }

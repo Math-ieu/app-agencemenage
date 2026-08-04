@@ -826,6 +826,19 @@ export default function ClientDetails() {
         updatedFormData.facturation = fact;
       }
 
+      let totalPlannedPassages = 0;
+      if (semaines && semaines.length > 0) {
+        semaines.forEach(w => {
+          if (w.jours) {
+            Object.keys(w.jours).forEach(d => {
+              if (w.jours[d]?.selected) {
+                totalPlannedPassages++;
+              }
+            });
+          }
+        });
+      }
+
       const data = {
         jours_intervention: joursInterventionFallback,
         heure_debut: fallbackHeureDebut ? (fallbackHeureDebut.length === 5 ? `${fallbackHeureDebut}:00` : fallbackHeureDebut) : null,
@@ -835,6 +848,7 @@ export default function ClientDetails() {
         statut: planningStatut,
         notes: planningNotes,
         semaines: semaines,
+        nombre_passages_mois: totalPlannedPassages,
       };
       
       await Promise.all([

@@ -2,7 +2,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Client, Demande } from '../../types';
 import {
   updateDemande, deleteDemande, createPlanningIntervention,
-  sendWhatsApp, toggleAbonnementSuspend, confirmAbonnementPaiement
+  sendWhatsApp, toggleAbonnementSuspend, confirmAbonnementPaiement,
+  updatePlanning
 } from '../../api/client';
 import { SubscriptionHeaderCard } from './SubscriptionHeaderCard';
 import { SubscriptionMonthTabs } from './SubscriptionMonthTabs';
@@ -356,8 +357,21 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     return count;
   }, [aboDateOverrides, monthDemandes, monthIsoPrefix]);
 
-  const monthPassagesPlanifies = useMemo(() => {
-    // Pure calendar calculation: count ONLY calendar slots that are "À VENIR" (active, excluding annulé, reporté, etc.)
+  const totalMonthsCount = useMemo(() => {
+    const semaines = latest?.planning?.semaines || [];
+    let maxM = 1;
+    semaines.forEach((w: any) => {
+      if (w.mois && typeof w.mois === 'number' && w.mois > maxM) {
+        maxM = w.mois;
+      }
+    });
+    if (monthTabs && monthTabs.length > maxM) {
+      maxM = monthTabs.length;
+    }
+    return maxM;
+  }, [latest?.planning?.semaines, monthTabs]);
+
+  const getPassagesForMonth = useCallback((mIndex: number) => {
     const dayMap: Record<string, number> = {
       dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6
     };
@@ -367,8 +381,13 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
     if (selectedDows.length === 0) return 0;
 
-    const firstOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
-    const lastOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    const calDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + mIndex, 1);
+    const y = calDate.getFullYear();
+    const m = calDate.getMonth();
+    const mPrefix = `${y}-${String(m + 1).padStart(2, '0')}`;
+
+    const firstOfMonth = new Date(y, m, 1, 0, 0, 0, 0);
+    const lastOfMonth = new Date(y, m + 1, 0, 23, 59, 59, 999);
 
     let start = firstOfMonth;
     const startStr = dateDebut || latest?.formulaire_data?.date_demarrage || latest?.formulaire_data?.date_debut || latest?.planning?.date_debut || latest?.date_intervention;
@@ -399,7 +418,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
     // Filter out calendar overrides marked as annulé, reporté, or excluded
     Object.entries(aboDateOverrides).forEach(([k, ov]: [string, any]) => {
-      if (k.startsWith(monthIsoPrefix)) {
+      if (k.startsWith(mPrefix)) {
         const st = (ov?.statut || '').toLowerCase();
         const isExcluded = ov?.excluded || ['annule', 'annulee', 'reporte', 'reportee', 'retirer'].includes(st);
         if (isExcluded) {
@@ -411,10 +430,10 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     });
 
     // Also filter out child demandes BDD status if marked as annulé, reporté, or retirer
-    monthDemandes.forEach((cd: Demande) => {
+    childDemandes.forEach((cd: Demande) => {
       if (cd.date_intervention) {
         const dIso = cd.date_intervention.includes('T') ? cd.date_intervention.split('T')[0] : cd.date_intervention.slice(0, 10);
-        if (dIso.startsWith(monthIsoPrefix)) {
+        if (dIso.startsWith(mPrefix)) {
           const st = (cd.statut || '').toLowerCase();
           if (['annule', 'annulee', 'reporte', 'reportee', 'retirer'].includes(st)) {
             passageDatesSet.delete(dIso);
@@ -424,7 +443,29 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     });
 
     return passageDatesSet.size;
-  }, [selectedDays, year, month, dateDebut, dateFin, latest, aboDateOverrides, monthIsoPrefix, monthDemandes]);
+  }, [selectedDays, baseDate, dateDebut, dateFin, latest, aboDateOverrides, childDemandes]);
+
+  const monthPassagesPlanifies = useMemo(() => {
+    return getPassagesForMonth(activeTabIndex);
+  }, [getPassagesForMonth, activeTabIndex]);
+
+  const totalPassagesAllMonths = useMemo(() => {
+    let sum = 0;
+    for (let i = 0; i < totalMonthsCount; i++) {
+      sum += getPassagesForMonth(i);
+    }
+    return sum;
+  }, [totalMonthsCount, getPassagesForMonth]);
+
+  // Auto-save nombre_passages_mois (total passages sum across all months) to planning in database
+  React.useEffect(() => {
+    if (!latest?.id || totalPassagesAllMonths === undefined || totalPassagesAllMonths === 0) return;
+    const current = latest?.planning?.nombre_passages_mois || 0;
+    if (totalPassagesAllMonths !== current) {
+      updatePlanning(latest.id, { nombre_passages_mois: totalPassagesAllMonths })
+        .catch(err => console.error('Auto-save nombre_passages_mois error:', err));
+    }
+  }, [totalPassagesAllMonths, latest?.id]);
 
   const fifthWeekInfo = useMemo(() => {
     const dayCounts: Record<string, { count: number; dates: string[] }> = {};

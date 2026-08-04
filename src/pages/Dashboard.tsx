@@ -324,11 +324,10 @@ export default function Dashboard() {
     if (index === -1) return null;
 
     const parentDemande = list.find(x => Number(x.id) === Number(parentId)) || d;
-    const weeks = parentDemande?.planning?.semaines;
-
-    let totalPlanned = 0;
-    if (weeks && Array.isArray(weeks)) {
-      weeks.forEach(week => {
+    let total = parentDemande?.planning?.nombre_passages_mois || 0;
+    if (!total && parentDemande?.planning?.semaines && Array.isArray(parentDemande.planning.semaines)) {
+      let totalPlanned = 0;
+      parentDemande.planning.semaines.forEach((week: any) => {
         if (week.jours) {
           Object.keys(week.jours).forEach(dayKey => {
             if (week.jours[dayKey]?.selected) {
@@ -337,9 +336,13 @@ export default function Dashboard() {
           });
         }
       });
+      if (totalPlanned > 0) {
+        total = totalPlanned;
+      }
     }
-
-    const total = totalPlanned > 0 ? totalPlanned : subDemands.length;
+    if (!total) {
+      total = subDemands.length;
+    }
 
     return {
       rank: index + 1,
