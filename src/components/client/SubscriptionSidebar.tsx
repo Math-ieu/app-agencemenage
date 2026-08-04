@@ -100,7 +100,7 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
             <div style={{ fontSize: 12, color: '#64748b' }}>—</div>
             <div>
               <span style={{ fontSize: 11, background: '#ffffff', border: '1px solid #f59e0b', color: '#92400e', padding: '3px 10px', borderRadius: 20, fontWeight: 600, display: 'inline-block' }}>
-                → Remonté au Tableau de bord (J-2)
+                → Remonté au Tableau de bord (J-1)
               </span>
             </div>
             <div style={{ fontSize: 12, color: '#92400e', fontWeight: 600, marginTop: 4 }}>
