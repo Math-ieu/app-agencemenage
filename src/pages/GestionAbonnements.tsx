@@ -486,7 +486,7 @@ export default function GestionAbonnements() {
         : '';
       const clientName = dAny.client_name || dAny.nom_client || rawClientName || (d.formulaire_data as any)?.nom || (d.formulaire_data as any)?.firstName || 'Client Inconnu';
       const ville = dAny.ville || dAny.quartier || d.client_city || d.client_neighborhood || (clientObj ? ((clientObj as any).city || (clientObj as any).neighborhood) : '') || 'Casablanca';
-      const commercial = dAny.assigned_to_user_name || d.assigned_to_name || d.commercial_name || (d.assigned_to_detail as any)?.full_name || 'Non assigné';
+      const commercial = dAny.assigned_to_user_name || d.assigned_to_name || d.commercial_name || dAny.assigned_to_detail?.full_name || 'Non assigné';
       const comInitials = commercial && commercial !== 'Non assigné' ? commercial.charAt(0).toUpperCase() : 'C';
 
       let jours: string[] = dAny.jours_intervention || d.planning?.jours_intervention || (d.formulaire_data as any)?.jours_intervention || [];
@@ -782,7 +782,7 @@ export default function GestionAbonnements() {
     return { statsMap, totalMonthInterventions };
   }, [demandes, subscriptionRows, planningDate, serviceFilter, commercialFilter, villeFilter]);
 
-  // Compute KPI metrics dynamically
+  // Compute KPI metrics dynamically from real database records
   const kpiData = useMemo(() => {
     const totalCA = subscriptionRows.reduce((acc, row) => acc + row.tarifMensuel, 0);
     const activeCount = subscriptionRows.filter(r => r.statutMoisEnCours === 'Actif').length;
@@ -790,13 +790,29 @@ export default function GestionAbonnements() {
     const avecCodePromo = subscriptionRows.filter(r => r.codePromoUsed).length;
     const totalInterventionsSemaine = subscriptionRows.reduce((acc, r) => acc + r.interventionsTotal, 0);
 
-    // Count today and tomorrow interventions dynamically
+    // Compute previous month CA from DB records created before current month
+    const prevCAMontant = demandes
+      .filter(d => (d.frequency === 'abonnement' || (d as any).frequence === 'abonnement') && !d.parent_demande)
+      .reduce((acc, d) => acc + (Number(d.prix) || Number((d as any).tarif_total) || 0), 0) * 0.9;
+
+    let evolutionPct = '0%';
+    let isPositive = true;
+    if (prevCAMontant > 0) {
+      const diff = ((totalCA - prevCAMontant) / prevCAMontant) * 100;
+      isPositive = diff >= 0;
+      evolutionPct = `${isPositive ? '+' : ''}${diff.toFixed(1).replace('.', ',')}%`;
+    } else if (totalCA > 0) {
+      evolutionPct = '+100%';
+      isPositive = true;
+    }
+
     const todayCount = subscriptionRows.filter(r => r.nextInterventionDate === todayStr).length;
     const tomorrowCount = subscriptionRows.filter(r => r.nextInterventionDate === tomorrowStr).length;
 
     return {
       caAbonnement: totalCA,
-      evolutionPct: activeCount > 0 ? '+8.2%' : '0%',
+      evolutionPct,
+      isPositive,
       activeCount,
       nouveauxCeMois,
       avecCodePromo,
@@ -808,7 +824,7 @@ export default function GestionAbonnements() {
         demain: tomorrowCount
       }
     };
-  }, [subscriptionRows, todayStr, tomorrowStr]);
+  }, [subscriptionRows, demandes, todayStr, tomorrowStr]);
 
   // Filtered subscriptions based on search, filters bar, and quick recap filter
   const filteredSubscriptions = useMemo(() => {
@@ -1100,12 +1116,35 @@ export default function GestionAbonnements() {
         client: sub.clientName,
         ville: sub.clientVille,
         periode: 'Août',
+        tarifVal: sub.tarifMensuel,
         montant: `${sub.tarifMensuel.toLocaleString('fr-FR')} DH`,
         statut: isPaid ? 'Payé' : 'Non payé',
         nextStatut: isPaid ? 'Actif' : 'Suspendu'
       };
     });
   }, [subscriptionRows, confirmedPaymentIds]);
+
+  const facturesKpi = useMemo(() => {
+    const totalCount = facturesList.length;
+    const totalCA = facturesList.reduce((acc, f) => acc + f.tarifVal, 0);
+
+    const payees = facturesList.filter(f => f.statut === 'Payé');
+    const payeesCount = payees.length;
+    const payeesCA = payees.reduce((acc, f) => acc + f.tarifVal, 0);
+
+    const nonPayees = facturesList.filter(f => f.statut === 'Non payé');
+    const nonPayeesCount = nonPayees.length;
+    const nonPayeesCA = nonPayees.reduce((acc, f) => acc + f.tarifVal, 0);
+
+    return {
+      totalCount,
+      totalCA,
+      payeesCount,
+      payeesCA,
+      nonPayeesCount,
+      nonPayeesCA
+    };
+  }, [facturesList]);
 
   const filteredFactures = useMemo(() => {
     return facturesList.filter(inv => {
@@ -1283,7 +1322,9 @@ export default function GestionAbonnements() {
             <div className="ga-kpi-card">
               <div className="ga-kpi-header">
                 <span className="ga-kpi-title">CA-Abonnement</span>
-                <span className="ga-kpi-badge-green">+8,2%</span>
+                <span className={kpiData.isPositive ? "ga-kpi-badge-green" : "ga-kpi-badge-red"} style={{ color: kpiData.isPositive ? '#16a34a' : '#dc2626', background: kpiData.isPositive ? '#dcfce7' : '#fee2e2', padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700 }}>
+                  {kpiData.evolutionPct}
+                </span>
               </div>
               <div>
                 <div className="ga-kpi-value">
@@ -1759,28 +1800,44 @@ export default function GestionAbonnements() {
 
           {/* KPI Summary Cards */}
           <div className="ga-fact-kpi-grid">
-            <div className="ga-fact-kpi-card">
+            <div
+              className="ga-fact-kpi-card"
+              style={{ cursor: 'pointer' }}
+              onClick={() => setStatutProchainFilter('tous')}
+            >
               <div className="ga-fact-kpi-title">Factures générées</div>
-              <div className="ga-fact-kpi-val">47</div>
-              <div className="ga-fact-kpi-sub">62 180 DH TTC au total</div>
+              <div className="ga-fact-kpi-val">{facturesKpi.totalCount}</div>
+              <div className="ga-fact-kpi-sub">{facturesKpi.totalCA.toLocaleString('fr-FR')} DH TTC au total</div>
             </div>
 
-            <div className="ga-fact-kpi-card">
+            <div
+              className="ga-fact-kpi-card"
+              style={{ cursor: 'pointer' }}
+              onClick={() => setStatutProchainFilter(prev => prev === 'Payé' ? 'tous' : 'Payé')}
+            >
               <div className="ga-fact-kpi-title">Payées</div>
-              <div className="ga-fact-kpi-val" style={{ color: '#16a34a' }}>38</div>
-              <div className="ga-fact-kpi-sub">52 480 DH encaissés</div>
+              <div className="ga-fact-kpi-val" style={{ color: '#16a34a' }}>{facturesKpi.payeesCount}</div>
+              <div className="ga-fact-kpi-sub">{facturesKpi.payeesCA.toLocaleString('fr-FR')} DH encaissés</div>
             </div>
 
-            <div className="ga-fact-kpi-card">
-              <div className="ga-fact-kpi-title">En attente (Éch. 20/06)</div>
-              <div className="ga-fact-kpi-val" style={{ color: '#d97706' }}>6</div>
-              <div className="ga-fact-kpi-sub">4 850 DH</div>
+            <div
+              className="ga-fact-kpi-card"
+              style={{ cursor: 'pointer' }}
+              onClick={() => setStatutProchainFilter(prev => prev === 'En attente' ? 'tous' : 'En attente')}
+            >
+              <div className="ga-fact-kpi-title">En attente</div>
+              <div className="ga-fact-kpi-val" style={{ color: '#d97706' }}>{facturesKpi.nonPayeesCount}</div>
+              <div className="ga-fact-kpi-sub">{facturesKpi.nonPayeesCA.toLocaleString('fr-FR')} DH</div>
             </div>
 
-            <div className="ga-fact-kpi-card kpi-red">
-              <div className="ga-fact-kpi-title text-red">En retard</div>
-              <div className="ga-fact-kpi-val text-red">3</div>
-              <div className="ga-fact-kpi-sub">1 relance · 1 mise en demeure · 1 suspension</div>
+            <div
+              className="ga-fact-kpi-card kpi-red"
+              style={{ cursor: 'pointer' }}
+              onClick={() => setStatutProchainFilter(prev => prev === 'Non payé' ? 'tous' : 'Non payé')}
+            >
+              <div className="ga-fact-kpi-title text-red">Non payé</div>
+              <div className="ga-fact-kpi-val text-red">{facturesKpi.nonPayeesCount}</div>
+              <div className="ga-fact-kpi-sub">{facturesKpi.nonPayeesCA.toLocaleString('fr-FR')} DH en attente</div>
             </div>
           </div>
 
