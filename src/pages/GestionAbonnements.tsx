@@ -681,7 +681,6 @@ export default function GestionAbonnements() {
       "Ménage bureaux",
       "Ménage Air BnB",
       "Ménage fin de chantier",
-      "Nettoyage post-déménagement",
       "Auxiliaire de vie",
       "Placement & gestion",
       "Ménage post-sinistre"
