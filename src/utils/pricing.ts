@@ -355,23 +355,21 @@ export interface DevisInvoiceResult {
 }
 
 export const getContractBaselinePassages = (demande: any): number => {
-    if (!demande) return 4;
+    if (!demande) return 12;
     const formData = demande.formulaire_data || {};
     if (Number(formData.nb_passages_base) > 0) return Number(formData.nb_passages_base);
     if (Number(formData.nb_passages_devis) > 0) return Number(formData.nb_passages_devis);
-    if (Number(formData.nb_passages_mois) > 0) return Number(formData.nb_passages_mois);
-    if (Number(formData.nombre_passages) > 0) return Number(formData.nombre_passages);
 
-    const freqStr = String(formData.frequence || demande.frequency_label || demande.frequency || '').toLowerCase();
-    if (freqStr.includes('7/sem') || freqStr.includes('7 fois')) return 28;
-    if (freqStr.includes('6/sem') || freqStr.includes('6 fois')) return 24;
-    if (freqStr.includes('5/sem') || freqStr.includes('5 fois')) return 20;
-    if (freqStr.includes('4/sem') || freqStr.includes('4 fois')) return 16;
-    if (freqStr.includes('3/sem') || freqStr.includes('3 fois')) return 12;
-    if (freqStr.includes('2/sem') || freqStr.includes('2 fois')) return 8;
-    if (freqStr.includes('1/sem') || freqStr.includes('1 fois')) return 4;
+    const freqStr = String(formData.frequence || (formData as any).subFrequency || demande.frequency_label || demande.frequency || '').toLowerCase();
+    if (freqStr.includes('7/sem') || freqStr.includes('7_fois') || freqStr.includes('7 fois')) return 28;
+    if (freqStr.includes('6/sem') || freqStr.includes('6_fois') || freqStr.includes('6 fois')) return 24;
+    if (freqStr.includes('5/sem') || freqStr.includes('5_fois') || freqStr.includes('5 fois')) return 20;
+    if (freqStr.includes('4/sem') || freqStr.includes('4_fois') || freqStr.includes('4 fois')) return 16;
+    if (freqStr.includes('3/sem') || freqStr.includes('3_fois') || freqStr.includes('3 fois')) return 12;
+    if (freqStr.includes('2/sem') || freqStr.includes('2_fois') || freqStr.includes('2 fois')) return 8;
+    if (freqStr.includes('1/sem') || freqStr.includes('1_fois') || freqStr.includes('1 fois')) return 4;
 
-    return 4;
+    return 12;
 };
 
 export const calculateInvoiceFromDevis = (

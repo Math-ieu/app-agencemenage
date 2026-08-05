@@ -85,8 +85,8 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     return () => clearTimeout(timer);
   }, [planningNotes, latest?.id]);
 
-  const [activeMonthTab, setActiveMonthTab] = useState<string>('mois1');
   const [monthTabs, setMonthTabs] = useState([{ id: 'mois1', label: 'Mois 1' }]);
+  const [activeMonthTab, setActiveMonthTab] = useState<string>('mois1');
   const [showInvoiceFormModal, setShowInvoiceFormModal] = useState(false);
 
   const activeTabIndex = useMemo(() => {
@@ -95,7 +95,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   }, [monthTabs, activeMonthTab]);
 
   const baseDate = useMemo(() => {
-    const dStr = dateDebut || latest?.date_intervention || latest?.created_at;
+    const dStr = dateDebut || latest?.formulaire_data?.date_demarrage || latest?.formulaire_data?.date_debut || latest?.planning?.date_debut || latest?.date_intervention || latest?.created_at;
     if (dStr) {
       const parsed = new Date(dStr.includes('T') ? dStr : `${dStr.slice(0, 10)}T00:00:00`);
       if (!isNaN(parsed.getTime())) return parsed;
@@ -108,31 +108,65 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   }, [baseDate, activeTabIndex]);
 
   const selectedDays = useMemo<string[]>(() => {
-    const rawJours = latest?.formulaire_data?.jours_intervention || latest?.planning?.jours_intervention || [];
+    const dayNames = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
     let days: string[] = [];
-    if (Array.isArray(rawJours) && rawJours.length > 0) {
-      days = rawJours.map((item: any) => {
-        if (typeof item === 'string') return item.toLowerCase();
-        if (item && typeof item === 'object' && item.jour) return String(item.jour).toLowerCase();
-        return String(item).toLowerCase();
-      }).filter(Boolean);
+
+    const detail = latest?.formulaire_data?.jours_intervention_detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+      days = detail.map((item: any) => typeof item === 'string' ? item.toLowerCase() : item?.jour?.toLowerCase()).filter((j: string) => dayNames.includes(j));
     }
 
     if (days.length === 0) {
-      const freq = frequencyLabel || latest?.frequency_label || latest?.formulaire_data?.frequence || '';
+      const rawJours = latest?.formulaire_data?.jours_intervention || latest?.planning?.jours_intervention || [];
+      if (Array.isArray(rawJours) && rawJours.length > 0) {
+        days = rawJours.map((item: any) => {
+          if (typeof item === 'string') return item.toLowerCase();
+          if (item && typeof item === 'object' && item.jour) return String(item.jour).toLowerCase();
+          return String(item).toLowerCase();
+        }).filter((j: string) => dayNames.includes(j));
+      }
+    }
+
+    if (days.length === 0 && Array.isArray(latest?.planning?.semaines)) {
+      const foundDays = new Set<string>();
+      latest.planning.semaines.forEach((w: any) => {
+        if (w.jours && typeof w.jours === 'object') {
+          Object.keys(w.jours).forEach((k: string) => {
+            if (w.jours[k]?.selected && dayNames.includes(k.toLowerCase())) {
+              foundDays.add(k.toLowerCase());
+            }
+          });
+        }
+      });
+      if (foundDays.size > 0) days = Array.from(foundDays);
+    }
+
+    if (days.length === 0) {
+      const freq = (frequencyLabel || latest?.frequency_label || latest?.formulaire_data?.frequence || '').toLowerCase();
       if (freq.includes('2')) days = ['lundi', 'jeudi'];
+      else if (freq.includes('1')) days = ['samedi'];
+      else if (freq.includes('4')) days = ['lundi', 'mardi', 'mercredi', 'jeudi'];
+      else if (freq.includes('5')) days = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
       else days = ['lundi', 'mercredi', 'vendredi'];
     }
 
     const freqStr = (frequencyLabel || latest?.frequency_label || latest?.formulaire_data?.frequence || '').toLowerCase();
-    let maxJours = 3;
+    let maxJours = 5;
     if (freqStr.includes('1_fois') || freqStr.includes('1/sem') || freqStr.includes('1 fois')) maxJours = 1;
     else if (freqStr.includes('2_fois') || freqStr.includes('2/sem') || freqStr.includes('2 fois')) maxJours = 2;
     else if (freqStr.includes('3_fois') || freqStr.includes('3/sem') || freqStr.includes('3 fois')) maxJours = 3;
+    else if (freqStr.includes('4_fois') || freqStr.includes('4/sem') || freqStr.includes('4 fois')) maxJours = 4;
     else if (freqStr.includes('bi_hebd') || freqStr.includes('mois')) maxJours = 1;
 
     return days.slice(0, maxJours);
   }, [latest, frequencyLabel]);
+
+  const year = activeCalendarDate.getFullYear();
+  const month = activeCalendarDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthIsoPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const monthTitle = activeCalendarDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  const capitalizedMonthTitle = monthTitle.charAt(0).toUpperCase() + monthTitle.slice(1);
 
   const childDemandes = useMemo(() => {
     if (!demandes || !Array.isArray(demandes) || !latest?.id) return [];
@@ -143,13 +177,6 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
       return (isParentMatch || (isClientMatch && !!d.parent_demande)) && !!d.date_intervention;
     });
   }, [demandes, latest?.id, client?.id]);
-
-  const year = activeCalendarDate.getFullYear();
-  const month = activeCalendarDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthIsoPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-  const monthTitle = activeCalendarDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-  const capitalizedMonthTitle = monthTitle.charAt(0).toUpperCase() + monthTitle.slice(1);
 
   const monthDemandes = useMemo(() => {
     return childDemandes.filter((c: Demande) => {
@@ -397,11 +424,14 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     }
 
     let end = lastOfMonth;
-    const endStr = dateFin || latest?.formulaire_data?.date_fin || latest?.planning?.date_fin;
-    if (endStr) {
-      const parsedEnd = new Date(endStr.includes('T') ? endStr : `${endStr.slice(0, 10)}T23:59:59`);
-      if (!isNaN(parsedEnd.getTime()) && parsedEnd >= firstOfMonth && parsedEnd < lastOfMonth) {
-        end = parsedEnd;
+    const isResilie = (latest?.statut || '').toLowerCase() === 'resilie';
+    if (isResilie) {
+      const endStr = dateFin || latest?.formulaire_data?.date_fin || latest?.planning?.date_fin;
+      if (endStr) {
+        const parsedEnd = new Date(endStr.includes('T') ? endStr : `${endStr.slice(0, 10)}T23:59:59`);
+        if (!isNaN(parsedEnd.getTime()) && parsedEnd >= firstOfMonth && parsedEnd < lastOfMonth) {
+          end = parsedEnd;
+        }
       }
     }
 

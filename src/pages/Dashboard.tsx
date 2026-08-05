@@ -12,7 +12,6 @@ import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
-import { getContractBaselinePassages } from '../utils/pricing';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';

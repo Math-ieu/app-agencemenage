@@ -25,7 +25,6 @@ import {
 import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
 import { hasPermission } from '../../utils/permissions';
-import { getContractBaselinePassages } from '../../utils/pricing';
 import './LesSuivis.css';
 
 // Interface matching the FacturationRow definition in VueGlobale
