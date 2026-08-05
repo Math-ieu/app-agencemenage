@@ -21,19 +21,17 @@ export const SubscriptionHeaderCard: React.FC<SubscriptionHeaderCardProps> = ({
   latest,
   capitalizedMonthTitle,
   selectedDays,
-  monthPassagesPlanifies,
   monthPassagesRealises,
   monthPassagesReport,
-  monthPassagesAnnules,
   fifthWeekInfo
 }) => {
   const assiduiteLabel = useMemo(() => {
-    const totalPlanned = monthPassagesPlanifies || 1;
-    const annules = monthPassagesAnnules || 0;
-    if (monthPassagesPlanifies === 0) return '100%';
-    const rate = Math.min(100, Math.max(0, Math.round(((totalPlanned - annules) / totalPlanned) * 100)));
-    return `${isNaN(rate) ? 100 : rate}%`;
-  }, [monthPassagesPlanifies, monthPassagesAnnules]);
+    const denom = monthPassagesRealises + monthPassagesReport;
+    if (denom === 0) return '100%';
+    const rate = (monthPassagesRealises / denom) * 100;
+    const formatted = Number.isInteger(rate) ? rate.toString() : (Math.round(rate * 10) / 10).toString().replace('.', ',');
+    return `${formatted}%`;
+  }, [monthPassagesRealises, monthPassagesReport]);
 
   const impayeCount = useMemo(() => {
     if ((latest as any)?.statut_facturation === 'Non payé' || (latest as any)?.statut_facturation === 'unpaid') return 1;
