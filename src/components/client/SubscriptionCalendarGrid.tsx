@@ -4,6 +4,7 @@ import { fr } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Demande } from '../../types';
 import { createPlanningIntervention, updateDemande, deleteDemande } from '../../api/client';
 
 export interface DateOverrideItem {
