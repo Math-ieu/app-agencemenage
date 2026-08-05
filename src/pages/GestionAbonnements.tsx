@@ -607,10 +607,15 @@ export default function GestionAbonnements() {
         return st === 'annule' || st === 'annulee';
       }).length;
 
-      const realPlanningCount = d.planning?.nombre_passages_mois || (d.formulaire_data as any)?.nombre_passages;
+      const realPlanningCount = d.planning?.nombre_passages_mois || 
+                                (d.formulaire_data as any)?.nombre_passages_mois || 
+                                (d.formulaire_data as any)?.nombre_passages ||
+                                (d.formulaire_data as any)?.nb_passages_mois ||
+                                (d.formulaire_data as any)?.nb_passages_devis ||
+                                (d.formulaire_data as any)?.nb_passages_base;
       const interventionsTotal = realPlanningCount && Number(realPlanningCount) > 0 
         ? Number(realPlanningCount) 
-        : (jours.length > 0 ? jours.length * 4 : (children.length > 0 ? children.length : 4));
+        : (children.length > 0 ? children.length : 0);
 
       const realTarifMensuel = getDevisBasedMonthlyAmount(d, interventionsTotal);
 
@@ -942,7 +947,110 @@ export default function GestionAbonnements() {
     const activeCount = subscriptionRows.filter(r => r.statutMoisEnCours === 'Actif').length;
     const nouveauxCeMois = subscriptionRows.length;
     const avecCodePromo = subscriptionRows.filter(r => r.codePromoUsed).length;
-    const totalInterventionsSemaine = subscriptionRows.reduce((acc, r) => acc + r.interventionsTotal, 0);
+
+    // Calculate interventions specifically for the current week (Monday to Sunday)
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    const fmtIso = (dateObj: Date) => `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+    const mondayIso = fmtIso(monday);
+    const sundayIso = fmtIso(sunday);
+
+    const daysMap: Record<number, string> = { 1: 'lundi', 2: 'mardi', 3: 'mercredi', 4: 'jeudi', 5: 'vendredi', 6: 'samedi', 0: 'dimanche' };
+    const countedKeys = new Set<string>();
+    let interventionsSemaineCount = 0;
+    let interventions5emeSemaineCount = 0;
+
+    const parentDemandes = demandes.filter(d => !d.parent_demande && (d.frequency === 'abonnement' || (d as any).frequence === 'abonnement' || demandes.some(c => Number(c.parent_demande) === Number(d.id))));
+
+    parentDemandes.forEach(d => {
+      const dbStatut = (d.statut || '').toLowerCase();
+      if (['resilie', 'suspendu'].includes(dbStatut)) return;
+
+      if (d.planning?.semaines && Array.isArray(d.planning.semaines)) {
+        d.planning.semaines.forEach((week: any) => {
+          const wStart = week.date_debut;
+          const wEnd = week.date_fin;
+          if (!wStart || !wEnd) return;
+          if (wStart <= sundayIso && wEnd >= mondayIso) {
+            if (week.jours && typeof week.jours === 'object') {
+              Object.keys(week.jours).forEach(dayKey => {
+                const dayObj = week.jours[dayKey];
+                if (dayObj?.selected) {
+                  const st = (dayObj?.statut || dayObj?.status || '').toLowerCase();
+                  const isExcluded = dayObj?.excluded || ['annule', 'annulee', 'reporte', 'reportee', 'retirer'].includes(st);
+                  if (!isExcluded) {
+                    const weekStartObj = new Date(`${wStart}T00:00:00`);
+                    const dayNames = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+                    const dayIndex = dayNames.indexOf(dayKey.toLowerCase());
+                    if (dayIndex !== -1) {
+                      const actualDateObj = new Date(weekStartObj);
+                      actualDateObj.setDate(weekStartObj.getDate() + dayIndex);
+                      const actualDateIso = fmtIso(actualDateObj);
+                      if (actualDateIso >= mondayIso && actualDateIso <= sundayIso) {
+                        const key = `${d.id}_${actualDateIso}`;
+                        if (!countedKeys.has(key)) {
+                          countedKeys.add(key);
+                          interventionsSemaineCount++;
+                          if (week.is_5th_week || week.is_fifth_week || dayObj?.is_5th_week || actualDateObj.getDate() > 28) {
+                            interventions5emeSemaineCount++;
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              });
+            }
+          }
+        });
+      } else {
+        const joursIntervention: string[] = d.planning?.jours_intervention || (d.formulaire_data as any)?.jours_passage || [];
+        for (let cur = new Date(monday); cur <= sunday; cur.setDate(cur.getDate() + 1)) {
+          const curIso = fmtIso(cur);
+          const dayName = daysMap[cur.getDay()];
+          if (joursIntervention.map(j => j.toLowerCase()).includes(dayName)) {
+            const key = `${d.id}_${curIso}`;
+            if (!countedKeys.has(key)) {
+              const isChildCanceled = demandes.some(c => 
+                Number(c.parent_demande) === Number(d.id) && 
+                c.date_intervention === curIso && 
+                ['annule', 'annulee', 'retirer', 'reporte', 'reportee'].includes((c.statut || '').toLowerCase())
+              );
+              if (!isChildCanceled) {
+                countedKeys.add(key);
+                interventionsSemaineCount++;
+                if (cur.getDate() > 28) {
+                  interventions5emeSemaineCount++;
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    demandes.forEach(c => {
+      if (c.parent_demande && c.date_intervention) {
+        const dIso = c.date_intervention.includes('T') ? c.date_intervention.slice(0, 10) : c.date_intervention;
+        if (dIso >= mondayIso && dIso <= sundayIso) {
+          const st = (c.statut || '').toLowerCase();
+          if (!['annule', 'annulee', 'retirer', 'reporte', 'reportee'].includes(st)) {
+            const key = `${c.parent_demande}_${dIso}`;
+            if (!countedKeys.has(key)) {
+              countedKeys.add(key);
+              interventionsSemaineCount++;
+            }
+          }
+        }
+      }
+    });
 
     // Compute previous month CA from DB records created before current month
     const prevCAMontant = demandes
@@ -970,8 +1078,8 @@ export default function GestionAbonnements() {
       activeCount,
       nouveauxCeMois,
       avecCodePromo,
-      interventionsSemaine: totalInterventionsSemaine,
-      interventions5emeSemaine: 0,
+      interventionsSemaine: interventionsSemaineCount,
+      interventions5emeSemaine: interventions5emeSemaineCount,
       recaps: {
         actifs: activeCount,
         aujourdhui: todayCount,

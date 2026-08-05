@@ -268,10 +268,13 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
         return dDate === dayIso;
       });
 
+      const stLower = (newStatut || '').toLowerCase();
+      const isRemovalOrReport = ['retirer', 'annule', 'annulee', 'reporte', 'reportee'].includes(stLower);
+
       if (existing) {
-        if (newStatut === 'retirer') {
+        if (isRemovalOrReport) {
           await deleteDemande(existing.id);
-          addToast("Intervention retirée", "info");
+          addToast("Intervention retirée / mise à jour sur le planning", "info");
         } else {
           await updateDemande(existing.id, {
             statut: newStatut,
@@ -279,14 +282,23 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
           });
           addToast("Statut mis à jour", "success");
         }
-      } else if (newStatut !== 'retirer') {
-        await createPlanningIntervention(latest.id, {
-          date: dayIso,
-          time: '09:00',
-          week_id: 'w1',
-          day_key: 'day'
-        });
-        addToast("Intervention créée", "success");
+      } else if (!isRemovalOrReport) {
+        const tom = new Date();
+        tom.setDate(tom.getDate() + 1);
+        const tomorrowIso = `${tom.getFullYear()}-${String(tom.getMonth() + 1).padStart(2, '0')}-${String(tom.getDate()).padStart(2, '0')}`;
+
+        // Rule 2.1: Only instantiate child demand if dayIso <= tomorrowIso (J-1 / J rule)
+        if (dayIso <= tomorrowIso) {
+          await createPlanningIntervention(latest.id, {
+            date: dayIso,
+            time: '09:00',
+            week_id: 'w1',
+            day_key: 'day'
+          });
+          addToast("Intervention créée pour l'échéance J-1", "success");
+        } else {
+          addToast("Planning mis à jour (Création automatique prévue à J-1)", "info");
+        }
       }
       if (fetchData) await fetchData();
     } catch (err) {
@@ -356,20 +368,6 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
     return count;
   }, [aboDateOverrides, monthDemandes, monthIsoPrefix]);
-
-  const totalMonthsCount = useMemo(() => {
-    const semaines = latest?.planning?.semaines || [];
-    let maxM = 1;
-    semaines.forEach((w: any) => {
-      if (w.mois && typeof w.mois === 'number' && w.mois > maxM) {
-        maxM = w.mois;
-      }
-    });
-    if (monthTabs && monthTabs.length > maxM) {
-      maxM = monthTabs.length;
-    }
-    return maxM;
-  }, [latest?.planning?.semaines, monthTabs]);
 
   const getPassagesForMonth = useCallback((mIndex: number) => {
     const dayMap: Record<string, number> = {
@@ -449,23 +447,15 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     return getPassagesForMonth(activeTabIndex);
   }, [getPassagesForMonth, activeTabIndex]);
 
-  const totalPassagesAllMonths = useMemo(() => {
-    let sum = 0;
-    for (let i = 0; i < totalMonthsCount; i++) {
-      sum += getPassagesForMonth(i);
-    }
-    return sum;
-  }, [totalMonthsCount, getPassagesForMonth]);
-
-  // Auto-save nombre_passages_mois (total passages sum across all months) to planning in database
+  // Auto-save nombre_passages_mois for current month planning in database
   React.useEffect(() => {
-    if (!latest?.id || totalPassagesAllMonths === undefined || totalPassagesAllMonths === 0) return;
+    if (!latest?.id || monthPassagesPlanifies === undefined || monthPassagesPlanifies === 0) return;
     const current = latest?.planning?.nombre_passages_mois || 0;
-    if (totalPassagesAllMonths !== current) {
-      updatePlanning(latest.id, { nombre_passages_mois: totalPassagesAllMonths })
+    if (monthPassagesPlanifies !== current) {
+      updatePlanning(latest.id, { nombre_passages_mois: monthPassagesPlanifies })
         .catch(err => console.error('Auto-save nombre_passages_mois error:', err));
     }
-  }, [totalPassagesAllMonths, latest?.id]);
+  }, [monthPassagesPlanifies, latest?.id]);
 
   const fifthWeekInfo = useMemo(() => {
     const dayCounts: Record<string, { count: number; dates: string[] }> = {};

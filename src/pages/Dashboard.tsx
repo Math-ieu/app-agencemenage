@@ -12,6 +12,7 @@ import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
+import { getContractBaselinePassages } from '../utils/pricing';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -292,6 +293,9 @@ export default function Dashboard() {
     const parentId = d.parent_demande || d.id;
     if (!parentId) return null;
 
+    const list = allDemandes.length > 0 ? allDemandes : demandes;
+    const parentDemande = list.find(x => Number(x.id) === Number(parentId)) || d;
+
     const parseFrenchDate = (value?: string): Date | null => {
       if (!value) return null;
       if (value.includes('-')) {
@@ -304,15 +308,30 @@ export default function Dashboard() {
       return Number.isNaN(parsed.getTime()) ? null : parsed;
     };
 
-    const list = allDemandes.length > 0 ? allDemandes : demandes;
+    const targetDate = parseFrenchDate(d.date_intervention || d.formulaire_data?.date_intervention || d.created_at);
+    const targetMonth = targetDate ? targetDate.getMonth() : null;
+    const targetYear = targetDate ? targetDate.getFullYear() : null;
+    const subMonthIndex = d.formulaire_data?.subscription_month || 1;
 
-    // Get all demands of this subscription sorted chronologically overall
-    const subDemands = list
+    const allSubDemands = list.filter(x => {
+      const isXSub = x.frequency === 'abonnement' || !!x.parent_demande;
+      if (!isXSub) return false;
+      const xParentId = x.parent_demande || x.id;
+      return Number(xParentId) === Number(parentId);
+    });
+
+    const monthSubDemands = allSubDemands
       .filter(x => {
-        const isXSub = x.frequency === 'abonnement' || !!x.parent_demande;
-        if (!isXSub) return false;
-        const xParentId = x.parent_demande || x.id;
-        return Number(xParentId) === Number(parentId);
+        if (x.formulaire_data?.subscription_month && x.formulaire_data.subscription_month === subMonthIndex) {
+          return true;
+        }
+        if (targetMonth !== null && targetYear !== null) {
+          const xDate = parseFrenchDate(x.date_intervention || x.formulaire_data?.date_intervention || x.created_at);
+          if (xDate) {
+            return xDate.getMonth() === targetMonth && xDate.getFullYear() === targetYear;
+          }
+        }
+        return true;
       })
       .sort((a, b) => {
         const dateA = parseFrenchDate(a.date_intervention || a.formulaire_data?.date_intervention || a.created_at)?.getTime() || 0;
@@ -320,33 +339,30 @@ export default function Dashboard() {
         return dateA - dateB;
       });
 
-    const index = subDemands.findIndex(x => Number(x.id) === Number(d.id));
-    if (index === -1) return null;
+    // Fetch total passages directly from database fields without any calculation
+    let monthTotal = Number(
+      parentDemande?.planning?.nombre_passages_mois ||
+      parentDemande?.formulaire_data?.nombre_passages_mois ||
+      parentDemande?.formulaire_data?.nombre_passages ||
+      parentDemande?.formulaire_data?.nb_passages_mois ||
+      parentDemande?.formulaire_data?.nb_passages_devis ||
+      parentDemande?.formulaire_data?.nb_passages_base ||
+      d.formulaire_data?.nombre_passages_mois ||
+      d.formulaire_data?.nombre_passages ||
+      monthSubDemands.length ||
+      0
+    );
 
-    const parentDemande = list.find(x => Number(x.id) === Number(parentId)) || d;
-    let total = parentDemande?.planning?.nombre_passages_mois || 0;
-    if (!total && parentDemande?.planning?.semaines && Array.isArray(parentDemande.planning.semaines)) {
-      let totalPlanned = 0;
-      parentDemande.planning.semaines.forEach((week: any) => {
-        if (week.jours) {
-          Object.keys(week.jours).forEach(dayKey => {
-            if (week.jours[dayKey]?.selected) {
-              totalPlanned++;
-            }
-          });
-        }
-      });
-      if (totalPlanned > 0) {
-        total = totalPlanned;
-      }
+    if (!monthTotal) {
+      monthTotal = monthSubDemands.length || 4;
     }
-    if (!total) {
-      total = subDemands.length;
-    }
+
+    const indexInMonth = monthSubDemands.findIndex(x => Number(x.id) === Number(d.id));
+    const rank = indexInMonth !== -1 ? indexInMonth + 1 : 1;
 
     return {
-      rank: index + 1,
-      total: total,
+      rank,
+      total: monthTotal,
       isFirst: !d.parent_demande
     };
   };

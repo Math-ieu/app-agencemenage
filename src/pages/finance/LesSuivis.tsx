@@ -25,6 +25,7 @@ import {
 import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
 import { hasPermission } from '../../utils/permissions';
+import { getContractBaselinePassages } from '../../utils/pricing';
 import './LesSuivis.css';
 
 // Interface matching the FacturationRow definition in VueGlobale
@@ -951,12 +952,33 @@ export default function LesSuivis() {
     const parentId = row.originalDemande?.parent_demande || row.originalDemande?.id || row.demandeId;
     if (!parentId) return null;
 
-    const subRows = facturationData
+    const parentRow = facturationData.find(r => Number(r.demandeId) === Number(parentId) && !r.parentDemandeId);
+    const parentDemande = demandsMap.get(Number(parentId)) || parentRow?.originalDemande || (row.parentDemandeId ? null : row.originalDemande);
+
+    const rowDate = parseFrenchDate(row.date);
+    const rowMonth = rowDate ? rowDate.getMonth() : null;
+    const rowYear = rowDate ? rowDate.getFullYear() : null;
+    const subMonthIndex = row.subscriptionMonth || row.originalDemande?.formulaire_data?.subscription_month || 1;
+
+    const allSubRows = facturationData.filter(r => {
+      const rIsSub = r.frequency === 'abonnement' || r.originalDemande?.frequency === 'abonnement';
+      if (!rIsSub) return false;
+      const rParentId = r.originalDemande?.parent_demande || r.originalDemande?.id || r.demandeId;
+      return Number(rParentId) === Number(parentId);
+    });
+
+    const monthSubRows = allSubRows
       .filter(r => {
-        const rIsSub = r.frequency === 'abonnement' || r.originalDemande?.frequency === 'abonnement';
-        if (!rIsSub) return false;
-        const rParentId = r.originalDemande?.parent_demande || r.originalDemande?.id || r.demandeId;
-        return Number(rParentId) === Number(parentId);
+        if (r.subscriptionMonth && r.subscriptionMonth === subMonthIndex) {
+          return true;
+        }
+        if (rowMonth !== null && rowYear !== null) {
+          const rDate = parseFrenchDate(r.date);
+          if (rDate) {
+            return rDate.getMonth() === rowMonth && rDate.getFullYear() === rowYear;
+          }
+        }
+        return true;
       })
       .sort((a, b) => {
         const dateA = parseFrenchDate(a.date)?.getTime() || 0;
@@ -964,34 +986,31 @@ export default function LesSuivis() {
         return dateA - dateB;
       });
 
-    const index = subRows.findIndex(r => r.missionId === row.missionId && r.demandeId === row.demandeId && r.date === row.date);
-    if (index === -1) return null;
-    
-    const parentRow = facturationData.find(r => Number(r.demandeId) === Number(parentId) && !r.parentDemandeId);
-    const parentDemande = demandsMap.get(Number(parentId)) || parentRow?.originalDemande || (row.parentDemandeId ? null : row.originalDemande);
-    let total = parentDemande?.planning?.nombre_passages_mois || 0;
-    if (!total && parentDemande?.planning?.semaines && Array.isArray(parentDemande.planning.semaines)) {
-      let totalPlanned = 0;
-      parentDemande.planning.semaines.forEach((week: any) => {
-        if (week.jours) {
-          Object.keys(week.jours).forEach(dayKey => {
-            if (week.jours[dayKey]?.selected) {
-              totalPlanned++;
-            }
-          });
-        }
-      });
-      if (totalPlanned > 0) {
-        total = totalPlanned;
-      }
+    // Fetch total passages directly from database fields without any calculation
+    let monthTotal = Number(
+      parentDemande?.planning?.nombre_passages_mois ||
+      parentDemande?.formulaire_data?.nombre_passages_mois ||
+      parentDemande?.formulaire_data?.nombre_passages ||
+      parentDemande?.formulaire_data?.nb_passages_mois ||
+      parentDemande?.formulaire_data?.nb_passages_devis ||
+      parentDemande?.formulaire_data?.nb_passages_base ||
+      row.originalDemande?.planning?.nombre_passages_mois ||
+      row.originalDemande?.formulaire_data?.nombre_passages_mois ||
+      row.originalDemande?.formulaire_data?.nombre_passages ||
+      monthSubRows.length ||
+      0
+    );
+
+    if (!monthTotal) {
+      monthTotal = monthSubRows.length || 4;
     }
-    if (!total) {
-      total = subRows.length;
-    }
-    
+
+    const indexInMonth = monthSubRows.findIndex(r => r.missionId === row.missionId && r.demandeId === row.demandeId && r.date === row.date);
+    const rank = indexInMonth !== -1 ? indexInMonth + 1 : 1;
+
     return {
-      rank: index + 1,
-      total: total,
+      rank,
+      total: monthTotal,
       isFirst: !row.parentDemandeId
     };
   }, [facturationData, demandsMap]);

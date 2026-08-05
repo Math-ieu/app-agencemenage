@@ -4,8 +4,7 @@ import { fr } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Demande } from '../../types';
-import { createPlanningIntervention, updateDemande } from '../../api/client';
+import { createPlanningIntervention, updateDemande, deleteDemande } from '../../api/client';
 
 export interface DateOverrideItem {
   heure?: string;
@@ -594,19 +593,37 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                           disabled={!reporteDraft[key].date || reporteDraft[key].date === key || !reporteDraft[key].heure}
                           onClick={async () => {
                             const dr = reporteDraft[key];
+                            const tom = new Date();
+                            tom.setDate(tom.getDate() + 1);
+                            const tomorrowIso = `${tom.getFullYear()}-${String(tom.getMonth() + 1).padStart(2, '0')}-${String(tom.getDate()).padStart(2, '0')}`;
+
+                            // Local overrides update
                             setAboDateOverrides((prev) => ({
                               ...prev,
                               [key]: { ...prev[key], statut: "reporte", excluded: false, reprogrammed_to: dr.date },
                               [dr.date]: { ...prev[dr.date], heure: dr.heure, heure_fin: dr.heure_fin, statut: null, excluded: false, reprogrammed_from: key },
                             }));
+
                             if (latestId) {
                               try {
-                                await createPlanningIntervention(latestId, {
-                                  date: dr.date,
-                                  time: dr.heure || '09:00',
-                                  week_id: 'w1',
-                                  day_key: 'day'
+                                // Rule 2.2: Delete existing child demand for original date D1 if present
+                                const existingD1 = childDemandes?.find((cd: Demande) => {
+                                  const cDate = cd.date_intervention?.includes('T') ? cd.date_intervention.split('T')[0] : cd.date_intervention?.slice(0, 10);
+                                  return cDate === key;
                                 });
+                                if (existingD1?.id) {
+                                  await deleteDemande(existingD1.id);
+                                }
+
+                                // Rule 2.1: Only create child demand if new target date <= tomorrowIso
+                                if (dr.date <= tomorrowIso) {
+                                  await createPlanningIntervention(latestId, {
+                                    date: dr.date,
+                                    time: dr.heure || '09:00',
+                                    week_id: 'w1',
+                                    day_key: 'day'
+                                  });
+                                }
                               } catch (err) {
                                 console.error("Error creating reported intervention:", err);
                               }
@@ -666,6 +683,10 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                           onClick={async () => {
                             const target = reprogTarget[key];
                             if (!target) return;
+                            const tom = new Date();
+                            tom.setDate(tom.getDate() + 1);
+                            const tomorrowIso = `${tom.getFullYear()}-${String(tom.getMonth() + 1).padStart(2, '0')}-${String(tom.getDate()).padStart(2, '0')}`;
+
                             const h = heure || heureByDow[d.getDay()] || "09:00";
                             const hf = heureFin || "";
                             setAboDateOverrides((prev) => ({
@@ -675,12 +696,22 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                             }));
                             if (latestId) {
                               try {
-                                await createPlanningIntervention(latestId, {
-                                  date: target,
-                                  time: h,
-                                  week_id: 'w1',
-                                  day_key: 'day'
+                                const existingD1 = childDemandes?.find((cd: Demande) => {
+                                  const cDate = cd.date_intervention?.includes('T') ? cd.date_intervention.split('T')[0] : cd.date_intervention?.slice(0, 10);
+                                  return cDate === key;
                                 });
+                                if (existingD1?.id) {
+                                  await deleteDemande(existingD1.id);
+                                }
+
+                                if (target <= tomorrowIso) {
+                                  await createPlanningIntervention(latestId, {
+                                    date: target,
+                                    time: h,
+                                    week_id: 'w1',
+                                    day_key: 'day'
+                                  });
+                                }
                               } catch (err) {
                                 console.error("Error creating reprogrammed intervention:", err);
                               }
@@ -728,6 +759,10 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                           onClick={async () => {
                             const src = useCreditSource[key];
                             if (!src) return;
+                            const tom = new Date();
+                            tom.setDate(tom.getDate() + 1);
+                            const tomorrowIso = `${tom.getFullYear()}-${String(tom.getMonth() + 1).padStart(2, '0')}-${String(tom.getDate()).padStart(2, '0')}`;
+
                             const h = heure || heureByDow[d.getDay()] || "09:00";
                             const hf = heureFin || "";
                             setAboDateOverrides((prev) => ({
@@ -737,12 +772,22 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                             }));
                             if (latestId) {
                               try {
-                                await createPlanningIntervention(latestId, {
-                                  date: key,
-                                  time: h,
-                                  week_id: 'w1',
-                                  day_key: 'day'
+                                const existingSrc = childDemandes?.find((cd: Demande) => {
+                                  const cDate = cd.date_intervention?.includes('T') ? cd.date_intervention.split('T')[0] : cd.date_intervention?.slice(0, 10);
+                                  return cDate === src;
                                 });
+                                if (existingSrc?.id) {
+                                  await deleteDemande(existingSrc.id);
+                                }
+
+                                if (key <= tomorrowIso) {
+                                  await createPlanningIntervention(latestId, {
+                                    date: key,
+                                    time: h,
+                                    week_id: 'w1',
+                                    day_key: 'day'
+                                  });
+                                }
                               } catch (err) {
                                 console.error("Error applying credit intervention:", err);
                               }
