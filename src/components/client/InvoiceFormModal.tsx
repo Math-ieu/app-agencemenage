@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, X, AlertCircle, FileText, Info } from 'lucide-react';
+import { DollarSign, X, AlertCircle, FileText } from 'lucide-react';
 import { Demande, Client } from '../../types';
 import { updateDemande, generateDocument } from '../../api/client';
 import { getContractBaselinePassages, calculateSinglePassagePrice } from '../../utils/pricing';
@@ -133,11 +133,13 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       const rawDevisTotal = Number(formData.total) || Number(formData.montant) || Number(latest.prix) || 0;
       setDevisTotal(rawDevisTotal);
 
-      // Passages de base du devis / contrat (FIXE)
-      const rawPassagesBase = getContractBaselinePassages(latest);
+      // Passages réels / proratisés du mois (ex: 10 pour le mois en cours)
+      const rawPassagesBase = monthPassagesPlanifies !== undefined && monthPassagesPlanifies > 0
+        ? monthPassagesPlanifies
+        : getContractBaselinePassages(latest);
       setPassagesBase(rawPassagesBase);
 
-      // Prix unitaire dérivé du devis (FIXE)
+      // Prix unitaire dérivé du devis
       const derivedPU = Number(formData.prix_unitaire) > 0
         ? Number(formData.prix_unitaire)
         : (rawPassagesBase > 0 && rawDevisTotal > 0
@@ -146,10 +148,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       setInvPrixUnitaire(String(derivedPU));
 
       // Passages ce mois-ci
-      const numPassages = monthPassagesPlanifies !== undefined && monthPassagesPlanifies > 0
-        ? monthPassagesPlanifies
-        : (monthDemandes?.length > 0 ? monthDemandes.length : rawPassagesBase);
-      setInvNbPassages(String(numPassages));
+      setInvNbPassages(String(rawPassagesBase));
 
       // Remise additionnelle = 0 par défaut (la remise abonnement est déjà dans le devis total)
       setInvRemiseDh('0');
@@ -220,32 +219,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         {/* Modal Body */}
         <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          {/* 0. Référence Devis — Source unique de vérité */}
-          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 12, padding: 16 }}>
-            <div style={{ fontWeight: 800, fontSize: 14, color: '#1e40af', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Info size={16} /> Référence Devis (source de vérité)
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 13 }}>
-              <div style={{ background: 'white', padding: '10px 14px', borderRadius: 8, border: '1px solid #dbeafe' }}>
-                <div style={{ color: '#64748b', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>Montant mensuel (devis)</div>
-                <div style={{ color: '#1e40af', fontWeight: 800, fontSize: 16 }}>{devisTotal.toLocaleString('fr-FR')} DH</div>
-              </div>
-              <div style={{ background: 'white', padding: '10px 14px', borderRadius: 8, border: '1px solid #dbeafe' }}>
-                <div style={{ color: '#64748b', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>Passages base / mois</div>
-                <div style={{ color: '#1e40af', fontWeight: 800, fontSize: 16 }}>{passagesBase}</div>
-              </div>
-              <div style={{ background: 'white', padding: '10px 14px', borderRadius: 8, border: '1px solid #dbeafe' }}>
-                <div style={{ color: '#64748b', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>PU dérivé du devis</div>
-                <div style={{ color: '#1e40af', fontWeight: 800, fontSize: 16 }}>{pu.toFixed(2).replace('.', ',')} DH</div>
-              </div>
-            </div>
-            {isProrata && (
-              <div style={{ marginTop: 10, padding: '8px 12px', background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12, color: '#92400e', fontWeight: 600 }}>
-                ⚠ Prorata actif : ce mois a {numPassages} passage{numPassages > 1 ? 's' : ''} au lieu de {passagesBase} (base devis).
-                Montant ajusté proportionnellement.
-              </div>
-            )}
-          </div>
+
 
           {/* 1. Informations générales */}
           <div style={{ background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: 12, padding: 16 }}>

@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import { getDemandes, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
-import { getDevisBasedMonthlyAmount } from '../utils/pricing';
+import { getDevisBasedMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage } from '../utils/pricing';
 import { useToast } from '@/hooks/use-toast';
 import './GestionAbonnements.css';
 
@@ -565,10 +565,18 @@ export default function GestionAbonnements() {
         : '';
       const clientName = dAny.client_name || dAny.nom_client || rawClientName || (d.formulaire_data as any)?.nom || (d.formulaire_data as any)?.firstName || 'Client Inconnu';
       const ville = dAny.ville || dAny.quartier || d.client_city || d.client_neighborhood || (clientObj ? ((clientObj as any).city || (clientObj as any).neighborhood) : '') || 'Casablanca';
-      const commercial = dAny.assigned_to_user_name || d.assigned_to_name || d.commercial_name || dAny.assigned_to_detail?.full_name || 'Non assigné';
+      const commercial = (d.formulaire_data as any)?.commercial || dAny.assigned_to_user_name || d.assigned_to_name || d.commercial_name || dAny.assigned_to_detail?.full_name || 'Non assigné';
       const comInitials = commercial && commercial !== 'Non assigné' ? commercial.charAt(0).toUpperCase() : 'C';
 
-      let jours: string[] = dAny.jours_intervention || d.planning?.jours_intervention || (d.formulaire_data as any)?.jours_intervention || [];
+      let jours: string[] = extractJoursPassage(
+        dAny.jours_intervention_detail ||
+        dAny.jours_intervention ||
+        d.planning?.jours_intervention ||
+        (d.formulaire_data as any)?.jours_intervention ||
+        (d.formulaire_data as any)?.jours_passage ||
+        dAny.jours_passage
+      );
+
       if (jours.length === 0) {
         const freqStr = d.frequency_label || (d.formulaire_data as any)?.frequence || (d.formulaire_data as any)?.subFrequency || '';
         if (freqStr.includes('3') || freqStr.includes('3fois')) {
@@ -607,15 +615,7 @@ export default function GestionAbonnements() {
         return st === 'annule' || st === 'annulee';
       }).length;
 
-      const realPlanningCount = d.planning?.nombre_passages_mois || 
-                                (d.formulaire_data as any)?.nombre_passages_mois || 
-                                (d.formulaire_data as any)?.nombre_passages ||
-                                (d.formulaire_data as any)?.nb_passages_mois ||
-                                (d.formulaire_data as any)?.nb_passages_devis ||
-                                (d.formulaire_data as any)?.nb_passages_base;
-      const interventionsTotal = realPlanningCount && Number(realPlanningCount) > 0 
-        ? Number(realPlanningCount) 
-        : (children.length > 0 ? children.length : 0);
+      const interventionsTotal = getDynamicMonthPassagesCount(d, demandes);
 
       const realTarifMensuel = getDevisBasedMonthlyAmount(d, interventionsTotal);
 
@@ -654,7 +654,7 @@ export default function GestionAbonnements() {
         clientVille: ville,
         serviceType: dAny.service_name || d.service_label || d.service || 'Ménage standard',
         frequenceLabel: d.frequency_label || (jours.length > 0 ? `${jours.length}×/semaine` : 'Abonnement'),
-        heuresParPassage: d.nb_heures || dAny.nombre_heures || 4,
+        heuresParPassage: (d.formulaire_data as any)?.duree_heures || d.nb_heures || dAny.nombre_heures || 4,
         joursChoice: jours,
         interventionsCompleted,
         interventionsTotal,

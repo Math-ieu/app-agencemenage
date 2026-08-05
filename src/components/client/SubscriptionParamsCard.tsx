@@ -1,7 +1,6 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 import { Demande } from '../../types';
-import { calculateInvoiceFromDevis } from '../../utils/pricing';
 
 export interface SubscriptionParamsCardProps {
   latest: Demande;
@@ -201,12 +200,15 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
           <span style={{ color: '#64748b', fontWeight: 500 }}>Mensuel de base (devis)</span>
           <strong style={{ color: '#034a3e', fontWeight: 700 }}>
             {(() => {
-              // Toujours afficher le montant CONSTANT du devis, pas le prorata du mois
-              const inv = calculateInvoiceFromDevis(latest);
-              if (inv.devisTotal > 0 && inv.passagesBase > 0) {
-                return `${inv.devisTotal.toLocaleString('fr-FR')} DH (${inv.passagesBase} passages × ${inv.prixUnitaireDevis.toFixed(2).replace('.', ',')} DH)`;
-              }
-              return inv.devisTotal > 0 ? `${inv.devisTotal.toLocaleString('fr-FR')} DH` : (mensuelBase ? `${mensuelBase} DH` : (latest.prix ? `${latest.prix} DH` : '—'));
+              const devisBase = Number(mensuelBase) ||
+                                Number(formData.mensuel_base) ||
+                                Number(formData.devis_total_base) ||
+                                Number(formData.montant_devis_base) ||
+                                Number(formData.total_ttc) ||
+                                Number(formData.total) ||
+                                Number(formData.montant) ||
+                                Number(latest.prix) || 0;
+              return devisBase > 0 ? `${devisBase.toLocaleString('fr-FR')} DH` : '—';
             })()}
           </strong>
         </div>

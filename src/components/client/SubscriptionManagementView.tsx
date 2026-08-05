@@ -13,7 +13,7 @@ import { SubscriptionCalendarGrid } from './SubscriptionCalendarGrid';
 import { SubscriptionSidebar } from './SubscriptionSidebar';
 import { FacturesReglementsCard } from './FacturesReglementsCard';
 import { InvoiceFormModal } from './InvoiceFormModal';
-
+import { extractJoursPassage } from '../../utils/pricing';
 export interface SubscriptionManagementViewProps {
   latest: Demande;
   client?: Client;
@@ -117,14 +117,13 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     }
 
     if (days.length === 0) {
-      const rawJours = latest?.formulaire_data?.jours_intervention || latest?.planning?.jours_intervention || [];
-      if (Array.isArray(rawJours) && rawJours.length > 0) {
-        days = rawJours.map((item: any) => {
-          if (typeof item === 'string') return item.toLowerCase();
-          if (item && typeof item === 'object' && item.jour) return String(item.jour).toLowerCase();
-          return String(item).toLowerCase();
-        }).filter((j: string) => dayNames.includes(j));
-      }
+      const rawJours = (latest?.formulaire_data as any)?.jours_intervention || latest?.planning?.jours_intervention || [];
+      days = extractJoursPassage(rawJours);
+    }
+
+    if (days.length === 0) {
+      const rawJoursPassage = (latest?.formulaire_data as any)?.jours_passage || (latest as any)?.jours_passage;
+      days = extractJoursPassage(rawJoursPassage);
     }
 
     if (days.length === 0 && Array.isArray(latest?.planning?.semaines)) {

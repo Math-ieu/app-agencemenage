@@ -385,8 +385,8 @@ export const calculateInvoiceFromDevis = (
 
     const formData = demande.formulaire_data || {};
 
-    // ── 1. Devis total HT (source de vérité pour le contrat de base) ──
-    const devisTotal = Number(formData.total) || Number(formData.montant) || Number(demande.prix) || 0;
+    // ── 1. Devis total (source de vérité pour le contrat de base TTC) ──
+    const devisTotal = Number(formData.devis_total_base) || Number(formData.montant_devis_base) || Number(formData.mensuel_base) || Number(formData.total_ttc) || Number(formData.total) || Number(formData.montant) || Number(demande.prix) || 0;
 
     // ── 2. Nombre de passages de base du devis / contrat (FIXE) ──
     const passagesBase = getContractBaselinePassages(demande);
@@ -446,4 +446,140 @@ export const getDevisBasedMonthlyAmount = (demande: any, monthPassages?: number)
 
     const result = calculateInvoiceFromDevis(demande, monthPassages);
     return result.totalTTC;
+};
+
+export const extractJoursPassage = (raw: any): string[] => {
+    const dayNames = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+        return raw
+            .map(item => typeof item === 'string' ? item.toLowerCase() : String(item?.jour || item).toLowerCase())
+            .map(s => s.trim())
+            .filter(j => dayNames.includes(j));
+    }
+    if (typeof raw === 'string') {
+        const parts = raw.split(/[+,/;]|\s+et\s+/i);
+        return parts
+            .map(p => p.trim().toLowerCase())
+            .filter(j => dayNames.includes(j));
+    }
+    return [];
+};
+
+/**
+ * Calculates the exact real dynamic number of planned passages for a given subscription and month.
+ * Automatically accounts for active days, calendar start date (e.g. mid-month start prorata),
+ * and manual overrides / child demand cancellations / postponements on the planning calendar.
+ */
+export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = []): number => {
+    if (!demande) return 0;
+
+    // 2. Compute dynamic passages for current month from active days & calendar bounds
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const mPrefix = `${y}-${String(m + 1).padStart(2, '0')}`;
+
+    const firstOfMonth = new Date(y, m, 1, 0, 0, 0, 0);
+    const lastOfMonth = new Date(y, m + 1, 0, 23, 59, 59, 999);
+
+    const dayNames = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+    const dayMap: Record<string, number> = {
+        dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6
+    };
+
+    let days: string[] = [];
+    const detail = (demande.formulaire_data as any)?.jours_intervention_detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+        days = detail.map((item: any) => typeof item === 'string' ? item.toLowerCase() : item?.jour?.toLowerCase()).filter((j: string) => dayNames.includes(j));
+    }
+    if (days.length === 0) {
+        const rawJours = (demande.formulaire_data as any)?.jours_intervention || demande.planning?.jours_intervention || [];
+        days = extractJoursPassage(rawJours);
+    }
+    if (days.length === 0) {
+        const rawJoursPassage = (demande.formulaire_data as any)?.jours_passage || demande.jours_passage;
+        days = extractJoursPassage(rawJoursPassage);
+    }
+    if (days.length === 0 && Array.isArray(demande.planning?.semaines)) {
+        const found = new Set<string>();
+        demande.planning.semaines.forEach((w: any) => {
+            if (w.jours && typeof w.jours === 'object') {
+                Object.keys(w.jours).forEach((k: string) => {
+                    if (w.jours[k]?.selected && dayNames.includes(k.toLowerCase())) {
+                        found.add(k.toLowerCase());
+                    }
+                });
+            }
+        });
+        if (found.size > 0) days = Array.from(found);
+    }
+    if (days.length === 0) {
+        const freqStr = (demande.frequency_label || (demande.formulaire_data as any)?.frequence || '').toLowerCase();
+        if (freqStr.includes('2')) days = ['lundi', 'jeudi'];
+        else if (freqStr.includes('1')) days = ['samedi'];
+        else if (freqStr.includes('4')) days = ['lundi', 'mardi', 'mercredi', 'jeudi'];
+        else if (freqStr.includes('5')) days = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
+        else days = ['lundi', 'mercredi', 'vendredi'];
+    }
+
+    const selectedDows = days.map(d => dayMap[d.toLowerCase()]).filter(v => v !== undefined);
+    if (selectedDows.length === 0) return getContractBaselinePassages(demande);
+
+    let start = firstOfMonth;
+    const startStr = (demande.formulaire_data as any)?.date_demarrage || (demande.formulaire_data as any)?.date_debut || demande.planning?.date_debut || demande.date_intervention;
+    if (startStr) {
+        const parsedStart = new Date(startStr.includes('T') ? startStr : `${startStr.slice(0, 10)}T00:00:00`);
+        if (!isNaN(parsedStart.getTime()) && parsedStart > firstOfMonth && parsedStart <= lastOfMonth) {
+            start = parsedStart;
+        }
+    }
+
+    let end = lastOfMonth;
+    const isResilie = (demande.statut || '').toLowerCase() === 'resilie';
+    if (isResilie) {
+        const endStr = (demande.formulaire_data as any)?.date_fin || demande.planning?.date_fin;
+        if (endStr) {
+            const parsedEnd = new Date(endStr.includes('T') ? endStr : `${endStr.slice(0, 10)}T23:59:59`);
+            if (!isNaN(parsedEnd.getTime()) && parsedEnd >= firstOfMonth && parsedEnd < lastOfMonth) {
+                end = parsedEnd;
+            }
+        }
+    }
+
+    const passageDatesSet = new Set<string>();
+    for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
+        if (selectedDows.includes(cur.getDay())) {
+            const isoKey = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+            passageDatesSet.add(isoKey);
+        }
+    }
+
+    const dateOverrides = (demande.formulaire_data as any)?.date_overrides || {};
+    Object.entries(dateOverrides).forEach(([k, ov]: [string, any]) => {
+        if (k.startsWith(mPrefix)) {
+            const st = (ov?.statut || '').toLowerCase();
+            const isExcluded = ov?.excluded || ['annule', 'annulee', 'reporte', 'reportee', 'retirer'].includes(st);
+            if (isExcluded) {
+                passageDatesSet.delete(k);
+            } else if (ov?.heure && !isExcluded) {
+                passageDatesSet.add(k);
+            }
+        }
+    });
+
+    const children = allDemandes.filter(c => Number(c.parent_demande) === Number(demande.id));
+    children.forEach((cd: any) => {
+        if (cd.date_intervention) {
+            const dIso = cd.date_intervention.includes('T') ? cd.date_intervention.split('T')[0] : cd.date_intervention.slice(0, 10);
+            if (dIso.startsWith(mPrefix)) {
+                const st = (cd.statut || '').toLowerCase();
+                if (['annule', 'annulee', 'reporte', 'reportee', 'retirer'].includes(st)) {
+                    passageDatesSet.delete(dIso);
+                }
+            }
+        }
+    });
+
+    return passageDatesSet.size > 0 ? passageDatesSet.size : getContractBaselinePassages(demande);
 };

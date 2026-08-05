@@ -25,6 +25,7 @@ import {
 import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
 import { hasPermission } from '../../utils/permissions';
+import { getDynamicMonthPassagesCount } from '../../utils/pricing';
 import './LesSuivis.css';
 
 // Interface matching the FacturationRow definition in VueGlobale
@@ -985,22 +986,9 @@ export default function LesSuivis() {
         return dateA - dateB;
       });
 
-    // Fetch total passages directly from database fields without any calculation
-    let monthTotal = Number(
-      parentDemande?.planning?.nombre_passages_mois ||
-      parentDemande?.formulaire_data?.nombre_passages_mois ||
-      parentDemande?.formulaire_data?.nombre_passages ||
-      parentDemande?.formulaire_data?.nb_passages_mois ||
-      parentDemande?.formulaire_data?.nb_passages_devis ||
-      parentDemande?.formulaire_data?.nb_passages_base ||
-      row.originalDemande?.planning?.nombre_passages_mois ||
-      row.originalDemande?.formulaire_data?.nombre_passages_mois ||
-      row.originalDemande?.formulaire_data?.nombre_passages ||
-      monthSubRows.length ||
-      0
-    );
-
-    if (!monthTotal) {
+    // Real dynamic number of planned passages on the month calendar (denominator for child intervention demands)
+    let monthTotal = parentDemande ? getDynamicMonthPassagesCount(parentDemande, Array.from(demandsMap.values())) : 0;
+    if (!monthTotal || monthTotal === 0) {
       monthTotal = monthSubRows.length || 4;
     }
 

@@ -12,6 +12,7 @@ import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
+import { getDynamicMonthPassagesCount } from '../utils/pricing';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -338,21 +339,9 @@ export default function Dashboard() {
         return dateA - dateB;
       });
 
-    // Fetch total passages directly from database fields without any calculation
-    let monthTotal = Number(
-      parentDemande?.planning?.nombre_passages_mois ||
-      parentDemande?.formulaire_data?.nombre_passages_mois ||
-      parentDemande?.formulaire_data?.nombre_passages ||
-      parentDemande?.formulaire_data?.nb_passages_mois ||
-      parentDemande?.formulaire_data?.nb_passages_devis ||
-      parentDemande?.formulaire_data?.nb_passages_base ||
-      d.formulaire_data?.nombre_passages_mois ||
-      d.formulaire_data?.nombre_passages ||
-      monthSubDemands.length ||
-      0
-    );
-
-    if (!monthTotal) {
+    // Real dynamic number of planned passages on the month calendar (denominator for child intervention demands)
+    let monthTotal = parentDemande ? getDynamicMonthPassagesCount(parentDemande, list) : 0;
+    if (!monthTotal || monthTotal === 0) {
       monthTotal = monthSubDemands.length || 4;
     }
 
