@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, X, AlertCircle, FileText } from 'lucide-react';
 import { Demande, Client } from '../../types';
 import { updateDemande, generateDocument } from '../../api/client';
+import { calculateSinglePassagePrice } from '../../utils/pricing';
 
 export interface InvoiceFormModalProps {
   show: boolean;
@@ -14,6 +15,7 @@ export interface InvoiceFormModalProps {
   capitalizedMonthTitle: string;
   frequencyLabel?: string;
   dateDebut?: string;
+  monthPassagesPlanifies?: number;
   addToast: (msg: string, type: 'success' | 'error' | 'info') => void;
   fetchData?: () => Promise<void>;
 }
@@ -29,6 +31,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   capitalizedMonthTitle,
   frequencyLabel,
   dateDebut,
+  monthPassagesPlanifies,
   addToast,
   fetchData
 }) => {
@@ -54,7 +57,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const [invMontantTotal, setInvMontantTotal] = useState(() => String(latest?.prix || 0));
   const [invModePaiement, setInvModePaiement] = useState(() => latest?.mode_paiement || 'Virement');
   const [invCommission, setInvCommission] = useState(() => String((latest as any)?.commission || ''));
-  const [invNbPassages, setInvNbPassages] = useState(() => String(monthDemandes?.length || 4));
+  const [invNbPassages, setInvNbPassages] = useState(() => String(monthPassagesPlanifies || monthDemandes?.length || 4));
   const [invTarifHoraire, setInvTarifHoraire] = useState(() => String(latest?.formulaire_data?.tarif_horaire || 0));
   const [invMensuelBase, setInvMensuelBase] = useState(() => String(latest?.prix || 0));
   const [invJoursPassage, setInvJoursPassage] = useState(() => selectedDays && selectedDays.length > 0 ? selectedDays.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' + ') : 'Lundi + Jeudi');
@@ -63,60 +66,156 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const [invInterventionsRecup, setInvInterventionsRecup] = useState('0');
 
   // Tarification States
-  const [invPrixUnitaire, setInvPrixUnitaire] = useState(() => {
-    const passages = Number(monthDemandes?.length || 4);
-    const total = Number(latest?.prix || 0);
-    return passages > 0 ? String(Math.round((total / passages) * 100) / 100) : '0';
-  });
+  const [invPrixUnitaire, setInvPrixUnitaire] = useState(() => String(calculateSinglePassagePrice(latest)));
   const [invRemiseDh, setInvRemiseDh] = useState('0');
   const [invTvaPercent, setInvTvaPercent] = useState('20');
 
+  const recalculatePrices = (overrides: {
+    service?: string;
+    duree?: string;
+    nbPersonnes?: string;
+    tarifHoraire?: string;
+    produitsInclus?: boolean;
+    tauxRemise?: string;
+    nbPassages?: string;
+    interventionsRecup?: string;
+  }) => {
+    const s = overrides.service !== undefined ? overrides.service : invService;
+    const durStr = overrides.duree !== undefined ? overrides.duree : invDuree;
+    const persStr = overrides.nbPersonnes !== undefined ? overrides.nbPersonnes : invNbPersonnes;
+    const thStr = overrides.tarifHoraire !== undefined ? overrides.tarifHoraire : invTarifHoraire;
+    const prod = overrides.produitsInclus !== undefined ? overrides.produitsInclus : invProduitsInclus;
+    const txStr = overrides.tauxRemise !== undefined ? overrides.tauxRemise : invTauxRemise;
+    const passStr = overrides.nbPassages !== undefined ? overrides.nbPassages : invNbPassages;
+    const recupStr = overrides.interventionsRecup !== undefined ? overrides.interventionsRecup : invInterventionsRecup;
+
+    const isGrand = String(s || '').toLowerCase().includes('grand');
+    const baseRate = Number(thStr) || (isGrand ? 70 : 60);
+    const minHours = isGrand ? 6 : 4;
+    const duree = Math.max(Number(durStr) || 0, minHours);
+    const nbPersonnes = Math.max(1, Number(persStr) || 1);
+    const remisePct = Number(txStr) !== undefined && !isNaN(Number(txStr)) ? Number(txStr) : 10;
+    const numPassages = Math.max(0, Number(passStr) || 0);
+    const numRecup = Math.max(0, Number(recupStr) || 0);
+
+    // Prix unitaire brut d'un passage (Audio 1: sans réduction, la réduction s'applique sur le total)
+    const labor = duree * baseRate * nbPersonnes;
+    const options = prod ? 90 : 0;
+    const pu = Math.round(labor + options);
+
+    // Interventions facturables (Audio 2: déduction des interventions récupérées de l'ancien mois)
+    const numFacturables = Math.max(0, numPassages - numRecup);
+    const subtotal = numFacturables * pu;
+    const remiseDh = Math.round((subtotal * remisePct) / 100);
+    const montantTotal = Math.max(0, subtotal - remiseDh);
+    const mensuelBase = Math.round(4 * pu);
+
+    setInvPrixUnitaire(String(pu));
+    setInvMontantTotal(String(montantTotal));
+    setInvMensuelBase(String(mensuelBase));
+    setInvRemiseDh(String(remiseDh));
+  };
+
   useEffect(() => {
     if (show && latest) {
-      setInvService(latest?.formulaire_data?.type_prestation || latest?.service || latest?.type_prestation || 'Grand ménage');
+      const realService = latest.service || latest.type_prestation || latest?.formulaire_data?.type_prestation || latest?.formulaire_data?.service || 'Grand ménage';
+      setInvService(realService);
       
-      const rawFreq = latest?.formulaire_data?.frequence || latest?.frequency_label || frequencyLabel;
+      const rawFreq = latest.frequency_label || latest?.formulaire_data?.frequence || frequencyLabel;
       setInvFrequence(formatFrequenceOption(rawFreq, selectedDays?.length));
 
-      setInvDateStart(dateDebut || latest?.date_intervention || latest?.formulaire_data?.date_demarrage || (latest?.created_at ? latest.created_at.slice(0, 10) : ''));
-      setInvNbPersonnes(String(latest?.formulaire_data?.nb_personnes || latest?.nb_intervenants || 1));
-      setInvDuree(String(latest?.formulaire_data?.duree || latest?.nb_heures || 4));
-      setInvMontantTotal(String(latest?.formulaire_data?.montant_total || latest?.prix || 0));
-      setInvModePaiement(latest?.formulaire_data?.mode_paiement || latest?.mode_paiement || 'Virement');
-      setInvCommission(String(latest?.formulaire_data?.com || (latest as any)?.commission || ''));
-      
-      const numPassages = monthDemandes?.length > 0 ? monthDemandes.length : (latest?.formulaire_data?.nombre_passages || 4);
+      const realStartDate = dateDebut || latest.planning?.date_debut || latest.formulaire_data?.date_demarrage || latest.formulaire_data?.date_debut || latest.date_intervention || (latest.created_at ? latest.created_at.slice(0, 10) : '');
+      setInvDateStart(realStartDate);
+
+      const realNbPersonnes = latest.nb_intervenants || latest?.formulaire_data?.nb_personnes || 1;
+      setInvNbPersonnes(String(realNbPersonnes));
+
+      const isGrand = String(realService).toLowerCase().includes('grand');
+      const realDuree = latest.nb_heures || latest?.formulaire_data?.duree || (isGrand ? 6 : 4);
+      setInvDuree(String(realDuree));
+
+      // PRE-FILL numPassages WITH REAL MONTH PASSAGE COUNT (monthPassagesPlanifies)
+      const numPassages = monthPassagesPlanifies !== undefined && monthPassagesPlanifies > 0
+        ? monthPassagesPlanifies
+        : (monthDemandes?.length > 0 ? monthDemandes.length : (latest.planning?.nombre_passages_mois || latest?.formulaire_data?.nombre_passages || 4));
       setInvNbPassages(String(numPassages));
-      
-      const totalPrix = Number(latest?.formulaire_data?.montant_total || latest?.prix || 0);
-      const dureeHeures = Number(latest?.formulaire_data?.duree || latest?.nb_heures || 4);
-      const th = latest?.formulaire_data?.tarif_horaire || (totalPrix > 0 && numPassages > 0 && dureeHeures > 0 ? Math.round((totalPrix / numPassages / dureeHeures) * 100) / 100 : 0);
+
+      const th = latest?.formulaire_data?.tarif_horaire || (isGrand ? 70 : 60);
       setInvTarifHoraire(String(th));
 
-      setInvMensuelBase(String(latest?.formulaire_data?.mensuel_base || latest?.prix || 0));
-      setInvJoursPassage(latest?.formulaire_data?.jours_passage || (selectedDays && selectedDays.length > 0 ? selectedDays.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join(' + ') : 'Lundi + Jeudi'));
-      setInvProduitsInclus(Boolean(latest?.formulaire_data?.produits_inclus));
-      setInvTauxRemise(String(latest?.formulaire_data?.taux_reduction || (latest as any)?.remise || 0));
-      setInvInterventionsRecup(String(latest?.formulaire_data?.interventions_recuperees || '0'));
+      const realProduitsInclus = Boolean(latest.avec_produit || latest?.formulaire_data?.produits_inclus);
+      setInvProduitsInclus(realProduitsInclus);
 
-      const pu = latest?.formulaire_data?.prix_unitaire || (numPassages > 0 && totalPrix > 0 ? Math.round((totalPrix / numPassages) * 100) / 100 : 0);
+      const realTauxRemise = latest?.formulaire_data?.taux_reduction || latest.geste_commercial?.reduction_value || (latest as any)?.remise || 10;
+      setInvTauxRemise(String(realTauxRemise));
+
+      const dateOverrides = latest?.formulaire_data?.date_overrides || {};
+      const recupCount = Object.values(dateOverrides).filter((v: any) => v?.statut === 'a_recuperer' && v?.reprogrammed_to).length;
+      const initialRecup = String(latest?.formulaire_data?.interventions_recuperees || recupCount);
+      setInvInterventionsRecup(initialRecup);
+
+      // Audio 1: Prix unitaire brut (sans réduction)
+      const pu = latest?.formulaire_data?.prix_unitaire || calculateSinglePassagePrice(latest);
       setInvPrixUnitaire(String(pu));
-      setInvRemiseDh(String(latest?.formulaire_data?.remise_dh || 0));
-      setInvTvaPercent(String(latest?.formulaire_data?.tva || 20));
+
+      const numRecup = Math.max(0, Number(initialRecup) || 0);
+      const numFacturables = Math.max(0, numPassages - numRecup);
+      const subtotal = numFacturables * pu;
+      const realRemiseDh = Math.round((subtotal * Number(realTauxRemise)) / 100);
+      setInvRemiseDh(String(realRemiseDh));
+
+      const realMontantTotal = Math.max(0, subtotal - realRemiseDh);
+      setInvMontantTotal(String(realMontantTotal));
+
+      const realMensuelBase = (pu > 0)
+        ? Math.round(4 * pu)
+        : (latest?.formulaire_data?.mensuel_base || latest.prix || 0);
+      setInvMensuelBase(String(realMensuelBase));
+
+      const realModePaiement = latest.mode_paiement || latest.mode_paiement_label || latest?.formulaire_data?.mode_paiement || 'Virement';
+      setInvModePaiement(realModePaiement);
+
+      const realCom = latest.commercial_name || (latest as any)?.commission || (latest as any)?.commercial || latest?.formulaire_data?.com || '';
+      setInvCommission(String(realCom));
+
+      const planningJours = latest.planning?.jours_intervention && Array.isArray(latest.planning.jours_intervention) && latest.planning.jours_intervention.length > 0
+        ? latest.planning.jours_intervention
+        : selectedDays;
+
+      const joursFormatted = planningJours && planningJours.length > 0 
+        ? planningJours.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join(' + ') 
+        : (latest?.formulaire_data?.jours_passage || 'Lundi + Jeudi');
+      setInvJoursPassage(joursFormatted);
+
+      const realTva = latest?.formulaire_data?.tva || 20;
+      setInvTvaPercent(String(realTva));
     }
-  }, [show, latest, monthDemandes, selectedDays, dateDebut, frequencyLabel]);
+  }, [show, latest, monthDemandes, selectedDays, dateDebut, frequencyLabel, monthPassagesPlanifies]);
 
   if (!show) return null;
 
   const numPassages = Math.max(0, Number(invNbPassages) || 0);
-  const numReportes = 0;
-  const numNouvelles = Math.max(0, numPassages - numReportes);
-  const pu = Math.max(0, Number(invPrixUnitaire) || 0);
-  const remise = Math.max(0, Number(invRemiseDh) || 0);
-  const tvaPct = Math.max(0, Number(invTvaPercent) || 0);
+  const numRecup = Math.max(0, Number(invInterventionsRecup) || 0);
 
-  const montantNouvelles = numNouvelles * pu;
-  const totalHT = Math.max(0, montantNouvelles - remise);
+  // Real BDD derived counts
+  const dateOverrides = latest?.formulaire_data?.date_overrides || {};
+  const numPayees = (monthDemandes || []).filter(d => ['integral', 'paye', 'payee'].includes((d.statut_paiement || '').toLowerCase()) || ['termine', 'terminee'].includes((d.statut || '').toLowerCase())).length;
+  const numCreditsPending = Object.values(dateOverrides).filter((ov: any) => ov?.statut === 'a_recuperer' && !ov?.reprogrammed_to).length;
+
+  // Interventions facturables = Nombre total de passages - Interventions récupérées
+  const numNouvelles = Math.max(0, numPassages - numRecup);
+  const pu = Math.max(0, Number(invPrixUnitaire) || 0);
+  const tauxRemisePct = Math.max(0, Number(invTauxRemise) || 0);
+
+  // Sous-total brut pour les interventions à facturer
+  const sousTotalHT = numNouvelles * pu;
+
+  // Calcul du montant de la réduction sur le total
+  const remiseCalculated = Math.round((sousTotalHT * tauxRemisePct) / 100);
+  const remise = Number(invRemiseDh) > 0 && invRemiseDh !== '0' ? Number(invRemiseDh) : remiseCalculated;
+
+  const totalHT = Math.max(0, sousTotalHT - remise);
+  const tvaPct = Math.max(0, Number(invTvaPercent) || 0);
   const tvaAmount = (totalHT * tvaPct) / 100;
   const totalTTC = totalHT + tvaAmount;
 
@@ -157,7 +256,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               Informations générales
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', fontSize: 13 }}>
-              <div><span style={{ color: '#64748b' }}>Client :</span> <strong style={{ color: '#0f172a' }}>{client?.display_name || latest?.formulaire_data?.nom || 'Client'}</strong></div>
+              <div><span style={{ color: '#64748b' }}>Client :</span> <strong style={{ color: '#0f172a' }}>{client?.display_name || latest?.client_detail?.display_name || latest?.formulaire_data?.nom || 'Client'}</strong></div>
               <div><span style={{ color: '#64748b' }}>N° abonnement :</span> <strong style={{ color: '#0f172a' }}>#{latest?.id}</strong></div>
               <div><span style={{ color: '#64748b' }}>Période :</span> <strong style={{ color: '#0f172a' }}>{capitalizedMonthTitle}</strong></div>
               <div><span style={{ color: '#64748b' }}>Type prestation :</span> <strong style={{ color: '#0f172a' }}>{invService}</strong></div>
@@ -174,7 +273,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Service</label>
-                <input type="text" value={invService} onChange={e => setInvService(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <input type="text" value={invService} onChange={e => { const v = e.target.value; setInvService(v); recalculatePrices({ service: v }); }} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Type de fréquence</label>
@@ -199,11 +298,11 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Nbre de personnes</label>
-                <input type="number" value={invNbPersonnes} onChange={e => setInvNbPersonnes(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <input type="number" value={invNbPersonnes} onChange={e => { const v = e.target.value; setInvNbPersonnes(v); recalculatePrices({ nbPersonnes: v }); }} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Durée / passage (h)</label>
-                <input type="number" value={invDuree} onChange={e => setInvDuree(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <input type="number" value={invDuree} onChange={e => { const v = e.target.value; setInvDuree(v); recalculatePrices({ duree: v }); }} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Montant total (DH)</label>
@@ -219,11 +318,11 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Nombre total de passages / mois</label>
-                <input type="number" value={invNbPassages} onChange={e => setInvNbPassages(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <input type="number" value={invNbPassages} onChange={e => { const v = e.target.value; setInvNbPassages(v); recalculatePrices({ nbPassages: v }); }} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Tarif horaire (DH / heure)</label>
-                <input type="number" value={invTarifHoraire} onChange={e => setInvTarifHoraire(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <input type="number" value={invTarifHoraire} onChange={e => { const v = e.target.value; setInvTarifHoraire(v); recalculatePrices({ tarifHoraire: v }); }} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Mensuel de base (DH)</label>
@@ -236,18 +335,18 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             </div>
 
             <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" id="produitsInclus" checked={invProduitsInclus} onChange={e => setInvProduitsInclus(e.target.checked)} style={{ cursor: 'pointer' }} />
+              <input type="checkbox" id="produitsInclus" checked={invProduitsInclus} onChange={e => { const v = e.target.checked; setInvProduitsInclus(v); recalculatePrices({ produitsInclus: v }); }} style={{ cursor: 'pointer' }} />
               <label htmlFor="produitsInclus" style={{ fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer' }}>Produits ménagers inclus</label>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Taux de réduction (%)</label>
-                <input type="number" value={invTauxRemise} onChange={e => setInvTauxRemise(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <input type="number" value={invTauxRemise} onChange={e => { const v = e.target.value; setInvTauxRemise(v); recalculatePrices({ tauxRemise: v }); }} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Interventions récupérées</label>
-                <input type="text" value={invInterventionsRecup} onChange={e => setInvInterventionsRecup(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <input type="number" value={invInterventionsRecup} onChange={e => { const v = e.target.value; setInvInterventionsRecup(v); recalculatePrices({ interventionsRecup: v }); }} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
               </div>
             </div>
           </div>
@@ -263,8 +362,8 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 10px', borderRadius: 6, fontWeight: 800, fontSize: 13 }}>{numPassages}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9' }}>
-                <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>Reportées des mois précédents (déjà payées)</span>
-                <span style={{ background: '#f3e8ff', color: '#6b21a8', padding: '2px 10px', borderRadius: 6, fontWeight: 800, fontSize: 13 }}>0</span>
+                <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>Interventions récupérées (à déduire)</span>
+                <span style={{ background: '#f3e8ff', color: '#6b21a8', padding: '2px 10px', borderRadius: 6, fontWeight: 800, fontSize: 13 }}>{numRecup}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                 <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>Total interventions planifiées</span>
@@ -276,11 +375,11 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                 <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>Interventions déjà payées (lecture seule)</span>
-                <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 10px', borderRadius: 6, fontWeight: 800, fontSize: 13 }}>0</span>
+                <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 10px', borderRadius: 6, fontWeight: 800, fontSize: 13 }}>{numPayees}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                 <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>Crédits à récupérer restants</span>
-                <span style={{ background: '#fef9c3', color: '#854d0e', padding: '2px 10px', borderRadius: 6, fontWeight: 800, fontSize: 13 }}>0</span>
+                <span style={{ background: '#fef9c3', color: '#854d0e', padding: '2px 10px', borderRadius: 6, fontWeight: 800, fontSize: 13 }}>{numCreditsPending}</span>
               </div>
             </div>
           </div>
@@ -309,7 +408,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 32px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#64748b' }}>Montant nouvelles interventions</span>
-                  <strong style={{ color: '#0f172a' }}>{montantNouvelles.toFixed(2).replace('.', ',')} DH</strong>
+                  <strong style={{ color: '#0f172a' }}>{sousTotalHT.toFixed(2).replace('.', ',')} DH</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#64748b' }}>Remise</span>

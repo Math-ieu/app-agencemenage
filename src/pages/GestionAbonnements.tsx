@@ -8,6 +8,7 @@ import jsPDF from 'jspdf';
 import { getDemandes, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
+import { calculateSinglePassagePrice } from '../utils/pricing';
 import { useToast } from '@/hooks/use-toast';
 import './GestionAbonnements.css';
 
@@ -105,11 +106,10 @@ export function calculateMidMonthProrata(
   };
 }
 
-// Helper Sub-Component for Calendar Popup Modal
+// Helper Sub-Component for Calendar Popup Modal — Synchronized with SubscriptionCalendarGrid
 function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; demandes: Demande[]; onClose: () => void }) {
   const navigate = useNavigate();
 
-  // Default calendar view to current month and year
   const [activeDate, setActiveDate] = useState(() => new Date());
 
   const year = activeDate.getFullYear();
@@ -119,7 +119,16 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
 
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  // Real child demandes / programmed interventions linked to this subscription or client in BDD
+  // Find the parent subscription demande to access date_overrides and jours_intervention_detail
+  const parentDemande = useMemo(() => {
+    return demandes.find(d => d.id === row.demandeId);
+  }, [demandes, row.demandeId]);
+
+  const dateOverrides: Record<string, any> = useMemo(() => {
+    return parentDemande?.formulaire_data?.date_overrides || {};
+  }, [parentDemande]);
+
+  // Real child demandes / programmed interventions linked to this subscription in BDD
   const childDemandes = useMemo(() => {
     return demandes.filter(d => {
       const isParentMatch = d.parent_demande && Number(d.parent_demande) === Number(row.demandeId);
@@ -127,6 +136,75 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
       return (isParentMatch || (isClientMatch && !!d.parent_demande)) && !!d.date_intervention;
     });
   }, [demandes, row.demandeId, row.clientId]);
+
+  // Build heureByDow map from jours_intervention_detail or joursChoice
+  const joursDetail: Array<{ jour: string; heure_debut: string; heure_fin: string }> = useMemo(() => {
+    const detail = parentDemande?.formulaire_data?.jours_intervention_detail;
+    if (detail && Array.isArray(detail) && detail.length > 0) return detail;
+    return (row.joursChoice || []).map(j => ({ jour: j, heure_debut: '09:00', heure_fin: '13:00' }));
+  }, [parentDemande, row.joursChoice]);
+
+  const dayMap: Record<string, number> = {
+    dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6,
+  };
+  const heureByDow: Record<number, { heure_debut: string; heure_fin: string }> = {};
+  joursDetail.forEach((j) => { heureByDow[dayMap[j.jour]] = { heure_debut: j.heure_debut, heure_fin: j.heure_fin }; });
+  const selectedDows = joursDetail.map((j) => dayMap[j.jour]);
+
+  // Compute intervention dates ONLY for the visible month (scoped to subscription period)
+  const interventionSet = useMemo(() => {
+    const set = new Set<string>();
+    const startStr = row.dateDebut || parentDemande?.date_intervention || todayStr;
+    let subStart: Date;
+    try { subStart = new Date(startStr.includes('T') ? startStr : `${startStr}T00:00:00`); } catch { subStart = new Date(); }
+    const endStr = row.dateFin || parentDemande?.formulaire_data?.date_fin || parentDemande?.planning?.date_fin;
+    let subEnd: Date;
+    if (endStr) {
+      try { subEnd = new Date(endStr.includes('T') ? endStr : `${endStr.slice(0, 10)}T23:59:59`); } catch { subEnd = new Date(year, month + 1, 0); }
+    } else {
+      const nbMois = Number(parentDemande?.formulaire_data?.nb_mois || parentDemande?.formulaire_data?.duree_mois || 1);
+      subEnd = new Date(subStart.getFullYear(), subStart.getMonth() + nbMois, 0, 23, 59, 59);
+    }
+
+    // Scope to visible month only
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0); // last day of month
+
+    // Intersect: loop only within [max(subStart, monthStart), min(subEnd, monthEnd)]
+    const loopStart = subStart > monthStart ? subStart : monthStart;
+    const loopEnd = subEnd < monthEnd ? subEnd : monthEnd;
+
+    const subStartMs = subStart.getTime();
+    const freqStr = (parentDemande?.formulaire_data?.frequence || parentDemande?.frequency_label || '').toLowerCase();
+    const seenMonth = new Set<string>();
+
+    for (let d = new Date(loopStart); d <= loopEnd; d.setDate(d.getDate() + 1)) {
+      if (!selectedDows.includes(d.getDay())) continue;
+      if (freqStr.includes('bi_hebdomadaire')) {
+        const weekNo = Math.floor((d.getTime() - subStartMs) / (7 * 24 * 3600 * 1000));
+        if (weekNo % 2 !== 0) continue;
+      }
+      if (freqStr.includes('1_fois_mois')) {
+        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDay()}`;
+        if (seenMonth.has(key)) continue;
+        seenMonth.add(key);
+      }
+      const dayIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      set.add(dayIso);
+    }
+
+    // Also add dates from child demandes (only this month)
+    childDemandes.forEach((cd) => {
+      if (cd.date_intervention) {
+        const dIso = cd.date_intervention.includes('T') ? cd.date_intervention.split('T')[0] : cd.date_intervention.slice(0, 10);
+        if (dIso.startsWith(monthIsoPrefix)) {
+          set.add(dIso);
+        }
+      }
+    });
+
+    return set;
+  }, [row, parentDemande, childDemandes, selectedDows, todayStr, year, month, monthIsoPrefix]);
 
   const handleOpenGestion = () => {
     const targetId = row.clientId || row.demandeId || row.id;
@@ -139,15 +217,11 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
     return monthName.charAt(0).toUpperCase() + monthName.slice(1);
   }, [activeDate]);
 
-  const handlePrevMonth = () => {
-    setActiveDate(new Date(year, month - 1, 1));
-  };
+  const handlePrevMonth = () => setActiveDate(new Date(year, month - 1, 1));
+  const handleNextMonth = () => setActiveDate(new Date(year, month + 1, 1));
 
-  const handleNextMonth = () => {
-    setActiveDate(new Date(year, month + 1, 1));
-  };
-
-  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0 = Sun, 1 = Mon, ...
+  // Build grid with Sunday-first alignment (matching SubscriptionCalendarGrid)
+  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0 = Sun
   const prevMonthDaysCount = firstDayOfWeek;
   const prevMonthLastDate = new Date(year, month, 0).getDate();
   const prevMonthDays = Array.from({ length: prevMonthDaysCount }, (_, i) => prevMonthLastDate - prevMonthDaysCount + 1 + i);
@@ -156,14 +230,9 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
   const remainingCells = (7 - (totalCells % 7)) % 7;
   const nextMonthDays = Array.from({ length: remainingCells }, (_, i) => i + 1);
 
-  // Count total interventions explicitly programmed in BDD for this month
-  const monthTotalInterventionsCount = useMemo(() => {
-    return childDemandes.filter(d => {
-      if (!d.date_intervention) return false;
-      const dDate = d.date_intervention.includes('T') ? d.date_intervention.split('T')[0] : d.date_intervention.slice(0, 10);
-      return dDate.startsWith(monthIsoPrefix);
-    }).length;
-  }, [childDemandes, monthIsoPrefix]);
+
+
+  const headers = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
 
   return (
     <div className="ga-modal-backdrop" onClick={onClose}>
@@ -203,147 +272,159 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
 
         {/* Modal Body */}
         <div className="ga-modal-body" style={{ padding: '0 1.5rem 1.5rem 1.5rem' }}>
-          {/* Inner Card Container */}
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.25rem' }}>
-            {/* Centered Month Title with Navigation Arrows */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
-              <button
-                onClick={handlePrevMonth}
-                title="Mois précédent"
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  padding: '0.3rem 0.5rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  color: '#475569'
-                }}
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#03362e' }}>
-                {monthTitle}
-              </div>
-              <button
-                onClick={handleNextMonth}
-                title="Mois suivant"
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  padding: '0.3rem 0.5rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  color: '#475569'
-                }}
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
+          {/* Month Title (Fixed on current month) */}
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#037265', margin: 0 }}>
+              {monthTitle}
+            </h3>
+          </div>
 
-            {/* Calendar Grid (7 Columns: DIM, LUN, MAR, MER, JEU, VEN, SAM) */}
-            <div className="ga-calendar-grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.35rem' }}>
-              {['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'].map(d => (
-                <div key={d} className="ga-calendar-day-head" style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.75rem', color: '#64748b', paddingBottom: '0.5rem' }}>
-                  {d}
+          {/* Calendar Card Box — Identical to SubscriptionCalendarGrid */}
+          <div style={{ border: '1px solid #d0e3e0', borderRadius: 16, overflow: 'hidden', background: 'white' }}>
+            {/* Header row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#e6f2f0', borderBottom: '1px solid #d0e3e0' }}>
+              {headers.map((h) => (
+                <div key={h} style={{ color: '#037265', fontWeight: 800, fontSize: 12, textAlign: 'center', padding: '12px 0', letterSpacing: '0.05em' }}>
+                  {h}
                 </div>
               ))}
+            </div>
 
+            {/* Calendar Days Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#d0e3e0', gap: '1px' }}>
               {/* Prev Month Days Offset */}
               {prevMonthDays.map(dayNum => (
-                <div key={`prev-${dayNum}`} className="ga-calendar-cell outside" style={{ minHeight: '65px', padding: '0.35rem', background: '#f8fafc', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
-                  <div className="ga-calendar-date-num" style={{ textAlign: 'right', fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>
-                    {dayNum}
-                  </div>
+                <div key={`prev-${dayNum}`} style={{ minHeight: 74, background: '#f8fafc', padding: 8, display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#cbd5e1' }}>{dayNum}</span>
                 </div>
               ))}
 
               {/* Days of Month */}
               {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(dayNum => {
                 const dayIso = `${monthIsoPrefix}-${String(dayNum).padStart(2, '0')}`;
+                const dayDate = new Date(year, month, dayNum);
+                const isToday = dayIso === todayStr;
 
-                // Check exclusively for an explicitly programmed child demande in BDD on this date
+                // Check override from date_overrides
+                const override = dateOverrides[dayIso];
+                const isPattern = interventionSet.has(dayIso);
+                const isIntervention = (isPattern && !override?.excluded) || (!!override?.heure && !override?.excluded);
+                const statut = override?.statut || null;
+
+                // Get the child demande status if it exists in BDD (takes priority)
                 const realDemande = childDemandes.find(d => {
                   if (!d.date_intervention) return false;
                   const dDate = d.date_intervention.includes('T') ? d.date_intervention.split('T')[0] : d.date_intervention.slice(0, 10);
                   return dDate === dayIso;
                 });
 
-                const hasEvent = !!realDemande;
-                const isPast = dayIso < todayStr;
-
-                let badgeLabel = '';
-                let badgeBg = '#00796b';
-                let cellBg = '#ffffff';
-
+                // Determine effective status
+                let effectiveStatut = statut;
                 if (realDemande) {
                   const st = (realDemande.statut || '').toLowerCase();
                   const isReported = realDemande.cao === 'reporte' || st === 'reporte' || st.includes('report');
                   const isCancelled = st === 'annule' || st === 'annulee';
                   const isCompleted = st === 'termine' || st === 'terminee';
                   const isRecup = st.includes('recup');
+                  if (isCompleted) effectiveStatut = 'termine';
+                  else if (isCancelled) effectiveStatut = 'annule';
+                  else if (isReported) effectiveStatut = 'reporte';
+                  else if (isRecup) effectiveStatut = 'a_recuperer';
+                  else effectiveStatut = null; // "à venir"
+                }
 
-                  if (isCompleted) {
-                    badgeLabel = 'Terminé';
-                    badgeBg = '#10b981';
+                const hasContent = isIntervention || effectiveStatut === 'a_recuperer' || effectiveStatut === 'reporte';
+
+                // Get hour info
+                const dowInfo = heureByDow[dayDate.getDay()];
+                const heure = override?.heure || (isPattern && dowInfo ? dowInfo.heure_debut : '') || (realDemande?.heure_intervention || '');
+                const heureFin = override?.heure_fin || (isPattern && dowInfo ? dowInfo.heure_fin : '') || '';
+
+                // Determine cell styling — exactly matching SubscriptionCalendarGrid
+                let cellBg = 'white';
+                let dateNumCol = '#0f172a';
+                let badgeBg = '#037265';
+                let badgeText = 'À VENIR';
+
+                if (hasContent) {
+                  if (effectiveStatut === 'termine') {
                     cellBg = '#f0fdf4';
-                  } else if (isCancelled) {
-                    badgeLabel = 'Annulé';
-                    badgeBg = '#ef4444';
-                    cellBg = '#fef2f2';
-                  } else if (isReported) {
-                    badgeLabel = 'Reportée';
-                    badgeBg = '#8b5cf6';
-                    cellBg = '#f5f3ff';
-                  } else if (isRecup) {
-                    badgeLabel = 'À récup.';
-                    badgeBg = '#f59e0b';
+                    dateNumCol = '#15803d';
+                    badgeBg = '#16a34a';
+                    badgeText = 'TERMINÉ';
+                  } else if (effectiveStatut === 'annule') {
+                    cellBg = '#fff1f2';
+                    dateNumCol = '#dc2626';
+                    badgeBg = '#dc2626';
+                    badgeText = 'ANNULÉ';
+                  } else if (effectiveStatut === 'a_recuperer') {
                     cellBg = '#fffbeb';
+                    dateNumCol = '#d97706';
+                    badgeBg = '#d97706';
+                    badgeText = 'À RÉCUP.';
+                  } else if (effectiveStatut === 'reporte') {
+                    cellBg = '#f5f3ff';
+                    dateNumCol = '#7c3aed';
+                    badgeBg = '#7c3aed';
+                    badgeText = 'REPORTÉE';
                   } else {
-                    badgeLabel = isPast ? 'Terminé' : 'À venir';
-                    badgeBg = isPast ? '#10b981' : '#00796b';
-                    cellBg = isPast ? '#f0fdf4' : '#f0fdfa';
+                    cellBg = '#e6f2f0';
+                    dateNumCol = '#037265';
+                    badgeBg = '#037265';
+                    badgeText = 'À VENIR';
                   }
                 }
 
                 return (
                   <div
                     key={dayNum}
-                    className={`ga-calendar-cell ${hasEvent ? 'has-event' : ''}`}
                     style={{
-                      minHeight: '65px',
-                      padding: '0.35rem',
-                      borderRadius: '6px',
-                      border: '1px solid #e2e8f0',
+                      minHeight: 74,
                       background: cellBg,
+                      padding: 8,
                       display: 'flex',
                       flexDirection: 'column',
-                      justifyContent: 'space-between'
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      border: isToday ? '2px solid #facc15' : 'none',
                     }}
                   >
-                    <div className="ga-calendar-date-num" style={{ textAlign: 'right', fontSize: '0.8rem', fontWeight: 600, color: '#334155' }}>
+                    <span style={{ fontSize: 13, fontWeight: isToday ? 800 : 700, color: dateNumCol }}>
                       {dayNum}
-                    </div>
+                    </span>
 
-                    {hasEvent && (
-                      <div style={{ marginTop: 'auto' }}>
-                        <div
-                          style={{
-                            background: badgeBg,
-                            color: '#ffffff',
-                            fontSize: '0.65rem',
+                    {hasContent && (
+                      <div style={{ width: '100%', marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <span style={{
+                          display: 'block',
+                          fontSize: 9,
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          background: badgeBg,
+                          color: 'white',
+                          borderRadius: 4,
+                          padding: '3px 4px',
+                          textAlign: 'center',
+                          letterSpacing: '0.03em',
+                          textDecoration: effectiveStatut === 'annule' ? 'line-through' : 'none'
+                        }}>
+                          {badgeText}
+                        </span>
+                        {heure && (
+                          <span style={{
+                            display: 'block',
+                            fontSize: 9,
                             fontWeight: 700,
-                            padding: '0.25rem 0.4rem',
-                            borderRadius: '12px',
+                            background: '#0d9488',
+                            color: 'white',
+                            borderRadius: 4,
+                            padding: '2px 4px',
                             textAlign: 'center',
-                            lineHeight: 1.1
-                          }}
-                        >
-                          {badgeLabel}
-                        </div>
+                            letterSpacing: '0.02em'
+                          }}>
+                            {heure.slice(0, 5)}{heureFin ? `–${heureFin.slice(0, 5)}` : ''}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -352,41 +433,32 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
 
               {/* Next Month Days Offset */}
               {nextMonthDays.map(dayNum => (
-                <div key={`next-${dayNum}`} className="ga-calendar-cell outside" style={{ minHeight: '65px', padding: '0.35rem', background: '#f8fafc', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
-                  <div className="ga-calendar-date-num" style={{ textAlign: 'right', fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500 }}>
-                    {dayNum}
-                  </div>
+                <div key={`next-${dayNum}`} style={{ minHeight: 74, background: '#f8fafc', padding: 8, display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#cbd5e1' }}>{dayNum}</span>
                 </div>
               ))}
             </div>
-
-            {/* Total Interventions Summary */}
-            <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.85rem', color: '#475569' }}>
-              <strong>{monthTotalInterventionsCount}</strong> intervention(s) programmée(s) ce mois
-            </div>
           </div>
 
-          {/* Modal Legend Footer */}
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.25rem', marginTop: '1.25rem', fontSize: '0.8rem', fontWeight: 500, color: '#475569' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#00796b', display: 'inline-block' }} />
-              À venir
+
+
+          {/* Legend — Identical to SubscriptionCalendarGrid */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 16, fontSize: 12, color: '#64748b' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 14, height: 14, borderRadius: 3, border: '2px solid #037265', display: 'inline-block' }} />
+              <span>Passage prévu</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-              Terminé
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 14, height: 14, borderRadius: 3, border: '2px solid #7c3aed', display: 'inline-block' }} />
+              <span>5ème semaine (facturée en +)</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
-              Annulé
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 14, height: 14, borderRadius: 3, border: '2px solid #d97706', display: 'inline-block' }} />
+              <span>Suspension fête religieuse</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
-              À récup.
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#8b5cf6', display: 'inline-block' }} />
-              Reportée
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 14, height: 14, borderRadius: 3, border: '2px solid #facc15', display: 'inline-block' }} />
+              <span>Aujourd'hui</span>
             </div>
           </div>
         </div>
@@ -528,8 +600,15 @@ export default function GestionAbonnements() {
         return st === 'annule' || st === 'annulee';
       }).length;
 
-      const expectedMonthlyCount = (jours.length > 0 ? jours.length * 4 : 4);
-      const interventionsTotal = children.length > 0 ? children.length : (isMidMonth ? Math.round(expectedMonthlyCount / 2) : expectedMonthlyCount);
+      const realPlanningCount = d.planning?.nombre_passages_mois || (d.formulaire_data as any)?.nombre_passages;
+      const interventionsTotal = realPlanningCount && Number(realPlanningCount) > 0 
+        ? Number(realPlanningCount) 
+        : (jours.length > 0 ? jours.length * 4 : (children.length > 0 ? children.length : 4));
+
+      const pu = (d.formulaire_data as any)?.prix_unitaire || calculateSinglePassagePrice(d);
+      const realTarifMensuel = (d.formulaire_data as any)?.montant_total 
+        ? Number((d.formulaire_data as any).montant_total) 
+        : (pu > 0 && interventionsTotal > 0 ? Math.round(interventionsTotal * pu) : Number(d.prix) || 0);
 
       // Find next upcoming intervention
       const upcoming = children
@@ -578,7 +657,7 @@ export default function GestionAbonnements() {
         statutMoisProchain,
         dateDebut,
         dateFin,
-        tarifMensuel: Number(d.prix) || Number(d.tarif_total) || 0,
+        tarifMensuel: realTarifMensuel,
         isMidMonthStart: isMidMonth,
         codePromoUsed: !!(d.promo_code || d.promo_code_name || dAny.code_promo)
       };
@@ -638,7 +717,15 @@ export default function GestionAbonnements() {
     // 1. Scan active subscriptions for recurring scheduled days in [debutSuspension, finSuspension]
     subscriptionRows.forEach(sub => {
       const subStartDate = new Date(sub.dateDebut);
-      const subEndDate = sub.dateFin ? new Date(sub.dateFin) : new Date(2099, 11, 31);
+      const parentDemande = demandes.find(d => d.id === sub.demandeId);
+      const endStr = sub.dateFin || parentDemande?.formulaire_data?.date_fin || parentDemande?.planning?.date_fin;
+      let subEndDate: Date;
+      if (endStr) {
+        subEndDate = new Date(endStr.includes('T') ? endStr : `${endStr.slice(0, 10)}T23:59:59`);
+      } else {
+        const nbMois = Number(parentDemande?.formulaire_data?.nb_mois || parentDemande?.formulaire_data?.duree_mois || 1);
+        subEndDate = new Date(subStartDate.getFullYear(), subStartDate.getMonth() + nbMois, 0, 23, 59, 59);
+      }
 
       const curr = new Date(debutSuspension);
       while (curr <= finSuspension) {
@@ -697,13 +784,13 @@ export default function GestionAbonnements() {
     };
   }, [fetes, demandes, subscriptionRows]);
 
-  // Real database planning stats calculated per month and day
+  // Real database planning stats calculated per month and day across ALL subscriptions
   const planningMonthData = useMemo(() => {
     const targetMonth = planningDate.getMonth();
     const targetYear = planningDate.getFullYear();
     const daysInMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
 
-    const statsMap: Record<number, { interventions: number; termine: number; reporte: number; annule: number }> = {};
+    const statsMap: Record<number, { interventions: number; a_venir: number; termine: number; reporte: number; a_recuperer: number; annule: number }> = {};
     let totalMonthInterventions = 0;
 
     const dayNameMap: Record<number, string> = {
@@ -716,64 +803,127 @@ export default function GestionAbonnements() {
       6: 'samedi'
     };
 
-    // 1. Process individual Demande records (child interventions or single demands) with exact date_intervention in target month & year
-    demandes.forEach(d => {
-      if (!d.date_intervention) return;
-      // Skip parent subscription contracts in Step 1 to avoid double counting, as their recurring passages are projected in Step 2 if child demands don't exist
-      if ((d.frequency === 'abonnement' || (d as any).frequence === 'abonnement') && !d.parent_demande) return;
+    const matchFilters = (service?: string, commercial?: string, ville?: string) => {
+      if (serviceFilter !== 'tous' && service !== serviceFilter) return false;
+      if (commercialFilter !== 'tous' && commercial !== commercialFilter) return false;
+      if (villeFilter !== 'tous' && ville !== villeFilter) return false;
+      return true;
+    };
 
-      if (serviceFilter !== 'tous' && d.service !== serviceFilter) return;
-      if (commercialFilter !== 'tous' && d.assigned_to_name !== commercialFilter) return;
-      if (villeFilter !== 'tous' && d.client_city !== villeFilter && d.client_neighborhood !== villeFilter) return;
+    // 1. Process all Demande items in DB that have a date_intervention in this month (excluding parent subscription contracts)
+    const childOrSingleDemandesInMonth = demandes.filter(d => {
+      if (!d.date_intervention) return false;
 
-      const parts = d.date_intervention.split('-');
-      if (parts.length === 3) {
-        const y = parseInt(parts[0], 10);
-        const m = parseInt(parts[1], 10) - 1; // 0-indexed month
-        const day = parseInt(parts[2], 10);
+      // Exclude parent subscription contract records (they represent contracts, not individual interventions)
+      const isParentSub = !d.parent_demande && (
+        d.frequency === 'abonnement' ||
+        (d as any).frequence === 'abonnement' ||
+        (d as any).frequency_label?.includes('/sem') ||
+        (d.formulaire_data as any)?.frequence?.includes('/sem') ||
+        (d.formulaire_data as any)?.subFrequency ||
+        demandes.some(child => Number(child.parent_demande) === Number(d.id))
+      );
+      if (isParentSub) return false;
 
-        if (y === targetYear && m === targetMonth) {
-          if (!statsMap[day]) {
-            statsMap[day] = { interventions: 0, termine: 0, reporte: 0, annule: 0 };
-          }
-          statsMap[day].interventions += 1;
-          totalMonthInterventions += 1;
+      const dService = d.service_label || d.service || 'Ménage standard';
+      const dCommercial = (d as any).assigned_to_user_name || d.assigned_to_name || d.commercial_name || 'Non assigné';
+      const dVille = d.client_city || d.client_neighborhood || (d as any).ville || 'Casablanca';
+      if (!matchFilters(dService, dCommercial, dVille)) return false;
 
-          const st = (d.statut || '').toLowerCase();
-          if (st === 'termine' || st === 'terminee') {
-            statsMap[day].termine += 1;
-          } else if (d.cao === 'reporte' || st === 'reporte') {
-            statsMap[day].reporte += 1;
-          } else if (st === 'annule' || st === 'annulee') {
-            statsMap[day].annule += 1;
-          }
-        }
+      const dateStr = d.date_intervention.includes('T') ? d.date_intervention.split('T')[0] : d.date_intervention.slice(0, 10);
+      const parts = dateStr.split('-');
+      if (parts.length < 3) return false;
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      return y === targetYear && m === targetMonth;
+    });
+
+    childOrSingleDemandesInMonth.forEach(d => {
+      const dateStr = d.date_intervention.includes('T') ? d.date_intervention.split('T')[0] : d.date_intervention.slice(0, 10);
+      const parts = dateStr.split('-');
+      const day = parseInt(parts[2], 10);
+
+      if (!statsMap[day]) {
+        statsMap[day] = { interventions: 0, a_venir: 0, termine: 0, reporte: 0, a_recuperer: 0, annule: 0 };
+      }
+      statsMap[day].interventions += 1;
+      totalMonthInterventions += 1;
+
+      const st = (d.statut || '').toLowerCase();
+      if (st === 'termine' || st === 'terminee') {
+        statsMap[day].termine += 1;
+      } else if (d.cao === 'reporte' || st === 'reporte' || st === 'reportee') {
+        statsMap[day].reporte += 1;
+      } else if (st.includes('recup')) {
+        statsMap[day].a_recuperer += 1;
+      } else if (st === 'annule' || st === 'annulee') {
+        statsMap[day].annule += 1;
+      } else {
+        statsMap[day].a_venir += 1;
       }
     });
 
-    // 2. Process active subscriptions for recurring intervention days (only if child demandes don't exist in target month)
-    subscriptionRows.forEach(sub => {
-      if (serviceFilter !== 'tous' && sub.serviceType !== serviceFilter) return;
-      if (commercialFilter !== 'tous' && sub.commercial !== commercialFilter) return;
-      if (villeFilter !== 'tous' && !sub.clientVille.toLowerCase().includes(villeFilter.toLowerCase())) return;
+    // 2. Process all parent subscriptions for planned recurring days & date_overrides
+    const filteredSubRows = subscriptionRows.filter(r =>
+      matchFilters(r.serviceType, r.commercial, r.clientVille)
+    );
 
-      const targetMonthStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
-      const hasChildInMonth = demandes.some(d => Number(d.parent_demande) === Number(sub.demandeId) && d.date_intervention?.startsWith(targetMonthStr));
-      if (hasChildInMonth) return;
+    filteredSubRows.forEach(subRow => {
+      const parentDemande = demandes.find(d => d.id === subRow.demandeId);
+      const dbStatut = (parentDemande?.statut || '').toLowerCase();
+      if (['resilie', 'annule', 'annulee'].includes(dbStatut)) return;
+      const dateOverrides = parentDemande?.formulaire_data?.date_overrides || {};
+      const joursChoice = subRow.joursChoice || [];
 
-      const subStartDate = new Date(sub.dateDebut);
-      const subEndDate = sub.dateFin ? new Date(sub.dateFin) : new Date(2099, 11, 31);
+      const startStr = subRow.dateDebut || parentDemande?.date_intervention || '';
+      const subStartDate = startStr ? new Date(startStr.includes('T') ? startStr : `${startStr}T00:00:00`) : new Date(2000, 0, 1);
+      const endStr = subRow.dateFin || parentDemande?.formulaire_data?.date_fin || parentDemande?.planning?.date_fin;
+      let subEndDate: Date;
+      if (endStr) {
+        subEndDate = new Date(endStr.includes('T') ? endStr : `${endStr.slice(0, 10)}T23:59:59`);
+      } else {
+        const nbMois = Number(parentDemande?.formulaire_data?.nb_mois || parentDemande?.formulaire_data?.duree_mois || 1);
+        subEndDate = new Date(subStartDate.getFullYear(), subStartDate.getMonth() + nbMois, 0, 23, 59, 59);
+      }
 
       for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
         const currentDate = new Date(targetYear, targetMonth, dayNum);
+        const dayIso = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+
+        // If a child demande for this parent is ALREADY in childOrSingleDemandesInMonth for dayIso, skip to prevent double counting
+        const hasChildOnDate = childOrSingleDemandesInMonth.some(c =>
+          Number(c.parent_demande) === Number(subRow.demandeId) && c.date_intervention?.startsWith(dayIso)
+        );
+        if (hasChildOnDate) continue;
+
+        const override = dateOverrides[dayIso];
+
         if (currentDate >= subStartDate && currentDate <= subEndDate) {
           const dayOfWeekName = dayNameMap[currentDate.getDay()];
-          if (sub.joursChoice.includes(dayOfWeekName)) {
+          const isPlannedDay = joursChoice.includes(dayOfWeekName);
+
+          const isIntervention = (isPlannedDay && !override?.excluded) || (!!override?.heure && !override?.excluded);
+          const statut = override?.statut || null;
+
+          if (isIntervention || statut === 'a_recuperer' || statut === 'reporte') {
             if (!statsMap[dayNum]) {
-              statsMap[dayNum] = { interventions: 0, termine: 0, reporte: 0, annule: 0 };
+              statsMap[dayNum] = { interventions: 0, a_venir: 0, termine: 0, reporte: 0, a_recuperer: 0, annule: 0 };
             }
             statsMap[dayNum].interventions += 1;
             totalMonthInterventions += 1;
+
+            const st = (statut || '').toLowerCase();
+            if (st === 'termine' || st === 'terminee') {
+              statsMap[dayNum].termine += 1;
+            } else if (st === 'reporte' || st === 'reportee') {
+              statsMap[dayNum].reporte += 1;
+            } else if (st === 'a_recuperer') {
+              statsMap[dayNum].a_recuperer += 1;
+            } else if (st === 'annule' || st === 'annulee') {
+              statsMap[dayNum].annule += 1;
+            } else {
+              statsMap[dayNum].a_venir += 1;
+            }
           }
         }
       }
@@ -896,7 +1046,7 @@ export default function GestionAbonnements() {
   };
 
   const daysInSelectedMonth = new Date(planningDate.getFullYear(), planningDate.getMonth() + 1, 0).getDate();
-  const firstDayIdx = new Date(planningDate.getFullYear(), planningDate.getMonth(), 1).getDay();
+  const firstDayIdx = new Date(planningDate.getFullYear(), planningDate.getMonth(), 1).getDay(); // 0 = Sun, 1 = Mon...
   const blankCount = firstDayIdx === 0 ? 6 : firstDayIdx - 1;
 
   // Toggle suspension
@@ -1561,7 +1711,7 @@ export default function GestionAbonnements() {
                 {nextMonthLabel} <ChevronRight size={14} />
               </button>
 
-              <span className="ga-badge-count">{planningMonthData.totalMonthInterventions} interventions ce mois</span>
+              <span className="ga-badge-count">{planningMonthData.totalMonthInterventions} Interventions ce mois</span>
             </div>
 
             {/* Right Filter Dropdowns */}
@@ -1599,7 +1749,7 @@ export default function GestionAbonnements() {
             </div>
           </div>
 
-          {/* Calendar Grid (7 Columns: LUN, MAR, MER, JEU, VEN, SAM, DIM) */}
+          {/* Calendar Grid (7 Columns: LUN → DIM — Exact matching screenshot) */}
           <div className="ga-calendar-grid" style={{ minHeight: '520px', gap: '0.4rem', width: '100%', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
             {['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'].map(day => (
               <div key={day} className="ga-calendar-day-head" style={{ fontWeight: 800, color: '#475569', fontSize: '0.8rem' }}>
@@ -1607,7 +1757,7 @@ export default function GestionAbonnements() {
               </div>
             ))}
 
-            {/* Offset blank cells for selected month start day */}
+            {/* Offset blank cells for selected month start day (LUN-first) */}
             {Array.from({ length: blankCount }).map((_, idx) => (
               <div key={`blank-${idx}`} className="ga-plan-day-cell outside" />
             ))}
@@ -1620,6 +1770,8 @@ export default function GestionAbonnements() {
                               now.getMonth() === planningDate.getMonth() &&
                               now.getFullYear() === planningDate.getFullYear();
 
+              const totalReporte = (dayStat?.reporte || 0) + (dayStat?.a_recuperer || 0);
+
               return (
                 <div
                   key={dayNum}
@@ -1627,7 +1779,7 @@ export default function GestionAbonnements() {
                 >
                   <div className="ga-plan-day-num">{dayNum}</div>
 
-                  {dayStat ? (
+                  {dayStat && dayStat.interventions > 0 ? (
                     <div className="ga-plan-stats">
                       <div className="ga-stat-line ga-stat-interventions">
                         Interventions : {dayStat.interventions}
@@ -1637,9 +1789,9 @@ export default function GestionAbonnements() {
                           Nbr terminé : {dayStat.termine}
                         </div>
                       )}
-                      {!!dayStat.reporte && (
+                      {!!totalReporte && (
                         <div className="ga-stat-line ga-stat-reporte">
-                          Nbre reporté : {dayStat.reporte}
+                          Nbre reporté : {totalReporte}
                         </div>
                       )}
                       {!!dayStat.annule && (

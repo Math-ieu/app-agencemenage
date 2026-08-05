@@ -640,6 +640,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
         capitalizedMonthTitle={capitalizedMonthTitle}
         frequencyLabel={frequencyLabel}
         dateDebut={dateDebut}
+        monthPassagesPlanifies={monthPassagesPlanifies}
         addToast={addToast}
         fetchData={fetchData}
       />

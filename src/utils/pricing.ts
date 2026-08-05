@@ -262,9 +262,30 @@ export const estimateResources = (service: string, input: any): { duration: numb
         return { duration: 8, people: 3 };
     }
 
-    if (serviceLower.includes('menage bureaux')) {
-        return null;
+    return null;
+};
+
+export const calculateSinglePassagePrice = (demande: any): number => {
+    if (!demande) return 0;
+
+    if (demande.formulaire_data?.prix_unitaire && Number(demande.formulaire_data.prix_unitaire) > 0) {
+        return Number(demande.formulaire_data.prix_unitaire);
     }
 
-    return null;
+    const service = String(demande.service || demande.type_prestation || '').toLowerCase();
+    const isGrand = service.includes('grand');
+    const baseRate = Number(demande.formulaire_data?.tarif_horaire) || (isGrand ? 70 : 60);
+    const minHours = isGrand ? 6 : 4;
+    const duree = Math.max(Number(demande.nb_heures || demande.formulaire_data?.duree) || 0, minHours);
+    const nbPersonnes = Number(demande.nb_intervenants || demande.formulaire_data?.nb_personnes) || 1;
+
+    // Main-d'œuvre brute (le taux de réduction s'applique sur le montant total)
+    const labor = duree * baseRate * nbPersonnes;
+
+    // Options
+    const produits = Boolean(demande.avec_produit || demande.formulaire_data?.produits_inclus);
+    const torchons = Boolean(demande.formulaire_data?.torchons_inclus);
+    const options = (produits ? 90 : 0) + (torchons ? 40 : 0);
+
+    return Math.round(labor + options);
 };

@@ -110,6 +110,7 @@ export interface Demande {
   assigned_to_operations_name?: string;
   created_by?: number | null;
   commercial_name?: string;
+  assigned_to_user_name?: string;
   nrp_count?: number;
   service: string;
   service_label?: string;

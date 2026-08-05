@@ -370,7 +370,7 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                     </span>
 
                     {(isIntervention || statut === "a_recuperer" || statut === "reporte") && inMonth && (
-                      <div style={{ width: '100%', marginTop: 'auto' }}>
+                      <div style={{ width: '100%', marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <span style={{
                           display: 'block',
                           fontSize: 9,
@@ -386,6 +386,21 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                         }}>
                           {badgeText}
                         </span>
+                        {heure && (
+                          <span style={{
+                            display: 'block',
+                            fontSize: 9,
+                            fontWeight: 700,
+                            background: '#0d9488',
+                            color: 'white',
+                            borderRadius: 4,
+                            padding: '2px 4px',
+                            textAlign: 'center',
+                            letterSpacing: '0.02em'
+                          }}>
+                            {heure.slice(0, 5)}{heureFin ? `–${heureFin.slice(0, 5)}` : ''}
+                          </span>
+                        )}
                       </div>
                     )}
                   </button>

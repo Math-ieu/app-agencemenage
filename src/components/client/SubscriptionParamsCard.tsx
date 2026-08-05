@@ -1,6 +1,7 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 import { Demande } from '../../types';
+import { calculateSinglePassagePrice } from '../../utils/pricing';
 
 export interface SubscriptionParamsCardProps {
   latest: Demande;
@@ -56,26 +57,31 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
 
   const startDateFormatted = dateDebut 
     ? new Date(dateDebut.includes('T') ? dateDebut : `${dateDebut.slice(0, 10)}T00:00:00`).toLocaleDateString('fr-FR') 
-    : (latest.date_intervention ? new Date(latest.date_intervention).toLocaleDateString('fr-FR') : '—');
+    : (latest.planning?.date_debut ? new Date(latest.planning.date_debut).toLocaleDateString('fr-FR') : (latest.date_intervention ? new Date(latest.date_intervention).toLocaleDateString('fr-FR') : '—'));
 
   const daysLabel = selectedDays.length > 0 
     ? selectedDays.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' + ') 
     : '—';
 
-  const nbPersonnes = latest.nb_intervenants ? `${latest.nb_intervenants} personne(s)` : '1 personne(s)';
+  const nbPersonnes = latest.nb_intervenants ? `${latest.nb_intervenants} personne(s)` : `${latest.formulaire_data?.nb_personnes || 1} personne(s)`;
 
-  const dureePassage = latest.nb_heures ? `${latest.nb_heures} heure(s)` : '—';
+  const isGrand = String(latest.service || latest.type_prestation || '').toLowerCase().includes('grand');
+  const realDuree = latest.nb_heures || latest.formulaire_data?.duree || (isGrand ? 6 : 4);
+  const dureePassage = `${realDuree} heure(s)`;
 
+  const realTarifHoraire = tarifHoraire || latest.formulaire_data?.tarif_horaire || (isGrand ? 70 : 60);
+
+  const hasProduits = Boolean(latest.avec_produit || latest.formulaire_data?.produits_inclus);
   const rawOptions = latest.formulaire_data?.options || (latest as any).options;
-  const formattedOptions = formatSafeValue(rawOptions, 'Aucune option');
+  const formattedOptions = rawOptions ? formatSafeValue(rawOptions) : (hasProduits ? 'Produits ménagers inclus (+90 DH)' : 'Aucune option');
 
-  const rawModePaiement = latest.mode_paiement || latest.mode_paiement_label;
-  const formattedModePaiement = formatSafeValue(rawModePaiement, '—');
+  const rawModePaiement = latest.mode_paiement || latest.mode_paiement_label || latest.formulaire_data?.mode_paiement;
+  const formattedModePaiement = formatSafeValue(rawModePaiement, 'Virement');
 
-  const rawCom = latest.formulaire_data?.com || (latest as any).commission || (latest as any).commercial;
+  const rawCom = latest.commercial_name || (latest as any).commission || (latest as any).commercial || latest.formulaire_data?.com;
   const formattedCom = formatSafeValue(rawCom, '—');
 
-  const formattedTauxReduc = tauxReduction !== undefined && tauxReduction !== null ? `${tauxReduction}%` : (latest.formulaire_data?.taux_reduction ? `${latest.formulaire_data.taux_reduction}%` : '10%');
+  const formattedTauxReduc = tauxReduction !== undefined && tauxReduction !== null ? `${tauxReduction}%` : (latest.formulaire_data?.taux_reduction || latest.geste_commercial?.reduction_value ? `${latest.formulaire_data?.taux_reduction || latest.geste_commercial?.reduction_value}%` : '10%');
 
   const formattedRecup = `${interventionsRecuperees} récupérée(s)${creditsEnAttente > 0 ? ` · ${creditsEnAttente} crédit(s) en attente` : ''}`;
 
@@ -149,7 +155,7 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
         {/* 8. Tarif horaire */}
         <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
           <span style={{ color: '#64748b', fontWeight: 500 }}>Tarif horaire</span>
-          <strong style={{ color: '#034a3e', fontWeight: 700 }}>{tarifHoraire ? `${tarifHoraire} DH / heure` : '—'}</strong>
+          <strong style={{ color: '#034a3e', fontWeight: 700 }}>{realTarifHoraire ? `${realTarifHoraire} DH / heure` : '—'}</strong>
         </div>
 
         {/* 9. Options */}
@@ -164,8 +170,7 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
           <strong style={{ color: '#034a3e', fontWeight: 700 }}>
             {(() => {
               const passages = monthPassagesPlanifies || 4;
-              const totalPrix = Number(latest?.formulaire_data?.montant_total || latest?.prix || 0);
-              const unit = latest?.formulaire_data?.prix_unitaire || (passages > 0 && totalPrix > 0 ? Math.round(totalPrix / passages) : 0);
+              const unit = latest?.formulaire_data?.prix_unitaire || calculateSinglePassagePrice(latest);
               if (unit > 0 && passages > 0) {
                 return `${passages} passages × ${unit} DH = ${Math.round(passages * unit)} DH`;
               }
