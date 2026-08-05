@@ -266,26 +266,186 @@ export const estimateResources = (service: string, input: any): { duration: numb
 };
 
 export const calculateSinglePassagePrice = (demande: any): number => {
-    if (!demande) return 0;
+    if (!demande) return 200;
 
     if (demande.formulaire_data?.prix_unitaire && Number(demande.formulaire_data.prix_unitaire) > 0) {
         return Number(demande.formulaire_data.prix_unitaire);
     }
 
-    const service = String(demande.service || demande.type_prestation || '').toLowerCase();
-    const isGrand = service.includes('grand');
-    const baseRate = Number(demande.formulaire_data?.tarif_horaire) || (isGrand ? 70 : 60);
-    const minHours = isGrand ? 6 : 4;
-    const duree = Math.max(Number(demande.nb_heures || demande.formulaire_data?.duree) || 0, minHours);
-    const nbPersonnes = Number(demande.nb_intervenants || demande.formulaire_data?.nb_personnes) || 1;
+    const formData = demande.formulaire_data || {};
+    const service = String(demande.service || demande.type_prestation || formData.type_prestation || formData.service || '').toLowerCase();
 
-    // Main-d'œuvre brute (le taux de réduction s'applique sur le montant total)
-    const labor = duree * baseRate * nbPersonnes;
-
-    // Options
-    const produits = Boolean(demande.avec_produit || demande.formulaire_data?.produits_inclus);
-    const torchons = Boolean(demande.formulaire_data?.torchons_inclus);
+    // Options (produits ménagers +90 DH, torchons +40 DH)
+    const produits = Boolean(
+        demande.avec_produit ||
+        formData.produits_inclus ||
+        formData.produits ||
+        formData.avec_produit ||
+        (typeof formData.options === 'object' && formData.options?.produits)
+    );
+    const torchons = Boolean(
+        formData.torchons_inclus ||
+        formData.torchons ||
+        (typeof formData.options === 'object' && formData.options?.torchons)
+    );
     const options = (produits ? 90 : 0) + (torchons ? 40 : 0);
 
+    // 1. Ménage Bureaux
+    if (service.includes('bureau') || service.includes('bureaux')) {
+        const duree = Number(demande.nb_heures || formData.duree) || 4;
+        const nbPersonnes = Math.max(1, Number(demande.nb_intervenants || formData.nb_personnes || formData.nb_intervenants) || 1);
+        const baseRate = Number(formData.tarif_horaire) || 60;
+        return Math.round(duree * baseRate * nbPersonnes + options);
+    }
+
+    // 2. Ménage Airbnb
+    if (service.includes('airbnb') || service.includes('air bnb')) {
+        const basePrice = Number(formData.base_price || formData.prix_base) || 165;
+        return Math.round(basePrice + options);
+    }
+
+    // 3. Post-Déménagement
+    if (service.includes('demenagement') || service.includes('déménagement')) {
+        const basePrice = Number(formData.base_price || formData.prix_base) || 890;
+        return Math.round(basePrice);
+    }
+
+    // 4. Standard / Grand Ménage / Autres services
+    const isGrand = service.includes('grand');
+    const baseRate = Number(formData.tarif_horaire) || (isGrand ? 70 : 60);
+    const minHours = isGrand ? 6 : 4;
+    const duree = Math.max(Number(demande.nb_heures || formData.duree) || 0, minHours);
+    const nbPersonnes = Math.max(1, Number(demande.nb_intervenants || formData.nb_personnes || formData.nb_intervenants) || 1);
+
+    const labor = duree * baseRate * nbPersonnes;
     return Math.round(labor + options);
+};
+
+/**
+ * Calcul de la facture à partir du devis (source unique de vérité).
+ *
+ * Le devis total est stocké dans formulaire_data.total / demande.prix
+ * par QuoteSection → handleQuoteUpdate lors de la préparation du devis.
+ *
+ * Le prix unitaire est dérivé : devisTotal / passagesBase.
+ * Si le mois en cours a un nombre de passages différent (prorata),
+ * le montant est ajusté proportionnellement.
+ */
+export interface DevisInvoiceResult {
+    /** Montant total HT du devis (base mensuelle complète) */
+    devisTotal: number;
+    /** Nombre de passages de base du devis (ex: 8 pour 2/sem × 4) */
+    passagesBase: number;
+    /** Prix unitaire dérivé du devis = devisTotal / passagesBase */
+    prixUnitaireDevis: number;
+    /** Passages facturables ce mois (après déduction des récupérées) */
+    passagesFacturables: number;
+    /** Montant brut HT (PU × passages facturables) */
+    montantBrut: number;
+    /** Remise additionnelle en DH */
+    remiseDh: number;
+    /** Montant HT après remise */
+    montantHT: number;
+    /** Taux TVA en % */
+    tvaPct: number;
+    /** Montant TVA */
+    tvaAmount: number;
+    /** Total TTC final */
+    totalTTC: number;
+}
+
+export const getContractBaselinePassages = (demande: any): number => {
+    if (!demande) return 4;
+    const formData = demande.formulaire_data || {};
+    if (Number(formData.nb_passages_base) > 0) return Number(formData.nb_passages_base);
+    if (Number(formData.nb_passages_devis) > 0) return Number(formData.nb_passages_devis);
+    if (Number(formData.nb_passages_mois) > 0) return Number(formData.nb_passages_mois);
+    if (Number(formData.nombre_passages) > 0) return Number(formData.nombre_passages);
+
+    const freqStr = String(formData.frequence || demande.frequency_label || demande.frequency || '').toLowerCase();
+    if (freqStr.includes('7/sem') || freqStr.includes('7 fois')) return 28;
+    if (freqStr.includes('6/sem') || freqStr.includes('6 fois')) return 24;
+    if (freqStr.includes('5/sem') || freqStr.includes('5 fois')) return 20;
+    if (freqStr.includes('4/sem') || freqStr.includes('4 fois')) return 16;
+    if (freqStr.includes('3/sem') || freqStr.includes('3 fois')) return 12;
+    if (freqStr.includes('2/sem') || freqStr.includes('2 fois')) return 8;
+    if (freqStr.includes('1/sem') || freqStr.includes('1 fois')) return 4;
+
+    return 4;
+};
+
+export const calculateInvoiceFromDevis = (
+    demande: any,
+    monthPassages?: number,
+    interventionsRecup?: number,
+    remiseDhOverride?: number,
+    tvaPctOverride?: number
+): DevisInvoiceResult => {
+    if (!demande) {
+        return { devisTotal: 0, passagesBase: 0, prixUnitaireDevis: 0, passagesFacturables: 0, montantBrut: 0, remiseDh: 0, montantHT: 0, tvaPct: 0, tvaAmount: 0, totalTTC: 0 };
+    }
+
+    const formData = demande.formulaire_data || {};
+
+    // ── 1. Devis total HT (source de vérité pour le contrat de base) ──
+    const devisTotal = Number(formData.total) || Number(formData.montant) || Number(demande.prix) || 0;
+
+    // ── 2. Nombre de passages de base du devis / contrat (FIXE) ──
+    const passagesBase = getContractBaselinePassages(demande);
+
+    // ── 3. Prix unitaire fixe par passage (FIXE) ──
+    let prixUnitaireDevis = 0;
+    if (formData.prix_unitaire && Number(formData.prix_unitaire) > 0) {
+        prixUnitaireDevis = Number(formData.prix_unitaire);
+    } else if (devisTotal > 0 && passagesBase > 0) {
+        prixUnitaireDevis = Math.round((devisTotal / passagesBase) * 100) / 100;
+    } else {
+        prixUnitaireDevis = calculateSinglePassagePrice(demande);
+    }
+
+    // ── 4. Passages facturables ce mois (VARIABLE) ──
+    const passagesMois = monthPassages ?? passagesBase;
+    const recup = Math.max(0, interventionsRecup ?? 0);
+    const passagesFacturables = Math.max(0, passagesMois - recup);
+
+    // ── 5. Montant brut HT ce mois (prorata = PU fixe × passages du mois) ──
+    const montantBrut = Math.round(prixUnitaireDevis * passagesFacturables);
+
+    // ── 6. Remise additionnelle ──
+    const remiseDh = Math.max(0, remiseDhOverride ?? 0);
+
+    // ── 7. Total HT ──
+    const montantHT = Math.max(0, montantBrut - remiseDh);
+
+    // ── 8. TVA ──
+    const tvaPct = tvaPctOverride ?? (Number(formData.tva) || 0);
+    const tvaAmount = Math.round((montantHT * tvaPct) / 100);
+    const totalTTC = montantHT + tvaAmount;
+
+    return {
+        devisTotal,
+        passagesBase,
+        prixUnitaireDevis,
+        passagesFacturables,
+        montantBrut,
+        remiseDh,
+        montantHT,
+        tvaPct,
+        tvaAmount,
+        totalTTC
+    };
+};
+
+/**
+ * Raccourci : retourne le montant TTC de la facture basé sur le devis.
+ * Utilisé par les composants qui affichent le montant TTC.
+ */
+export const getDevisBasedMonthlyAmount = (demande: any, monthPassages?: number): number => {
+    if (!demande) return 0;
+    const formData = demande.formulaire_data || {};
+    const validatedTTC = Number(formData.total_ttc || formData.montant_ttc || formData.montant_facture || formData.montant_final);
+    if (validatedTTC > 0) return validatedTTC;
+
+    const result = calculateInvoiceFromDevis(demande, monthPassages);
+    return result.totalTTC;
 };

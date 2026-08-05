@@ -614,6 +614,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
           {/* Section Factures & règlements */}
           <FacturesReglementsCard
             latest={latest}
+            monthPassagesPlanifies={monthPassagesPlanifies}
             onDownloadInvoice={() => handleDownloadInvoice && handleDownloadInvoice(latest.id)}
           />
         </div>

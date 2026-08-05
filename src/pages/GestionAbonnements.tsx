@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import { getDemandes, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
-import { calculateSinglePassagePrice } from '../utils/pricing';
+import { getDevisBasedMonthlyAmount } from '../utils/pricing';
 import { useToast } from '@/hooks/use-toast';
 import './GestionAbonnements.css';
 
@@ -272,11 +272,17 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
 
         {/* Modal Body */}
         <div className="ga-modal-body" style={{ padding: '0 1.5rem 1.5rem 1.5rem' }}>
-          {/* Month Title (Fixed on current month) */}
-          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          {/* Month Title Navigation */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
+            <button type="button" onClick={handlePrevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#037265', display: 'flex', padding: 4 }}>
+              <ChevronLeft size={20} />
+            </button>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: '#037265', margin: 0 }}>
               {monthTitle}
             </h3>
+            <button type="button" onClick={handleNextMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#037265', display: 'flex', padding: 4 }}>
+              <ChevronRight size={20} />
+            </button>
           </div>
 
           {/* Calendar Card Box — Identical to SubscriptionCalendarGrid */}
@@ -494,6 +500,7 @@ export default function GestionAbonnements() {
 
   // Action dropdown state for facturation table
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
   const [confirmedPaymentIds, setConfirmedPaymentIds] = useState<number[]>([]);
   const [generatedInvoiceIds, setGeneratedInvoiceIds] = useState<number[]>([]);
 
@@ -605,10 +612,7 @@ export default function GestionAbonnements() {
         ? Number(realPlanningCount) 
         : (jours.length > 0 ? jours.length * 4 : (children.length > 0 ? children.length : 4));
 
-      const pu = (d.formulaire_data as any)?.prix_unitaire || calculateSinglePassagePrice(d);
-      const realTarifMensuel = (d.formulaire_data as any)?.montant_total 
-        ? Number((d.formulaire_data as any).montant_total) 
-        : (pu > 0 && interventionsTotal > 0 ? Math.round(interventionsTotal * pu) : Number(d.prix) || 0);
+      const realTarifMensuel = getDevisBasedMonthlyAmount(d, interventionsTotal);
 
       // Find next upcoming intervention
       const upcoming = children
@@ -2022,12 +2026,65 @@ export default function GestionAbonnements() {
               </div>
             </div>
 
-            {/* Backdrop overlay to close dropdown menu when clicking outside */}
-            {openDropdownId !== null && (
-              <div
-                style={{ position: 'fixed', inset: 0, zIndex: 40 }}
-                onClick={() => setOpenDropdownId(null)}
-              />
+            {/* Backdrop overlay & Fixed Action Dropdown Portal */}
+            {openDropdownId !== null && dropdownPos !== null && (
+              <>
+                <div
+                  style={{ position: 'fixed', inset: 0, zIndex: 99998 }}
+                  onClick={() => {
+                    setOpenDropdownId(null);
+                    setDropdownPos(null);
+                  }}
+                />
+                {(() => {
+                  const inv = filteredFactures.find(f => f.id === openDropdownId);
+                  if (!inv) return null;
+                  return (
+                    <div
+                      className="ga-action-dropdown-menu"
+                      style={{
+                        position: 'fixed',
+                        top: dropdownPos.top,
+                        left: dropdownPos.left,
+                        right: 'auto',
+                        bottom: 'auto',
+                        zIndex: 99999,
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '0.5rem',
+                        padding: '0.35rem 0',
+                        minWidth: '190px'
+                      }}
+                    >
+                      <button
+                        className="ga-dropdown-item"
+                        onClick={() => {
+                          handleConfirmPayment(inv.demandeId || inv.id);
+                          setOpenDropdownId(null);
+                          setDropdownPos(null);
+                        }}
+                      >
+                        <CheckCircle2 size={16} color="#059669" />
+                        Confirmer paiement
+                      </button>
+
+                      <button
+                        className="ga-dropdown-item"
+                        onClick={() => {
+                          const targetId = inv.clientId || inv.demandeId || inv.id;
+                          navigate(`/clients/${encodeId(targetId)}`);
+                          setOpenDropdownId(null);
+                          setDropdownPos(null);
+                        }}
+                      >
+                        <Eye size={16} color="#475569" />
+                        Voir le dossier
+                      </button>
+                    </div>
+                  );
+                })()}
+              </>
             )}
 
             <div className="ga-table-wrapper">
@@ -2051,7 +2108,7 @@ export default function GestionAbonnements() {
                       </td>
                     </tr>
                   ) : (
-                    filteredFactures.map(inv => {
+                    filteredFactures.map((inv) => {
                       const isDropdownOpen = openDropdownId === inv.id;
                       const isPaid = inv.statut === 'Payé';
 
@@ -2130,37 +2187,24 @@ export default function GestionAbonnements() {
                             <button
                               className="ga-dropdown-btn"
                               title="Actions"
-                              onClick={() => setOpenDropdownId(isDropdownOpen ? null : inv.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isDropdownOpen) {
+                                  setOpenDropdownId(null);
+                                  setDropdownPos(null);
+                                } else {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const isNearBottom = rect.bottom + 110 > window.innerHeight;
+                                  setDropdownPos({
+                                    top: isNearBottom ? Math.max(10, rect.top - 95) : rect.bottom + 4,
+                                    left: Math.max(10, rect.right - 190)
+                                  });
+                                  setOpenDropdownId(inv.id);
+                                }
+                              }}
                             >
                               <MoreHorizontal size={18} />
                             </button>
-
-                            {isDropdownOpen && (
-                              <div className="ga-action-dropdown-menu">
-                                <button
-                                  className="ga-dropdown-item"
-                                  onClick={() => {
-                                    handleConfirmPayment(inv.demandeId || inv.id);
-                                    setOpenDropdownId(null);
-                                  }}
-                                >
-                                  <CheckCircle2 size={16} color="#059669" />
-                                  Confirmer paiement
-                                </button>
-
-                                <button
-                                  className="ga-dropdown-item"
-                                  onClick={() => {
-                                    const targetId = inv.clientId || inv.demandeId || inv.id;
-                                    navigate(`/clients/${encodeId(targetId)}`);
-                                    setOpenDropdownId(null);
-                                  }}
-                                >
-                                  <Eye size={16} color="#475569" />
-                                  Voir le dossier
-                                </button>
-                              </div>
-                            )}
                           </td>
                         </tr>
                       );

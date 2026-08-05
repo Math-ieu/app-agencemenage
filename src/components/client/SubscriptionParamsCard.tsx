@@ -1,7 +1,7 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 import { Demande } from '../../types';
-import { calculateSinglePassagePrice } from '../../utils/pricing';
+import { calculateInvoiceFromDevis } from '../../utils/pricing';
 
 export interface SubscriptionParamsCardProps {
   latest: Demande;
@@ -71,9 +71,41 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
 
   const realTarifHoraire = tarifHoraire || latest.formulaire_data?.tarif_horaire || (isGrand ? 70 : 60);
 
-  const hasProduits = Boolean(latest.avec_produit || latest.formulaire_data?.produits_inclus);
-  const rawOptions = latest.formulaire_data?.options || (latest as any).options;
-  const formattedOptions = rawOptions ? formatSafeValue(rawOptions) : (hasProduits ? 'Produits ménagers inclus (+90 DH)' : 'Aucune option');
+  const formData = latest.formulaire_data || {};
+  const hasProduits = Boolean(
+    latest.avec_produit ||
+    formData.produits_inclus ||
+    formData.produits ||
+    formData.avec_produit ||
+    (typeof formData.options === 'object' && formData.options?.produits)
+  );
+  const hasTorchons = Boolean(
+    formData.torchons_inclus ||
+    formData.torchons ||
+    (typeof formData.options === 'object' && formData.options?.torchons)
+  );
+  const hasPack = Boolean(
+    formData.pack_integral ||
+    formData.pack ||
+    (typeof formData.options === 'object' && formData.options?.pack_integral)
+  );
+  const hasZone = Boolean(
+    formData.zone_eloignee ||
+    formData.zone ||
+    (typeof formData.options === 'object' && formData.options?.zone_eloignee)
+  );
+
+  const activeOptionLabels: string[] = [];
+  if (hasProduits) activeOptionLabels.push('Produits ménagers inclus (+90 DH)');
+  if (hasTorchons) activeOptionLabels.push('Torchons & serpillières (+40 DH)');
+  if (hasPack) activeOptionLabels.push('Pack Intégral (+200 DH)');
+  if (hasZone) activeOptionLabels.push('Zone éloignée (+50 DH)');
+
+  let formattedOptions = activeOptionLabels.length > 0
+    ? activeOptionLabels.join(' · ')
+    : (formData.options ? formatSafeValue(formData.options) : 'Aucune option');
+
+  if (formattedOptions === '—') formattedOptions = 'Aucune option';
 
   const rawModePaiement = latest.mode_paiement || latest.mode_paiement_label || latest.formulaire_data?.mode_paiement;
   const formattedModePaiement = formatSafeValue(rawModePaiement, 'Virement');
@@ -164,17 +196,17 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
           <strong style={{ color: '#034a3e', fontWeight: 700 }}>{formattedOptions}</strong>
         </div>
 
-        {/* 10. Mensuel du mois (au prorata des passages) */}
+        {/* 10. Mensuel de base (devis — montant constant) */}
         <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-          <span style={{ color: '#64748b', fontWeight: 500 }}>Mensuel du mois</span>
+          <span style={{ color: '#64748b', fontWeight: 500 }}>Mensuel de base (devis)</span>
           <strong style={{ color: '#034a3e', fontWeight: 700 }}>
             {(() => {
-              const passages = monthPassagesPlanifies || 4;
-              const unit = latest?.formulaire_data?.prix_unitaire || calculateSinglePassagePrice(latest);
-              if (unit > 0 && passages > 0) {
-                return `${passages} passages × ${unit} DH = ${Math.round(passages * unit)} DH`;
+              // Toujours afficher le montant CONSTANT du devis, pas le prorata du mois
+              const inv = calculateInvoiceFromDevis(latest);
+              if (inv.devisTotal > 0 && inv.passagesBase > 0) {
+                return `${inv.devisTotal.toLocaleString('fr-FR')} DH (${inv.passagesBase} passages × ${inv.prixUnitaireDevis.toFixed(2).replace('.', ',')} DH)`;
               }
-              return mensuelBase ? `${mensuelBase} DH` : (latest.prix ? `${latest.prix} DH` : '—');
+              return inv.devisTotal > 0 ? `${inv.devisTotal.toLocaleString('fr-FR')} DH` : (mensuelBase ? `${mensuelBase} DH` : (latest.prix ? `${latest.prix} DH` : '—'));
             })()}
           </strong>
         </div>

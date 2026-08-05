@@ -408,13 +408,13 @@ export const getClientActionLogs = (id: number) => apiClient.get(`/api/clients/$
 
 // ─── Subscription Planning ───────────────────────────────────────────────────
 export const getPlanning = (demandeId: number) =>
-  apiClient.get(`/api/demandes/${demandeId}/planning/`);
+  getDemande(demandeId).then(res => ({ data: res.data?.planning || null }));
 
 export const savePlanning = (demandeId: number, data: Record<string, unknown>) =>
-  apiClient.post(`/api/demandes/${demandeId}/planning/`, data);
+  updateDemande(demandeId, { planning: data } as any);
 
 export const updatePlanning = (demandeId: number, data: Record<string, unknown>) =>
-  apiClient.patch(`/api/demandes/${demandeId}/planning/`, data);
+  updateDemande(demandeId, { planning: data } as any);
 
 export const createPlanningIntervention = (demandeId: number, data: { date: string; time: string; week_id: string; day_key: string }) =>
   apiClient.post(`/api/demandes/${demandeId}/create_planning_intervention/`, data);

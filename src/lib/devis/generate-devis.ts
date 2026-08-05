@@ -10,6 +10,7 @@ import { genererDevisPostSinistre, type DevisPostSinistreData } from './devis-po
 import { genererDevis as genererDevisFinChantier, type DevisData as DevisFinChantierData } from './devis-nettoyagefinchantier';
 import { genererDevisAutreService } from './devis-autreservice';
 import { genererDevisMenageStandard, type DevisStandardData } from './devis-menagestandard';
+import { calculateSinglePassagePrice, getDevisBasedMonthlyAmount } from '../../utils/pricing';
 
 const toNumber = (value: unknown): number => {
   const n = Number(value);
@@ -655,20 +656,46 @@ const buildGestion360Data = (demande: Demande): DevisGestion360Data => {
 
 const buildMenageStandardData = (demande: Demande): DevisStandardData => {
   const form = demande.formulaire_data || {};
-  const total = getTotalPrice(demande, form);
-  const isGrand = (demande.service || '').toLowerCase().includes('grand');
+  const isGrand = (demande.service || form.type_prestation || '').toLowerCase().includes('grand');
   const isAbonnement = demande.frequency === 'abonnement' || form.frequency === 'subscription' || form.frequency === 'abonnement';
 
   const lignes: Array<{ designation: string; montant: number | string; isReduction?: boolean }> = [];
+
   if (Array.isArray(form.prestations) && form.prestations.length) {
     form.prestations.forEach((p: any) => {
       const m = typeof p.montant === 'string' && isNaN(Number(p.montant)) ? p.montant : parseMoney(p.montant || p.prix || 0);
       lignes.push({ designation: p.desc || p.designation || p.label || 'Prestation', montant: m, isReduction: p.isReduction });
     });
+  } else if (isAbonnement) {
+    const numPassages = toNumber(demande.planning?.nombre_passages_mois || form.nombre_passages || 4);
+    const pu = Number(form.prix_unitaire) || calculateSinglePassagePrice(demande);
+    const subtotal = numPassages * pu;
+
+    const produits = Boolean(demande.avec_produit || form.produits_inclus || form.produits);
+    const serviceTitle = isGrand ? 'Grand ménage' : 'Ménage standard';
+
+    lignes.push({
+      designation: `${serviceTitle} (${numPassages} passage${numPassages > 1 ? 's' : ''}/mois × ${pu} DH/passage${produits ? ' — produits inclus' : ''})`,
+      montant: subtotal
+    });
+
+    const tauxReduc = Number(form.taux_reduction || demande.geste_commercial?.reduction_value || (demande as any).remise) || 0;
+    const remiseDh = Number(form.remise_dh) || (tauxReduc > 0 ? Math.round((subtotal * tauxReduc) / 100) : 0);
+
+    if (remiseDh > 0) {
+      lignes.push({
+        designation: `Remise abonnement (-${tauxReduc || Math.round((remiseDh / subtotal) * 100)}%)`,
+        montant: -remiseDh,
+        isReduction: true
+      });
+    }
   } else {
-    lignes.push({ designation: isGrand ? 'Grand ménage' : 'Ménage standard', montant: total });
+    lignes.push({ designation: isGrand ? 'Grand ménage' : 'Ménage standard', montant: getTotalPrice(demande, form) });
   }
-  const computedTotal = lignes.reduce((s, l) => s + (typeof l.montant === 'number' ? l.montant : 0), 0) || total;
+
+  const computedTotal = isAbonnement
+    ? getDevisBasedMonthlyAmount(demande)
+    : (lignes.reduce((s, l) => s + (typeof l.montant === 'number' ? l.montant : 0), 0) || getTotalPrice(demande, form));
 
   return {
     numero: buildDevisNumber(demande),
