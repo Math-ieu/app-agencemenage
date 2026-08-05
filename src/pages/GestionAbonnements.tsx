@@ -673,6 +673,36 @@ export default function GestionAbonnements() {
     });
   }, [demandes, todayStr]);
 
+  // Dynamic filter lists for Services, Commercials, Villes
+  const ALL_SERVICE_OPTIONS = useMemo(() => {
+    const baseServices = [
+      "Ménage standard",
+      "Grand ménage",
+      "Ménage bureaux",
+      "Ménage Air BnB",
+      "Ménage fin de chantier",
+      "Nettoyage post-déménagement",
+      "Auxiliaire de vie",
+      "Placement & gestion",
+      "Ménage post-sinistre"
+    ];
+    const dynamicServices = subscriptionRows.map(r => r.serviceType).filter(Boolean);
+    return Array.from(new Set([...baseServices, ...dynamicServices]));
+  }, [subscriptionRows]);
+
+  const ALL_COMMERCIAL_OPTIONS = useMemo(() => {
+    const dynamicComms = subscriptionRows
+      .map(r => r.commercial)
+      .filter(c => c && c !== 'Non assigné' && c.trim() !== '');
+    return Array.from(new Set(dynamicComms)).sort();
+  }, [subscriptionRows]);
+
+  const ALL_VILLE_OPTIONS = useMemo(() => {
+    const baseVilles = ['Casablanca', 'Rabat', 'Bouskoura', 'Mohammedia', 'Dar Bouazza', 'Marrakech'];
+    const dynamicVilles = subscriptionRows.map(r => r.clientVille).filter(Boolean);
+    return Array.from(new Set([...baseVilles, ...dynamicVilles])).sort();
+  }, [subscriptionRows]);
+
   // Dynamic Holiday Banner Calculation based on parameters from Paramètres > Jours fériés
   const activeHolidayBanner = useMemo(() => {
     const typeLabelMap: Record<string, string> = {
@@ -813,9 +843,9 @@ export default function GestionAbonnements() {
     };
 
     const matchFilters = (service?: string, commercial?: string, ville?: string) => {
-      if (serviceFilter !== 'tous' && service !== serviceFilter) return false;
-      if (commercialFilter !== 'tous' && commercial !== commercialFilter) return false;
-      if (villeFilter !== 'tous' && ville !== villeFilter) return false;
+      if (serviceFilter !== 'tous' && (service || '').toLowerCase() !== serviceFilter.toLowerCase()) return false;
+      if (commercialFilter !== 'tous' && (commercial || '').toLowerCase() !== commercialFilter.toLowerCase()) return false;
+      if (villeFilter !== 'tous' && (ville || '').toLowerCase() !== villeFilter.toLowerCase()) return false;
       return true;
     };
 
@@ -1501,9 +1531,9 @@ export default function GestionAbonnements() {
                   onChange={e => setServiceFilter(e.target.value)}
                 >
                   <option value="tous">Tous les services</option>
-                  <option value="Ménage standard">Ménage standard</option>
-                  <option value="Grand ménage">Grand ménage</option>
-                  <option value="Ménage bureaux">Ménage bureaux</option>
+                  {ALL_SERVICE_OPTIONS.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
                 </select>
               </div>
 
@@ -1515,8 +1545,9 @@ export default function GestionAbonnements() {
                   onChange={e => setCommercialFilter(e.target.value)}
                 >
                   <option value="tous">Tous les commerciaux</option>
-                  <option value="Kawtar">Kawtar</option>
-                  <option value="Salma">Salma</option>
+                  {ALL_COMMERCIAL_OPTIONS.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
               </div>
 
@@ -1528,8 +1559,9 @@ export default function GestionAbonnements() {
                   onChange={e => setVilleFilter(e.target.value)}
                 >
                   <option value="tous">Toutes les villes</option>
-                  <option value="Casablanca">Casablanca</option>
-                  <option value="Rabat">Rabat</option>
+                  {ALL_VILLE_OPTIONS.map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
                 </select>
               </div>
 
@@ -1834,9 +1866,9 @@ export default function GestionAbonnements() {
                 onChange={e => setServiceFilter(e.target.value)}
               >
                 <option value="tous">Tous les services</option>
-                <option value="Ménage standard">Ménage standard</option>
-                <option value="Grand ménage">Grand ménage</option>
-                <option value="Ménage bureaux">Ménage bureaux</option>
+                {ALL_SERVICE_OPTIONS.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
               </select>
 
               <select
@@ -1845,8 +1877,9 @@ export default function GestionAbonnements() {
                 onChange={e => setCommercialFilter(e.target.value)}
               >
                 <option value="tous">Tous les commerciaux</option>
-                <option value="Kawtar">Kawtar</option>
-                <option value="Salma">Salma</option>
+                {ALL_COMMERCIAL_OPTIONS.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
 
               <select
@@ -1855,8 +1888,9 @@ export default function GestionAbonnements() {
                 onChange={e => setVilleFilter(e.target.value)}
               >
                 <option value="tous">Toutes les villes</option>
-                <option value="Casablanca">Casablanca</option>
-                <option value="Rabat">Rabat</option>
+                {ALL_VILLE_OPTIONS.map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -1957,9 +1991,9 @@ export default function GestionAbonnements() {
                 <span className="ga-filter-label">Service</span>
                 <select className="ga-filter-select" value={serviceFilter} onChange={e => setServiceFilter(e.target.value)}>
                   <option value="tous">Tous les services</option>
-                  <option value="Ménage standard">Ménage standard</option>
-                  <option value="Grand ménage">Grand ménage</option>
-                  <option value="Ménage bureaux">Ménage bureaux</option>
+                  {ALL_SERVICE_OPTIONS.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
                 </select>
               </div>
 
@@ -1967,8 +2001,9 @@ export default function GestionAbonnements() {
                 <span className="ga-filter-label">Commercial</span>
                 <select className="ga-filter-select" value={commercialFilter} onChange={e => setCommercialFilter(e.target.value)}>
                   <option value="tous">Tous les commerciaux</option>
-                  <option value="Kawtar">Kawtar</option>
-                  <option value="Salma">Salma</option>
+                  {ALL_COMMERCIAL_OPTIONS.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
               </div>
 
@@ -1976,8 +2011,9 @@ export default function GestionAbonnements() {
                 <span className="ga-filter-label">Ville</span>
                 <select className="ga-filter-select" value={villeFilter} onChange={e => setVilleFilter(e.target.value)}>
                   <option value="tous">Toutes les villes</option>
-                  <option value="Casablanca">Casablanca</option>
-                  <option value="Rabat">Rabat</option>
+                  {ALL_VILLE_OPTIONS.map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
                 </select>
               </div>
 
