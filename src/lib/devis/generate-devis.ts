@@ -89,6 +89,18 @@ const parseMoney = (value: unknown): number => {
 };
 
 const getTotalPrice = (demande: Demande, form?: Record<string, any>): number => {
+  const explicitDevis = parseMoney(demande.montant_devis);
+  if (explicitDevis > 0) return explicitDevis;
+
+  if (form) {
+    const devisFormVal =
+      parseMoney(form.montant_devis_base) ||
+      parseMoney(form.devis_total_base) ||
+      parseMoney(form.mensuel_base) ||
+      parseMoney(form.montant_devis);
+    if (devisFormVal > 0) return devisFormVal;
+  }
+
   const direct = parseMoney(demande.prix);
   if (direct > 0) return direct;
   if (!form) return direct;

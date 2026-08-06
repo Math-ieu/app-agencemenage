@@ -195,20 +195,34 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
           <strong style={{ color: '#034a3e', fontWeight: 700 }}>{formattedOptions}</strong>
         </div>
 
-        {/* 10. Mensuel de base (devis — montant constant) */}
+        {/* 10. Montant Devis (baseline 30j/29j) */}
         <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-          <span style={{ color: '#64748b', fontWeight: 500 }}>Mensuel de base (devis)</span>
+          <span style={{ color: '#64748b', fontWeight: 500 }}>Montant Devis (Base 30j/29j)</span>
           <strong style={{ color: '#034a3e', fontWeight: 700 }}>
             {(() => {
-              const devisBase = Number(mensuelBase) ||
-                                Number(formData.mensuel_base) ||
-                                Number(formData.devis_total_base) ||
+              const devisBase = Number(latest.montant_devis) ||
+                                Number(mensuelBase) ||
                                 Number(formData.montant_devis_base) ||
-                                Number(formData.total_ttc) ||
-                                Number(formData.total) ||
-                                Number(formData.montant) ||
+                                Number(formData.devis_total_base) ||
+                                Number(formData.mensuel_base) ||
+                                Number(formData.montant_devis) ||
                                 Number(latest.prix) || 0;
               return devisBase > 0 ? `${devisBase.toLocaleString('fr-FR')} DH` : '—';
+            })()}
+          </strong>
+        </div>
+
+        {/* 10b. Montant Facture (Prorata) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+          <span style={{ color: '#64748b', fontWeight: 500 }}>Montant Facture (Prorata)</span>
+          <strong style={{ color: '#0284c7', fontWeight: 700 }}>
+            {(() => {
+              const facProrata = Number(latest.montant_facture) ||
+                                 Number(formData.montant_facture) ||
+                                 Number(formData.total_ttc) ||
+                                 Number(formData.montant_ttc) ||
+                                 Number(formData.montant_final) || 0;
+              return facProrata > 0 ? `${facProrata.toLocaleString('fr-FR')} DH` : 'Non générée';
             })()}
           </strong>
         </div>

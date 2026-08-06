@@ -129,26 +129,27 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       // DEVIS comme source unique de vérité
       // ═══════════════════════════════════════════════════════════
 
-      // Devis total HT (stocké par QuoteSection → handleQuoteUpdate)
-      const rawDevisTotal = Number(formData.total) || Number(formData.montant) || Number(latest.prix) || 0;
+      // Devis total HT de référence (baseline contrat 30j/29j)
+      const rawDevisTotal = Number(latest.montant_devis) || Number(formData.montant_devis_base) || Number(formData.devis_total_base) || Number(formData.mensuel_base) || Number(formData.montant_devis) || Number(latest.prix) || 0;
       setDevisTotal(rawDevisTotal);
 
-      // Passages réels / proratisés du mois (ex: 10 pour le mois en cours)
-      const rawPassagesBase = monthPassagesPlanifies !== undefined && monthPassagesPlanifies > 0
-        ? monthPassagesPlanifies
-        : getContractBaselinePassages(latest);
-      setPassagesBase(rawPassagesBase);
+      // Passages de base du contrat (diviseur fixe du devis, ex: 8 pour 2 fois/semaine)
+      const contractPassagesBase = getContractBaselinePassages(latest);
+      setPassagesBase(contractPassagesBase);
 
-      // Prix unitaire dérivé du devis
+      // Prix unitaire dérivé du devis = devisTotal / contractPassagesBase
       const derivedPU = Number(formData.prix_unitaire) > 0
         ? Number(formData.prix_unitaire)
-        : (rawPassagesBase > 0 && rawDevisTotal > 0
-          ? Math.round((rawDevisTotal / rawPassagesBase) * 100) / 100
+        : (contractPassagesBase > 0 && rawDevisTotal > 0
+          ? Math.round((rawDevisTotal / contractPassagesBase) * 100) / 100
           : calculateSinglePassagePrice(latest));
       setInvPrixUnitaire(String(derivedPU));
 
-      // Passages ce mois-ci
-      setInvNbPassages(String(rawPassagesBase));
+      // Passages ce mois-ci (ex: 10 si mois à 5 semaines ou 5 si démarrage en cours de mois)
+      const realMonthPassages = monthPassagesPlanifies !== undefined && monthPassagesPlanifies > 0
+        ? monthPassagesPlanifies
+        : contractPassagesBase;
+      setInvNbPassages(String(realMonthPassages));
 
       // Remise additionnelle = 0 par défaut (la remise abonnement est déjà dans le devis total)
       setInvRemiseDh('0');
@@ -449,12 +450,13 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   produits: invProduitsInclus,
                   interventions_recuperees: invInterventionsRecup,
 
-                  // 1. Stockage distinct et séparé du devis de référence et de la facture (Audio 1)
+                  // 1. Stockage distinct et séparé du devis de référence et de la facture
                   devis_total_base: devisTotal,
                   montant_devis_base: devisTotal,
+                  montant_devis: devisTotal,
                   montant_facture: finalMontantFacture,
 
-                  // 2. Tarification complète et TVA pour le backend & le frontend (Audio 2)
+                  // 2. Tarification complète et TVA pour le backend & le frontend
                   prix_unitaire: invPrixUnitaire,
                   remise_dh: invRemiseDh,
                   tva: tvaPercentNum,
@@ -470,13 +472,13 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   montant_ttc: totalTTCNum,
                   montant_total: finalMontantFacture,
                   montant_final: finalMontantFacture,
-                  total: finalMontantFacture,
-                  montant: finalMontantFacture,
                   mensuel_base: devisTotal
                 };
 
                 await updateDemande(latest.id, {
-                  prix: finalMontantFacture || Math.round(devisTotal) || latest.prix,
+                  prix: Math.round(devisTotal) || latest.prix,
+                  montant_devis: devisTotal || latest.montant_devis || latest.prix,
+                  montant_facture: finalMontantFacture,
                   service: invService,
                   formulaire_data: updatedFormData
                 } as any);

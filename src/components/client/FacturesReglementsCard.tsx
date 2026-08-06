@@ -1,17 +1,20 @@
 import React from 'react';
 import { Receipt, Eye } from 'lucide-react';
 import { Demande } from '../../types';
-import { getDevisBasedMonthlyAmount } from '../../utils/pricing';
+import { getInvoiceMonthlyAmount } from '../../utils/pricing';
 
 export interface InvoiceItem {
+  id?: number | string;
   reference: string;
   periode: string;
   montant: number;
-  envoyeeLe: string;
   statut: {
     type: 'envoyee' | 'payee' | 'en_attente' | 'non_payee';
     label: string;
   };
+  envoyeeLe?: string;
+  datePaiement?: string;
+  pdfUrl?: string;
 }
 
 export interface FacturesReglementsCardProps {
@@ -37,10 +40,10 @@ export const FacturesReglementsCard: React.FC<FacturesReglementsCardProps> = ({
 
     // Priorité au montant validé dans le formulaire de facturation (total_ttc / montant_ttc / montant_facture)
     const formData = latest.formulaire_data || {};
-    const validatedMontant = Number(formData.total_ttc) || Number(formData.montant_ttc) || Number(formData.montant_facture) || Number(formData.montant_final);
+    const validatedMontant = Number(latest.montant_facture) || Number(formData.montant_facture) || Number(formData.total_ttc) || Number(formData.montant_ttc) || Number(formData.montant_final);
 
     const passages = monthPassagesPlanifies ?? (latest.planning?.nombre_passages_mois || formData.nombre_passages || 4);
-    const realMontant = validatedMontant > 0 ? validatedMontant : getDevisBasedMonthlyAmount(latest, passages);
+    const realMontant = validatedMontant > 0 ? validatedMontant : getInvoiceMonthlyAmount(latest, passages);
 
     const refNum = (latest as any)?.num_demande || latest.id || 118;
     const refStr = `AM/F${String(refNum).padStart(3, '0')}/2026`;

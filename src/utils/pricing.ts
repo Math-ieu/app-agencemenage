@@ -355,21 +355,92 @@ export interface DevisInvoiceResult {
 }
 
 export const getContractBaselinePassages = (demande: any): number => {
-    if (!demande) return 12;
+    if (!demande) return 8;
     const formData = demande.formulaire_data || {};
+
+    // 1. Explicit baseline fields saved in form or demande
     if (Number(formData.nb_passages_base) > 0) return Number(formData.nb_passages_base);
     if (Number(formData.nb_passages_devis) > 0) return Number(formData.nb_passages_devis);
+    if (Number(formData.passages_base) > 0) return Number(formData.passages_base);
+    if (Number(formData.passages_devis) > 0) return Number(formData.passages_devis);
 
-    const freqStr = String(formData.frequence || (formData as any).subFrequency || demande.frequency_label || demande.frequency || '').toLowerCase();
-    if (freqStr.includes('7/sem') || freqStr.includes('7_fois') || freqStr.includes('7 fois')) return 28;
-    if (freqStr.includes('6/sem') || freqStr.includes('6_fois') || freqStr.includes('6 fois')) return 24;
-    if (freqStr.includes('5/sem') || freqStr.includes('5_fois') || freqStr.includes('5 fois')) return 20;
-    if (freqStr.includes('4/sem') || freqStr.includes('4_fois') || freqStr.includes('4 fois')) return 16;
-    if (freqStr.includes('3/sem') || freqStr.includes('3_fois') || freqStr.includes('3 fois')) return 12;
-    if (freqStr.includes('2/sem') || freqStr.includes('2_fois') || freqStr.includes('2 fois')) return 8;
-    if (freqStr.includes('1/sem') || freqStr.includes('1_fois') || freqStr.includes('1 fois')) return 4;
+    // 2. Derive from active days selected in the planning / form (extractJoursPassage)
+    let days: string[] = [];
+    const detail = (formData as any)?.jours_intervention_detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+        days = extractJoursPassage(detail);
+    }
+    if (days.length === 0) {
+        days = extractJoursPassage(formData.jours_intervention || demande.planning?.jours_intervention);
+    }
+    if (days.length === 0) {
+        days = extractJoursPassage(formData.jours_passage || demande.jours_passage);
+    }
+    if (days.length === 0 && Array.isArray(demande.planning?.semaines)) {
+        const dayNames = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+        const found = new Set<string>();
+        demande.planning.semaines.forEach((w: any) => {
+            if (w.jours && typeof w.jours === 'object') {
+                Object.keys(w.jours).forEach((k: string) => {
+                    if (w.jours[k]?.selected && dayNames.includes(k.toLowerCase())) {
+                        found.add(k.toLowerCase());
+                    }
+                });
+            }
+        });
+        if (found.size > 0) days = Array.from(found);
+    }
+    if (days.length > 0) {
+        return days.length * 4;
+    }
 
-    return 12;
+    // 3. Robust string parsing of frequency (handles "2 fois / semaine", "2 fois par semaine", "2/sem", etc.)
+    const freqStr = String(
+        formData.frequence ||
+        formData.frequency_label ||
+        (formData as any).subFrequency ||
+        demande.frequency_label ||
+        demande.frequency ||
+        ''
+    ).toLowerCase().trim();
+
+    const weekMatch = freqStr.match(/(\d+)\s*(?:fois|j|x)?\s*(?:\/|par)?\s*(?:semaine|sem|week)/i) ||
+                      freqStr.match(/(\d+)\s*(?:fois|_fois|\/sem)/i);
+    if (weekMatch && weekMatch[1]) {
+        const perWeek = Number(weekMatch[1]);
+        if (perWeek >= 1 && perWeek <= 7) {
+            return perWeek * 4;
+        }
+    }
+
+    const monthMatch = freqStr.match(/(\d+)\s*(?:fois|j|x)?\s*(?:\/|par)?\s*(?:mois|month)/i);
+    if (monthMatch && monthMatch[1]) {
+        const perMonth = Number(monthMatch[1]);
+        if (perMonth >= 1 && perMonth <= 31) {
+            return perMonth;
+        }
+    }
+
+    // 4. Derive from devis total & single passage price if available
+    const devisTotal = Number(demande.montant_devis) || Number(formData.montant_devis_base) || Number(formData.devis_total_base) || Number(formData.mensuel_base) || Number(formData.montant_devis) || Number(demande.prix) || 0;
+    const pu = Number(formData.prix_unitaire);
+    if (devisTotal > 0 && pu > 0) {
+        const calculatedPassages = Math.round(devisTotal / pu);
+        if (calculatedPassages >= 1 && calculatedPassages <= 31) {
+            return calculatedPassages;
+        }
+    }
+
+    // 5. Soft fallback checks
+    if (freqStr.includes('7')) return 28;
+    if (freqStr.includes('6')) return 24;
+    if (freqStr.includes('5')) return 20;
+    if (freqStr.includes('4')) return 16;
+    if (freqStr.includes('3')) return 12;
+    if (freqStr.includes('2')) return 8;
+    if (freqStr.includes('1')) return 4;
+
+    return 8;
 };
 
 export const calculateInvoiceFromDevis = (
@@ -385,8 +456,8 @@ export const calculateInvoiceFromDevis = (
 
     const formData = demande.formulaire_data || {};
 
-    // ── 1. Devis total (source de vérité pour le contrat de base TTC) ──
-    const devisTotal = Number(formData.devis_total_base) || Number(formData.montant_devis_base) || Number(formData.mensuel_base) || Number(formData.total_ttc) || Number(formData.total) || Number(formData.montant) || Number(demande.prix) || 0;
+    // ── 1. Devis total (source de vérité pour le contrat de base / devis initial) ──
+    const devisTotal = Number(demande.montant_devis) || Number(formData.montant_devis_base) || Number(formData.devis_total_base) || Number(formData.mensuel_base) || Number(formData.montant_devis) || Number(demande.prix) || 0;
 
     // ── 2. Nombre de passages de base du devis / contrat (FIXE) ──
     const passagesBase = getContractBaselinePassages(demande);
@@ -435,14 +506,28 @@ export const calculateInvoiceFromDevis = (
 };
 
 /**
- * Raccourci : retourne le montant TTC de la facture basé sur le devis.
- * Utilisé par les composants qui affichent le montant TTC.
+ * Retourne le montant de référence du DEVIS (baseline 30j/29j / contrat fixe).
+ * Utilisé pour la génération du devis PDF et l'affichage des devis.
  */
-export const getDevisBasedMonthlyAmount = (demande: any, monthPassages?: number): number => {
+export const getDevisBasedMonthlyAmount = (demande: any): number => {
     if (!demande) return 0;
     const formData = demande.formulaire_data || {};
-    const validatedTTC = Number(formData.total_ttc || formData.montant_ttc || formData.montant_facture || formData.montant_final);
-    if (validatedTTC > 0) return validatedTTC;
+    const baselineDevis = Number(demande.montant_devis) || Number(formData.montant_devis_base) || Number(formData.devis_total_base) || Number(formData.mensuel_base) || Number(formData.montant_devis);
+    if (baselineDevis > 0) return baselineDevis;
+
+    const result = calculateInvoiceFromDevis(demande);
+    return result.devisTotal || Number(demande.prix) || 0;
+};
+
+/**
+ * Retourne le montant de la FACTURE (calculé au prorata des passages du mois).
+ * Utilisé pour la facturation, les widgets financiers et l'affichage des factures.
+ */
+export const getInvoiceMonthlyAmount = (demande: any, monthPassages?: number): number => {
+    if (!demande) return 0;
+    const formData = demande.formulaire_data || {};
+    const validatedInvoice = Number(demande.montant_facture) || Number(formData.montant_facture) || Number(formData.total_ttc) || Number(formData.montant_ttc) || Number(formData.montant_final);
+    if (validatedInvoice > 0) return validatedInvoice;
 
     const result = calculateInvoiceFromDevis(demande, monthPassages);
     return result.totalTTC;

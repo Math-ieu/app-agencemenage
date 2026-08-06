@@ -130,6 +130,8 @@ export interface Demande {
   avec_produit?: boolean;
   tarif_produit?: number;
   prix: number | string;
+  montant_devis?: number;
+  montant_facture?: number;
   is_devis: boolean;
   devis_statut?: 'brouillon' | 'en_attente_validation' | 'valide' | 'envoye' | 'accepte' | 'refuse';
   tarif_total?: number;

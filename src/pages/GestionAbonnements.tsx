@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import { getDemandes, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
-import { getDevisBasedMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage } from '../utils/pricing';
+import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage } from '../utils/pricing';
 import { useToast } from '@/hooks/use-toast';
 import './GestionAbonnements.css';
 
@@ -617,7 +617,7 @@ export default function GestionAbonnements() {
 
       const interventionsTotal = getDynamicMonthPassagesCount(d, demandes);
 
-      const realTarifMensuel = getDevisBasedMonthlyAmount(d, interventionsTotal);
+      const realTarifMensuel = getInvoiceMonthlyAmount(d, interventionsTotal);
 
       // Find next upcoming intervention
       const upcoming = children
