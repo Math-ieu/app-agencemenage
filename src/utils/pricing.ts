@@ -354,6 +354,25 @@ export interface DevisInvoiceResult {
     totalTTC: number;
 }
 
+/**
+ * Extraie et unifie le montant de référence du devis (montant_devis).
+ * Priorité au champ officiel demande.montant_devis ou formulaire_data.montant_devis.
+ */
+export const getDevisAmount = (demande: any): number => {
+    if (!demande) return 0;
+    const formData = demande.formulaire_data || {};
+    const val = Number(demande.montant_devis)
+             || Number(formData.montant_devis)
+             || Number(formData.montant_devis_base)
+             || Number(formData.devis_total_base)
+             || Number(formData.mensuel_base)
+             || Number(formData.total)
+             || Number(formData.montant)
+             || Number(demande.prix)
+             || 0;
+    return Math.max(0, val);
+};
+
 export const getContractBaselinePassages = (demande: any): number => {
     if (!demande) return 8;
     const formData = demande.formulaire_data || {};
@@ -422,7 +441,7 @@ export const getContractBaselinePassages = (demande: any): number => {
     }
 
     // 4. Derive from devis total & single passage price if available
-    const devisTotal = Number(demande.montant_devis) || Number(formData.montant_devis_base) || Number(formData.devis_total_base) || Number(formData.mensuel_base) || Number(formData.montant_devis) || Number(formData.total) || Number(formData.montant) || Number(demande.prix) || 0;
+    const devisTotal = getDevisAmount(demande);
     const pu = Number(formData.prix_unitaire);
     if (devisTotal > 0 && pu > 0) {
         const calculatedPassages = Math.round(devisTotal / pu);
@@ -457,8 +476,7 @@ export const calculateInvoiceFromDevis = (
     const formData = demande.formulaire_data || {};
 
     // ── 1. Devis total (source de vérité pour le contrat de base — APRÈS remise abonnement) ──
-    // formData.total / formData.montant are saved by QuoteSection with the post-discount total
-    const devisTotal = Number(demande.montant_devis) || Number(formData.montant_devis_base) || Number(formData.devis_total_base) || Number(formData.mensuel_base) || Number(formData.montant_devis) || Number(formData.total) || Number(formData.montant) || Number(demande.prix) || 0;
+    const devisTotal = getDevisAmount(demande);
 
     // ── 2. Nombre de passages de base du devis / contrat (FIXE) ──
     const passagesBase = getContractBaselinePassages(demande);
@@ -512,8 +530,7 @@ export const calculateInvoiceFromDevis = (
  */
 export const getDevisBasedMonthlyAmount = (demande: any): number => {
     if (!demande) return 0;
-    const formData = demande.formulaire_data || {};
-    const baselineDevis = Number(demande.montant_devis) || Number(formData.montant_devis_base) || Number(formData.devis_total_base) || Number(formData.mensuel_base) || Number(formData.montant_devis) || Number(formData.total) || Number(formData.montant);
+    const baselineDevis = getDevisAmount(demande);
     if (baselineDevis > 0) return baselineDevis;
 
     const result = calculateInvoiceFromDevis(demande);

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, X, AlertCircle, FileText } from 'lucide-react';
 import { Demande, Client } from '../../types';
 import { updateDemande, generateDocument } from '../../api/client';
-import { getContractBaselinePassages, calculateSinglePassagePrice } from '../../utils/pricing';
+import { getContractBaselinePassages, calculateSinglePassagePrice, getDevisAmount } from '../../utils/pricing';
 
 export interface InvoiceFormModalProps {
   show: boolean;
@@ -130,8 +130,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       // ═══════════════════════════════════════════════════════════
 
       // Devis total HT de référence (baseline contrat — APRÈS remise abonnement)
-      // formData.total / formData.montant are saved by QuoteSection with the post-discount total
-      const rawDevisTotal = Number(latest.montant_devis) || Number(formData.montant_devis_base) || Number(formData.devis_total_base) || Number(formData.mensuel_base) || Number(formData.montant_devis) || Number(formData.total) || Number(formData.montant) || Number(latest.prix) || 0;
+      const rawDevisTotal = getDevisAmount(latest);
       setDevisTotal(rawDevisTotal);
 
       // Passages de base du contrat (diviseur fixe du devis, ex: 8 pour 2 fois/semaine)
@@ -180,7 +179,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const totalTTC = Math.round((totalHT + tvaAmount) * 100) / 100;
 
   // Montant mensuel de base (full month, pour référence)
-  const mensuelBase = Number(latest?.formulaire_data?.montant_devis_base || pu * passagesBase || 0);
+  const mensuelBase = getDevisAmount(latest) || (pu * passagesBase) || 0;
 
   // BDD derived counts
   const dateOverrides = latest?.formulaire_data?.date_overrides || {};
@@ -451,29 +450,17 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   produits: invProduitsInclus,
                   interventions_recuperees: invInterventionsRecup,
 
-                  // 1. Stockage distinct et séparé du devis de référence et de la facture
-                  devis_total_base: devisTotal,
-                  montant_devis_base: devisTotal,
+                  // Standard devis & invoice properties
                   montant_devis: devisTotal,
                   montant_facture: finalMontantFacture,
 
-                  // 2. Tarification complète et TVA pour le backend & le frontend
+                  // Tarification & TVA
                   prix_unitaire: invPrixUnitaire,
                   remise_dh: invRemiseDh,
                   tva: tvaPercentNum,
-                  tva_pct: tvaPercentNum,
-                  tva_pourcentage: tvaPercentNum,
-                  tax_rate: tvaPercentNum,
                   tva_amount: tvaAmountNum,
-                  tva_montant: tvaAmountNum,
-                  tax_amount: tvaAmountNum,
-                  total_ht: totalHTNum,
                   montant_ht: totalHTNum,
-                  total_ttc: totalTTCNum,
-                  montant_ttc: totalTTCNum,
-                  montant_total: finalMontantFacture,
-                  montant_final: finalMontantFacture,
-                  mensuel_base: devisTotal
+                  montant_ttc: totalTTCNum
                 };
 
                 await updateDemande(latest.id, {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 import { Demande } from '../../types';
+import { getDevisAmount } from '../../utils/pricing';
 
 export interface SubscriptionParamsCardProps {
   latest: Demande;
@@ -197,17 +198,10 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
 
         {/* 10. Montant Devis (baseline 30j/29j) */}
         <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-          <span style={{ color: '#64748b', fontWeight: 500 }}>Montant Devis (Base )</span>
+          <span style={{ color: '#64748b', fontWeight: 500 }}>Montant Devis (Base)</span>
           <strong style={{ color: '#034a3e', fontWeight: 700 }}>
             {(() => {
-              const devisBase = Number(mensuelBase) ||
-                                Number(formData.montant_devis_base) ||
-                                Number(formData.devis_total_base) ||
-                                Number(formData.mensuel_base) ||
-                                Number(formData.montant_devis) ||
-                                Number(formData.total) ||
-                                Number(formData.montant) ||
-                                Number(latest.prix) || 0;
+              const devisBase = Number(mensuelBase) || getDevisAmount(latest);
               return devisBase > 0 ? `${devisBase.toLocaleString('fr-FR')} DH` : '—';
             })()}
           </strong>

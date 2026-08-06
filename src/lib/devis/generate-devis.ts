@@ -94,10 +94,10 @@ const getTotalPrice = (demande: Demande, form?: Record<string, any>): number => 
 
   if (form) {
     const devisFormVal =
+      parseMoney(form.montant_devis) ||
       parseMoney(form.montant_devis_base) ||
       parseMoney(form.devis_total_base) ||
-      parseMoney(form.mensuel_base) ||
-      parseMoney(form.montant_devis);
+      parseMoney(form.mensuel_base);
     if (devisFormVal > 0) return devisFormVal;
   }
 
