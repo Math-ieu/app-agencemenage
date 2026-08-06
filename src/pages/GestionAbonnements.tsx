@@ -631,8 +631,8 @@ export default function GestionAbonnements() {
       const nextInterventionDate = nextChild?.date_intervention || d.date_intervention || dateDebut;
       const nextInterventionDay = formatShortDayMonth(nextInterventionDate);
       const nextInterventionHousekeeper = nextChild
-        ? (nextChild.assigned_to_operations_name || (nextChild as any).profil_affecte_name || nextChild.assigned_to_name || (nextChild.profils_envoyes?.[0]?.full_name) || 'Non affecté')
-        : (d.assigned_to_operations_name || dAny.profil_affecte_name || d.assigned_to_name || 'Non affecté');
+        ? (nextChild.assigned_to_operations_name || (nextChild as any).profil_affecte_name || (nextChild as any).intervenant_name || (nextChild as any).intervenante || (nextChild.profils_envoyes?.[0]?.full_name) || 'Non affecté')
+        : (d.assigned_to_operations_name || dAny.profil_affecte_name || dAny.intervenant_name || dAny.intervenante || (d.profils_envoyes?.[0]?.full_name) || 'Non affecté');
 
       // Status calculation from DB fields
       const dbStatut = (d.statut || '').toLowerCase();

@@ -76,11 +76,45 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
     return upcoming[0];
   }, [childDemandes]);
 
+  const extractRealAgentNames = (d: Demande): string[] => {
+    if (!d) return [];
+    const dAny = d as any;
+    const names: string[] = [];
+
+    const candidateNames = [
+      dAny.intervenant_name,
+      dAny.intervenante_name,
+      dAny.intervenante,
+      dAny.agent_name,
+      dAny.profil_affecte_name,
+      dAny.assigned_to_operations_name,
+      dAny.agent_detail?.full_name,
+      dAny.intervenante_detail?.full_name
+    ];
+
+    candidateNames.forEach(cName => {
+      if (isRealPrestataireName(cName) && !names.includes((cName as string).trim())) {
+        names.push((cName as string).trim());
+      }
+    });
+
+    if (Array.isArray(d.profils_envoyes) && d.profils_envoyes.length > 0) {
+      d.profils_envoyes.forEach((p: any) => {
+        const pName = p.full_name || p.nom_complet || p.name || (p.first_name || p.prenom ? `${p.first_name || p.prenom || ''} ${p.last_name || p.nom || ''}`.trim() : null);
+        if (isRealPrestataireName(pName) && !names.includes(pName.trim())) {
+          names.push(pName.trim());
+        }
+      });
+    }
+
+    return names;
+  };
+
   const nextIntervenantDisplay = React.useMemo(() => {
     if (!nextIntervention) return 'À assigner par la chargée opérationnelle';
-    const name = (nextIntervention as any).intervenant_name || nextIntervention.assigned_to_name || (nextIntervention as any).assigned_to_detail?.nom_complet || (nextIntervention as any).assigned_to_detail?.name;
-    if (isRealPrestataireName(name)) {
-      return (name as string).trim();
+    const names = extractRealAgentNames(nextIntervention);
+    if (names.length > 0) {
+      return names.join(', ');
     }
     return 'À assigner par la chargée opérationnelle';
   }, [nextIntervention]);
@@ -124,34 +158,33 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
             const intervCounts: Record<string, { count: number; note?: string }> = {};
 
             childDemandes.forEach((d: Demande) => {
-              const assigned = (d as any).assigned_to_detail || d.assigned_to;
-              const name = (d as any).intervenant_name || d.assigned_to_name || assigned?.nom_complet || assigned?.name || (typeof assigned === 'string' ? assigned : null) || (d as any).intervenante;
-              
-              if (isRealPrestataireName(name)) {
-                const key = (name as string).trim();
-                const note = (d as any).intervenant_note || (d as any).note_client;
-                if (!intervCounts[key]) {
-                  intervCounts[key] = { count: 1, note };
+              const names = extractRealAgentNames(d);
+              const note = (d as any).intervenant_note || (d as any).note_client;
+              names.forEach(name => {
+                if (!intervCounts[name]) {
+                  intervCounts[name] = { count: 1, note };
                 } else {
-                  intervCounts[key].count += 1;
-                  if (note && !intervCounts[key].note) {
-                    intervCounts[key].note = note;
+                  intervCounts[name].count += 1;
+                  if (note && !intervCounts[name].note) {
+                    intervCounts[name].note = note;
                   }
                 }
-              }
+              });
             });
 
-            const parentIntervenant = (latest as any).intervenant_name || latest.assigned_to_name || (latest as any).assigned_to_detail?.nom_complet || (latest as any).assigned_to_detail?.name;
-            if (isRealPrestataireName(parentIntervenant) && Object.keys(intervCounts).length === 0) {
-              intervCounts[(parentIntervenant as string).trim()] = { count: Math.max(childDemandes.length, 1) };
-            }
+            const parentAgentNames = extractRealAgentNames(latest);
+            parentAgentNames.forEach(name => {
+              if (!intervCounts[name]) {
+                intervCounts[name] = { count: Math.max(childDemandes.length, 1) };
+              }
+            });
 
             const entries = Object.entries(intervCounts).sort((a, b) => b[1].count - a[1].count);
 
             if (entries.length === 0) {
               return (
                 <div style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: 12, padding: '4px 0' }}>
-                  Aucune intervenante affectée
+                  Aucune intervenante affectée pour le moment
                 </div>
               );
             }
