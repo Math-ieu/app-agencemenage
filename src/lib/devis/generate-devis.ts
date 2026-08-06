@@ -10,7 +10,7 @@ import { genererDevisPostSinistre, type DevisPostSinistreData } from './devis-po
 import { genererDevis as genererDevisFinChantier, type DevisData as DevisFinChantierData } from './devis-nettoyagefinchantier';
 import { genererDevisAutreService } from './devis-autreservice';
 import { genererDevisMenageStandard, type DevisStandardData } from './devis-menagestandard';
-import { calculateSinglePassagePrice, getDevisBasedMonthlyAmount } from '../../utils/pricing';
+import { calculateSinglePassagePrice } from '../../utils/pricing';
 
 const toNumber = (value: unknown): number => {
   const n = Number(value);
@@ -705,9 +705,8 @@ const buildMenageStandardData = (demande: Demande): DevisStandardData => {
     lignes.push({ designation: isGrand ? 'Grand ménage' : 'Ménage standard', montant: getTotalPrice(demande, form) });
   }
 
-  const computedTotal = isAbonnement
-    ? getDevisBasedMonthlyAmount(demande)
-    : (lignes.reduce((s, l) => s + (typeof l.montant === 'number' ? l.montant : 0), 0) || getTotalPrice(demande, form));
+  const computedTotal = lignes.reduce((s, l) => s + (typeof l.montant === 'number' ? l.montant : 0), 0)
+    || getTotalPrice(demande, form);
 
   return {
     numero: buildDevisNumber(demande),
