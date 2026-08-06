@@ -69,7 +69,10 @@ export function calculateMidMonthProrata(
   };
 
   const remainingDates: Array<{ dateStr: string; dayName: string; dayNumber: number }> = [];
-  const normalizedSelectedDays = selectedDays.map(d => d.toLowerCase().trim());
+  const safeSelectedDays = Array.isArray(selectedDays)
+    ? selectedDays
+    : (typeof selectedDays === 'string' ? [selectedDays] : []);
+  const normalizedSelectedDays = safeSelectedDays.map(d => d.toLowerCase().trim());
 
   const current = new Date(start);
   while (current <= end) {
@@ -1040,11 +1043,17 @@ export default function GestionAbonnements() {
           }
         });
       } else {
-        const joursIntervention: string[] = d.planning?.jours_intervention || (d.formulaire_data as any)?.jours_passage || [];
+        const rawJours = (d as any).jours_intervention_detail ||
+          (d as any).jours_intervention ||
+          d.planning?.jours_intervention ||
+          (d.formulaire_data as any)?.jours_intervention ||
+          (d.formulaire_data as any)?.jours_passage ||
+          (d as any).jours_passage;
+        const joursIntervention: string[] = extractJoursPassage(rawJours);
         for (let cur = new Date(monday); cur <= sunday; cur.setDate(cur.getDate() + 1)) {
           const curIso = fmtIso(cur);
           const dayName = daysMap[cur.getDay()];
-          if (joursIntervention.map(j => j.toLowerCase()).includes(dayName)) {
+          if (joursIntervention.includes(dayName)) {
             const key = `${d.id}_${curIso}`;
             if (!countedKeys.has(key)) {
               const isChildCanceled = demandes.some(c => 
