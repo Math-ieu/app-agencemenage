@@ -935,7 +935,10 @@ export default function ClientDetails() {
 
       // 3. Si un document backend existe, télécharger le blob sécurisé du vrai PDF
       if (invoiceDoc) {
-        const docUrl = invoiceDoc.fichier || invoiceDoc.url || `/api/demandes/documents/${invoiceDoc.id}/download/`;
+        const docUrl = invoiceDoc.download_url ||
+          (invoiceDoc.id && latest?.id ? `/api/demandes/${latest.id}/download/${invoiceDoc.id}/` : null) ||
+          invoiceDoc.url ||
+          invoiceDoc.fichier;
         try {
           const { blobUrl } = await fetchSecureDocBlob(docUrl);
           setShowPreviewModal({
@@ -945,7 +948,22 @@ export default function ClientDetails() {
           });
           return;
         } catch (fetchErr) {
-          console.error("Échec de récupération du blob backend:", fetchErr);
+          console.error("Échec de récupération du blob backend, régénération en cours:", fetchErr);
+          try {
+            const genRes = await generateDocument(latest?.id || demandeId, 'facture');
+            if (genRes.data) {
+              const retryUrl = genRes.data.download_url || `/api/demandes/${demandeId}/download/${genRes.data.id}/`;
+              const { blobUrl } = await fetchSecureDocBlob(retryUrl);
+              setShowPreviewModal({
+                url: blobUrl,
+                type: 'facture',
+                name: genRes.data.nom || `FACTURE_${demandeId}.pdf`
+              });
+              return;
+            }
+          } catch (retryErr) {
+            console.error("Erreur régénération facture:", retryErr);
+          }
           addToast("Impossible de télécharger le fichier PDF de la facture.", "error");
           return;
         }
