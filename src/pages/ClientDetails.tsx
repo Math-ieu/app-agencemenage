@@ -1,7 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import jsPDF from 'jspdf';
 import {
   getClient, getDemandes, getFeedbacks, getClientActionLogs,
   updateDemande, deleteDemande, fetchSecureDocBlob, updateClient, savePlanning,
@@ -911,177 +910,9 @@ export default function ClientDetails() {
     }
   };
 
-  const generateInvoicePdfBlob = (inv: any): { blobUrl: string; fileName: string } => {
-    const doc = new jsPDF();
-    const fileName = inv.fileName || `${inv.num.replace(/\//g, '-')}.pdf`;
-
-    const formData = latest?.formulaire_data || {};
-    const serviceLabel = inv.service || latest?.service || formData.type_prestation || 'Ménage bureaux';
-    const frequenceLabel = inv.frequence || formData.frequence || latest?.frequency_label || '2 fois / semaine';
-    const nbPassages = Number(formData.nombre_passages) || 6;
-    const pu = Number(formData.prix_unitaire || 203.25);
-    const rawTva = formData.tva ?? formData.tva_pct ?? formData.tva_pourcentage ?? formData.tax_rate;
-    const tvaPct = rawTva !== undefined && rawTva !== null && rawTva !== '' ? Number(rawTva) : 20;
-
-    let totalHT = Number(formData.total_ht ?? formData.montant_ht ?? (pu * nbPassages));
-    let totalTTC = Number(formData.total_ttc ?? formData.montant_ttc ?? formData.montant_final ?? 0);
-
-    if (totalHT <= 0 && pu > 0 && nbPassages > 0) {
-      totalHT = Math.round(pu * nbPassages * 100) / 100;
-    }
-
-    if (totalTTC <= 0) {
-      totalTTC = tvaPct > 0 ? Math.round((totalHT * (1 + tvaPct / 100)) * 100) / 100 : totalHT;
-    }
-
-    // If totalHT was improperly stored as equal to totalTTC, recalculate clean totalHT
-    if (tvaPct > 0 && Math.abs(totalHT - totalTTC) < 0.01) {
-      totalHT = Math.round((totalTTC / (1 + tvaPct / 100)) * 100) / 100;
-    }
-
-    const tvaAmount = Number(formData.tva_amount ?? formData.tva_montant ?? (tvaPct > 0 ? Math.round((totalHT * tvaPct / 100) * 100) / 100 : 0));
-
-    // Company Header Left
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.setTextColor(3, 114, 101);
-    doc.text('AGENCE MÉNAGE', 20, 24);
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(71, 85, 105);
-    doc.text('Agence Ménage', 20, 31);
-    doc.text('36 Boulevard d\'Anfa, Résidence Anafee A', 20, 36);
-    doc.text('Num 78, Casablanca', 20, 41);
-
-    // Date & Client Header Right
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.setTextColor(30, 41, 59);
-    doc.text('Date de facture :', 120, 24);
-    doc.setFont('helvetica', 'normal');
-    doc.text(new Date().toLocaleDateString('fr-FR'), 155, 24);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Client:', 120, 33);
-    doc.text(inv.client || client?.display_name || 'Client', 133, 33);
-    doc.setFont('helvetica', 'normal');
-    doc.text('ICE:', 120, 39);
-    doc.text('Adresse: Maarif', 120, 45);
-
-    // Divider Line
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.5);
-    doc.line(20, 54, 190, 54);
-
-    // Facturation Info Section
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(30, 41, 59);
-    doc.text('Facturation n°', 20, 64);
-    doc.text(':', 60, 64);
-    doc.setFont('helvetica', 'normal');
-    doc.text(inv.num, 67, 64);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Service', 20, 71);
-    doc.text(':', 60, 71);
-    doc.setFont('helvetica', 'normal');
-    doc.text(serviceLabel, 67, 71);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Fréquence', 20, 78);
-    doc.text(':', 60, 78);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${frequenceLabel} (${nbPassages} passages ce mois)`, 67, 78);
-
-    // Table Header Banner
-    doc.setFillColor(3, 169, 145); // Teal header
-    doc.rect(20, 88, 170, 9, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(255, 255, 255);
-    doc.text('Désignation', 25, 94);
-    doc.text('Montant', 160, 94);
-
-    // Table Row
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(30, 41, 59);
-    doc.text(`${serviceLabel} (${nbPassages} passages × ${pu.toFixed(2).replace('.', ',')} DH)`, 25, 106);
-    doc.text(`${totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}`, 160, 106);
-
-    doc.setDrawColor(241, 245, 249);
-    doc.line(20, 114, 190, 114);
-
-    // Totals Section
-    let currentY = 124;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(71, 85, 105);
-    doc.text('Total HT:', 130, currentY);
-    doc.setTextColor(30, 41, 59);
-    doc.text(`${totalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}`, 160, currentY);
-
-    currentY += 8;
-    doc.setTextColor(71, 85, 105);
-    doc.text(`TVA ${tvaPct}%:`, 130, currentY);
-    doc.setTextColor(30, 41, 59);
-    doc.text(`${tvaAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}`, 160, currentY);
-
-    currentY += 10;
-    // Dark Total Banner
-    doc.setFillColor(40, 40, 40); // Dark grey banner
-    doc.rect(20, currentY, 170, 11, 'F');
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(255, 255, 255);
-    doc.text('MONTANT TOTAL A PAYER T.T.C :', 80, currentY + 7.5);
-    doc.setFontSize(11);
-    doc.setTextColor(3, 169, 145);
-    doc.text(`${totalTTC.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} MAD`, 150, currentY + 7.5);
-
-    // Payment Section
-    currentY += 25;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(30, 41, 59);
-    doc.text('Règlement par virement', 20, currentY);
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('RIB :', 20, currentY + 7);
-    doc.setFont('helvetica', 'normal');
-    doc.text('011 780 0 00036 21 000139 83 89', 32, currentY + 7);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Banque :', 20, currentY + 13);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Bank Of Africa', 38, currentY + 13);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Titulaire du compte :', 20, currentY + 19);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Agence Ménage', 58, currentY + 19);
-
-    // Footer
-    doc.setDrawColor(226, 232, 240);
-    doc.line(20, 270, 190, 270);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(148, 163, 184);
-    doc.text('Agence Ménage SARL — R.C. 123456 — Patente 987654 — IF 456789', 105, 276, { align: 'center' });
-    doc.text('Facture générée automatiquement via la plateforme Agence Ménage', 105, 281, { align: 'center' });
-
-    const blob = doc.output('blob');
-    const blobUrl = URL.createObjectURL(blob);
-    return { blobUrl, fileName };
-  };
-
   const handleDownloadInvoice = async (demandeId: number) => {
     try {
-      addToast("Chargement de l'aperçu de la facture...", "info");
+      addToast("Chargement de la facture...", "info");
 
       // 1. Chercher si un document "facture" existe déjà dans les documents de la demande
       let invoiceDoc = (latest?.documents || []).find(
@@ -1096,7 +927,9 @@ export default function ClientDetails() {
             invoiceDoc = genRes.data;
           }
         } catch (genErr) {
-          console.warn("Impossible de générer la facture backend, bascule sur le fallback:", genErr);
+          console.error("Erreur de génération de facture backend:", genErr);
+          addToast("Erreur lors de la génération de la facture côté serveur. Veuillez réessayer.", "error");
+          return;
         }
       }
 
@@ -1112,36 +945,16 @@ export default function ClientDetails() {
           });
           return;
         } catch (fetchErr) {
-          console.warn("Échec de récupération du blob backend, bascule sur le fallback frontend:", fetchErr);
+          console.error("Échec de récupération du blob backend:", fetchErr);
+          addToast("Impossible de télécharger le fichier PDF de la facture.", "error");
+          return;
         }
       }
 
-      // Fallback si le backend n'a pas pu renvoyer le PDF
-      const formData = latest?.formulaire_data || {};
-      const tvaPct = Number(formData.tva ?? formData.tva_pct ?? 20);
-      const totalHT = Number(formData.total_ht || formData.montant_ht || 0);
-      const totalTTC = Number(formData.total_ttc || formData.montant_ttc || formData.montant_final || latest?.prix || 0);
-      const validatedAmount = tvaPct > 0 && totalTTC > 0 ? totalTTC : (totalHT > 0 ? totalHT : Number(latest?.prix || 0));
-
-      const inv = {
-        num: `AM/F${String(demandeId).padStart(3, '0')}/2026`,
-        client: client?.display_name || formData.nom || 'Client',
-        ville: client?.city || formData.ville || 'Casablanca',
-        periode: 'Août 2026',
-        montant: `${validatedAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} DH`,
-        statut: formData.statut_facturation || 'Facture générée',
-        fileName: `AM-F${String(demandeId).padStart(3, '0')}-2026.pdf`
-      };
-
-      const { blobUrl, fileName } = generateInvoicePdfBlob(inv);
-      setShowPreviewModal({
-        url: blobUrl,
-        type: 'facture',
-        name: fileName
-      });
-    } catch (fallbackErr) {
-      console.error("Erreur aperçu facture:", fallbackErr);
-      addToast("Erreur lors de l'aperçu de la facture", "error");
+      addToast("Aucun document de facture disponible sur le serveur.", "error");
+    } catch (err) {
+      console.error("Erreur aperçu facture:", err);
+      addToast("Erreur lors du chargement de la facture.", "error");
     }
   };
 
