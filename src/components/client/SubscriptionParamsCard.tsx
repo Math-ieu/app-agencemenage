@@ -206,6 +206,8 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
                                 Number(formData.devis_total_base) ||
                                 Number(formData.mensuel_base) ||
                                 Number(formData.montant_devis) ||
+                                Number(formData.total) ||
+                                Number(formData.montant) ||
                                 Number(latest.prix) || 0;
               return devisBase > 0 ? `${devisBase.toLocaleString('fr-FR')} DH` : '—';
             })()}

@@ -129,8 +129,9 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       // DEVIS comme source unique de vérité
       // ═══════════════════════════════════════════════════════════
 
-      // Devis total HT de référence (baseline contrat 30j/29j)
-      const rawDevisTotal = Number(latest.montant_devis) || Number(formData.montant_devis_base) || Number(formData.devis_total_base) || Number(formData.mensuel_base) || Number(formData.montant_devis) || Number(latest.prix) || 0;
+      // Devis total HT de référence (baseline contrat — APRÈS remise abonnement)
+      // formData.total / formData.montant are saved by QuoteSection with the post-discount total
+      const rawDevisTotal = Number(latest.montant_devis) || Number(formData.montant_devis_base) || Number(formData.devis_total_base) || Number(formData.mensuel_base) || Number(formData.montant_devis) || Number(formData.total) || Number(formData.montant) || Number(latest.prix) || 0;
       setDevisTotal(rawDevisTotal);
 
       // Passages de base du contrat (diviseur fixe du devis, ex: 8 pour 2 fois/semaine)
