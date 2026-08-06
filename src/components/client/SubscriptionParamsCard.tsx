@@ -197,7 +197,7 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
 
         {/* 10. Montant Devis (baseline 30j/29j) */}
         <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-          <span style={{ color: '#64748b', fontWeight: 500 }}>Montant Devis (Base 30j/29j)</span>
+          <span style={{ color: '#64748b', fontWeight: 500 }}>Montant Devis (Base )</span>
           <strong style={{ color: '#034a3e', fontWeight: 700 }}>
             {(() => {
               const devisBase = Number(latest.montant_devis) ||
