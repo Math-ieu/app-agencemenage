@@ -200,8 +200,7 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
           <span style={{ color: '#64748b', fontWeight: 500 }}>Montant Devis (Base )</span>
           <strong style={{ color: '#034a3e', fontWeight: 700 }}>
             {(() => {
-              const devisBase = Number(latest.montant_devis) ||
-                                Number(mensuelBase) ||
+              const devisBase = Number(mensuelBase) ||
                                 Number(formData.montant_devis_base) ||
                                 Number(formData.devis_total_base) ||
                                 Number(formData.mensuel_base) ||

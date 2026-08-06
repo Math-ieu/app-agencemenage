@@ -180,7 +180,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const totalTTC = Math.round((totalHT + tvaAmount) * 100) / 100;
 
   // Montant mensuel de base (full month, pour référence)
-  const mensuelBase = Math.round(pu * passagesBase);
+  const mensuelBase = Number(latest?.formulaire_data?.montant_devis_base || pu * passagesBase || 0);
 
   // BDD derived counts
   const dateOverrides = latest?.formulaire_data?.date_overrides || {};
