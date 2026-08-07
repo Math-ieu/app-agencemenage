@@ -1,4 +1,5 @@
 import React from 'react';
+import { extractJoursPassage } from '../../../utils/pricing';
 
 export interface FormBlockProps {
     formData: any;
@@ -155,37 +156,363 @@ export const SurfaceBureauxBlock: React.FC<FormBlockProps> = ({ formData, setFor
     </div>
 );
 
-export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => (
-    <div className="ws-form-block">
-        <div className="ws-section-header">Choisissez la fréquence</div>
-        <div className="ws-freq-toggle">
-            <button type="button" className={formData.frequence === 'une fois' || !formData.frequence ? 'active' : ''} onClick={() => setFormData({ ...formData, frequence: 'une fois' })}>
-                Une fois
-            </button>
-            <button type="button" className={formData.frequence !== 'une fois' && formData.frequence ? 'active' : ''} onClick={() => setFormData({ ...formData, frequence: '1/sem' })}>
-                Abonnement
-            </button>
-        </div>
-        {formData.frequence && formData.frequence !== 'une fois' && (
-            <div style={{ maxWidth: '380px', margin: '0 auto' }}>
-                <div className="ws-discount-badge">-10 % de réduction sur l'abonnement</div>
-                <select className="ws-select" value={formData.frequence} onChange={e => setFormData({ ...formData, frequence: e.target.value })}>
-                    <option value="1/sem">1 fois par semaine</option>
-                    <option value="2/sem">2 fois par semaine</option>
-                    <option value="3/sem">3 fois par semaine</option>
-                    <option value="4/sem">4 fois par semaine</option>
-                    <option value="5/sem">5 fois par semaine</option>
-                    <option value="6/sem">6 fois par semaine</option>
-                    <option value="7/sem">7 fois par semaine</option>
-                    <option value="1/mois">1 fois par mois</option>
-                    <option value="2/mois">2 fois par mois</option>
-                    <option value="3/mois">3 fois par mois</option>
-                    <option value="4/mois">4 fois par mois</option>
-                </select>
+const ALL_DAYS = [
+    { key: 'lundi', label: 'Lundi' },
+    { key: 'mardi', label: 'Mardi' },
+    { key: 'mercredi', label: 'Mercredi' },
+    { key: 'jeudi', label: 'Jeudi' },
+    { key: 'vendredi', label: 'Vendredi' },
+    { key: 'samedi', label: 'Samedi' },
+    { key: 'dimanche', label: 'Dimanche' }
+];
+
+const addHoursToTime = (timeStr: string, durationHours: number): string => {
+    if (!timeStr) return '13:00';
+    const parts = timeStr.split(':');
+    let h = parseInt(parts[0], 10);
+    let m = parseInt(parts[1], 10);
+    if (isNaN(h)) h = 9;
+    if (isNaN(m)) m = 0;
+
+    const totalMinutes = h * 60 + m + Math.round((durationHours || 4) * 60);
+    const endH = Math.floor(totalMinutes / 60) % 24;
+    const endM = totalMinutes % 60;
+
+    return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+};
+
+export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => {
+    const isAbo = formData.frequence && formData.frequence !== 'une fois';
+    const dureeHours = Number(formData.duree || formData.nb_heures || 4);
+
+    const getTargetCount = (freq: string): number => {
+        if (!freq || freq === 'une fois') return 1;
+        const match = freq.match(/^(\d+)/);
+        return match ? parseInt(match[1], 10) : 1;
+    };
+
+    const targetCount = getTargetCount(formData.frequence || '1/sem');
+
+    const existingDetailMap = new Map<string, { heure_debut: string; heure_fin: string }>();
+    if (Array.isArray(formData.jours_intervention_detail)) {
+        formData.jours_intervention_detail.forEach((item: any) => {
+            if (item && item.jour) {
+                existingDetailMap.set(item.jour.toLowerCase(), {
+                    heure_debut: item.heure_debut || formData.heure || '09:00',
+                    heure_fin: item.heure_fin || addHoursToTime(item.heure_debut || formData.heure || '09:00', dureeHours)
+                });
+            }
+        });
+    }
+
+    // Try each source separately — empty arrays are truthy in JS, so || chaining fails
+    let extractedDays: string[] = [];
+    const daySources = [
+        formData.jours_intervention_detail,
+        formData.jours_intervention,
+        formData.jours_passage,
+        formData.planning?.jours_intervention
+    ];
+    for (const src of daySources) {
+        if (src !== undefined && src !== null && src !== '') {
+            const parsed = extractJoursPassage(src);
+            if (parsed.length > 0) {
+                extractedDays = parsed;
+                break;
+            }
+        }
+    }
+
+    // Frequency-based fallback aligned with SubscriptionManagementView
+    const getFrequencyDefaultDays = (count: number): string[] => {
+        if (count === 1) return ['samedi'];
+        if (count === 2) return ['lundi', 'jeudi'];
+        if (count === 3) return ['lundi', 'mercredi', 'vendredi'];
+        if (count === 4) return ['lundi', 'mardi', 'mercredi', 'jeudi'];
+        if (count === 5) return ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
+        if (count === 6) return ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+        if (count === 7) return ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+        return ALL_DAYS.slice(0, count).map(d => d.key);
+    };
+
+    const effectiveDays = extractedDays.length > 0
+        ? extractedDays
+        : getFrequencyDefaultDays(targetCount);
+
+    const currentDetail: Array<{ jour: string; heure_debut: string; heure_fin: string }> = effectiveDays.map(jKey => {
+        const keyLower = jKey.toLowerCase();
+        const existing = existingDetailMap.get(keyLower);
+        const start = existing?.heure_debut || formData.heure || '09:00';
+        const end = existing?.heure_fin || addHoursToTime(start, dureeHours);
+        return { jour: keyLower, heure_debut: start, heure_fin: end };
+    });
+
+    const selectedKeys = currentDetail.map(d => d.jour.toLowerCase());
+
+    const updateDaysAndFreq = (newDetail: Array<{ jour: string; heure_debut: string; heure_fin: string }>, newFreq?: string) => {
+        const daysList = newDetail.map(d => d.jour.toLowerCase());
+        const daysFormattedStr = newDetail.map(d => {
+            const match = ALL_DAYS.find(ad => ad.key === d.jour.toLowerCase());
+            return match ? match.label : d.jour;
+        }).join(' + ');
+
+        const freqToSet = newFreq || (daysList.length > 0 ? `${daysList.length}/sem` : formData.frequence);
+
+        setFormData({
+            ...formData,
+            frequence: freqToSet,
+            jours_intervention_detail: newDetail,
+            jours_intervention: daysList,
+            jours_passage: daysFormattedStr,
+            jours_par_semaine: daysList.length
+        });
+    };
+
+    const handleToggleDay = (dayKey: string) => {
+        let nextDetail = [...currentDetail];
+        const existingIdx = nextDetail.findIndex(d => d.jour.toLowerCase() === dayKey.toLowerCase());
+        if (existingIdx >= 0) {
+            if (nextDetail.length > 1) {
+                nextDetail.splice(existingIdx, 1);
+            }
+        } else {
+            const defaultStart = formData.heure || '09:00';
+            const defaultEnd = addHoursToTime(defaultStart, dureeHours);
+            nextDetail.push({ jour: dayKey.toLowerCase(), heure_debut: defaultStart, heure_fin: defaultEnd });
+        }
+        updateDaysAndFreq(nextDetail);
+    };
+
+    const handleTimeChange = (dayKey: string, field: 'heure_debut' | 'heure_fin', val: string) => {
+        const nextDetail = currentDetail.map(d => {
+            if (d.jour.toLowerCase() === dayKey.toLowerCase()) {
+                if (field === 'heure_debut') {
+                    const computedEnd = addHoursToTime(val, dureeHours);
+                    return { ...d, heure_debut: val, heure_fin: computedEnd };
+                }
+                return { ...d, [field]: val };
+            }
+            return d;
+        });
+        updateDaysAndFreq(nextDetail, formData.frequence);
+    };
+
+    const handleFreqSelectChange = (newFreq: string) => {
+        const newTarget = getTargetCount(newFreq);
+        let nextDetail = [...currentDetail];
+        if (nextDetail.length < newTarget) {
+            const unselected = ALL_DAYS.filter(d => !nextDetail.some(nd => nd.jour.toLowerCase() === d.key));
+            for (let i = 0; i < newTarget - nextDetail.length && i < unselected.length; i++) {
+                const defaultStart = formData.heure || '09:00';
+                nextDetail.push({ jour: unselected[i].key, heure_debut: defaultStart, heure_fin: addHoursToTime(defaultStart, dureeHours) });
+            }
+        } else if (nextDetail.length > newTarget) {
+            nextDetail = nextDetail.slice(0, newTarget);
+        }
+        updateDaysAndFreq(nextDetail, newFreq);
+    };
+
+    return (
+        <div className="ws-form-block">
+            <div className="ws-section-header">Choisissez la fréquence</div>
+            <div className="ws-freq-toggle">
+                <button
+                    type="button"
+                    className={!isAbo ? 'active' : ''}
+                    onClick={() => setFormData({ ...formData, frequence: 'une fois' })}
+                >
+                    Une fois
+                </button>
+                <button
+                    type="button"
+                    className={isAbo ? 'active' : ''}
+                    onClick={() => {
+                        const todayStr = new Date().toISOString().slice(0, 10);
+                        const defaultStart = formData.heure || '09:00';
+                        const fallbackDetail = ALL_DAYS.slice(0, 1).map(d => ({ jour: d.key, heure_debut: defaultStart, heure_fin: addHoursToTime(defaultStart, dureeHours) }));
+                        const detailToUse = currentDetail.length > 0 ? currentDetail : fallbackDetail;
+                        const startDate = formData.date_demarrage || formData.date_debut || formData.date || todayStr;
+                        const targetFreq = formData.frequence && formData.frequence !== 'une fois' ? formData.frequence : `${detailToUse.length}/sem`;
+                        setFormData({
+                            ...formData,
+                            date_demarrage: startDate,
+                            date_debut: startDate,
+                            date: startDate
+                        });
+                        updateDaysAndFreq(detailToUse, targetFreq);
+                    }}
+                >
+                    Abonnement
+                </button>
             </div>
-        )}
-    </div>
-);
+
+            {isAbo && (
+                <div style={{ marginTop: '1.25rem' }}>
+                    <div style={{ maxWidth: '380px', margin: '0 auto 1.5rem' }}>
+                        <div className="ws-discount-badge">-10 % de réduction sur l'abonnement</div>
+                        <select
+                            className="ws-select"
+                            value={formData.frequence || '1/sem'}
+                            onChange={e => handleFreqSelectChange(e.target.value)}
+                        >
+                            <option value="1/sem">1 fois par semaine</option>
+                            <option value="2/sem">2 fois par semaine</option>
+                            <option value="3/sem">3 fois par semaine</option>
+                            <option value="4/sem">4 fois par semaine</option>
+                            <option value="5/sem">5 fois par semaine</option>
+                            <option value="6/sem">6 fois par semaine</option>
+                            <option value="7/sem">7 fois par semaine</option>
+                            <option value="1/mois">1 fois par mois</option>
+                            <option value="2/mois">2 fois par mois</option>
+                            <option value="3/mois">3 fois par mois</option>
+                            <option value="4/mois">4 fois par mois</option>
+                        </select>
+                    </div>
+
+                    {/* JOURS D'INTERVENTION SECTION matching UI screenshots */}
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', marginTop: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <span style={{ fontWeight: 800, fontSize: '0.875rem', color: '#034a3e', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                                JOURS D'INTERVENTION *
+                            </span>
+                            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#0f766e' }}>
+                                {selectedKeys.length}/{targetCount} jour(s) sélectionné(s)
+                            </span>
+                        </div>
+
+                        {/* Days buttons grid */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                            {ALL_DAYS.map(day => {
+                                const isSelected = selectedKeys.includes(day.key);
+                                return (
+                                    <button
+                                        key={day.key}
+                                        type="button"
+                                        onClick={() => handleToggleDay(day.key)}
+                                        style={{
+                                            padding: '0.625rem 0.25rem',
+                                            borderRadius: '10px',
+                                            border: isSelected ? '1px solid #006654' : '1px solid #e2e8f0',
+                                            backgroundColor: isSelected ? '#006654' : '#ffffff',
+                                            color: isSelected ? '#ffffff' : '#475569',
+                                            fontWeight: isSelected ? 700 : 500,
+                                            fontSize: '0.8125rem',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            textAlign: 'center'
+                                        }}
+                                    >
+                                        {day.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Horaires par jour */}
+                        <div style={{ fontWeight: 600, fontSize: '0.8125rem', color: '#475569', marginBottom: '0.75rem' }}>
+                            Horaires par jour (début / fin)
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem' }}>
+                            {currentDetail.map(detail => {
+                                const dayObj = ALL_DAYS.find(ad => ad.key === detail.jour.toLowerCase());
+                                const dayLabel = dayObj ? dayObj.label : detail.jour;
+                                return (
+                                    <div
+                                        key={detail.jour}
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            backgroundColor: '#ffffff',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: '10px',
+                                            padding: '0.625rem 0.875rem'
+                                        }}
+                                    >
+                                        <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#0f172a', width: '90px' }}>
+                                            {dayLabel}
+                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <input
+                                                type="time"
+                                                value={detail.heure_debut || '09:00'}
+                                                onChange={e => handleTimeChange(detail.jour, 'heure_debut', e.target.value)}
+                                                style={{
+                                                    padding: '0.375rem 0.5rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #cbd5e1',
+                                                    fontSize: '0.875rem',
+                                                    fontWeight: 600,
+                                                    color: '#1e293b',
+                                                    backgroundColor: '#f8fafc',
+                                                    outline: 'none'
+                                                }}
+                                            />
+                                            <span style={{ color: '#94a3b8', fontWeight: 600 }}>→</span>
+                                            <input
+                                                type="time"
+                                                value={detail.heure_fin || '13:00'}
+                                                onChange={e => handleTimeChange(detail.jour, 'heure_fin', e.target.value)}
+                                                style={{
+                                                    padding: '0.375rem 0.5rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #cbd5e1',
+                                                    fontSize: '0.875rem',
+                                                    fontWeight: 600,
+                                                    color: '#1e293b',
+                                                    backgroundColor: '#f8fafc',
+                                                    outline: 'none'
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Date de démarrage de l'abonnement */}
+                        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                            <div>
+                                <label style={{ fontWeight: 800, fontSize: '0.8125rem', color: '#034a3e', letterSpacing: '0.05em', textTransform: 'uppercase', display: 'block', marginBottom: '0.25rem' }}>
+                                    DATE DE DÉBUT DE L'ABONNEMENT *
+                                </label>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>
+                                    Date de la première intervention / démarrage du contrat
+                                </span>
+                            </div>
+                            <input
+                                type="date"
+                                required
+                                value={formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10)}
+                                onChange={e => {
+                                    const val = e.target.value || new Date().toISOString().slice(0, 10);
+                                    setFormData({
+                                        ...formData,
+                                        date_demarrage: val,
+                                        date_debut: val,
+                                        date: val
+                                    });
+                                }}
+                                style={{
+                                    padding: '0.5rem 0.75rem',
+                                    borderRadius: '10px',
+                                    border: '1.5px solid #0f766e',
+                                    backgroundColor: '#ffffff',
+                                    fontSize: '0.875rem',
+                                    fontWeight: 700,
+                                    color: '#0f172a',
+                                    outline: 'none',
+                                    cursor: 'pointer'
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 export const RoomsGridBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => (
     <div className="ws-form-block">
@@ -291,40 +618,97 @@ export const PeopleBlock: React.FC<DurationBlockProps> = ({ formData, setFormDat
     </div>
 );
 
-export const PlanningBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => (
-    <div className="ws-form-block">
-        <div className="ws-section-header">Planning pour votre demande</div>
-        <div className="ws-planning-grid">
-            <div className="ws-planning-col">
-                <label className="ws-planning-radio-label">
-                    <input type="radio" name="schedulingType" value="fixed" checked={formData.scheduling_type === 'fixed'} onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })} />
-                    <span>Heure fixe</span>
-                </label>
-                <input type="time" value={formData.heure || ''} onChange={e => setFormData({ ...formData, heure: e.target.value })} disabled={formData.scheduling_type !== 'fixed'} style={{ width: '120px', textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px' }} />
+export const PlanningBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => {
+    const isAbo = Boolean(formData.frequence && formData.frequence !== 'une fois');
+
+    return (
+        <div
+            className="ws-form-block"
+            style={isAbo ? { opacity: 0.55, pointerEvents: 'none', filter: 'grayscale(0.4)' } : {}}
+        >
+            <div className="ws-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Planning pour votre demande</span>
+                {isAbo && (
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', fontStyle: 'italic' }}>
+                        (Information définie dans l'abonnement ci-dessus)
+                    </span>
+                )}
             </div>
-            <div className="ws-planning-col">
-                <label className="ws-planning-radio-label">
-                    <input type="radio" name="schedulingType" value="flexible" checked={formData.scheduling_type === 'flexible'} onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })} />
-                    <span>Je suis flexible</span>
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500 }}>
-                        <input type="radio" name="timePref" value="matin" checked={formData.preference_horaire === 'matin'} onChange={() => setFormData({ ...formData, preference_horaire: 'matin' })} disabled={formData.scheduling_type !== 'flexible'} style={{ accentColor: 'var(--primary)' }} />
-                        Le matin
+            <div className="ws-planning-grid">
+                <div className="ws-planning-col">
+                    <label className="ws-planning-radio-label">
+                        <input
+                            type="radio"
+                            name="schedulingType"
+                            value="fixed"
+                            checked={formData.scheduling_type === 'fixed'}
+                            onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })}
+                            disabled={isAbo}
+                        />
+                        <span>Heure fixe</span>
                     </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500 }}>
-                        <input type="radio" name="timePref" value="apres_midi" checked={formData.preference_horaire === 'apres_midi'} onChange={() => setFormData({ ...formData, preference_horaire: 'apres_midi' })} disabled={formData.scheduling_type !== 'flexible'} style={{ accentColor: 'var(--primary)' }} />
-                        L'après-midi
+                    <input
+                        type="time"
+                        value={formData.heure || ''}
+                        onChange={e => setFormData({ ...formData, heure: e.target.value })}
+                        disabled={isAbo || formData.scheduling_type !== 'fixed'}
+                        style={{ width: '120px', textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px' }}
+                    />
+                </div>
+                <div className="ws-planning-col">
+                    <label className="ws-planning-radio-label">
+                        <input
+                            type="radio"
+                            name="schedulingType"
+                            value="flexible"
+                            checked={formData.scheduling_type === 'flexible'}
+                            onChange={e => setFormData({ ...formData, scheduling_type: e.target.value })}
+                            disabled={isAbo}
+                        />
+                        <span>Je suis flexible</span>
                     </label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500 }}>
+                            <input
+                                type="radio"
+                                name="timePref"
+                                value="matin"
+                                checked={formData.preference_horaire === 'matin'}
+                                onChange={() => setFormData({ ...formData, preference_horaire: 'matin' })}
+                                disabled={isAbo || formData.scheduling_type !== 'flexible'}
+                                style={{ accentColor: 'var(--primary)' }}
+                            />
+                            Le matin
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500 }}>
+                            <input
+                                type="radio"
+                                name="timePref"
+                                value="apres_midi"
+                                checked={formData.preference_horaire === 'apres_midi'}
+                                onChange={() => setFormData({ ...formData, preference_horaire: 'apres_midi' })}
+                                disabled={isAbo || formData.scheduling_type !== 'flexible'}
+                                style={{ accentColor: 'var(--primary)' }}
+                            />
+                            L'après-midi
+                        </label>
+                    </div>
+                </div>
+                <div className="ws-planning-col">
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--primary)' }}>Date</div>
+                    <input
+                        type="date"
+                        required={!isAbo}
+                        value={formData.date || ''}
+                        onChange={e => setFormData({ ...formData, date: e.target.value })}
+                        disabled={isAbo}
+                        style={{ padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem' }}
+                    />
                 </div>
             </div>
-            <div className="ws-planning-col">
-                <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--primary)' }}>Date</div>
-                <input type="date" required value={formData.date || ''} onChange={e => setFormData({ ...formData, date: e.target.value })} style={{ padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem' }} />
-            </div>
         </div>
-    </div>
-);
+    );
+};
 
 export const OptionalServicesBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => (
     <div className="ws-form-block">

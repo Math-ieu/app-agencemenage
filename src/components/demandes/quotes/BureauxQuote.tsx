@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
-import { SURCHARGE_CITIES } from "../../../utils/pricing";
+import { SURCHARGE_CITIES, getDynamicMonthPassagesCount } from "../../../utils/pricing";
 import type { QuotePrestationLine } from "./QuoteSection";
 
 const visitsMap: Record<string, number> = {
@@ -191,12 +191,14 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
   }, [minHours, heures]);
 
   const isAbo = frequency === "subscription";
-  const nbPassages = isAbo ? (visitsMap[subFrequency] * 4) : 1;
+  const dynamicPassages = getDynamicMonthPassagesCount(demande);
+  const nbPassages = isAbo ? (dynamicPassages > 0 ? dynamicPassages : (visitsMap[subFrequency] * 4)) : 1;
 
   const optionsPerPassage = (opts.produits ? OPT_PRODUITS : 0) + (opts.torchons ? OPT_TORCHONS : 0)
     + (opts.pack ? OPT_PACK : 0) + (opts.zone ? OPT_ZONE : 0);
 
-  const laborPerPassage = heures * personnes * HOURLY_RATE;
+  const rate = Number(data.tarif_horaire || data.tarif_base || data.rate) || HOURLY_RATE;
+  const laborPerPassage = heures * personnes * rate;
   const laborTotal = laborPerPassage * nbPassages;
   // Remise effective : −10% abonnement ou remise étendue (la plus avantageuse) — via RemiseSection
   const remisePct = isAbo ? Math.max(remise.abonnement ? 10 : 0, remise.etenduePct) : remise.etenduePct;

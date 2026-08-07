@@ -5,6 +5,7 @@ import {
   SurfaceSliderBlock,
   EtatLogementBlock,
   OptionalServicesBlock,
+  FrequenceBlock,
   PlanningBlock
 } from '../ServiceFormBlocks';
 
@@ -20,6 +21,7 @@ export const PostDemenagementForm: React.FC<PostDemenagementFormProps> = (props)
       <SurfaceSliderBlock {...props} />
       <EtatLogementBlock {...props} />
       <OptionalServicesBlock {...props} />
+      <FrequenceBlock {...props} />
       <PlanningBlock {...props} />
     </>
   );

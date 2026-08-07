@@ -51,14 +51,24 @@ export interface PricingInput {
     torchons: boolean;
     ville: string;
     date: string;
+    date_demarrage?: string;
+    date_debut?: string;
+    jours_passage?: any;
+    jours_intervention?: any;
+    jours_intervention_detail?: any;
+    tarif_horaire?: number;
+    tarif_base?: number;
+    rate?: number;
     scheduling_type: string;
     heure: string;
     preference_horaire: string;
     surface?: number | string;
     formula?: 'A' | 'B';
     size_tier?: string;
+    sizeTier?: string;
     conso?: boolean;
     linen_sets?: number;
+    linenSets?: number;
 }
 
 export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' => {
@@ -169,13 +179,33 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         else if (frequence.includes('4/mois')) visitsPerWeek = 1;
     }
 
+    let dynamicPassages = 0;
+    if (isSubscription && !isOneShot) {
+        const dummyDemande = {
+            id: (input as any)?.id,
+            formulaire_data: input,
+            frequency_label: frequence,
+            date_intervention: input.date_demarrage || input.date_debut || input.date,
+            date_demarrage: input.date_demarrage || input.date_debut || input.date,
+            jours_passage: input.jours_passage || input.jours_intervention,
+            jours_intervention_detail: input.jours_intervention_detail
+        };
+        dynamicPassages = getDynamicMonthPassagesCount(dummyDemande);
+    }
+    const numPassages = dynamicPassages > 0 ? dynamicPassages : (visitsPerWeek * 4);
+
     // 3. Ménage Bureaux — base 60 DH HT/h ; produits/torchons en option flat (brief)
     if (serviceLower.includes('menage bureaux')) {
+        const customRate = Number((input as any).tarif_horaire || (input as any).tarif_base || (input as any).rate);
+        const baseRate = customRate > 0 ? customRate : 60;
+        const est = input.surface ? estimateResources(serviceLower, input) : null;
+        const effDuree = est ? est.duration : Math.max(Number(duree) || 0, 2);
+        const effPeople = est ? est.people : Math.max(1, Number(nb_intervenants) || 1);
         const optionsPerVisit = (produits ? 90 : 0) + (torchons ? 40 : 0);
-        const laborPerVisit = duree * nb_intervenants * 60 * multiplier;
+        const laborPerVisit = effDuree * effPeople * baseRate * multiplier;
 
         if (isSubscription && !isOneShot) {
-            const laborMonthly = laborPerVisit * visitsPerWeek * 4;
+            const laborMonthly = laborPerVisit * numPassages;
             const discountAmount = laborMonthly * 0.1; // remise sur la main-d'œuvre uniquement
             // Options en ligne flat (une seule fois), conformément au brief
             return Math.round(laborMonthly - discountAmount + optionsPerVisit);
@@ -184,22 +214,45 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         }
     }
 
-    // 4. Ménage Standard, Grand Ménage
+    // 4. Fin de chantier (Surface * 15 DH/m², min 1500 DH)
+    if (serviceLower.includes('fin de chantier') || serviceLower.includes('fin chantier')) {
+        const s = Number(surface) || 0;
+        if (s <= 0) return 'Sur devis';
+        const baseRaw = s * 15;
+        const base = Math.max(baseRaw, 1500);
+        return Math.round(base * multiplier);
+    }
+
+    // 5. Post-Sinistre (Surface * 28 DH/m², min 1200 DH)
+    if (serviceLower.includes('post-sinistre') || serviceLower.includes('post sinistre')) {
+        const s = Number(surface) || 0;
+        if (s <= 0) return 'Sur devis';
+        const baseRaw = s * 28;
+        const base = Math.max(baseRaw, 1200);
+        return Math.round(base * multiplier);
+    }
+
+    // 6. Ménage Standard, Grand Ménage
     if (serviceLower.includes('menage standard') || serviceLower.includes('grand menage')) {
         const isGrand = serviceLower.includes('grand menage');
-        const baseRate = isGrand ? 70 : 60;
-        // Durée minimum facturable (brief) : standard 4h, grand ménage 6h
+        const customRate = Number((input as any).tarif_horaire || (input as any).tarif_base || (input as any).rate);
+        const baseRate = customRate > 0 ? customRate : (isGrand ? 70 : 60);
         const minHours = isGrand ? 6 : 4;
-        const effDuree = Math.max(Number(duree) || 0, minHours);
+
+        // Auto-derive from surface if surface is specified (Grand Ménage / Post-Déménagement)
+        const est = (isGrand || input.surface) ? estimateResources(serviceLower, input) : null;
+        const effDuree = Math.max(Number(duree) || 0, est ? est.duration : 0, minHours);
+        const effPeople = Math.max(Number(nb_intervenants) || 1, est ? est.people : 1);
+
         let totalServicePrice = 0;
 
         if (isSubscription && !isOneShot) {
-            const monthlyHours = effDuree * visitsPerWeek * 4;
-            const subtotalMonthly = monthlyHours * baseRate * nb_intervenants;
+            const monthlyHours = effDuree * numPassages;
+            const subtotalMonthly = monthlyHours * baseRate * effPeople;
             const discountAmount = subtotalMonthly * 0.1;
             totalServicePrice = (subtotalMonthly - discountAmount) * multiplier;
         } else {
-            totalServicePrice = effDuree * baseRate * nb_intervenants * multiplier;
+            totalServicePrice = effDuree * baseRate * effPeople * multiplier;
         }
 
         let price = totalServicePrice;
@@ -217,6 +270,13 @@ export const estimateResources = (service: string, input: any): { duration: numb
     const normalizeService = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     const serviceLower = normalizeService(service);
 
+    if (serviceLower.includes('bureau') || serviceLower.includes('bureaux')) {
+        const surf = String(input.surface || '');
+        if (surf === '0-70' || surf === '70' || Number(surf) <= 70) return { duration: 2, people: 1 };
+        if (surf === '71-150' || surf === '150' || (Number(surf) > 70 && Number(surf) <= 150)) return { duration: 4, people: 1 };
+        if (surf === '151-300' || surf === '300' || (Number(surf) > 150 && Number(surf) <= 300)) return { duration: 4, people: 2 };
+        return { duration: 8, people: 2 };
+    }
 
     if (serviceLower.includes('menage standard') || serviceLower.includes('airbnb')) {
         const rooms = input.rooms || {};
@@ -255,9 +315,9 @@ export const estimateResources = (service: string, input: any): { duration: numb
         serviceLower.includes('post-demenagement') ||
         serviceLower.includes('demenagement')) {
         
-        const surface = input.surface || 0;
+        const surface = Number(input.surface) || 0;
         if (surface <= 70) return { duration: 6, people: 1 };
-        if (surface <= 150) return { duration: 4, people: 2 };
+        if (surface <= 150) return { duration: 6, people: 2 };
         if (surface < 300) return { duration: 8, people: 2 };
         return { duration: 8, people: 3 };
     }
@@ -370,7 +430,16 @@ export const getDevisAmount = (demande: any): number => {
              || Number(formData.montant)
              || Number(demande.prix)
              || 0;
-    return Math.max(0, val);
+
+    if (val > 0) return Math.max(0, val);
+
+    // Fallback: compute dynamically using calculateTotalPrice (which includes options like produits +90, torchons +40, etc.)
+    const calc = calculateTotalPrice(formData);
+    if (typeof calc === 'number' && calc > 0) {
+        return calc;
+    }
+
+    return 0;
 };
 
 export const getContractBaselinePassages = (demande: any): number => {
@@ -382,6 +451,10 @@ export const getContractBaselinePassages = (demande: any): number => {
     if (Number(formData.nb_passages_devis) > 0) return Number(formData.nb_passages_devis);
     if (Number(formData.passages_base) > 0) return Number(formData.passages_base);
     if (Number(formData.passages_devis) > 0) return Number(formData.passages_devis);
+
+    // 2. Dynamic month passages calculated for the subscription month prorata
+    const dynamicPassages = getDynamicMonthPassagesCount(demande);
+    if (dynamicPassages > 0) return dynamicPassages;
 
     // 2. Derive from active days selected in the planning / form (extractJoursPassage)
     let days: string[] = [];
@@ -475,18 +548,18 @@ export const calculateInvoiceFromDevis = (
 
     const formData = demande.formulaire_data || {};
 
-    // ── 1. Devis total (source de vérité pour le contrat de base — APRÈS remise abonnement) ──
+    // ── 1. Devis total (source de vérité pour le contrat de base — APRÈS remise abonnement ET AVEC options) ──
     const devisTotal = getDevisAmount(demande);
 
     // ── 2. Nombre de passages de base du devis / contrat (FIXE) ──
     const passagesBase = getContractBaselinePassages(demande);
 
-    // ── 3. Prix unitaire fixe par passage (FIXE) ──
+    // ── 3. Prix unitaire fixe par passage (derived from devisTotal so options are included) ──
     let prixUnitaireDevis = 0;
-    if (formData.prix_unitaire && Number(formData.prix_unitaire) > 0) {
-        prixUnitaireDevis = Number(formData.prix_unitaire);
-    } else if (devisTotal > 0 && passagesBase > 0) {
+    if (devisTotal > 0 && passagesBase > 0) {
         prixUnitaireDevis = Math.round((devisTotal / passagesBase) * 100) / 100;
+    } else if (formData.prix_unitaire && Number(formData.prix_unitaire) > 0) {
+        prixUnitaireDevis = Number(formData.prix_unitaire);
     } else {
         prixUnitaireDevis = calculateSinglePassagePrice(demande);
     }
@@ -551,22 +624,67 @@ export const getInvoiceMonthlyAmount = (demande: any, monthPassages?: number): n
     return result.totalTTC;
 };
 
+export const parseDateRobust = (val: any): Date | null => {
+    if (!val) return null;
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    if (typeof val === 'number') {
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof val === 'string') {
+        const s = val.trim();
+        if (!s) return null;
+
+        // Check French format DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+        const frMatch = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+        if (frMatch) {
+            const day = parseInt(frMatch[1], 10);
+            const month = parseInt(frMatch[2], 10) - 1;
+            const year = parseInt(frMatch[3], 10);
+            const d = new Date(year, month, day, 0, 0, 0, 0);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        // ISO format YYYY-MM-DD or YYYY.MM.DD
+        const isoMatch = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+        if (isoMatch) {
+            const year = parseInt(isoMatch[1], 10);
+            const month = parseInt(isoMatch[2], 10) - 1;
+            const day = parseInt(isoMatch[3], 10);
+            const d = new Date(year, month, day, 0, 0, 0, 0);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        const d = new Date(s);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+};
+
 export const extractJoursPassage = (raw: any): string[] => {
     const dayNames = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
     if (!raw) return [];
+    let items: any[] = [];
     if (Array.isArray(raw)) {
-        return raw
-            .map(item => typeof item === 'string' ? item.toLowerCase() : String(item?.jour || item).toLowerCase())
-            .map(s => s.trim())
-            .filter(j => dayNames.includes(j));
+        items = raw;
+    } else if (typeof raw === 'string') {
+        const s = raw.trim();
+        if (s.startsWith('[') && s.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(s);
+                if (Array.isArray(parsed)) items = parsed;
+                else items = [s];
+            } catch (e) {
+                items = s.split(/[+,/;]|\s+et\s+/i);
+            }
+        } else {
+            items = s.split(/[+,/;]|\s+et\s+/i);
+        }
     }
-    if (typeof raw === 'string') {
-        const parts = raw.split(/[+,/;]|\s+et\s+/i);
-        return parts
-            .map(p => p.trim().toLowerCase())
-            .filter(j => dayNames.includes(j));
-    }
-    return [];
+    return items
+        .map(item => typeof item === 'string' ? item.toLowerCase() : String(item?.jour || item?.label || item?.name || item || '').toLowerCase())
+        .map(str => str.replace(/["'\[\]]/g, '').trim())
+        .filter(j => dayNames.includes(j));
 };
 
 /**
@@ -574,13 +692,24 @@ export const extractJoursPassage = (raw: any): string[] => {
  * Automatically accounts for active days, calendar start date (e.g. mid-month start prorata),
  * and manual overrides / child demand cancellations / postponements on the planning calendar.
  */
-export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = []): number => {
+export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = [], targetMonthDate?: Date | string): number => {
     if (!demande) return 0;
 
-    // 2. Compute dynamic passages for current month from active days & calendar bounds
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth();
+    const startStr = (demande.formulaire_data as any)?.date_demarrage || (demande.formulaire_data as any)?.date_debut || demande.planning?.date_debut || demande.date_intervention;
+    const parsedStart = parseDateRobust(startStr);
+
+    let targetDateObj: Date;
+    const parsedTarget = parseDateRobust(targetMonthDate);
+    if (parsedTarget) {
+        targetDateObj = parsedTarget;
+    } else if (parsedStart) {
+        targetDateObj = parsedStart;
+    } else {
+        targetDateObj = new Date();
+    }
+
+    const y = targetDateObj.getFullYear();
+    const m = targetDateObj.getMonth();
     const mPrefix = `${y}-${String(m + 1).padStart(2, '0')}`;
 
     const firstOfMonth = new Date(y, m, 1, 0, 0, 0, 0);
@@ -630,11 +759,14 @@ export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = 
     if (selectedDows.length === 0) return getContractBaselinePassages(demande);
 
     let start = firstOfMonth;
-    const startStr = (demande.formulaire_data as any)?.date_demarrage || (demande.formulaire_data as any)?.date_debut || demande.planning?.date_debut || demande.date_intervention;
-    if (startStr) {
-        const parsedStart = new Date(startStr.includes('T') ? startStr : `${startStr.slice(0, 10)}T00:00:00`);
-        if (!isNaN(parsedStart.getTime()) && parsedStart > firstOfMonth && parsedStart <= lastOfMonth) {
-            start = parsedStart;
+    if (parsedStart) {
+        const startNormalized = new Date(parsedStart.getFullYear(), parsedStart.getMonth(), parsedStart.getDate(), 0, 0, 0, 0);
+        if (startNormalized > lastOfMonth) {
+            // Subscription has not started yet in target month
+            return 0;
+        }
+        if (startNormalized >= firstOfMonth && startNormalized <= lastOfMonth) {
+            start = startNormalized;
         }
     }
 
@@ -642,10 +774,12 @@ export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = 
     const isResilie = (demande.statut || '').toLowerCase() === 'resilie';
     if (isResilie) {
         const endStr = (demande.formulaire_data as any)?.date_fin || demande.planning?.date_fin;
-        if (endStr) {
-            const parsedEnd = new Date(endStr.includes('T') ? endStr : `${endStr.slice(0, 10)}T23:59:59`);
-            if (!isNaN(parsedEnd.getTime()) && parsedEnd >= firstOfMonth && parsedEnd < lastOfMonth) {
-                end = parsedEnd;
+        const parsedEnd = parseDateRobust(endStr);
+        if (parsedEnd) {
+            const endNormalized = new Date(parsedEnd.getFullYear(), parsedEnd.getMonth(), parsedEnd.getDate(), 23, 59, 59, 999);
+            if (endNormalized < firstOfMonth) return 0;
+            if (endNormalized >= firstOfMonth && endNormalized < lastOfMonth) {
+                end = endNormalized;
             }
         }
     }
@@ -684,5 +818,5 @@ export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = 
         }
     });
 
-    return passageDatesSet.size > 0 ? passageDatesSet.size : getContractBaselinePassages(demande);
+    return passageDatesSet.size;
 };

@@ -4,6 +4,7 @@ import {
   HabitationTypeBlock,
   InterventionNatureBlock,
   SurfacePostSinistreBlock,
+  FrequenceBlock,
   PlanningBlock
 } from '../ServiceFormBlocks';
 
@@ -18,6 +19,7 @@ export const PostSinistreForm: React.FC<PostSinistreFormProps> = (props) => {
       <HabitationTypeBlock {...props} />
       <InterventionNatureBlock {...props} />
       <SurfacePostSinistreBlock {...props} />
+      <FrequenceBlock {...props} />
       <PlanningBlock {...props} />
     </>
   );

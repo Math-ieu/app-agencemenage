@@ -10,7 +10,7 @@ import { genererDevisPostSinistre, type DevisPostSinistreData } from './devis-po
 import { genererDevis as genererDevisFinChantier, type DevisData as DevisFinChantierData } from './devis-nettoyagefinchantier';
 import { genererDevisAutreService } from './devis-autreservice';
 import { genererDevisMenageStandard, type DevisStandardData } from './devis-menagestandard';
-import { calculateSinglePassagePrice } from '../../utils/pricing';
+import { calculateSinglePassagePrice, getDynamicMonthPassagesCount } from '../../utils/pricing';
 
 const toNumber = (value: unknown): number => {
   const n = Number(value);
@@ -464,7 +464,8 @@ const buildMenageBureauxData = (demande: Demande): DevisMenageBureauxData => {
   const total = getTotalPrice(demande, form);
   const heures = toNumber(form.nb_heures || form.heures || 3);
   const nbIntervenantes = toNumber(form.nb_intervenantes || form.nb_intervenants || 1);
-  const nbPassages = toNumber(form.nb_passages_mois || form.nb_passages || 4);
+  const dynamicPassages = getDynamicMonthPassagesCount(demande);
+  const nbPassages = dynamicPassages > 0 ? dynamicPassages : toNumber(form.nb_passages_mois || form.nb_passages || 4);
   const prixBase = toNumber(form.prix_base || form.prixBase || total);
   const prixProduits = toNumber(form.prix_produits || form.prixProduits || 0);
 
@@ -679,7 +680,8 @@ const buildMenageStandardData = (demande: Demande): DevisStandardData => {
       lignes.push({ designation: p.desc || p.designation || p.label || 'Prestation', montant: m, isReduction: p.isReduction });
     });
   } else if (isAbonnement) {
-    const numPassages = toNumber(demande.planning?.nombre_passages_mois || form.nombre_passages || 4);
+    const dynamicPassages = getDynamicMonthPassagesCount(demande);
+    const numPassages = dynamicPassages > 0 ? dynamicPassages : toNumber(demande.planning?.nombre_passages_mois || form.nombre_passages || 4);
     const pu = Number(form.prix_unitaire) || calculateSinglePassagePrice(demande);
     const subtotal = numPassages * pu;
 

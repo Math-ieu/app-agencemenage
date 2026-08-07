@@ -3,6 +3,7 @@ import { FormBlockProps } from '../ServiceFormBlocks';
 import { 
   HabitationTypeBlock,
   FormulesAirbnbBlock,
+  FrequenceBlock,
   PlanningBlock
 } from '../ServiceFormBlocks';
 
@@ -16,6 +17,7 @@ export const MenageAirBnBForm: React.FC<MenageAirBnBFormProps> = (props) => {
     <>
       <HabitationTypeBlock {...props} />
       <FormulesAirbnbBlock {...props} />
+      <FrequenceBlock {...props} />
       <PlanningBlock {...props} />
     </>
   );

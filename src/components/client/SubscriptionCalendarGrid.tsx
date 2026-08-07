@@ -6,6 +6,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Demande } from '../../types';
 import { createPlanningIntervention, updateDemande, deleteDemande } from '../../api/client';
+import { parseDateRobust } from '../../utils/pricing';
 
 export interface DateOverrideItem {
   heure?: string;
@@ -77,11 +78,11 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
 
   const maxJours = React.useMemo(() => {
     const freqStr = (aboFrequence || '').toLowerCase();
-    if (freqStr.includes('1_fois') || freqStr.includes('1/sem') || freqStr.includes('1 fois')) return 1;
-    if (freqStr.includes('2_fois') || freqStr.includes('2/sem') || freqStr.includes('2 fois')) return 2;
-    if (freqStr.includes('3_fois') || freqStr.includes('3/sem') || freqStr.includes('3 fois')) return 3;
-    if (freqStr.includes('4_fois') || freqStr.includes('4/sem') || freqStr.includes('4 fois')) return 4;
-    if (freqStr.includes('5_fois') || freqStr.includes('5/sem') || freqStr.includes('5 fois')) return 5;
+    if (freqStr.includes('1_fois') || freqStr.includes('1/sem') || freqStr.includes('1 fois') || freqStr.includes('1 passage') || freqStr.includes('1/mois') || freqStr.startsWith('1')) return 1;
+    if (freqStr.includes('2_fois') || freqStr.includes('2/sem') || freqStr.includes('2 fois') || freqStr.includes('2 passage') || freqStr.startsWith('2')) return 2;
+    if (freqStr.includes('3_fois') || freqStr.includes('3/sem') || freqStr.includes('3 fois') || freqStr.includes('3 passage') || freqStr.startsWith('3')) return 3;
+    if (freqStr.includes('4_fois') || freqStr.includes('4/sem') || freqStr.includes('4 fois') || freqStr.includes('4 passage') || freqStr.startsWith('4')) return 4;
+    if (freqStr.includes('5_fois') || freqStr.includes('5/sem') || freqStr.includes('5 fois') || freqStr.includes('5 passage') || freqStr.startsWith('5')) return 5;
     return Math.max(currentJours.length, 2);
   }, [aboFrequence, currentJours.length]);
 
@@ -143,13 +144,22 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
   };
 
   const heureByDow: Record<number, string> = {};
-  aboJours.forEach((j) => { heureByDow[dayMap[j.jour]] = j.heure_debut; });
-  const selectedDows = aboJours.map((j) => dayMap[j.jour]);
+  const heureFinByDow: Record<number, string> = {};
+  (aboJours || []).forEach((j) => {
+    const dow = dayMap[j.jour?.toLowerCase()];
+    if (dow !== undefined) {
+      if (j.heure_debut) heureByDow[dow] = j.heure_debut;
+      if (j.heure_fin) heureFinByDow[dow] = j.heure_fin;
+    }
+  });
+  const selectedDows = (aboJours || []).map((j) => dayMap[j.jour?.toLowerCase()]).filter(v => v !== undefined);
 
-  let start: Date;
-  try { start = aboDateDebut ? parseISO(aboDateDebut) : new Date(); } catch { start = new Date(); }
-  let end: Date;
-  try { end = dateFinAuto ? parseISO(dateFinAuto) : addMonths(start, 1); } catch { end = addMonths(start, 1); }
+  const parsedStart = parseDateRobust(aboDateDebut);
+  let start = parsedStart ? new Date(parsedStart.getFullYear(), parsedStart.getMonth(), parsedStart.getDate(), 0, 0, 0, 0) : startOfMonth(calMonth);
+
+  const calMonthEnd = endOfMonth(calMonth);
+  const parsedEnd = parseDateRobust(dateFinAuto);
+  let end = parsedEnd ? new Date(parsedEnd.getFullYear(), parsedEnd.getMonth(), parsedEnd.getDate(), 23, 59, 59, 999) : (calMonthEnd > start ? calMonthEnd : addMonths(start, 12));
 
   const startMs = start.getTime();
   const interventionSet = new Set<string>();
@@ -304,7 +314,7 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
             const isPattern = interventionSet.has(key);
             const isIntervention = (isPattern && !override?.excluded) || (!!override?.heure && !override?.excluded);
             const heure = override?.heure || (isPattern ? heureByDow[d.getDay()] : "");
-            const heureFin = override?.heure_fin || "";
+            const heureFin = override?.heure_fin || (isPattern ? heureFinByDow[d.getDay()] : "");
             const statut = override?.statut || null;
             const isToday = isSameDay(d, new Date());
 
@@ -396,9 +406,10 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                             borderRadius: 4,
                             padding: '2px 4px',
                             textAlign: 'center',
-                            letterSpacing: '0.02em'
+                            letterSpacing: '0.02em',
+                            whiteSpace: 'nowrap'
                           }}>
-                            {heure.slice(0, 5)}{heureFin ? `–${heureFin.slice(0, 5)}` : ''}
+                            {heure.slice(0, 5)}{heureFin ? ` - ${heureFin.slice(0, 5)}` : ''}
                           </span>
                         )}
                       </div>

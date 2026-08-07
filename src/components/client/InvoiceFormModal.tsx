@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, X, AlertCircle, FileText } from 'lucide-react';
 import { Demande, Client } from '../../types';
 import { updateDemande, generateDocument } from '../../api/client';
-import { getContractBaselinePassages, calculateSinglePassagePrice, getDevisAmount } from '../../utils/pricing';
+import { getContractBaselinePassages, calculateSinglePassagePrice, getDevisAmount, extractJoursPassage, getDynamicMonthPassagesCount } from '../../utils/pricing';
 
 export interface InvoiceFormModalProps {
   show: boolean;
@@ -137,11 +137,11 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       const contractPassagesBase = getContractBaselinePassages(latest);
       setPassagesBase(contractPassagesBase);
 
-      // Prix unitaire dérivé du devis = devisTotal / contractPassagesBase
-      const derivedPU = Number(formData.prix_unitaire) > 0
-        ? Number(formData.prix_unitaire)
-        : (contractPassagesBase > 0 && rawDevisTotal > 0
-          ? Math.round((rawDevisTotal / contractPassagesBase) * 100) / 100
+      // Prix unitaire dérivé du devis = devisTotal / contractPassagesBase (inclut les produits optionnels)
+      const derivedPU = (contractPassagesBase > 0 && rawDevisTotal > 0)
+        ? Math.round((rawDevisTotal / contractPassagesBase) * 100) / 100
+        : (Number(formData.prix_unitaire) > 0
+          ? Number(formData.prix_unitaire)
           : calculateSinglePassagePrice(latest));
       setInvPrixUnitaire(String(derivedPU));
 
@@ -159,6 +159,56 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       setInvTvaPercent(String(realTva));
     }
   }, [show, latest, monthDemandes, selectedDays, dateDebut, frequencyLabel, monthPassagesPlanifies]);
+
+  // Synchronisation dynamique si le bouton "Produits ménagers inclus" est coché / décoché dans le modal
+  const initialProduits = Boolean(latest?.avec_produit || latest?.formulaire_data?.produits_inclus || latest?.formulaire_data?.produits);
+  useEffect(() => {
+    if (!latest || !show) return;
+    const baseDevis = getDevisAmount(latest);
+    const passBase = getContractBaselinePassages(latest);
+    const produitsDiff = (invProduitsInclus ? 90 : 0) - (initialProduits ? 90 : 0);
+    const adjustedDevisTotal = Math.max(0, baseDevis + produitsDiff);
+    setDevisTotal(adjustedDevisTotal);
+    if (passBase > 0) {
+      setInvPrixUnitaire(String(Math.round((adjustedDevisTotal / passBase) * 100) / 100));
+    }
+  }, [invProduitsInclus, latest, show]);
+
+  // Recalculate passages when days, start date, or frequency change
+  useEffect(() => {
+    if (!show || !latest) return;
+    const parsedDays = extractJoursPassage(invJoursPassage);
+    if (parsedDays.length === 0) return;
+
+    // Build a synthetic demande with updated values to compute dynamic passages
+    const freqMatch = invFrequence.match(/(\d+)/);
+    const freqLabel = freqMatch ? `${freqMatch[1]}/sem` : (latest.frequency_label || latest.formulaire_data?.frequence || '2/sem');
+
+    const syntheticDemande = {
+      ...latest,
+      frequency_label: freqLabel,
+      date_intervention: invDateStart || latest.date_intervention,
+      formulaire_data: {
+        ...(latest.formulaire_data || {}),
+        frequence: freqLabel,
+        date_demarrage: invDateStart || latest.formulaire_data?.date_demarrage || latest.date_intervention,
+        date_debut: invDateStart || latest.formulaire_data?.date_debut || latest.date_intervention,
+        jours_passage: invJoursPassage,
+        jours_intervention: parsedDays,
+        jours_intervention_detail: parsedDays.map(j => ({ jour: j, heure_debut: '09:00', heure_fin: '13:00' }))
+      }
+    };
+
+    const newPassages = getDynamicMonthPassagesCount(syntheticDemande);
+    if (newPassages > 0) {
+      setInvNbPassages(String(newPassages));
+      // Recalculate PU from devis total and contract baseline
+      const contractBase = getContractBaselinePassages(latest);
+      if (contractBase > 0 && devisTotal > 0) {
+        setInvPrixUnitaire(String(Math.round((devisTotal / contractBase) * 100) / 100));
+      }
+    }
+  }, [invJoursPassage, invDateStart, invFrequence, show]);
 
   if (!show) return null;
 
@@ -432,6 +482,8 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 const tvaAmountNum = Math.round((totalHTNum * tvaPercentNum) / 100 * 100) / 100;
                 const finalMontantFacture = tvaPercentNum > 0 ? totalTTCNum : totalHTNum;
 
+                const parsedDays = extractJoursPassage(invJoursPassage);
+
                 // Sync ALL changes bidirectionally back to formulaire_data
                 const updatedFormData = {
                   ...(latest.formulaire_data || {}),
@@ -446,6 +498,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   com: invCommission,
                   nombre_passages: invNbPassages,
                   jours_passage: invJoursPassage,
+                  jours_intervention: parsedDays,
                   produits_inclus: invProduitsInclus,
                   produits: invProduitsInclus,
                   interventions_recuperees: invInterventionsRecup,
@@ -468,6 +521,11 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   montant_devis: devisTotal || latest.montant_devis || latest.prix,
                   montant_facture: finalMontantFacture,
                   service: invService,
+                  planning: {
+                    ...(latest.planning || {}),
+                    date_debut: invDateStart || latest.planning?.date_debut,
+                    jours_intervention: parsedDays.length > 0 ? parsedDays : latest.planning?.jours_intervention
+                  },
                   formulaire_data: updatedFormData
                 } as any);
 

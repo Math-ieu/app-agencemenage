@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { extractJoursPassage } from '../utils/pricing';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient, uploadDocument } from '../api/client';
 import { decodeId } from '../utils/obfuscation';
@@ -162,11 +163,16 @@ export default function DemandesEnAttente() {
     quartier: '',
     adresse: '',
     date: '',
+    date_demarrage: '',
+    date_debut: '',
     heure: '',
     scheduling_type: 'fixed',
     preference_horaire: '',
     type_habitation: '',
     frequence: '',
+    jours_passage: '',
+    jours_intervention: [] as string[],
+    jours_intervention_detail: [] as any[],
     intervention_nature: 'sinistre',
     accommodation_state: '',
     cleanliness_type: '',
@@ -272,27 +278,25 @@ export default function DemandesEnAttente() {
   const calculatedPrice = usePriceCalculator(formData, selectedService);
   const estimatedResources = useResourceEstimator(formData, selectedService);
 
-  // Sync estimated resources (only for new creations, not for edits or renewals)
+  // Sync estimated resources dynamically whenever estimatedResources updates
   useEffect(() => {
-    if (!editingDemande && !isRenewal && estimatedResources) {
+    if (estimatedResources) {
       setFormData(prev => ({
         ...prev,
         duree: estimatedResources.duration,
         nb_intervenants: estimatedResources.people
       }));
     }
-  }, [estimatedResources, editingDemande, isRenewal]);
+  }, [estimatedResources]);
 
-  // Sync calculated price to montant (only for new creations)
+  // Sync calculated price to montant automatically whenever calculatedPrice updates
   useEffect(() => {
-    if (!editingDemande && !isRenewal) {
-      if (calculatedPrice && calculatedPrice !== 'Sur devis') {
-        setFormData(prev => ({ ...prev, montant: calculatedPrice }));
-      } else if (calculatedPrice === 'Sur devis') {
-        setFormData(prev => ({ ...prev, montant: '' }));
-      }
+    if (calculatedPrice && calculatedPrice !== 'Sur devis') {
+      setFormData(prev => ({ ...prev, montant: calculatedPrice }));
+    } else if (calculatedPrice === 'Sur devis') {
+      setFormData(prev => ({ ...prev, montant: '' }));
     }
-  }, [calculatedPrice, editingDemande, isRenewal]);
+  }, [calculatedPrice]);
 
   // Enforce minDuree for duration
   useEffect(() => {
@@ -664,8 +668,8 @@ export default function DemandesEnAttente() {
     setDirectPhone('');
     setWhatsappPhone('');
     setFormData({
-      nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: '', heure: '',
-      scheduling_type: 'fixed', preference_horaire: '', type_habitation: '', frequence: 'une fois', intervention_nature: 'sinistre', accommodation_state: '', cleanliness_type: '', nb_intervenants: 1,
+      nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: '', date_demarrage: '', date_debut: '', heure: '',
+      scheduling_type: 'fixed', preference_horaire: '', type_habitation: '', frequence: 'une fois', jours_passage: '', jours_intervention: [] as string[], jours_intervention_detail: [] as any[], intervention_nature: 'sinistre', accommodation_state: '', cleanliness_type: '', nb_intervenants: 1,
       surface: 50, details_pieces: '', duree: 4, produits: false, torchons: false,
       montant: '', mode_paiement: 'virement', statut_paiement_ui: 'non_confirme', heard_about_us: '', notes: '',
       service_type: 'flexible', structure_type: '', nb_personnel: 1,
@@ -692,6 +696,39 @@ export default function DemandesEnAttente() {
 
   const openEditModal = (d: Demande) => {
     setIsRenewal(false);
+    // Helper: find first non-empty day source (mirrors SubscriptionManagementView logic)
+    // Empty arrays are truthy in JS, so || chaining fails — must check each source individually
+    const resolvedDays = (() => {
+      const dayNames = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+      const sources = [d.formulaire_data?.jours_intervention_detail, d.formulaire_data?.jours_intervention, d.formulaire_data?.jours_passage, d.planning?.jours_intervention];
+      for (const src of sources) { const p = extractJoursPassage(src); if (p.length > 0) return p; }
+      // Check planning.semaines (same as SubscriptionManagementView lines 129-141)
+      if (Array.isArray(d.planning?.semaines)) {
+        const foundDays = new Set<string>();
+        d.planning.semaines.forEach((w: any) => {
+          if (w.jours && typeof w.jours === 'object') {
+            Object.keys(w.jours).forEach((k: string) => {
+              if (w.jours[k]?.selected && dayNames.includes(k.toLowerCase())) foundDays.add(k.toLowerCase());
+            });
+          }
+        });
+        if (foundDays.size > 0) return Array.from(foundDays);
+      }
+      // Frequency-based fallback (same as SubscriptionManagementView lines 143-150)
+      const freq = (d.frequency_label || d.formulaire_data?.frequence || '').toLowerCase();
+      const freqMatch = freq.match(/^(\d+)/);
+      const freqCount = freqMatch ? parseInt(freqMatch[1], 10) : 0;
+      if (freqCount === 1) return ['samedi'];
+      if (freqCount === 2) return ['lundi', 'jeudi'];
+      if (freqCount === 4) return ['lundi', 'mardi', 'mercredi', 'jeudi'];
+      if (freqCount === 5) return ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
+      if (freqCount === 6) return ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+      if (freqCount === 7) return dayNames;
+      if (freqCount === 3) return ['lundi', 'mercredi', 'vendredi'];
+      return [];
+    })();
+    const resolvedDetail = Array.isArray(d.formulaire_data?.jours_intervention_detail) && d.formulaire_data.jours_intervention_detail.length > 0 ? d.formulaire_data.jours_intervention_detail : [];
+    const resolvedPassageStr = resolvedDays.length > 0 ? resolvedDays.map((d2: string) => d2.charAt(0).toUpperCase() + d2.slice(1)).join(' + ') : '';
     setEditingDemande(d);
     const isAutre = d.formulaire_data?.is_autre_service === true;
     setSelectedService(isAutre ? 'Autre service' : d.service);
@@ -716,11 +753,16 @@ export default function DemandesEnAttente() {
       quartier: normalizeQuartier(d.client_neighborhood || d.formulaire_data?.quartier || ''),
       adresse: d.client_address || d.formulaire_data?.adresse || '',
       date: d.date_intervention || d.formulaire_data?.date || d.formulaire_data?.scheduledDate || '',
+      date_demarrage: d.formulaire_data?.date_demarrage || d.formulaire_data?.date_debut || d.planning?.date_debut || d.date_intervention || '',
+      date_debut: d.formulaire_data?.date_demarrage || d.formulaire_data?.date_debut || d.planning?.date_debut || d.date_intervention || '',
       heure: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime || '',
       scheduling_type: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime ? 'fixed' : 'flexible',
       preference_horaire: normalizeTimePref(d.preference_horaire || d.formulaire_data?.preference_horaire || (d.formulaire_data?.schedulingTime === 'morning' ? 'matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? 'apres_midi' : '')),
       type_habitation: normalizeStructure(d.formulaire_data?.type_habitation || ''),
       frequence: normalizeFrequence(d.frequency_label || d.formulaire_data?.frequence || (d.frequency === 'oneshot' ? 'une fois' : 'mensuel')),
+      jours_passage: resolvedPassageStr,
+      jours_intervention: resolvedDays,
+      jours_intervention_detail: resolvedDetail,
       intervention_nature: d.formulaire_data?.interventionNature || d.formulaire_data?.intervention_nature || 'sinistre',
       accommodation_state: (d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
       cleanliness_type: (d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
@@ -783,6 +825,36 @@ export default function DemandesEnAttente() {
   const openRenewModal = (d: Demande) => {
     setIsRenewal(true);
     setEditingDemande(null);
+    // Helper: find first non-empty day source (mirrors SubscriptionManagementView logic)
+    const resolvedDaysRenew = (() => {
+      const dayNames = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+      const sources = [d.formulaire_data?.jours_intervention_detail, d.formulaire_data?.jours_intervention, d.formulaire_data?.jours_passage, d.planning?.jours_intervention];
+      for (const src of sources) { const p = extractJoursPassage(src); if (p.length > 0) return p; }
+      if (Array.isArray(d.planning?.semaines)) {
+        const foundDays = new Set<string>();
+        d.planning.semaines.forEach((w: any) => {
+          if (w.jours && typeof w.jours === 'object') {
+            Object.keys(w.jours).forEach((k: string) => {
+              if (w.jours[k]?.selected && dayNames.includes(k.toLowerCase())) foundDays.add(k.toLowerCase());
+            });
+          }
+        });
+        if (foundDays.size > 0) return Array.from(foundDays);
+      }
+      const freq = (d.frequency_label || d.formulaire_data?.frequence || '').toLowerCase();
+      const freqMatch = freq.match(/^(\d+)/);
+      const freqCount = freqMatch ? parseInt(freqMatch[1], 10) : 0;
+      if (freqCount === 1) return ['samedi'];
+      if (freqCount === 2) return ['lundi', 'jeudi'];
+      if (freqCount === 3) return ['lundi', 'mercredi', 'vendredi'];
+      if (freqCount === 4) return ['lundi', 'mardi', 'mercredi', 'jeudi'];
+      if (freqCount === 5) return ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
+      if (freqCount === 6) return ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+      if (freqCount === 7) return dayNames;
+      return [];
+    })();
+    const resolvedDetailRenew = Array.isArray(d.formulaire_data?.jours_intervention_detail) && d.formulaire_data.jours_intervention_detail.length > 0 ? d.formulaire_data.jours_intervention_detail : [];
+    const resolvedPassageStrRenew = resolvedDaysRenew.length > 0 ? resolvedDaysRenew.map((d2: string) => d2.charAt(0).toUpperCase() + d2.slice(1)).join(' + ') : '';
     const isAutre = d.formulaire_data?.is_autre_service === true;
     setSelectedService(isAutre ? 'Autre service' : d.service);
     setActiveSegment(d.segment);
@@ -806,11 +878,16 @@ export default function DemandesEnAttente() {
       quartier: normalizeQuartier(d.client_neighborhood || d.formulaire_data?.quartier || ''),
       adresse: d.client_address || d.formulaire_data?.adresse || '',
       date: d.date_intervention || d.formulaire_data?.date || d.formulaire_data?.scheduledDate || '',
+      date_demarrage: d.formulaire_data?.date_demarrage || d.formulaire_data?.date_debut || d.planning?.date_debut || d.date_intervention || '',
+      date_debut: d.formulaire_data?.date_demarrage || d.formulaire_data?.date_debut || d.planning?.date_debut || d.date_intervention || '',
       heure: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime || '',
       scheduling_type: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime ? 'fixed' : 'flexible',
       preference_horaire: normalizeTimePref(d.preference_horaire || d.formulaire_data?.preference_horaire || (d.formulaire_data?.schedulingTime === 'morning' ? 'matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? 'apres_midi' : '')),
       type_habitation: normalizeStructure(d.formulaire_data?.type_habitation || ''),
       frequence: normalizeFrequence(d.frequency_label || d.formulaire_data?.frequence || (d.frequency === 'oneshot' ? 'une fois' : 'mensuel')),
+      jours_passage: resolvedPassageStrRenew,
+      jours_intervention: resolvedDaysRenew,
+      jours_intervention_detail: resolvedDetailRenew,
       intervention_nature: d.formulaire_data?.interventionNature || d.formulaire_data?.intervention_nature || 'sinistre',
       accommodation_state: (d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
       cleanliness_type: (d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
@@ -1020,6 +1097,11 @@ export default function DemandesEnAttente() {
       avance_pourcentage: formData.avance_pourcentage,
       avance_fixe: formData.avance_fixe,
       frequence: formData.frequence,
+      date_demarrage: formData.date_demarrage || formData.date_debut || formData.date || null,
+      date_debut: formData.date_demarrage || formData.date_debut || formData.date || null,
+      jours_passage: formData.jours_passage || (Array.isArray(formData.jours_intervention) ? formData.jours_intervention.join(' + ') : ''),
+      jours_intervention: formData.jours_intervention || [],
+      jours_intervention_detail: formData.jours_intervention_detail || [],
       jours_par_semaine: joursParSemaine,
       subFrequency: mappedSubFrequency
     };
@@ -1148,8 +1230,17 @@ export default function DemandesEnAttente() {
         frequency_label: formData.frequence,
         nb_heures: formData.duree || 4,
         nb_intervenants: cleanerCount,
+        montant_devis: formData.montant || null,
         ...(isRenewal ? { statut: 'en_attente', cao: false, profils_envoyes: [], documents: [] } : {}),
         ...(decodedClientId ? { client: decodedClientId } : {}),
+        // Sync planning so Client Detail calendar reflects updated days
+        planning: {
+          ...(editingDemande?.planning || {}),
+          date_debut: formData.date_demarrage || formData.date_debut || formData.date || null,
+          jours_intervention: Array.isArray(formData.jours_intervention) && formData.jours_intervention.length > 0
+            ? formData.jours_intervention
+            : extractJoursPassage(formData.jours_passage),
+        },
         formulaire_data: {
           facturation: {
             ...(editingDemande?.formulaire_data?.facturation || {}),
@@ -1250,6 +1341,11 @@ export default function DemandesEnAttente() {
           avance_pourcentage: formData.avance_pourcentage,
           avance_fixe: formData.avance_fixe,
           frequence: formData.frequence,
+          date_demarrage: formData.date_demarrage || formData.date_debut || formData.date || null,
+          date_debut: formData.date_demarrage || formData.date_debut || formData.date || null,
+          jours_passage: formData.jours_passage || (Array.isArray(formData.jours_intervention) ? formData.jours_intervention.join(' + ') : ''),
+          jours_intervention: formData.jours_intervention || [],
+          jours_intervention_detail: formData.jours_intervention_detail || [],
           jours_par_semaine: joursParSemaine,
           subFrequency: mappedSubFrequency
         }

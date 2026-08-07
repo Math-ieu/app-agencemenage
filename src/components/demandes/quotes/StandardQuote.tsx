@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
-import { SURCHARGE_CITIES } from "../../../utils/pricing";
+import { SURCHARGE_CITIES, getDynamicMonthPassagesCount, estimateResources } from "../../../utils/pricing";
 import type { QuotePrestationLine } from "./QuoteSection";
 
 // Brief Services 02–05 — Ménage standard (60 DH/h, min 4h) & Grand ménage (70 DH/h, min 6h)
@@ -19,15 +19,34 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
   const data = demande.formulaire_data || {};
   const service = (demande.service || "").toLowerCase();
   const isGrand = service.includes("grand");
-  const rate = isGrand ? 70 : 60;
+  const defaultRate = isGrand ? 70 : 60;
+  const rate = Number(data.tarif_horaire || data.tarif_base || data.rate) || defaultRate;
   const minHours = isGrand ? 6 : 4;
 
   // Ville concernée par le supplément zone éloignée ?
   const ville = data.ville || data.city || demande.client_city || "";
   const villeConcernee = SURCHARGE_CITIES.includes(ville);
 
-  const [heures, setHeures] = useState<number>(() => Math.max(minHours, Number(data.duree || data.nb_heures || data.heures || minHours)));
-  const [personnes, setPersonnes] = useState<number>(() => Number(data.nb_intervenants || data.nb_intervenantes || 1));
+  const [surface, setSurface] = useState<number | "">(data.surface !== undefined && data.surface !== null && data.surface !== "" ? Number(data.surface) : "");
+
+  const initialEst = (surface !== "" && surface > 0) ? estimateResources(service, { surface }) : null;
+  const initialHeures = initialEst ? initialEst.duration : Math.max(minHours, Number(data.duree || data.nb_heures || data.heures || minHours));
+  const initialPersonnes = initialEst ? initialEst.people : Math.max(1, Number(data.nb_intervenants || data.nb_intervenantes || 1));
+
+  const [heures, setHeures] = useState<number>(initialHeures);
+  const [personnes, setPersonnes] = useState<number>(initialPersonnes);
+
+  const handleSurfaceChange = (val: number | "") => {
+    setSurface(val);
+    if (val !== "" && val > 0) {
+      const est = estimateResources(service, { surface: val });
+      if (est) {
+        setHeures(est.duration);
+        setPersonnes(est.people);
+      }
+    }
+  };
+
   const [frequency, setFrequency] = useState<string>(() => {
     if (data.frequency) return data.frequency === "abonnement" || data.frequency === "subscription" ? "subscription" : "oneshot";
     if (demande.frequency === "abonnement") return "subscription";
@@ -66,7 +85,8 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
   }, [minHours, heures]);
 
   const isAbo = frequency === "subscription";
-  const nbPassages = isAbo ? joursSemaine * 4 : 1;
+  const dynamicPassages = getDynamicMonthPassagesCount(demande);
+  const nbPassages = isAbo ? (dynamicPassages > 0 ? dynamicPassages : joursSemaine * 4) : 1;
 
   const optionsTotal = (opts.produits ? OPT_PRODUITS : 0) + (opts.torchons ? OPT_TORCHONS : 0)
     + (opts.pack ? OPT_PACK : 0) + (opts.zone ? OPT_ZONE : 0);
@@ -90,15 +110,16 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
     if (!onPrestationsChange) return;
     const label = isGrand ? "Grand ménage" : "Ménage standard";
     const prestations: QuotePrestationLine[] = [];
+    const surfStr = surface !== "" && surface > 0 ? ` (${surface} m²)` : "";
 
     if (isAbo) {
       prestations.push({
-        designation: `${label} — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} × ${nbPassages} passages/mois`,
+        designation: `${label}${surfStr} — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} × ${nbPassages} passages/mois`,
         montant: laborBase,
       });
     } else {
       prestations.push({
-        designation: `${label} — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} (prestation ponctuelle)`,
+        designation: `${label}${surfStr} — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} (prestation ponctuelle)`,
         montant: laborBase,
       });
     }
@@ -116,6 +137,7 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
     if (opts.zone) prestations.push({ designation: "Zone éloignée (Bouskoura, Dar Bouazza, Mohammédia…)", montant: OPT_ZONE });
 
     onPrestationsChange(prestations, total, {
+      surface: surface === "" ? 0 : surface,
       nb_heures: heures,
       heures,
       duree: heures,
@@ -138,7 +160,7 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
       frequence: isAbo ? `${joursSemaine}/sem` : "une fois",
       frequency,
     });
-  }, [heures, personnes, frequency, joursSemaine, opts, remise, total, isAbo, nbPassages, laborBase, remiseMontant, remisePct, total1erMois, isGrand, onPrestationsChange]);
+  }, [surface, heures, personnes, frequency, joursSemaine, opts, remise, total, isAbo, nbPassages, laborBase, remiseMontant, remisePct, total1erMois, isGrand, onPrestationsChange]);
 
   return (
     <div className="quote-calculator">
@@ -147,6 +169,15 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
       </FormulaBox>
       <div style={s.grid2}>
         <div>
+          <Field label="Superficie du logement (m²)">
+            <input
+              type="number"
+              placeholder="ex: 120"
+              value={surface}
+              onChange={e => handleSurfaceChange(e.target.value === "" ? "" : Math.max(0, +e.target.value))}
+              style={s.input as any}
+            />
+          </Field>
           <Field label={`Heures par passage (min ${minHours}h)`}>
             <input type="number" value={heures} min={minHours} max={12} onChange={e => setHeures(Math.max(minHours, +e.target.value))} style={s.input as any} />
           </Field>

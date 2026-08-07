@@ -13,7 +13,7 @@ import { SubscriptionCalendarGrid } from './SubscriptionCalendarGrid';
 import { SubscriptionSidebar } from './SubscriptionSidebar';
 import { FacturesReglementsCard } from './FacturesReglementsCard';
 import { InvoiceFormModal } from './InvoiceFormModal';
-import { extractJoursPassage } from '../../utils/pricing';
+import { extractJoursPassage, parseDateRobust } from '../../utils/pricing';
 export interface SubscriptionManagementViewProps {
   latest: Demande;
   client?: Client;
@@ -151,14 +151,56 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
     const freqStr = (frequencyLabel || latest?.frequency_label || latest?.formulaire_data?.frequence || '').toLowerCase();
     let maxJours = 5;
-    if (freqStr.includes('1_fois') || freqStr.includes('1/sem') || freqStr.includes('1 fois')) maxJours = 1;
-    else if (freqStr.includes('2_fois') || freqStr.includes('2/sem') || freqStr.includes('2 fois')) maxJours = 2;
-    else if (freqStr.includes('3_fois') || freqStr.includes('3/sem') || freqStr.includes('3 fois')) maxJours = 3;
-    else if (freqStr.includes('4_fois') || freqStr.includes('4/sem') || freqStr.includes('4 fois')) maxJours = 4;
+    if (freqStr.includes('1_fois') || freqStr.includes('1/sem') || freqStr.includes('1 fois') || freqStr.includes('1/mois') || freqStr.startsWith('1')) maxJours = 1;
+    else if (freqStr.includes('2_fois') || freqStr.includes('2/sem') || freqStr.includes('2 fois') || freqStr.startsWith('2')) maxJours = 2;
+    else if (freqStr.includes('3_fois') || freqStr.includes('3/sem') || freqStr.includes('3 fois') || freqStr.startsWith('3')) maxJours = 3;
+    else if (freqStr.includes('4_fois') || freqStr.includes('4/sem') || freqStr.includes('4 fois') || freqStr.startsWith('4')) maxJours = 4;
     else if (freqStr.includes('bi_hebd') || freqStr.includes('mois')) maxJours = 1;
 
     return days.slice(0, maxJours);
   }, [latest, frequencyLabel]);
+
+  const detailedAboJours = useMemo(() => {
+    const detail = latest?.formulaire_data?.jours_intervention_detail;
+    const isGrand = String(latest?.service || latest?.type_prestation || latest?.formulaire_data?.service || '').toLowerCase().includes('grand');
+    const defaultDuree = Number(latest?.nb_heures || latest?.formulaire_data?.duree || (isGrand ? 6 : 4));
+
+    const computeEndTime = (startStr: string, dur: number) => {
+      if (!startStr) return '13:00';
+      const parts = startStr.split(':');
+      let h = parseInt(parts[0], 10);
+      let m = parseInt(parts[1], 10);
+      if (isNaN(h)) h = 9;
+      if (isNaN(m)) m = 0;
+      const totalMin = h * 60 + m + Math.round(dur * 60);
+      const endH = Math.floor(totalMin / 60) % 24;
+      const endM = totalMin % 60;
+      return `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+    };
+
+    if (Array.isArray(detail) && detail.length > 0) {
+      return detail.map((item: any) => {
+        const jourKey = typeof item === 'string' ? item.toLowerCase() : item?.jour?.toLowerCase();
+        const start = item?.heure_debut || latest?.formulaire_data?.heure || (latest as any)?.heure || '09:00';
+        const end = item?.heure_fin || computeEndTime(start, defaultDuree);
+        return {
+          jour: jourKey,
+          heure_debut: start,
+          heure_fin: end
+        };
+      });
+    }
+
+    return selectedDays.map(d => {
+      const start = latest?.formulaire_data?.heure || (latest as any)?.heure || '09:00';
+      const end = computeEndTime(start, defaultDuree);
+      return {
+        jour: d.toLowerCase(),
+        heure_debut: start,
+        heure_fin: end
+      };
+    });
+  }, [latest, selectedDays]);
 
   const year = activeCalendarDate.getFullYear();
   const month = activeCalendarDate.getMonth();
@@ -415,10 +457,12 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
     let start = firstOfMonth;
     const startStr = dateDebut || latest?.formulaire_data?.date_demarrage || latest?.formulaire_data?.date_debut || latest?.planning?.date_debut || latest?.date_intervention;
-    if (startStr) {
-      const parsedStart = new Date(startStr.includes('T') ? startStr : `${startStr.slice(0, 10)}T00:00:00`);
-      if (!isNaN(parsedStart.getTime()) && parsedStart > firstOfMonth && parsedStart <= lastOfMonth) {
-        start = parsedStart;
+    const parsedStart = parseDateRobust(startStr);
+    if (parsedStart) {
+      const startNormalized = new Date(parsedStart.getFullYear(), parsedStart.getMonth(), parsedStart.getDate(), 0, 0, 0, 0);
+      if (startNormalized > lastOfMonth) return 0;
+      if (startNormalized >= firstOfMonth && startNormalized <= lastOfMonth) {
+        start = startNormalized;
       }
     }
 
@@ -426,10 +470,12 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     const isResilie = (latest?.statut || '').toLowerCase() === 'resilie';
     if (isResilie) {
       const endStr = dateFin || latest?.formulaire_data?.date_fin || latest?.planning?.date_fin;
-      if (endStr) {
-        const parsedEnd = new Date(endStr.includes('T') ? endStr : `${endStr.slice(0, 10)}T23:59:59`);
-        if (!isNaN(parsedEnd.getTime()) && parsedEnd >= firstOfMonth && parsedEnd < lastOfMonth) {
-          end = parsedEnd;
+      const parsedEnd = parseDateRobust(endStr);
+      if (parsedEnd) {
+        const endNormalized = new Date(parsedEnd.getFullYear(), parsedEnd.getMonth(), parsedEnd.getDate(), 23, 59, 59, 999);
+        if (endNormalized < firstOfMonth) return 0;
+        if (endNormalized >= firstOfMonth && endNormalized < lastOfMonth) {
+          end = endNormalized;
         }
       }
     }
@@ -596,7 +642,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
             aboDateDebut={dateDebut || latest?.date_intervention || latest?.formulaire_data?.date_demarrage || ''}
             dateFinAuto={latest?.formulaire_data?.date_fin || ''}
             aboFrequence={latest?.formulaire_data?.frequence || latest?.frequency_label || frequencyLabel || ''}
-            aboJours={selectedDays.map(d => ({ jour: d, heure_debut: '09:00', heure_fin: '13:00' }))}
+            aboJours={detailedAboJours}
             aboDateOverrides={aboDateOverrides}
             setAboDateOverrides={handleUpdateDateOverrides}
             childDemandes={childDemandes}
