@@ -46,45 +46,40 @@ const B = ({ children }: { children: React.ReactNode }) => <strong style={{ font
 
 // ─── AIRBNB ───────────────────────────────────────────────────────────────────
 const AB_PALIERS = [
-  { label: "Studio", sub: "Pièce unique", h: 2 },
-  { label: "1 chambre", sub: "Appart 2 pièces", h: 2.5 },
-  { label: "2 chambres", sub: "Appart 3 pièces", h: 3 },
-  { label: "3 chambres", sub: "Appart ou duplex", h: 4 },
-  { label: "4 chambres", sub: "Grand duplex", h: 5 },
-  { label: "Villa", sub: "5 chambres et plus", h: 6 },
+  { label: "Studio / 1 chambre", sub: "130 DH / intervention", price: 130 },
+  { label: "2 chambres", sub: "160 DH / intervention", price: 160 },
+  { label: "3 chambres", sub: "190 DH / intervention", price: 190 },
+  { label: "4 chambres", sub: "220 DH / intervention", price: 220 },
+  { label: "5 chambres", sub: "250 DH / intervention", price: 250 },
+  { label: "Villa / Riad", sub: "300 DH (2 intervenants)", price: 300 },
 ];
 
 function AirbnbCalc() {
   const [palier, setPalier] = useState(0);
-  const [formule, setFormule] = useState("A");
-  const [conso, setConso] = useState(false);
+  const [isFarZone, setIsFarZone] = useState(false);
+  const [reassortType, setReassortType] = useState<"aucun" | "essentiel" | "confort">("aucun");
+  const [videoApres, setVideoApres] = useState(false);
+  const [materielFourni, setMaterielFourni] = useState(false);
+  const [linenSets, setLinenSets] = useState(0);
 
   const p = AB_PALIERS[palier];
-  const pA = Math.round(p.h * 65 / 5) * 5;
-  const pB = pA + 90;
-  const price = formule === "A" ? pA : pB;
-  const total = price + (conso ? 25 : 0);
+  const farZoneCost = isFarZone ? 50 : 0;
+  const reassortCost = reassortType === "essentiel" ? 49 : reassortType === "confort" ? 79 : 0;
+  const videoCost = videoApres ? 10 : 0;
+  const materielCost = materielFourni ? 29 : 0;
+  const linenCost = linenSets * 50;
+
+  const total = p.price + farZoneCost + reassortCost + videoCost + materielCost + linenCost;
 
   return (
     <div>
       <FormulaBox>
-        <B>Formule A</B> — Ménage seul · <B>Formule B</B> — Ménage + collecte linge + lavage + repassage (+90 DH)
-        <br /><span style={{ fontSize: 10, marginTop: 4, display: "block" }}>Base horaire : 65 DH/h (usage interne uniquement — ne pas communiquer au client)</span>
+        <B>Tarif Conciergerie Airbnb</B> — Offre réservée aux hôtes confiant 3 biens ou plus · Prix fixe par intervention
+        <br /><span style={{ fontSize: 10, marginTop: 4, display: "block" }}>Ménage complet, draps changés, vaisselle lavée et poubelles vidées</span>
       </FormulaBox>
-
-      <div style={s.seg}>
-        {["A", "B"].map(f => (
-          <button key={f} onClick={() => setFormule(f)}
-            style={{ ...s.segBtn, ...(formule === f ? s.segBtnOn : {}) }}>
-            {f === "A" ? "Formule A — Ménage seul" : "Formule B — Ménage + Linge"}
-          </button>
-        ))}
-      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7, marginBottom: 12 }}>
         {AB_PALIERS.map((p2, i) => {
-          const a = Math.round(p2.h * 65 / 5) * 5;
-          const b = a + 90;
           const selected = palier === i;
           return (
             <button key={i} onClick={() => setPalier(i)}
@@ -95,19 +90,59 @@ function AirbnbCalc() {
               }}>
               <div style={{ fontWeight: 600, fontSize: 12 }}>{p2.label}</div>
               <div style={{ fontSize: 10, opacity: .7, marginBottom: 4 }}>{p2.sub}</div>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{formule === "A" ? a : b} DH</div>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{p2.price} DH</div>
             </button>
           );
         })}
       </div>
 
-      <div style={s.optTitle}>Option</div>
-      <OptRow label="Réassort consommables" note="Savon liquide, café, papier toilette..." price="+25 DH" checked={conso} onChange={setConso} />
+      <div style={s.optTitle}>Options conciergerie</div>
+      <OptRow label="Zone éloignée / Périphérie" note="Bouskoura, Dar Bouazza, Mansouria, Mohammédia..." price="+50 DH" checked={isFarZone} onChange={setIsFarZone} />
+      
+      <div style={{ margin: "8px 0", padding: "8px", background: "var(--c-fond-alt, #f8fafc)", borderRadius: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Réassort consommables</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {[
+            { id: "aucun", label: "Aucun (0 DH)" },
+            { id: "essentiel", label: "Essentiel (+49 DH)" },
+            { id: "confort", label: "Confort (+79 DH)" }
+          ].map(opt => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setReassortType(opt.id as any)}
+              style={{
+                flex: 1, padding: "5px 4px", fontSize: 10, fontWeight: 600, borderRadius: 5,
+                border: `1px solid ${reassortType === opt.id ? "#3B82F6" : "var(--c-bord)"}`,
+                background: reassortType === opt.id ? "#EFF6FF" : "transparent",
+                color: reassortType === opt.id ? "#1D4ED8" : "inherit",
+                cursor: "pointer"
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <OptRow label="Vidéo avant / après" note="Preuve filmée de l'état du logement" price="+10 DH" checked={videoApres} onChange={setVideoApres} />
+      <OptRow label="Mise à disposition du matériel" note="Produits, torchons et serpillère fournis" price="+29 DH" checked={materielFourni} onChange={setMaterielFourni} />
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", marginBottom: 8, borderTop: "1px dashed var(--c-bord)", paddingTop: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 600 }}>Sets de linge (Casablanca — +50 DH/set)</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button type="button" onClick={() => setLinenSets(Math.max(0, linenSets - 1))}
+            style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--c-bord)", background: "transparent", cursor: "pointer", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+          <span style={{ fontWeight: 700, fontSize: 13, minWidth: 20, textAlign: "center" }}>{linenSets}</span>
+          <button type="button" onClick={() => setLinenSets(linenSets + 1)}
+            style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--c-bord)", background: "transparent", cursor: "pointer", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+        </div>
+      </div>
 
       <ResultBar
-        detail={`${p.label} — Formule ${formule} : ${price} DH${conso ? " + consommables 25 DH" : ""}`}
+        detail={`${p.label}${isFarZone ? " + Zone éloignée" : ""}${reassortType !== "aucun" ? ` + Réassort ${reassortType}` : ""}${videoApres ? " + Vidéo" : ""}${materielFourni ? " + Matériel" : ""}${linenSets > 0 ? ` + ${linenSets} set(s)` : ""}`}
         total={`${fmt(total)} DH`}
-        label="Prix par passage"
+        label="Prix par intervention"
       />
     </div>
   );

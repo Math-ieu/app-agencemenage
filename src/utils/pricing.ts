@@ -69,6 +69,12 @@ export interface PricingInput {
     conso?: boolean;
     linen_sets?: number;
     linenSets?: number;
+    zone_eloignee?: boolean;
+    is_far_zone?: boolean;
+    reassort_type?: string;
+    video_apres?: boolean;
+    materiel_fourni?: boolean;
+    service_linge?: boolean;
 }
 
 export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' => {
@@ -111,52 +117,7 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
     const locationSurcharge = SURCHARGE_CITIES.includes(ville) ? 50 : 0;
     const multiplier = calculateSurchargeMultiplier(date, scheduling_type, heure, preference_horaire);
 
-    // 1. Post-Déménagement (Fixed tiered pricing)
-    if (serviceLower.includes('post-demenagement') || serviceLower.includes('post demenagement') || serviceLower.includes('demenagement')) {
-        const s = Number(surface) || 0;
-        let basePrice = 0;
-        if (s <= 50) basePrice = 590;
-        else if (s <= 80) basePrice = 890;
-        else if (s <= 120) basePrice = 1290;
-        else if (s <= 180) basePrice = 1790;
-        else if (s <= 250) basePrice = 2490;
-        else return 'Sur devis';
-
-        const corePrice = basePrice * multiplier;
-        return Math.round(corePrice);
-    }
-
-    // 1.5. Ménage Airbnb
-    if (serviceLower.includes('airbnb') || serviceLower.includes('air bnb')) {
-        const AIRBNB_PRICES = {
-            A: { studio: 130, '1chambre': 165, '2chambres': 195, '2chambresDoubleSDB': 230, '3chambres': 260, '4chambres': 325, villa: 390 },
-            B: { studio: 220, '1chambre': 255, '2chambres': 285, '2chambresDoubleSDB': 320, '3chambres': 350, '4chambres': 415, villa: 480 }
-        } as const;
-
-        // Tarif linge par set (brief) : 1er 50, 2ème 45, 3ème et + 40 DH
-        const linenSetsCost = (n: number): number => {
-            let c = 0;
-            for (let i = 1; i <= n; i++) c += i === 1 ? 50 : i === 2 ? 45 : 40;
-            return c;
-        };
-
-        const formula = input.formula || 'A';
-        const sizeTier = (input.size_tier || '1chambre') as keyof typeof AIRBNB_PRICES.A;
-        const conso = !!input.conso;
-        const linenSets = Number(input.linen_sets || 0);
-
-        const basePrice = AIRBNB_PRICES[formula]?.[sizeTier] ?? AIRBNB_PRICES.A['1chambre'];
-        let total = basePrice;
-        if (conso) total += 25;
-        if (formula === 'B' && linenSets > 0) total += linenSetsCost(linenSets);
-        
-        // Add location surcharge
-        total += locationSurcharge;
-
-        return Math.round(total * multiplier);
-    }
-
-    // 2. Subscriptions setup
+    // Subscriptions setup
     const isSubscription = frequence.toLowerCase().includes('mensuel') || 
                            frequence.toLowerCase().includes('abonnement') || 
                            frequence.toLowerCase().includes('semaine') || 
@@ -193,6 +154,75 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         dynamicPassages = getDynamicMonthPassagesCount(dummyDemande);
     }
     const numPassages = dynamicPassages > 0 ? dynamicPassages : (visitsPerWeek * 4);
+
+    // 1. Post-Déménagement (Fixed tiered pricing)
+    if (serviceLower.includes('post-demenagement') || serviceLower.includes('post demenagement') || serviceLower.includes('demenagement')) {
+        const s = Number(surface) || 0;
+        let basePrice = 0;
+        if (s <= 50) basePrice = 590;
+        else if (s <= 80) basePrice = 890;
+        else if (s <= 120) basePrice = 1290;
+        else if (s <= 180) basePrice = 1790;
+        else if (s <= 250) basePrice = 2490;
+        else return 'Sur devis';
+
+        const corePrice = basePrice * multiplier;
+        return Math.round(corePrice);
+    }
+
+    // 1.5. Ménage Airbnb (Conciergerie)
+    if (serviceLower.includes('airbnb') || serviceLower.includes('air bnb')) {
+        const AIRBNB_CONCIERGERIE_RATES: Record<string, number> = {
+            studio: 130,
+            '1chambre': 130,
+            '2chambres': 160,
+            '2chambresDoubleSDB': 160,
+            '3chambres': 190,
+            '4chambres': 220,
+            '5chambres': 250,
+            villa: 300
+        };
+
+        const sizeTier = (input.size_tier || input.sizeTier || '1chambre') as string;
+        const basePrice = AIRBNB_CONCIERGERIE_RATES[sizeTier] ?? 130;
+
+        let singleVisitPrice = basePrice;
+
+        // Zone éloignée (+50 DH)
+        if (input.zone_eloignee || input.is_far_zone || locationSurcharge > 0) {
+            singleVisitPrice += 50;
+        }
+
+        // Réassort consommables (+49 DH Essentiel, +79 DH Confort)
+        const reassortType = input.reassort_type || (input.conso ? 'essentiel' : 'aucun');
+        if (reassortType === 'essentiel') {
+            singleVisitPrice += 49;
+        } else if (reassortType === 'confort') {
+            singleVisitPrice += 79;
+        }
+
+        // Vidéo avant/après (+10 DH)
+        if (input.video_apres) {
+            singleVisitPrice += 10;
+        }
+
+        // Matériel fourni (+29 DH)
+        if (input.materiel_fourni) {
+            singleVisitPrice += 29;
+        }
+
+        // Service Linge (+50 DH / set)
+        const linenSets = Number(input.linen_sets || (input.service_linge ? 1 : 0));
+        if (linenSets > 0) {
+            singleVisitPrice += linenSets * 50;
+        }
+
+        if (isSubscription && !isOneShot) {
+            return Math.round(singleVisitPrice * numPassages * multiplier);
+        } else {
+            return Math.round(singleVisitPrice * multiplier);
+        }
+    }
 
     // 3. Ménage Bureaux — base 60 DH HT/h ; produits/torchons en option flat (brief)
     if (serviceLower.includes('menage bureaux')) {
@@ -358,10 +388,31 @@ export const calculateSinglePassagePrice = (demande: any): number => {
         return Math.round(duree * baseRate * nbPersonnes + options);
     }
 
-    // 2. Ménage Airbnb
+    // 2. Ménage Airbnb (Conciergerie)
     if (service.includes('airbnb') || service.includes('air bnb')) {
-        const basePrice = Number(formData.base_price || formData.prix_base) || 165;
-        return Math.round(basePrice + options);
+        const AIRBNB_CONCIERGERIE_RATES: Record<string, number> = {
+            studio: 130,
+            '1chambre': 130,
+            '2chambres': 160,
+            '2chambresDoubleSDB': 160,
+            '3chambres': 190,
+            '4chambres': 220,
+            '5chambres': 250,
+            villa: 300
+        };
+        const sizeTier = String(formData.size_tier || formData.sizeTier || '1chambre');
+        const basePrice = Number(formData.prix_unitaire || formData.prix_passage || formData.prix_base) || (AIRBNB_CONCIERGERIE_RATES[sizeTier] ?? 130);
+        let singlePrice = basePrice;
+        if (formData.zone_eloignee || formData.is_far_zone) singlePrice += 50;
+        const reassortType = formData.reassort_type || (formData.conso ? 'essentiel' : 'aucun');
+        if (reassortType === 'essentiel') singlePrice += 49;
+        else if (reassortType === 'confort') singlePrice += 79;
+        if (formData.video_apres) singlePrice += 10;
+        if (formData.materiel_fourni) singlePrice += 29;
+        const linenSets = Number(formData.linen_sets || (formData.service_linge ? 1 : 0));
+        if (linenSets > 0) singlePrice += linenSets * 50;
+
+        return Math.round(singlePrice);
     }
 
     // 3. Post-Déménagement

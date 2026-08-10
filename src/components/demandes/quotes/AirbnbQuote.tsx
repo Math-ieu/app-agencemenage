@@ -3,32 +3,13 @@ import { FormulaBox, B, OptRow, ResultBar, fmt } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
 import type { QuotePrestationLine } from "./QuoteSection";
 
-const AIRBNB_PRICES = {
-  A: { studio: 130, '1chambre': 165, '2chambres': 195, '2chambresDoubleSDB': 230, '3chambres': 260, '4chambres': 325, villa: 390 },
-  B: { studio: 220, '1chambre': 255, '2chambres': 285, '2chambresDoubleSDB': 320, '3chambres': 350, '4chambres': 415, villa: 480 }
-} as const;
-
-const SIZE_LABELS: Record<string, string> = {
-  studio: 'Studio',
-  '1chambre': '1 chambre',
-  '2chambres': '2 chambres',
-  '2chambresDoubleSDB': '2 ch · double SDB',
-  '3chambres': '3 chambres',
-  '4chambres': 'Grand appart / Duplex',
-  villa: 'Villa'
-};
-
-// Brief Service 01 — tarif linge par set : 1er 50 DH, 2ème 45 DH, 3ème et + 40 DH/set
-const linenSetsCost = (n: number): number => {
-  let c = 0;
-  for (let i = 1; i <= n; i++) c += i === 1 ? 50 : i === 2 ? 45 : 40;
-  return c;
-};
-
-const s = {
-  seg: { display: "flex", gap: 4, marginBottom: 10 } as React.CSSProperties,
-  segBtn: { flex: 1, padding: "7px 0", border: "1px solid var(--c-bord)", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 12, background: "transparent", color: "inherit", transition: "all .15s" } as React.CSSProperties,
-  segBtnOn: { background: "#3B82F6", color: "#fff", borderColor: "#3B82F6" } as React.CSSProperties,
+const AIRBNB_CONCIERGERIE_PRICES: Record<string, { label: string; price: number; note?: string }> = {
+  '1chambre': { label: 'Studio / 1 chambre', price: 130 },
+  '2chambres': { label: '2 chambres', price: 160 },
+  '3chambres': { label: '3 chambres', price: 190 },
+  '4chambres': { label: '4 chambres', price: 220 },
+  '5chambres': { label: '5 chambres', price: 250 },
+  'villa': { label: 'Villa / Riad', price: 300, note: '2 femmes de ménage' }
 };
 
 interface AirbnbQuoteProps {
@@ -42,20 +23,28 @@ interface AirbnbQuoteProps {
 export default function AirbnbQuote({ demande, onPrestationsChange, formData: externalFormData, setFormData: externalSetFormData, onUpdateDemandeData }: AirbnbQuoteProps) {
   const data = externalFormData || demande.formulaire_data || {};
 
-  // Read values — source: linked formData if available, else demande data
-  const formula = (data.formula || 'A') as 'A' | 'B';
-  const sizeTier = (data.size_tier || data.sizeTier || '1chambre') as keyof typeof AIRBNB_PRICES.A;
-  const conso = !!data.conso;
-  const linenSets = Number(data.linen_sets || data.linenSets || 0);
-  const extraPieces = Number(data.linen_extra_pieces || 0);
+  // Read values
+  const sizeTier = (data.size_tier || data.sizeTier || '1chambre') as string;
+  const isFarZone = Boolean(data.zone_eloignee || data.is_far_zone);
+  const reassortType = data.reassort_type || (data.conso ? 'essentiel' : 'aucun');
+  const videoApres = Boolean(data.video_apres);
+  const materielFourni = Boolean(data.materiel_fourni);
+  const serviceLinge = Boolean(data.service_linge || (data.linen_sets && data.linen_sets > 0));
+  const linenSets = Number(data.linen_sets || (serviceLinge ? 1 : 0));
 
-  const sizeLabel = SIZE_LABELS[sizeTier] || sizeTier;
-  const basePrice = AIRBNB_PRICES[formula]?.[sizeTier] ?? AIRBNB_PRICES.A['1chambre'];
-  const linenCost = formula === 'B' ? linenSetsCost(linenSets) : 0;
-  const extraPiecesCost = formula === 'B' ? extraPieces * 5 : 0;
-  const preRemise = basePrice + (conso ? 25 : 0) + linenCost + extraPiecesCost;
+  const tierInfo = AIRBNB_CONCIERGERIE_PRICES[sizeTier] || AIRBNB_CONCIERGERIE_PRICES['1chambre'];
+  const basePrice = tierInfo.price;
+  const sizeLabel = tierInfo.label;
 
-  // Remise (étendue + code promo) — stockée dans le formData lié
+  const farZoneCost = isFarZone ? 50 : 0;
+  const reassortCost = reassortType === 'essentiel' ? 49 : reassortType === 'confort' ? 79 : 0;
+  const videoCost = videoApres ? 10 : 0;
+  const materielCost = materielFourni ? 29 : 0;
+  const linenCost = linenSets * 50;
+
+  const preRemise = basePrice + farZoneCost + reassortCost + videoCost + materielCost + linenCost;
+
+  // Remise
   const remise: RemiseValue = {
     abonnement: false,
     etenduePct: Number(data.remise_etendue_pct || 0),
@@ -66,7 +55,6 @@ export default function AirbnbQuote({ demande, onPrestationsChange, formData: ex
   const promoMontant = remise.promoCode ? Math.round((preRemise - remiseMontant) * remise.promoPct / 100) : 0;
   const total = preRemise - remiseMontant - promoMontant;
 
-  // Update handler — writes to linked formData or propagates up to parent
   const update = (patch: Record<string, any>) => {
     if (externalSetFormData && externalFormData) {
       externalSetFormData({ ...externalFormData, ...patch });
@@ -80,16 +68,24 @@ export default function AirbnbQuote({ demande, onPrestationsChange, formData: ex
   useEffect(() => {
     if (!onPrestationsChange) return;
     const prestations: QuotePrestationLine[] = [
-      { designation: `Ménage Airbnb — Formule ${formula} — ${sizeLabel}`, montant: basePrice },
+      { designation: `Conciergerie Airbnb — ${sizeLabel}`, montant: basePrice },
     ];
-    if (conso) {
-      prestations.push({ designation: "Réassort consommables (savon, papier, etc.)", montant: 25 });
+    if (isFarZone) {
+      prestations.push({ designation: "Supplément zone éloignée (périphérie)", montant: 50 });
     }
-    if (formula === 'B' && linenSets > 0) {
-      prestations.push({ designation: `Service linge — ${linenSets} set(s) (1er 50, 2e 45, 3e+ 40 DH)`, montant: linenCost });
+    if (reassortType === 'essentiel') {
+      prestations.push({ designation: "Réassort consommables Essentiel (eau, café, savon...)", montant: 49 });
+    } else if (reassortType === 'confort') {
+      prestations.push({ designation: "Réassort consommables Confort (shampoing, gel douche...)", montant: 79 });
     }
-    if (formula === 'B' && extraPieces > 0) {
-      prestations.push({ designation: `Articles hors set (${extraPieces} × 5 DH/pièce)`, montant: extraPiecesCost });
+    if (videoApres) {
+      prestations.push({ designation: "Vidéo avant / après (preuve filmée)", montant: 10 });
+    }
+    if (materielFourni) {
+      prestations.push({ designation: "Mise à disposition du matériel & produits", montant: 29 });
+    }
+    if (linenSets > 0) {
+      prestations.push({ designation: `Service linge — ${linenSets} set(s) (50 DH/set)`, montant: linenCost });
     }
     if (remiseMontant > 0) {
       prestations.push({ designation: `Remise (–${remise.etenduePct}%)`, montant: -remiseMontant, isReduction: true });
@@ -98,10 +94,15 @@ export default function AirbnbQuote({ demande, onPrestationsChange, formData: ex
       prestations.push({ designation: `Code promo ${remise.promoCode} (–${remise.promoPct}%)`, montant: -promoMontant, isReduction: true });
     }
     onPrestationsChange(prestations, total, {
-      formule: formula, palier_label: sizeLabel, prix_passage: basePrice, prix_base: basePrice,
-      consommables: conso ? 25 : 0, reassort: conso ? 25 : 0,
-      linen_sets: linenSets, linen_cost: linenCost,
-      linen_extra_pieces: extraPieces, linen_extra_cost: extraPiecesCost,
+      palier_label: sizeLabel,
+      prix_passage: basePrice,
+      prix_base: basePrice,
+      zone_eloignee: isFarZone,
+      reassort_type: reassortType,
+      video_apres: videoApres,
+      materiel_fourni: materielFourni,
+      linen_sets: linenSets,
+      linen_cost: linenCost,
       reduction: remiseMontant + promoMontant,
       reduction_montant: remiseMontant + promoMontant,
       reduction_pourcentage: remise.etenduePct,
@@ -109,39 +110,25 @@ export default function AirbnbQuote({ demande, onPrestationsChange, formData: ex
       code_promo: remise.promoCode,
       code_promo_pct: remise.promoPct,
     });
-  }, [formula, sizeTier, conso, linenSets, extraPieces, basePrice, total, remiseMontant, promoMontant]);
+  }, [sizeTier, isFarZone, reassortType, videoApres, materielFourni, linenSets, basePrice, total, remiseMontant, promoMontant]);
 
   const isLinked = !!externalFormData || !!onUpdateDemandeData;
 
   return (
     <div className="quote-calculator">
       <FormulaBox>
-        <B>Formule A</B> — Ménage seul · <B>Formule B</B> — Ménage + collecte, lavage &amp; repassage du linge (sets : 50 / 45 / 40 DH)
+        <B>Tarif Conciergerie Airbnb</B> — Offre réservée aux hôtes confiant 3 biens ou plus · Prix fixe par intervention
         <br /><span style={{ fontSize: 10, marginTop: 4, display: "block" }}>
           {isLinked
             ? "🔗 Synchronisé — Toute modification est enregistrée sur la demande."
-            : "Base horaire : 65 DH/h (usage interne uniquement — ne pas communiquer au client)"}
+            : "Tarifs officiels conciergerie Airbnb"}
         </span>
       </FormulaBox>
 
-      {/* Formule A / B Selector */}
-      <div style={s.seg}>
-        {(["A", "B"] as const).map(f => (
-          <button key={f} onClick={() => update({ formula: f })}
-            className={`seg-btn ${formula === f ? 'active' : ''}`}
-            style={{ ...s.segBtn, ...(formula === f ? s.segBtnOn : {}), ...(!isLinked ? { cursor: 'default', opacity: 0.7 } : {}) }}
-            disabled={!isLinked}
-          >
-            {f === "A" ? "Formule A" : "Formule B"}
-          </button>
-        ))}
-      </div>
-
       {/* Size Tier Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7, marginBottom: 12 }}>
-        {Object.keys(AIRBNB_PRICES.A).map((key) => {
+        {Object.entries(AIRBNB_CONCIERGERIE_PRICES).map(([key, item]) => {
           const selected = sizeTier === key;
-          const price = AIRBNB_PRICES[formula][key as keyof typeof AIRBNB_PRICES.A];
           return (
             <button key={key}
               onClick={() => update({ size_tier: key, sizeTier: key })}
@@ -154,53 +141,79 @@ export default function AirbnbQuote({ demande, onPrestationsChange, formData: ex
                 cursor: isLinked ? "pointer" : "default",
                 transition: "all .15s",
               }}>
-              <div style={{ fontWeight: 600, fontSize: 11 }}>{SIZE_LABELS[key]}</div>
-              <div style={{ fontWeight: 700, fontSize: 12 }}>{price} DH</div>
+              <div style={{ fontWeight: 600, fontSize: 11 }}>{item.label}</div>
+              <div style={{ fontWeight: 700, fontSize: 12 }}>{item.price} DH</div>
+              {item.note && <div style={{ fontSize: 9, opacity: 0.8 }}>{item.note}</div>}
             </button>
           );
         })}
       </div>
 
-      {/* Conso checkbox */}
+      {/* Options */}
       <OptRow
-        label="Réassort consommables"
-        price="+25 DH"
-        checked={conso}
-        onChange={(v) => update({ conso: v })}
+        label="Zone éloignée / Périphérie"
+        price="+50 DH"
+        checked={isFarZone}
+        onChange={(v) => update({ zone_eloignee: v, is_far_zone: v })}
       />
 
-      {/* Linen sets (only if formula B) */}
-      {formula === 'B' && (
-        <>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", marginBottom: 8, borderTop: "1px dashed var(--c-bord)", paddingTop: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 600 }}>Sets de linge (1er 50 · 2e 45 · 3e+ 40 DH)</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <button type="button" disabled={!isLinked} onClick={() => update({ linen_sets: Math.max(0, linenSets - 1), linenSets: Math.max(0, linenSets - 1) })}
-                style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--c-bord)", background: "transparent", cursor: isLinked ? "pointer" : "default", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-              <span style={{ fontWeight: 700, fontSize: 13, minWidth: 20, textAlign: "center" }}>{linenSets}</span>
-              <button type="button" disabled={!isLinked} onClick={() => update({ linen_sets: linenSets + 1, linenSets: linenSets + 1 })}
-                style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--c-bord)", background: "transparent", cursor: isLinked ? "pointer" : "default", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", marginBottom: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 600 }}>Articles hors set (+5 DH/pièce)</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <button type="button" disabled={!isLinked} onClick={() => update({ linen_extra_pieces: Math.max(0, extraPieces - 1) })}
-                style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--c-bord)", background: "transparent", cursor: isLinked ? "pointer" : "default", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-              <span style={{ fontWeight: 700, fontSize: 13, minWidth: 20, textAlign: "center" }}>{extraPieces}</span>
-              <button type="button" disabled={!isLinked} onClick={() => update({ linen_extra_pieces: extraPieces + 1 })}
-                style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--c-bord)", background: "transparent", cursor: isLinked ? "pointer" : "default", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-            </div>
-          </div>
-        </>
-      )}
+      <div style={{ margin: "8px 0", padding: "8px", background: "var(--c-fond-alt, #f8fafc)", borderRadius: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>Réassort consommables</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {[
+            { id: 'aucun', label: 'Aucun (0 DH)' },
+            { id: 'essentiel', label: 'Essentiel (+49 DH)' },
+            { id: 'confort', label: 'Confort (+79 DH)' }
+          ].map(opt => (
+            <button
+              key={opt.id}
+              type="button"
+              disabled={!isLinked}
+              onClick={() => update({ reassort_type: opt.id, conso: opt.id !== 'aucun' })}
+              style={{
+                flex: 1, padding: "5px 4px", fontSize: 10, fontWeight: 600, borderRadius: 5,
+                border: `1px solid ${reassortType === opt.id ? "#3B82F6" : "var(--c-bord)"}`,
+                background: reassortType === opt.id ? "#EFF6FF" : "transparent",
+                color: reassortType === opt.id ? "#1D4ED8" : "inherit"
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <OptRow
+        label="Vidéo avant / après"
+        price="+10 DH"
+        checked={videoApres}
+        onChange={(v) => update({ video_apres: v })}
+      />
+
+      <OptRow
+        label="Mise à disposition du matériel"
+        price="+29 DH"
+        checked={materielFourni}
+        onChange={(v) => update({ materiel_fourni: v })}
+      />
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", marginBottom: 8, borderTop: "1px dashed var(--c-bord)", paddingTop: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 600 }}>Sets de linge (+50 DH/set)</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button type="button" disabled={!isLinked} onClick={() => update({ linen_sets: Math.max(0, linenSets - 1), service_linge: linenSets - 1 > 0 })}
+            style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--c-bord)", background: "transparent", cursor: isLinked ? "pointer" : "default", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+          <span style={{ fontWeight: 700, fontSize: 13, minWidth: 20, textAlign: "center" }}>{linenSets}</span>
+          <button type="button" disabled={!isLinked} onClick={() => update({ linen_sets: linenSets + 1, service_linge: true })}
+            style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--c-bord)", background: "transparent", cursor: isLinked ? "pointer" : "default", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+        </div>
+      </div>
 
       <RemiseSection isAbo={false} segment={demande.segment} montantBase={preRemise} value={remise} onChange={setRemise} />
 
       <ResultBar
-        detail={`${sizeLabel} — Formule ${formula}${conso ? " + réassort" : ""}${formula === 'B' && linenSets > 0 ? ` + ${linenSets} set(s)` : ""}${formula === 'B' && extraPieces > 0 ? ` + ${extraPieces} pièce(s)` : ""}${remiseMontant > 0 ? ` − ${fmt(remiseMontant)} remise` : ""}${promoMontant > 0 ? ` − ${fmt(promoMontant)} promo` : ""}`}
+        detail={`${sizeLabel}${isFarZone ? " + Zone éloignée" : ""}${reassortType !== 'aucun' ? ` + Réassort ${reassortType}` : ""}${videoApres ? " + Vidéo" : ""}${materielFourni ? " + Matériel" : ""}${linenSets > 0 ? ` + ${linenSets} set(s) linge` : ""}${remiseMontant > 0 ? ` − ${fmt(remiseMontant)} remise` : ""}${promoMontant > 0 ? ` − ${fmt(promoMontant)} promo` : ""}`}
         total={`${fmt(total)} DH`}
-        label="Prix par passage"
+        label="Prix par intervention"
       />
     </div>
   );

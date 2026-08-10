@@ -162,7 +162,7 @@ const getAdvanceFields = (form: Record<string, any>) => {
 const buildAirbnbData = (demande: Demande): DevisAirbnbData => {
   const form = demande.formulaire_data || {};
   const total = getTotalPrice(demande, form);
-  const objet = `${demande.service} — ${form.type_habitation || form.structure_type || form.structure || 'Logement'}`;
+  const objet = `${demande.service} — ${form.palier_label || form.type_habitation || form.structure || 'Conciergerie Airbnb'}`;
 
   // Build detailed prestation lines from calculator data
   const lignes: Array<{ designation: string; montant: number }> = [];
@@ -171,17 +171,32 @@ const buildAirbnbData = (demande: Demande): DevisAirbnbData => {
       lignes.push({ designation: p.desc || p.designation || p.label || 'Prestation', montant: parseMoney(p.montant || p.prix || 0) });
     });
   } else {
-    // Try to build from calculator fields
-    const formule = form.formule || 'A';
-    const palierLabel = form.palier_label || form.type_habitation || form.structure || 'Logement';
-    const prixPassage = parseMoney(form.prix_passage || form.prix_base || total);
+    const palierLabel = form.palier_label || 'Studio / 1 chambre';
+    const prixPassage = parseMoney(form.prix_passage || form.prix_base || 130);
     lignes.push({
-      designation: form.description_tarif || `Ménage Airbnb — Formule ${formule} — ${palierLabel}`,
+      designation: form.description_tarif || `Prestation Conciergerie Airbnb — ${palierLabel}`,
       montant: prixPassage,
     });
-    const consommables = parseMoney(form.consommables || form.reassort || 0);
-    if (consommables > 0) {
-      lignes.push({ designation: 'Réassort consommables (savon, papier, etc.)', montant: consommables });
+    if (form.zone_eloignee || form.is_far_zone) {
+      lignes.push({ designation: 'Supplément zone éloignée (périphérie)', montant: 50 });
+    }
+    const reassortType = form.reassort_type || (form.conso ? 'essentiel' : 'aucun');
+    if (reassortType === 'essentiel') {
+      lignes.push({ designation: 'Réassort consommables Essentiel (eau, café, savon...)', montant: 49 });
+    } else if (reassortType === 'confort') {
+      lignes.push({ designation: 'Réassort consommables Confort (shampoing, gel douche...)', montant: 79 });
+    } else if (parseMoney(form.consommables || form.reassort || 0) > 0) {
+      lignes.push({ designation: 'Réassort consommables', montant: parseMoney(form.consommables || form.reassort) });
+    }
+    if (form.video_apres) {
+      lignes.push({ designation: 'Vidéo avant / après (preuve filmée)', montant: 10 });
+    }
+    if (form.materiel_fourni) {
+      lignes.push({ designation: 'Mise à disposition du matériel & produits', montant: 29 });
+    }
+    const linenSets = Number(form.linen_sets || 0);
+    if (linenSets > 0) {
+      lignes.push({ designation: `Service linge — ${linenSets} set(s) (50 DH/set)`, montant: linenSets * 50 });
     }
   }
   const totalHT = lignes.reduce((s, l) => s + l.montant, 0) || total;

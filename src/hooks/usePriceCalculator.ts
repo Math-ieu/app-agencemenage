@@ -29,7 +29,13 @@ export function usePriceCalculator(formData: any, selectedService: string) {
             formula: formData.formula,
             size_tier: formData.size_tier || formData.sizeTier,
             conso: formData.conso,
-            linen_sets: formData.linen_sets || formData.linenSets
+            linen_sets: formData.linen_sets || formData.linenSets,
+            zone_eloignee: formData.zone_eloignee || formData.is_far_zone,
+            is_far_zone: formData.zone_eloignee || formData.is_far_zone,
+            reassort_type: formData.reassort_type,
+            video_apres: formData.video_apres,
+            materiel_fourni: formData.materiel_fourni,
+            service_linge: formData.service_linge
         };
 
         const result = calculateTotalPrice(input);
@@ -60,7 +66,13 @@ export function usePriceCalculator(formData: any, selectedService: string) {
         formData.sizeTier,
         formData.conso,
         formData.linen_sets,
-        formData.linenSets
+        formData.linenSets,
+        formData.zone_eloignee,
+        formData.is_far_zone,
+        formData.reassort_type,
+        formData.video_apres,
+        formData.materiel_fourni,
+        formData.service_linge
     ]);
 
     return calculatedPrice;

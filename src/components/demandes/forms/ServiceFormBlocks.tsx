@@ -742,105 +742,259 @@ export const OptionalServicesBlock: React.FC<FormBlockProps> = ({ formData, setF
 /* ====  AIRBNB BLOCKS  ======= */
 /* ============================= */
 
-const AIRBNB_PRICES = {
-    A: { studio: 130, '1chambre': 165, '2chambres': 195, '3chambres': 260, '4chambres': 325, villa: 390 },
-    B: { studio: 220, '1chambre': 255, '2chambres': 285, '3chambres': 350, '4chambres': 415, villa: 480 }
-} as const;
-
-const SIZE_LABELS: Record<string, string> = {
-    studio: 'Studio',
-    '1chambre': '1 chambre',
-    '2chambres': '2 chambres',
-    '3chambres': '3 chambres',
-    '4chambres': '4 chambres',
-    villa: 'Villa'
+export const AIRBNB_CONCIERGERIE_PRICES: Record<string, { label: string; price: number; note?: string }> = {
+    '1chambre': { label: 'Studio / 1 chambre', price: 130 },
+    '2chambres': { label: '2 chambres', price: 160 },
+    '3chambres': { label: '3 chambres', price: 190 },
+    '4chambres': { label: '4 chambres', price: 220 },
+    '5chambres': { label: '5 chambres', price: 250 },
+    'villa': { label: 'Villa / Riad', price: 300, note: '2 femmes de ménage' }
 };
 
 export const FormulesAirbnbBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => {
-    const formula = (formData.formula || 'A') as 'A' | 'B';
-    const sizeTier = (formData.size_tier || formData.sizeTier || '1chambre') as keyof typeof AIRBNB_PRICES.A;
+    const sizeTier = (formData.size_tier || formData.sizeTier || '1chambre') as string;
+    const nbBiens = formData.nombre_biens || '3 biens';
+    const isFarZone = Boolean(formData.zone_eloignee || formData.is_far_zone);
+    const reassortType = formData.reassort_type || (formData.conso ? 'essentiel' : 'aucun');
+    const videoApres = Boolean(formData.video_apres);
+    const materielFourni = Boolean(formData.materiel_fourni);
+    const serviceLinge = Boolean(formData.service_linge || (formData.linen_sets && formData.linen_sets > 0));
+    const linenSets = Number(formData.linen_sets || (serviceLinge ? 1 : 0));
+
+    const handleSizeSelect = (key: string) => {
+        setFormData({
+            ...formData,
+            size_tier: key,
+            sizeTier: key
+        });
+    };
+
+    const handleReassortChange = (type: 'aucun' | 'essentiel' | 'confort') => {
+        setFormData({
+            ...formData,
+            reassort_type: type,
+            conso: type !== 'aucun'
+        });
+    };
 
     return (
         <div className="ws-form-block">
-            <div className="ws-section-header">Nos formules</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1rem' }}>
-                {/* Formula Selection */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <button
-                        type="button"
-                        onClick={() => setFormData({ ...formData, formula: 'A' })}
-                        className={`ws-nature-card ${formula === 'A' ? 'active' : ''}`}
-                        style={{ padding: '1.5rem', textAlign: 'center' }}
-                    >
-                        <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', opacity: 0.7 }}>FORMULE A</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>Ménage seul</div>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setFormData({ ...formData, formula: 'B' })}
-                        className={`ws-nature-card ${formula === 'B' ? 'active' : ''}`}
-                        style={{ padding: '1.5rem', textAlign: 'center' }}
-                    >
-                        <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.25rem', opacity: 0.7 }}>FORMULE B</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>Ménage + set de linge</div>
-                    </button>
-                </div>
-
-                {/* Size Selection Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-                    {Object.keys(AIRBNB_PRICES.A).map((sizeKey) => {
-                        const isSelected = sizeTier === sizeKey;
-                        const price = AIRBNB_PRICES[formula][sizeKey as keyof typeof AIRBNB_PRICES.A];
-                        return (
-                            <button
-                                key={sizeKey}
-                                type="button"
-                                onClick={() => setFormData({ ...formData, size_tier: sizeKey, sizeTier: sizeKey })}
-                                className={`ws-surface-card ${isSelected ? 'active' : ''}`}
-                                style={{ padding: '1rem', textAlign: 'left' }}
-                            >
-                                <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{SIZE_LABELS[sizeKey]}</div>
-                                <div style={{ fontWeight: 800, fontSize: '1.1rem', marginTop: '0.25rem' }}>{price} DH</div>
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Separator */}
-                <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0' }} />
-
-                {/* Réassort consommables */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
-                        <input
-                            type="checkbox"
-                            checked={formData.conso || false}
-                            onChange={(e) => setFormData({ ...formData, conso: e.target.checked })}
-                            style={{ width: '1.25rem', height: '1.25rem', accentColor: 'var(--primary)' }}
-                        />
-                        <span style={{ fontWeight: 800, fontSize: '0.875rem' }}>Réassort consommables</span>
+            <div className="ws-section-header">Tarif Conciergerie Airbnb</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '1rem' }}>
+                
+                {/* Orientation & Nombre de biens */}
+                <div style={{ padding: '0.85rem 1rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }}>
+                    <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.5rem', color: '#1e293b' }}>
+                        Nombre de biens à confier
                     </label>
-                    <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--primary)' }}>+25 DH</span>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {['1-2 biens', '3 biens', '4 biens', '5 biens', '6+ biens'].map((opt) => {
+                            const isSelected = nbBiens === opt || (opt === '6+ biens' && (nbBiens === '6 biens' || nbBiens === 'Plus de 6 biens'));
+                            return (
+                                <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => {
+                                        setFormData({ ...formData, nombre_biens: opt });
+                                    }}
+                                    style={{
+                                        padding: '0.4rem 0.85rem',
+                                        borderRadius: '0.5rem',
+                                        border: isSelected ? '2px solid var(--primary)' : '1px solid #cbd5e1',
+                                        background: isSelected ? 'hsl(var(--primary) / 0.1)' : '#ffffff',
+                                        color: isSelected ? 'var(--primary)' : '#334155',
+                                        fontWeight: isSelected ? 700 : 500,
+                                        fontSize: '0.8rem',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    {opt}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {nbBiens === '1-2 biens' && (
+                        <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.85rem', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '0.5rem', fontSize: '0.75rem', color: '#92400e' }}>
+                            ⚠️ <strong>Information :</strong> Le tarif conciergerie s'applique à partir de 3 biens. Pour 1 ou 2 biens, préférez le service <strong>Ménage Standard</strong>.
+                        </div>
+                    )}
                 </div>
 
-                {/* Linen Sets (only if formula B) */}
-                {formula === 'B' && (
-                    <div style={{ padding: '1rem', border: '2px dashed var(--primary)', borderRadius: '1rem', backgroundColor: 'hsl(var(--primary) / 0.05)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+                {/* Sélection Type de Logement (Prix Conciergerie) */}
+                <div>
+                    <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.5rem', color: '#1e293b' }}>
+                        Type de logement (Prix fixe par intervention)
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
+                        {Object.entries(AIRBNB_CONCIERGERIE_PRICES).map(([key, item]) => {
+                            const isSelected = sizeTier === key || (key === '1chambre' && sizeTier === 'studio');
+                            return (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => handleSizeSelect(key)}
+                                    className={`ws-surface-card ${isSelected ? 'active' : ''}`}
+                                    style={{ padding: '0.85rem', textAlign: 'left', borderRadius: '0.75rem', cursor: 'pointer' }}
+                                >
+                                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: isSelected ? 'var(--primary)' : '#1e293b' }}>{item.label}</div>
+                                    <div style={{ fontWeight: 800, fontSize: '1.05rem', marginTop: '0.2rem', color: isSelected ? 'var(--primary)' : '#0f172a' }}>{item.price} DH</div>
+                                    {item.note && (
+                                        <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '0.15rem' }}>{item.note}</div>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Champ facultatif détails logement */}
+                <div>
+                    <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.35rem', color: '#475569' }}>
+                        Détails des logements (optionnel)
+                    </label>
+                    <input
+                        type="text"
+                        placeholder="Ex : 2 studios et 1 T3 à Gauthier..."
+                        value={formData.types_logement_details || formData.types_logement || ''}
+                        onChange={(e) => setFormData({ ...formData, types_logement_details: e.target.value, types_logement: e.target.value })}
+                        style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                    />
+                </div>
+
+                <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '0.25rem 0' }} />
+
+                {/* Zone éloignée */}
+                <div style={{ padding: '0.75rem', background: '#fcfcfc', border: '1px solid #e2e8f0', borderRadius: '0.6rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <input
+                                type="checkbox"
+                                checked={isFarZone}
+                                onChange={(e) => setFormData({ ...formData, zone_eloignee: e.target.checked, is_far_zone: e.target.checked })}
+                                style={{ width: '1.1rem', height: '1.1rem', accentColor: 'var(--primary)' }}
+                            />
                             <div>
-                                <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--primary)' }}>— Ajout de set de linge : +90 DH / set</div>
-                                <p style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem', maxWidth: '320px', lineHeight: '1.4' }}>
-                                    2 grandes serviettes, 2 moyennes serviettes, 1 drap housse, 1 housse de couette, 1 drap lit, 2 tales d'oreiller
-                                </p>
+                                <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Zone éloignée / Périphérie</span>
+                                <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Bouskoura, Dar Bouazza, Mansouria, Almaz, Sidi Rahal, Mohammédia, etc.</div>
                             </div>
-                            <div className="ws-room-counter">
-                                <button type="button" className="ws-room-btn" onClick={() => setFormData({ ...formData, linen_sets: Math.max(0, (formData.linen_sets || 0) - 1) })}>−</button>
-                                <span className="ws-room-count">{formData.linen_sets || 0}</span>
-                                <button type="button" className="ws-room-btn" onClick={() => setFormData({ ...formData, linen_sets: (formData.linen_sets || 0) + 1 })}>+</button>
+                        </div>
+                        <span style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--primary)' }}>+50 DH</span>
+                    </label>
+                </div>
+
+                {/* Options complémentaires */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b' }}>Options complémentaires</div>
+                    
+                    {/* Réassort Consommables */}
+                    <div style={{ padding: '0.75rem', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.6rem' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.4rem', color: '#334155' }}>Réassort consommables</div>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            {[
+                                { type: 'aucun', label: 'Aucun', price: '0 DH' },
+                                { type: 'essentiel', label: 'Essentiel (eau, café, papier, savon...)', price: '+49 DH' },
+                                { type: 'confort', label: 'Confort (+ shampoing, gel douche...)', price: '+79 DH' }
+                            ].map((opt) => (
+                                <button
+                                    key={opt.type}
+                                    type="button"
+                                    onClick={() => handleReassortChange(opt.type as any)}
+                                    style={{
+                                        flex: 1,
+                                        minWidth: '140px',
+                                        padding: '0.5rem 0.6rem',
+                                        borderRadius: '0.5rem',
+                                        border: reassortType === opt.type ? '2px solid var(--primary)' : '1px solid #cbd5e1',
+                                        background: reassortType === opt.type ? 'hsl(var(--primary) / 0.08)' : '#f8fafc',
+                                        color: reassortType === opt.type ? 'var(--primary)' : '#334155',
+                                        fontWeight: reassortType === opt.type ? 700 : 500,
+                                        fontSize: '0.75rem',
+                                        cursor: 'pointer',
+                                        textAlign: 'left'
+                                    }}
+                                >
+                                    <div>{opt.label}</div>
+                                    <div style={{ fontWeight: 800, marginTop: '0.15rem' }}>{opt.price}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Vidéo & Matériel */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.75rem', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.6rem', cursor: 'pointer' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={videoApres}
+                                    onChange={(e) => setFormData({ ...formData, video_apres: e.target.checked })}
+                                    style={{ width: '1.1rem', height: '1.1rem', accentColor: 'var(--primary)' }}
+                                />
+                                <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>Vidéo avant / après</span>
+                            </div>
+                            <span style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--primary)' }}>+10 DH</span>
+                        </label>
+
+                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.65rem 0.75rem', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.6rem', cursor: 'pointer' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={materielFourni}
+                                    onChange={(e) => setFormData({ ...formData, materiel_fourni: e.target.checked })}
+                                    style={{ width: '1.1rem', height: '1.1rem', accentColor: 'var(--primary)' }}
+                                />
+                                <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>Matériel fourni</span>
+                            </div>
+                            <span style={{ fontWeight: 800, fontSize: '0.8rem', color: 'var(--primary)' }}>+29 DH</span>
+                        </label>
+                    </div>
+
+                    {/* Service Linge (Casablanca) */}
+                    <div style={{ padding: '0.85rem', border: '1px dashed var(--primary)', borderRadius: '0.75rem', backgroundColor: 'hsl(var(--primary) / 0.04)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                            <div>
+                                <div style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--primary)' }}>🧺 Service linge (Casablanca)</div>
+                                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                    +50 DH / set complet (8 pièces: lavage, séchage, repassage, livraison inclus)
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <button
+                                    type="button"
+                                    className="ws-room-btn"
+                                    onClick={() => {
+                                        const newSets = Math.max(0, linenSets - 1);
+                                        setFormData({
+                                            ...formData,
+                                            linen_sets: newSets,
+                                            service_linge: newSets > 0
+                                        });
+                                    }}
+                                >
+                                    −
+                                </button>
+                                <span className="ws-room-count" style={{ fontWeight: 800, fontSize: '0.9rem', minWidth: '1.5rem', textAlign: 'center' }}>
+                                    {linenSets}
+                                </span>
+                                <button
+                                    type="button"
+                                    className="ws-room-btn"
+                                    onClick={() => {
+                                        const newSets = linenSets + 1;
+                                        setFormData({
+                                            ...formData,
+                                            linen_sets: newSets,
+                                            service_linge: true
+                                        });
+                                    }}
+                                >
+                                    +
+                                </button>
                             </div>
                         </div>
                     </div>
-                )}
+                </div>
+
             </div>
         </div>
     );

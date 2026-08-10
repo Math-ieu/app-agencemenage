@@ -1,7 +1,6 @@
 import React from 'react';
 import { FormBlockProps } from '../ServiceFormBlocks';
 import { 
-  HabitationTypeBlock,
   FormulesAirbnbBlock,
   FrequenceBlock,
   PlanningBlock
@@ -15,7 +14,6 @@ interface MenageAirBnBFormProps extends FormBlockProps {
 export const MenageAirBnBForm: React.FC<MenageAirBnBFormProps> = (props) => {
   return (
     <>
-      <HabitationTypeBlock {...props} />
       <FormulesAirbnbBlock {...props} />
       <FrequenceBlock {...props} />
       <PlanningBlock {...props} />
