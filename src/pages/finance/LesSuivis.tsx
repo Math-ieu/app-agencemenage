@@ -24,7 +24,7 @@ import {
 } from '../../api/client';
 import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
-import { hasPermission } from '../../utils/permissions';
+import { hasPermission, hasPermissionWithContext } from '../../utils/permissions';
 import { getDynamicMonthPassagesCount } from '../../utils/pricing';
 import './LesSuivis.css';
 
@@ -2851,6 +2851,24 @@ export default function LesSuivis() {
                 </div>
 
                 <div className="ls-modal-footer">
+                  {(selectedRow.demandeId || selectedRow.originalDemande?.id) &&
+                    (hasPermissionWithContext(user, 'editer_besoin_facture', selectedRow.originalDemande) ||
+                     hasPermissionWithContext(user, 'editer_besoin', selectedRow.originalDemande) ||
+                     hasPermissionWithContext(user, 'editer_besoin_agence', selectedRow.originalDemande) ||
+                     hasPermission(user, 'modifier_demande')) && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      onClick={() => {
+                        const targetId = selectedRow.originalDemande?.id || selectedRow.demandeId;
+                        setShowDetailsModal(false);
+                        navigate(`/?edit=${targetId}`);
+                      }}
+                    >
+                      <Pencil size={14} /> Éditer le besoin
+                    </button>
+                  )}
                   <button className="btn btn-primary" onClick={() => setShowDetailsModal(false)}>
                     Fermer
                   </button>
