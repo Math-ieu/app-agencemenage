@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import { getDemandes, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
-import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage } from '../utils/pricing';
+import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage, getStatutMoisProchainCalculated } from '../utils/pricing';
 import { useToast } from '@/hooks/use-toast';
 import './GestionAbonnements.css';
 
@@ -31,7 +31,7 @@ interface SubscriptionRow {
   nextInterventionDay: string;
   nextInterventionHousekeeper: string;
   statutMoisEnCours: 'Actif' | 'Terminé';
-  statutMoisProchain: 'Actif' | 'En attente' | 'Facture envoyé' | '1er rappel' | '2e rappel' | 'Suspendu' | 'Stand by' | 'Résilié';
+  statutMoisProchain: string;
   dateDebut: string;
   dateFin?: string;
   tarifMensuel: number;
@@ -638,14 +638,9 @@ export default function GestionAbonnements() {
       const dbStatut = (d.statut || '').toLowerCase();
       const statutMoisEnCours: 'Actif' | 'Terminé' = (d.formulaire_data as any)?.statut_mois_en_cours || (['termine', 'terminee', 'resilie'].includes(dbStatut) ? 'Terminé' : 'Actif');
 
-      let statutMoisProchain: SubscriptionRow['statutMoisProchain'] = 'Actif';
-      if ((d.formulaire_data as any)?.statut_mois_prochain) {
-        statutMoisProchain = (d.formulaire_data as any).statut_mois_prochain;
-      } else if (d.statut_paiement === 'non_paye' || dbStatut === 'suspendu') {
-        statutMoisProchain = 'Suspendu';
-      } else if (d.statut_paiement === 'en_attente') {
-        statutMoisProchain = 'En attente';
-      }
+      const rawOverride = (d.formulaire_data as any)?.statut_mois_prochain;
+      const statutFacturation = (d.formulaire_data as any)?.statut_facturation || (['integral', 'paye', 'payee'].includes((d.statut_paiement || '').toLowerCase()) ? 'Payé' : undefined);
+      const statutMoisProchain = getStatutMoisProchainCalculated(new Date().getDate(), statutFacturation, rawOverride);
 
       return {
         id: d.id,
@@ -1594,13 +1589,13 @@ export default function GestionAbonnements() {
                   onChange={e => setStatutProchainFilter(e.target.value)}
                 >
                   <option value="tous">Tous</option>
+                  <option value="Non défini">Non défini</option>
                   <option value="Actif">Actif</option>
-                  <option value="En attente">En attente</option>
-                  <option value="Facture envoyé">Facture envoyé</option>
+                  <option value="Facture envoyée">Facture envoyée</option>
                   <option value="1er rappel">1er rappel</option>
                   <option value="2e rappel">2e rappel</option>
                   <option value="Suspendu">Suspendu</option>
-                  <option value="Stand by">Stand by</option>
+                  <option value="Stand-by">Stand-by</option>
                   <option value="Résilié">Résilié</option>
                 </select>
               </div>

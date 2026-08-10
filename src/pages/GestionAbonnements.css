@@ -440,29 +440,35 @@
 }
 .ga-status-suspendu .ga-badge-status-dot { background: #dc2626; }
 
-.ga-status-facture_envoye {
+.ga-status-nondefini, .ga-status-nondéfini {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.ga-status-nondefini .ga-badge-status-dot, .ga-status-nondéfini .ga-badge-status-dot { background: #94a3b8; }
+
+.ga-status-factureenvoyee, .ga-status-factureenvoyée, .ga-status-facture_envoye {
   background: #e0f2fe;
   color: #0369a1;
 }
-.ga-status-facture_envoye .ga-badge-status-dot { background: #0284c7; }
+.ga-status-factureenvoyee .ga-badge-status-dot, .ga-status-factureenvoyée .ga-badge-status-dot, .ga-status-facture_envoye .ga-badge-status-dot { background: #0284c7; }
 
-.ga-status-rappel1 {
+.ga-status-1errappel, .ga-status-rappel1 {
   background: #fef3c7;
   color: #92400e;
 }
-.ga-status-rappel1 .ga-badge-status-dot { background: #d97706; }
+.ga-status-1errappel .ga-badge-status-dot, .ga-status-rappel1 .ga-badge-status-dot { background: #d97706; }
 
-.ga-status-rappel2 {
+.ga-status-2erappel, .ga-status-rappel2 {
   background: #ffedd5;
   color: #9a3412;
 }
-.ga-status-rappel2 .ga-badge-status-dot { background: #ea580c; }
+.ga-status-2erappel .ga-badge-status-dot, .ga-status-rappel2 .ga-badge-status-dot { background: #ea580c; }
 
-.ga-status-standby {
+.ga-status-stand-by, .ga-status-standby {
   background: #f3e8ff;
   color: #6b21a8;
 }
-.ga-status-standby .ga-badge-status-dot { background: #9333ea; }
+.ga-status-stand-by .ga-badge-status-dot, .ga-status-standby .ga-badge-status-dot { background: #9333ea; }
 
 .ga-status-resilie {
   background: #f3f4f6;

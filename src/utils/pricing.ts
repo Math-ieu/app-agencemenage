@@ -820,3 +820,67 @@ export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = 
 
     return passageDatesSet.size;
 };
+
+/**
+ * Computes Statut Mois Prochain (Mois à venir) dynamically based on current day of month and billing status:
+ * 
+ * Rules (from subscription_memory.md & UI specs):
+ * - If explicitOverride is 'Stand-by' or 'Résilié', honor explicit manual state.
+ * - If statutFacturation is 'Payé' (or explicitOverride === 'Actif'), return 'Actif'.
+ * - Day 1 to 14 (< 15): Before 15th invoice generation -> 'Non défini' (unless explicitOverride is 'Actif' / 'Stand-by' / 'Résilié').
+ * - Day 15 to 17 (15..17): Invoice generated on the 15th -> 'Facture envoyée'
+ * - Day 18 to 22 (18..22): 1st reminder -> '1er rappel'
+ * - Day 23 to 26 (23..26): 2nd reminder -> '2e rappel'
+ * - Day 27 onwards (>= 27): Cutoff date -> 'Suspendu'
+ */
+export const getStatutMoisProchainCalculated = (
+    dayOfMonth: number = new Date().getDate(),
+    statutFacturation?: string,
+    explicitOverride?: string
+): string => {
+    if (explicitOverride === 'Stand-by' || explicitOverride === 'Résilié') {
+        return explicitOverride;
+    }
+
+    const isPaid = statutFacturation === 'Payé' || ['paye', 'payee', 'integral'].includes((statutFacturation || '').toLowerCase());
+    if (isPaid || explicitOverride === 'Actif') {
+        return 'Actif';
+    }
+
+    if (dayOfMonth < 15) {
+        if (explicitOverride && !['Suspendu', 'En attente', 'Actif', 'Non défini'].includes(explicitOverride)) {
+            return explicitOverride;
+        }
+        return 'Non défini';
+    }
+
+    if (dayOfMonth >= 15 && dayOfMonth <= 17) {
+        if (explicitOverride && ['Facture envoyée', 'Actif'].includes(explicitOverride)) {
+            return explicitOverride;
+        }
+        return 'Facture envoyée';
+    }
+
+    if (dayOfMonth >= 18 && dayOfMonth <= 22) {
+        if (explicitOverride && ['1er rappel', 'Actif'].includes(explicitOverride)) {
+            return explicitOverride;
+        }
+        return '1er rappel';
+    }
+
+    if (dayOfMonth >= 23 && dayOfMonth <= 26) {
+        if (explicitOverride && ['2e rappel', 'Actif'].includes(explicitOverride)) {
+            return explicitOverride;
+        }
+        return '2e rappel';
+    }
+
+    if (dayOfMonth >= 27) {
+        if (explicitOverride && ['Suspendu', 'Actif'].includes(explicitOverride)) {
+            return explicitOverride;
+        }
+        return 'Suspendu';
+    }
+
+    return 'Non défini';
+};

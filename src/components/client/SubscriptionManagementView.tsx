@@ -15,7 +15,7 @@ import { SubscriptionCalendarGrid } from './SubscriptionCalendarGrid';
 import { SubscriptionSidebar } from './SubscriptionSidebar';
 import { FacturesReglementsCard } from './FacturesReglementsCard';
 import { InvoiceFormModal } from './InvoiceFormModal';
-import { extractJoursPassage, parseDateRobust } from '../../utils/pricing';
+import { extractJoursPassage, parseDateRobust, getStatutMoisProchainCalculated } from '../../utils/pricing';
 
 export interface SubscriptionManagementViewProps {
   latest: Demande;
@@ -276,16 +276,6 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     return ['termine', 'terminee', 'resilie'].includes(dbStatut) ? 'Terminé' : 'Actif';
   });
 
-  const [statutMoisProchain, setStatutMoisProchain] = useState<string>(() => {
-    if (latest?.formulaire_data?.statut_mois_prochain) {
-      return latest.formulaire_data.statut_mois_prochain;
-    }
-    if (latest?.statut_paiement === 'non_paye' || (latest?.statut || '').toLowerCase() === 'suspendu') {
-      return 'Suspendu';
-    }
-    return 'Actif';
-  });
-
   const [statutFacturation, setStatutFacturation] = useState<string>(() => {
     if (latest?.formulaire_data?.statut_facturation) {
       return latest.formulaire_data.statut_facturation;
@@ -295,6 +285,11 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
       return 'Payé';
     }
     return 'Non payé';
+  });
+
+  const [statutMoisProchain, setStatutMoisProchain] = useState<string>(() => {
+    const rawOverride = latest?.formulaire_data?.statut_mois_prochain;
+    return getStatutMoisProchainCalculated(new Date().getDate(), statutFacturation, rawOverride);
   });
 
   const handleMoisProchainChange = async (newVal: string) => {
@@ -319,6 +314,8 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
   const handleFacturationChange = async (newVal: string) => {
     setStatutFacturation(newVal);
+    const updatedStatutProchain = getStatutMoisProchainCalculated(new Date().getDate(), newVal, statutMoisProchain);
+    setStatutMoisProchain(updatedStatutProchain);
     if (!latest?.id) return;
     try {
       if (newVal === 'Payé') {
@@ -327,11 +324,13 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
       } else {
         const updatedFormData = {
           ...(latest.formulaire_data || {}),
-          statut_facturation: newVal
+          statut_facturation: newVal,
+          statut_mois_prochain: updatedStatutProchain
         };
         await updateDemande(latest.id, {
           statut_paiement: newVal === 'Payé' ? 'integral' : 'non_paye',
           statut_paiement_ui: newVal === 'Payé' ? 'paye' : 'non_paye',
+          statut_mois_prochain: updatedStatutProchain,
           formulaire_data: updatedFormData
         } as any);
         addToast(`Statut de facturation mis à jour : ${newVal}`, "info");
@@ -673,7 +672,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
       />
 
       {/* 4. Main 2 Columns Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20 }}>
+      <div className="sub-view-layout-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20 }}>
         {/* LEFT COLUMN */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Subscription Contract Parameters Card matching screenshot */}
@@ -738,13 +737,15 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
         </div>
 
         {/* RIGHT SIDEBAR STACK */}
-        <SubscriptionSidebar
-          latest={latest}
-          client={client}
-          childDemandes={childDemandes}
-          onOpenInvoiceModal={() => setShowInvoiceFormModal(true)}
-          addToast={addToast}
-        />
+        <div className="sub-view-sidebar" style={{ width: 320, flexShrink: 0 }}>
+          <SubscriptionSidebar
+            latest={latest}
+            client={client}
+            childDemandes={childDemandes}
+            onOpenInvoiceModal={() => setShowInvoiceFormModal(true)}
+            addToast={addToast}
+          />
+        </div>
       </div>
 
       {/* Invoice Form Modal */}

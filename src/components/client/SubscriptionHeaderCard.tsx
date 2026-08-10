@@ -41,7 +41,7 @@ export const SubscriptionHeaderCard: React.FC<SubscriptionHeaderCardProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* ── Dark Teal KPI Banner ── */}
-      <div style={{ background: '#034a3e', borderRadius: 12, padding: '1.25rem 1.5rem', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+      <div className="sub-header-banner" style={{ background: '#034a3e', borderRadius: 12, padding: '1.25rem 1.5rem', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', opacity: 0.8, letterSpacing: '0.05em' }}>
             STATUT ABONNEMENT ({capitalizedMonthTitle.toUpperCase()})
@@ -55,7 +55,7 @@ export const SubscriptionHeaderCard: React.FC<SubscriptionHeaderCardProps> = ({
         </div>
 
         {/* 4 KPIs matching user screenshot */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+        <div className="sub-kpi-grid" style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
           {/* KPI 1 : PASSAGES RÉALISÉS */}
           <div style={{ padding: '0 20px', textAlign: 'center' }}>
             <div style={{ fontSize: 24, fontWeight: 800, color: 'white' }}>
@@ -66,7 +66,7 @@ export const SubscriptionHeaderCard: React.FC<SubscriptionHeaderCardProps> = ({
             </div>
           </div>
 
-          <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.25)' }} />
+          <div className="sub-kpi-divider" style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.25)' }} />
 
           {/* KPI 2 : REPORT */}
           <div style={{ padding: '0 20px', textAlign: 'center' }}>
@@ -78,7 +78,7 @@ export const SubscriptionHeaderCard: React.FC<SubscriptionHeaderCardProps> = ({
             </div>
           </div>
 
-          <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.25)' }} />
+          <div className="sub-kpi-divider" style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.25)' }} />
 
           {/* KPI 3 : IMPAYÉ */}
           <div style={{ padding: '0 20px', textAlign: 'center' }}>
@@ -90,7 +90,7 @@ export const SubscriptionHeaderCard: React.FC<SubscriptionHeaderCardProps> = ({
             </div>
           </div>
 
-          <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.25)' }} />
+          <div className="sub-kpi-divider" style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.25)' }} />
 
           {/* KPI 4 : ASSIDUITÉ */}
           <div style={{ padding: '0 20px', textAlign: 'center' }}>

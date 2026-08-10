@@ -22,6 +22,7 @@ import { normalizeFrequence } from '../utils/formNormalizers';
 import ClientEditModal from './ClientEditModal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { SubscriptionManagementView } from '../components/client/SubscriptionManagementView';
+import './ClientDetails.css';
 
 export interface ActionLog {
   id: number;
@@ -1645,13 +1646,9 @@ export default function ClientDetails() {
     <div style={{ background: '#F8F9FA', minHeight: '100vh', paddingBottom: 64, fontFamily: 'Inter, sans-serif' }}>
 
       {/* ══════════════ HEADER ══════════════ */}
-      <div style={{
-        background: 'white', borderBottom: '1px solid #e2e8f0',
-        padding: '12px 0', position: 'sticky', top: 0, zIndex: 20,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-      }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} className="flex-wrap gap-y-4">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+      <div className="cd-header-sticky">
+        <div className="cd-header-inner">
+          <div className="cd-header-left">
             {/* Back button */}
             <button
               onClick={() => navigate('/clients')}
@@ -1667,17 +1664,17 @@ export default function ClientDetails() {
             </button>
 
             {/* Avatar + info */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="cd-header-title-group">
               <div style={{
                 width: 48, height: 48, borderRadius: 14,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: 'white', fontSize: 20, fontWeight: 700,
-                backgroundColor: C.teal,
+                backgroundColor: C.teal, flexShrink: 0
               }}>
                 {(client.display_name || client.full_name || client.entity_name || client.last_name || client.first_name || 'C').trim()[0].toUpperCase()}
               </div>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a202c', margin: 0, textTransform: 'capitalize' }}>
                     {client.display_name || client.full_name || client.entity_name || `${client.first_name || ''} ${client.last_name || ''}`.trim()}
                   </h1>
@@ -1690,7 +1687,7 @@ export default function ClientDetails() {
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>x{client.demandes_count}</span>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#a0aec0' }}>#{client.id}</span>
                   <Badge bg={C.lime} color="white">{client.segment}</Badge>
                   {demandes[0] && renderStatusBadge(demandes[0].statut, demandes[0].cao)}
@@ -1701,7 +1698,7 @@ export default function ClientDetails() {
           </div>
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 10 }} className="flex-wrap">
+          <div className="cd-header-actions">
             {hasPermissionWithClientContext(user, client, demandes) && (
               <button
                 onClick={() => setShowEditModal(true)}
@@ -1737,11 +1734,11 @@ export default function ClientDetails() {
       </div>
 
       {/* ══════════════ BODY ══════════════ */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 24px' }}>
+      <div className="cd-body-container">
 
         {/* ── 1. Informations Client ── */}
         <Accordion title="Informations Client" icon={<User size={18} />} isOpen={openSections.info} onToggle={() => toggle('info')} color={C.teal}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px 32px' }}>
+          <div className="cd-info-grid">
             <InfoField label="NOM / RAISON SOCIALE" value={client.display_name || client.full_name || client.entity_name || `${client.first_name || ''} ${client.last_name || ''}`.trim()} />
             <InfoField label="SEGMENT" value={client.segment} />
             <InfoField label="TÉLÉPHONE DIRECT" value={client.phone} />
@@ -1756,7 +1753,7 @@ export default function ClientDetails() {
         {/* ── 2. Historique Fidélité ── */}
         <Accordion title="Historique Fidélité" icon={<Heart size={18} />} isOpen={openSections.fidelite} onToggle={() => toggle('fidelite')} color={C.coral} badge={parentDemandes.length}>
           {parentDemandes.length === 0 ? <EmptyState text="Aucune demande trouvée." /> : (
-            <div style={{ overflowX: 'auto' }}>
+            <div className="cd-table-wrapper" style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
                   <Th>Date</Th><Th>Nom du service</Th><Th>Intervention</Th><Th>Profils proposés</Th><Th>Segment</Th><Th>Statut</Th><Th>Paiement</Th><Th center>Actions</Th>
@@ -2085,7 +2082,7 @@ export default function ClientDetails() {
 
         {/* ── 6. Historique Documents ── */}
         <Accordion title="Historique Documents" icon={<FileText size={18} />} isOpen={openSections.documents} onToggle={() => toggle('documents')} color={C.orange}>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="cd-table-wrapper" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
                 <Th>Date d'émission</Th>
@@ -2149,7 +2146,7 @@ export default function ClientDetails() {
 
         {/* ── 7. Historique des actions ── */}
         <Accordion title="Historique des actions" icon={<History size={18} />} isOpen={openSections.actionsHistory} onToggle={() => toggle('actionsHistory')} color="#6366f1" badge={actionLogs.length}>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="cd-table-wrapper" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
@@ -2178,7 +2175,7 @@ export default function ClientDetails() {
 
         {/* ── 8. Feedback Client ── */}
         <Accordion title="Feedback Client" icon={<Star size={18} />} isOpen={openSections.feedback} onToggle={() => toggle('feedback')} color={C.coral} badge={feedbacks.length}>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="cd-table-wrapper" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
                 <Th>Service</Th><Th>Profil</Th><Th>Date</Th><Th>Satisfaction</Th><Th>Note agence</Th><Th>Statut</Th><Th center>Action</Th>
@@ -2239,7 +2236,7 @@ export default function ClientDetails() {
         {/* ── 9. Historique ── */}
         {/*
         <Accordion title="Historique" icon={<History size={18} />} isOpen={openSections.historique} onToggle={() => toggle('historique')} color={C.tan}>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="cd-table-wrapper" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
                 <Th>Utilisateur</Th><Th>Date</Th><Th>Action</Th><Th>Note</Th>

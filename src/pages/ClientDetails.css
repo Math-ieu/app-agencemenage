@@ -1,0 +1,215 @@
+/* ClientDetails.css - Responsive Styles for Client Details View */
+
+/* Base Container & Spacing */
+.cd-header-sticky {
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 0;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.cd-header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.cd-header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.cd-header-title-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cd-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cd-body-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 24px;
+}
+
+/* 1. Informations Client Grid */
+.cd-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px 32px;
+}
+
+/* Responsive Table Wrappers */
+.cd-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cd-table-wrapper table {
+  min-width: 700px;
+}
+
+/* Accordion Customization */
+.cd-accordion-header {
+  user-select: none;
+  cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE BREAKPOINTS (ONLY for Tablet & Mobile)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Tablet Breakpoint (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .cd-header-inner {
+    padding: 0 16px;
+  }
+
+  .cd-body-container {
+    padding: 16px 16px;
+  }
+
+  .cd-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px 20px;
+  }
+
+  /* Subscription Management View Layout Adjustments */
+  .sub-view-layout-grid {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .sub-view-sidebar {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+  .sub-header-banner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .sub-kpi-grid {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .sub-kpi-divider {
+    display: none !important;
+  }
+}
+
+/* Mobile Breakpoint (max-width: 768px) */
+@media (max-width: 768px) {
+  .cd-header-sticky {
+    position: relative;
+    top: auto;
+  }
+
+  .cd-header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 0 12px;
+  }
+
+  .cd-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .cd-header-title-group {
+    width: 100%;
+  }
+
+  .cd-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .cd-header-actions button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .cd-body-container {
+    padding: 12px 12px;
+  }
+
+  .cd-info-grid {
+    grid-template-columns: 1fr;
+    gap: 12px 0;
+  }
+
+  /* Status Bar Stack on Mobile */
+  .sub-status-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 10px !important;
+  }
+
+  .sub-status-dropdowns {
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 10px !important;
+  }
+
+  .sub-status-dropdowns select {
+    width: 100% !important;
+  }
+
+  .sub-status-actions {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .sub-status-actions button {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+  }
+
+  /* Month Tabs Scrollable on Mobile */
+  .sub-month-tabs {
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    padding-bottom: 4px !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Calendar Grid Scroll */
+  .sub-calendar-wrapper {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Small Mobile Breakpoint (max-width: 480px) */
+@media (max-width: 480px) {
+  .sub-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sub-status-actions {
+    grid-template-columns: 1fr !important;
+  }
+}
