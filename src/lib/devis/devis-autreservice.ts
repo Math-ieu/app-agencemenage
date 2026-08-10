@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { renderSubscriptionPlanningPDF } from "./devis-planning-pdf";
 
 const formatNumber = (n: number): string => {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -39,6 +40,7 @@ interface DevisAutreServiceData {
   frequence?: string;
   datePrestation?: string;
   heurePrestation?: string;
+  demande?: any;
 }
 
 export function genererDevisAutreService(data: DevisAutreServiceData, logoBase64?: string, signatureBase64?: string) {
@@ -285,6 +287,11 @@ export function genererDevisAutreService(data: DevisAutreServiceData, logoBase64
     const wrapped = doc.splitTextToSize(para, CONTENT_W);
     doc.text(wrapped, MARGIN, y);
     y += wrapped.length * 5;
+  }
+  y += 6;
+
+  if (data.demande) {
+    y = renderSubscriptionPlanningPDF(doc, data.demande, y);
   }
   y += 16;
 

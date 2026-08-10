@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { renderSubscriptionPlanningPDF } from "./devis-planning-pdf";
 
 /** Format number with regular space as thousands separator (jsPDF can't render non-breaking spaces from toLocaleString) */
 const formatNumber = (n: number): string => {
@@ -31,6 +32,7 @@ interface DevisAirbnbData {
   avancePourcentage?: number;
   avanceFixe?: number;
   avancePaiement?: number;
+  demande?: any;
 }
 
 export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, signatureBase64?: string) {
@@ -357,7 +359,11 @@ export function genererDevisAirbnb(data: DevisAirbnbData, logoBase64?: string, s
     doc.text(wrapped, MARGIN, y);
     y += wrapped.length * 5;
   }
-  y += 16;
+  y += 6;
+
+  if (data.demande) {
+    y = renderSubscriptionPlanningPDF(doc, data.demande, y);
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.text('Pour Agence Ménage :', MARGIN, y);

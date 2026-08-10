@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { renderSubscriptionPlanningPDF } from './devis-planning-pdf';
 
 /** Format number with regular space as thousands separator */
 const formatNumber = (n: number): string => {
@@ -30,6 +31,7 @@ interface DevisAuxiliaireData {
   totalMensuelLabel?: string;
   totalMensuel?: number;
   nbSemaines?: number;
+  demande?: any;
 }
 
 async function genererDevisAuxiliaire(data: DevisAuxiliaireData, logoBase64?: string, signatureBase64?: string): Promise<Blob> {
@@ -449,7 +451,11 @@ L'équipe Agence Ménage — 05 22 20 02 39`;
   pdf.setTextColor(DARK_GREY[0], DARK_GREY[1], DARK_GREY[2]);
   
   pdf.text(messageLines, margin, y);
-  y += messageHeight + 12;
+  y += messageHeight + 6;
+
+  if (data.demande) {
+    y = renderSubscriptionPlanningPDF(pdf, data.demande, y);
+  }
 
   // ==================== SIGNATURES ====================
   // Check for page break before signatures block

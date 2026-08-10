@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { renderSubscriptionPlanningPDF } from "./devis-planning-pdf";
 
 /** Format number with regular space as thousands separator */
 const formatNumber = (n: number): string =>
@@ -35,6 +36,7 @@ export interface DevisStandardData {
   avancePourcentage?: number;
   avanceFixe?: number;
   avancePaiement?: number;
+  demande?: any;
 }
 
 export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?: string, signatureBase64?: string): Blob {
@@ -362,7 +364,12 @@ export function genererDevisMenageStandard(data: DevisStandardData, logoBase64?:
     doc.text(wrapped, MARGIN, y);
     y += wrapped.length * 5;
   }
-  y += 14;
+  y += 6;
+
+  // ─── Subscription Planning & Calendar Section ───
+  if (data.demande) {
+    y = renderSubscriptionPlanningPDF(doc, data.demande, y);
+  }
 
   // ─── Signatures ───
   if (y > pageHeight - 55) { doc.addPage(); y = 24; }

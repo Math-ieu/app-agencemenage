@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { renderSubscriptionPlanningPDF } from './devis-planning-pdf';
 
 /** Format number with regular space as thousands separator (jsPDF can't render non-breaking spaces from toLocaleString) */
 const formatNumber = (n: number): string => {
@@ -33,6 +34,7 @@ interface DevisGestion360Data {
   avanceFixe?: number;
   avancePaiement?: number;
   ferie?: boolean;
+  demande?: any;
 }
 
 // Données d'exemple (correspondant au devis original)
@@ -557,6 +559,11 @@ async function genererDevisGestion360(data: DevisGestion360Data, logoBase64?: st
     const wrapped = doc.splitTextToSize(para, contentWidth);
     doc.text(wrapped, margin, y);
     y += wrapped.length * 5;
+  }
+  y += 6;
+
+  if (data.demande) {
+    y = renderSubscriptionPlanningPDF(doc, data.demande, y);
   }
   // Check for page break before signatures block
   if (y > footerThreshold - 40) {

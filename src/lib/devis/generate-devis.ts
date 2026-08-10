@@ -187,6 +187,7 @@ const buildAirbnbData = (demande: Demande): DevisAirbnbData => {
   const totalHT = lignes.reduce((s, l) => s + l.montant, 0) || total;
 
   return {
+    demande,
     numero: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     client: {
@@ -243,6 +244,7 @@ const buildAutreServiceData = (demande: Demande) => {
   }
 
   return {
+    demande,
     numero: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     client: {
@@ -278,6 +280,7 @@ const buildAuxiliaireData = (demande: Demande): DevisAuxiliaireData => {
   const total = getTotalPrice(demande, form);
   const nbSemaines = toNumber(form.nb_semaines || 4);
   return {
+    demande,
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     validite: 'Valable 7 jours',
@@ -362,6 +365,7 @@ const buildFinChantierData = (demande: Demande): DevisFinChantierData => {
   }
 
   return {
+    demande,
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     client: {
@@ -433,6 +437,7 @@ const buildPostSinistreData = (demande: Demande): DevisPostSinistreData => {
   }
 
   return {
+    demande,
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     client: {
@@ -492,6 +497,7 @@ const buildMenageBureauxData = (demande: Demande): DevisMenageBureauxData => {
   }
 
   return {
+    demande,
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     client: {
@@ -568,6 +574,7 @@ const buildPlacementFlexibleData = (demande: Demande): DevisPlacementFlexibleDat
     });
   }
   return {
+    demande,
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     client: {
@@ -642,6 +649,7 @@ const buildGestion360Data = (demande: Demande): DevisGestion360Data => {
     { designation: 'Supervision qualité incluse (≥3 personnes)', montant: 'Inclus' }
   );
   return {
+    demande,
     numDevis: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     client: {
@@ -711,6 +719,7 @@ const buildMenageStandardData = (demande: Demande): DevisStandardData => {
     || getTotalPrice(demande, form);
 
   return {
+    demande,
     numero: buildDevisNumber(demande),
     date: formatLongDate(demande.created_at || demande.date_intervention),
     isGrand,

@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { renderSubscriptionPlanningPDF } from './devis-planning-pdf';
 
 /** Format number with regular space as thousands separator (jsPDF can't render non-breaking spaces from toLocaleString) */
 const formatNumber = (n: number): string => {
@@ -35,6 +36,7 @@ interface DevisMenageBureauxData {
   codePromo?: string;
   codePromoPct?: number;
   total1erMois?: number;
+  demande?: any;
 }
 
 // Données d'exemple (correspondant au devis original)
@@ -473,7 +475,11 @@ async function genererDevisMenageBureaux(data: DevisMenageBureauxData, logoBase6
     doc.text(wrapped, margin, y);
     y += wrapped.length * 5;
   }
-  y += 16;
+  y += 6;
+
+  if (data.demande) {
+    y = renderSubscriptionPlanningPDF(doc, data.demande, y);
+  }
 
   doc.setFont('helvetica', 'bold');
   doc.text('Pour Agence Ménage :', margin, y);

@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { renderSubscriptionPlanningPDF } from './devis-planning-pdf';
 
 /** Format number with regular space as thousands separator (jsPDF can't render non-breaking spaces from toLocaleString) */
 const formatNumber = (n: number): string => {
@@ -38,6 +39,7 @@ interface DevisPlacementFlexibleData {
   avancePourcentage?: number;
   avanceFixe?: number;
   avancePaiement?: number;
+  demande?: any;
   ferie?: boolean;
 }
 
@@ -505,6 +507,11 @@ export async function genererDevisPlacementFlexible(data: DevisPlacementFlexible
     const wrapped = doc.splitTextToSize(para, contentWidth);
     doc.text(wrapped, margin, y);
     y += wrapped.length * 5;
+  }
+  y += 6;
+
+  if (data.demande) {
+    y = renderSubscriptionPlanningPDF(doc, data.demande, y);
   }
   // Check for page break before signatures block
   const footerThreshold = pageHeight - 40;
