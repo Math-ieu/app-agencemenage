@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { Client, Demande } from '../../types';
 import {
   updateDemande, deleteDemande, createPlanningIntervention,
@@ -14,6 +16,7 @@ import { SubscriptionSidebar } from './SubscriptionSidebar';
 import { FacturesReglementsCard } from './FacturesReglementsCard';
 import { InvoiceFormModal } from './InvoiceFormModal';
 import { extractJoursPassage, parseDateRobust } from '../../utils/pricing';
+
 export interface SubscriptionManagementViewProps {
   latest: Demande;
   client?: Client;
@@ -41,6 +44,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   latest,
   client,
   demandes,
+  navigate,
   handleGenerateInvoice,
   handleDownloadInvoice,
   handleSavePlanning,
@@ -54,6 +58,17 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   fetchData
 }) => {
   if (!latest) return null;
+
+  const navigateHook = useNavigate();
+  const [isBackHovered, setIsBackHovered] = useState(false);
+
+  const handleGoToGestionAbonnement = () => {
+    if (typeof navigate === 'function') {
+      navigate('/gestion-abonnement');
+    } else {
+      navigateHook('/gestion-abonnement');
+    }
+  };
 
   const [localPlanningNotes, setLocalPlanningNotes] = useState<string>(() => {
     return latest?.formulaire_data?.planning_notes || latest?.planning?.notes || '';
@@ -574,6 +589,44 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 20 }}>
+      {/* 0. Navigation back to Gestion Abonnement */}
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={handleGoToGestionAbonnement}
+          onMouseEnter={() => setIsBackHovered(true)}
+          onMouseLeave={() => setIsBackHovered(false)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '9px 18px',
+            backgroundColor: isBackHovered ? '#e6f4f1' : '#ffffff',
+            color: isBackHovered ? '#037265' : '#475569',
+            border: isBackHovered ? '1px solid #037265' : '1px solid #cbd5e1',
+            borderRadius: 8,
+            fontWeight: 600,
+            fontSize: 14,
+            cursor: 'pointer',
+            boxShadow: isBackHovered
+              ? '0 4px 14px rgba(3, 114, 101, 0.2)'
+              : '0 1px 3px rgba(0, 0, 0, 0.05)',
+            transform: isBackHovered ? 'translateY(-1px)' : 'translateY(0)',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+        >
+          <ArrowLeft
+            size={18}
+            style={{
+              color: isBackHovered ? '#037265' : '#64748b',
+              transform: isBackHovered ? 'translateX(-4px)' : 'translateX(0)',
+              transition: 'all 0.2s ease'
+            }}
+          />
+          <span>Retour à Gestion Abonnement</span>
+        </button>
+      </div>
+
       {/* 1. Month Tabs Navigation Header */}
       <SubscriptionMonthTabs
         monthTabs={monthTabs}
