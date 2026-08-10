@@ -16,6 +16,8 @@ import { SubscriptionSidebar } from './SubscriptionSidebar';
 import { FacturesReglementsCard } from './FacturesReglementsCard';
 import { InvoiceFormModal } from './InvoiceFormModal';
 import { extractJoursPassage, parseDateRobust, getStatutMoisProchainCalculated } from '../../utils/pricing';
+import { useAuthStore } from '../../store/auth';
+import { checkPermission } from '../../utils/permissions';
 
 export interface SubscriptionManagementViewProps {
   latest: Demande;
@@ -59,6 +61,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 }) => {
   if (!latest) return null;
 
+  const { user } = useAuthStore();
   const navigateHook = useNavigate();
   const [isBackHovered, setIsBackHovered] = useState(false);
 
@@ -293,6 +296,11 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   });
 
   const handleMoisProchainChange = async (newVal: string) => {
+    const perm = checkPermission(user, 'pause_standby_abonnement');
+    if (!perm.allowed) {
+      addToast(perm.message || "Action non autorisée par votre rôle.", "error");
+      return;
+    }
     setStatutMoisProchain(newVal);
     if (!latest?.id) return;
     try {
@@ -313,6 +321,11 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   };
 
   const handleFacturationChange = async (newVal: string) => {
+    const perm = checkPermission(user, 'valider_facturation_abonnement');
+    if (!perm.allowed) {
+      addToast(perm.message || "Action non autorisée par votre rôle.", "error");
+      return;
+    }
     setStatutFacturation(newVal);
     const updatedStatutProchain = getStatutMoisProchainCalculated(new Date().getDate(), newVal, statutMoisProchain);
     setStatutMoisProchain(updatedStatutProchain);
@@ -343,6 +356,11 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
   const handleSetCellStatus = async (dayIso: string, newStatut: string) => {
     if (!latest) return;
+    const perm = checkPermission(user, 'modifier_abonnement');
+    if (!perm.allowed) {
+      addToast(perm.message || "Action non autorisée par votre rôle.", "error");
+      return;
+    }
     try {
       const existing = childDemandes.find((d: Demande) => {
         if (!d.date_intervention) return false;
@@ -574,6 +592,11 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   }, [year, month, daysInMonth, selectedDays]);
 
   const handleAddNextMonthTab = () => {
+    const perm = checkPermission(user, 'creer_abonnement');
+    if (!perm.allowed) {
+      addToast(perm.message || "Action non autorisée par votre rôle.", "error");
+      return;
+    }
     if (statutFacturation !== 'Payé') {
       addToast("Le statut de facturation du mois doit être 'Payé' pour pouvoir activer le mois prochain.", "error");
       return;

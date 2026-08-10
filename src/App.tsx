@@ -90,7 +90,7 @@ export default function App() {
           <Route path="profils/:id" element={<PermissionRoute permission="consulter_agents"><ProfilDetails /></PermissionRoute>} />
           <Route path="profils" element={<PermissionRoute permission="consulter_agents"><Profils /></PermissionRoute>} />
           <Route path="historique" element={<PermissionRoute permission="consulter_historique_global"><Historique /></PermissionRoute>} />
-          <Route path="gestion-abonnement" element={<PermissionRoute permission="consulter_demandes|consulter_clients"><GestionAbonnements /></PermissionRoute>} />
+          <Route path="gestion-abonnement" element={<PermissionRoute permission="consulter_abonnements|consulter_planning_abonnements|consulter_facturation_abonnements"><GestionAbonnements /></PermissionRoute>} />
           <Route path="finance">
             <Route path="vue-globale" element={<PermissionRoute permission="voir_la_caisse"><VueGlobale /></PermissionRoute>} />
             <Route path="les-suivis" element={<PermissionRoute permission="consulter_dus_agences_profils|consulter_suivi_commerciaux"><LesSuivis /></PermissionRoute>} />

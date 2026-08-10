@@ -10,6 +10,8 @@ import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
 import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage, getStatutMoisProchainCalculated } from '../utils/pricing';
 import { useToast } from '@/hooks/use-toast';
+import { useAuthStore } from '../store/auth';
+import { checkPermission, hasPermission } from '../utils/permissions';
 import './GestionAbonnements.css';
 
 interface SubscriptionRow {
@@ -479,7 +481,32 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
 export default function GestionAbonnements() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'vue_ensemble' | 'planning' | 'facturation'>('vue_ensemble');
+  const { user } = useAuthStore();
+  const canViewVueEnsemble = hasPermission(user, 'consulter_abonnements');
+  const canViewPlanning = hasPermission(user, 'consulter_planning_abonnements');
+  const canViewFacturation = hasPermission(user, 'consulter_facturation_abonnements');
+
+  const initialTab = useMemo<'vue_ensemble' | 'planning' | 'facturation'>(() => {
+    if (canViewVueEnsemble) return 'vue_ensemble';
+    if (canViewPlanning) return 'planning';
+    if (canViewFacturation) return 'facturation';
+    return 'vue_ensemble';
+  }, [canViewVueEnsemble, canViewPlanning, canViewFacturation]);
+
+  const [activeTab, setActiveTab] = useState<'vue_ensemble' | 'planning' | 'facturation'>(initialTab);
+
+  useEffect(() => {
+    if (activeTab === 'vue_ensemble' && !canViewVueEnsemble) {
+      if (canViewPlanning) setActiveTab('planning');
+      else if (canViewFacturation) setActiveTab('facturation');
+    } else if (activeTab === 'planning' && !canViewPlanning) {
+      if (canViewVueEnsemble) setActiveTab('vue_ensemble');
+      else if (canViewFacturation) setActiveTab('facturation');
+    } else if (activeTab === 'facturation' && !canViewFacturation) {
+      if (canViewVueEnsemble) setActiveTab('vue_ensemble');
+      else if (canViewPlanning) setActiveTab('planning');
+    }
+  }, [canViewVueEnsemble, canViewPlanning, canViewFacturation, activeTab]);
   
   // Data state
   const [demandes, setDemandes] = useState<Demande[]>([]);
@@ -639,7 +666,8 @@ export default function GestionAbonnements() {
       const statutMoisEnCours: 'Actif' | 'Terminé' = (d.formulaire_data as any)?.statut_mois_en_cours || (['termine', 'terminee', 'resilie'].includes(dbStatut) ? 'Terminé' : 'Actif');
 
       const rawOverride = (d.formulaire_data as any)?.statut_mois_prochain;
-      const statutFacturation = (d.formulaire_data as any)?.statut_facturation || (['integral', 'paye', 'payee'].includes((d.statut_paiement || '').toLowerCase()) ? 'Payé' : undefined);
+      const isConfirmedPaid = confirmedPaymentIds.includes(d.id);
+      const statutFacturation = isConfirmedPaid ? 'Payé' : ((d.formulaire_data as any)?.statut_facturation || (['integral', 'paye', 'payee'].includes((d.statut_paiement || '').toLowerCase()) ? 'Payé' : undefined));
       const statutMoisProchain = getStatutMoisProchainCalculated(new Date().getDate(), statutFacturation, rawOverride);
 
       return {
@@ -1196,6 +1224,15 @@ export default function GestionAbonnements() {
 
   // Toggle suspension
   const handleToggleSuspend = async (row: SubscriptionRow) => {
+    const perm = checkPermission(user, 'pause_standby_abonnement');
+    if (!perm.allowed) {
+      toast({
+        title: 'Action non autorisée',
+        description: perm.message || 'Votre rôle ne vous permet pas de modifier le statut de suspension.',
+        variant: 'destructive'
+      });
+      return;
+    }
     const newStatut = row.statutMoisProchain === 'Suspendu' ? 'Actif' : 'Suspendu';
     try {
       await toggleAbonnementSuspend(row.demandeId, { statut_mois_prochain: newStatut });
@@ -1211,6 +1248,15 @@ export default function GestionAbonnements() {
 
   // Confirm payment
   const handleConfirmPayment = async (demandeId: number) => {
+    const perm = checkPermission(user, 'valider_facturation_abonnement');
+    if (!perm.allowed) {
+      toast({
+        title: 'Action non autorisée',
+        description: perm.message || 'Votre rôle ne vous permet pas de valider la facturation.',
+        variant: 'destructive'
+      });
+      return;
+    }
     setConfirmedPaymentIds(prev => [...prev, demandeId]);
     toast({
       title: 'Paiement confirmé',
@@ -1414,7 +1460,7 @@ export default function GestionAbonnements() {
         tarifVal: sub.tarifMensuel,
         montant: `${sub.tarifMensuel.toLocaleString('fr-FR')} DH`,
         statut: isPaid ? 'Payé' : 'Non payé',
-        nextStatut: isPaid ? 'Actif' : 'Suspendu'
+        nextStatut: isPaid ? 'Actif' : sub.statutMoisProchain
       };
     });
   }, [subscriptionRows, confirmedPaymentIds]);
@@ -1464,29 +1510,35 @@ export default function GestionAbonnements() {
 
         {/* Tab Selection Pill Buttons */}
         <div className="ga-tabs-container">
-          <button
-            className={`ga-tab-btn ${activeTab === 'vue_ensemble' ? 'active' : ''}`}
-            onClick={() => setActiveTab('vue_ensemble')}
-          >
-            Vue d'ensemble Abonnement
-          </button>
-          <button
-            className={`ga-tab-btn ${activeTab === 'planning' ? 'active' : ''}`}
-            onClick={() => setActiveTab('planning')}
-          >
-            Planning
-          </button>
-          <button
-            className={`ga-tab-btn ${activeTab === 'facturation' ? 'active' : ''}`}
-            onClick={() => setActiveTab('facturation')}
-          >
-            Facturation Abonnement
-          </button>
+          {canViewVueEnsemble && (
+            <button
+              className={`ga-tab-btn ${activeTab === 'vue_ensemble' ? 'active' : ''}`}
+              onClick={() => setActiveTab('vue_ensemble')}
+            >
+              Vue d'ensemble Abonnement
+            </button>
+          )}
+          {canViewPlanning && (
+            <button
+              className={`ga-tab-btn ${activeTab === 'planning' ? 'active' : ''}`}
+              onClick={() => setActiveTab('planning')}
+            >
+              Planning
+            </button>
+          )}
+          {canViewFacturation && (
+            <button
+              className={`ga-tab-btn ${activeTab === 'facturation' ? 'active' : ''}`}
+              onClick={() => setActiveTab('facturation')}
+            >
+              Facturation Abonnement
+            </button>
+          )}
         </div>
       </div>
 
       {/* Main Tab Content */}
-      {activeTab === 'vue_ensemble' && (
+      {activeTab === 'vue_ensemble' && canViewVueEnsemble && (
         <>
           {/* Filters Bar Section */}
           <div className="ga-filters-card">
@@ -1836,7 +1888,7 @@ export default function GestionAbonnements() {
       )}
 
       {/* Tab 2: Planning View */}
-      {activeTab === 'planning' && (
+      {activeTab === 'planning' && canViewPlanning && (
         <div className="ga-table-card" style={{ padding: '1.5rem' }}>
           {/* Header Controls for Planning Tab */}
           <div className="ga-planning-ctrls">
@@ -1960,7 +2012,7 @@ export default function GestionAbonnements() {
       )}
 
       {/* Tab 3: Facturation Abonnement */}
-      {activeTab === 'facturation' && (
+      {activeTab === 'facturation' && canViewFacturation && (
         <>
           {/* Top Filters Bar for Facturation */}
           <div className="ga-filters-card">
@@ -2274,7 +2326,7 @@ export default function GestionAbonnements() {
                               {inv.statut}
                             </span>
                             <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.2rem' }}>
-                              Statut final - mois suivant : <strong style={{ color: inv.nextStatut === 'Actif' ? '#16a34a' : '#dc2626' }}>{inv.nextStatut}</strong>
+                              Statut final - mois suivant : <strong style={{ color: inv.nextStatut === 'Actif' ? '#16a34a' : ['Suspendu', 'Résilié'].includes(inv.nextStatut) ? '#dc2626' : ['1er rappel', '2e rappel', 'Facture envoyée'].includes(inv.nextStatut) ? '#d97706' : '#64748b' }}>{inv.nextStatut}</strong>
                             </div>
                           </td>
                           <td>

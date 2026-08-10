@@ -103,6 +103,15 @@ export type PermissionKey =
   | 'modifier_infos_profil'
   | 'modifier_mot_de_passe'
   | 'activer_mfa'
+  // Gestion des abonnements
+  | 'consulter_abonnements'
+  | 'consulter_planning_abonnements'
+  | 'consulter_facturation_abonnements'
+  | 'creer_abonnement'
+  | 'modifier_abonnement'
+  | 'pause_standby_abonnement'
+  | 'resilier_abonnement'
+  | 'valider_facturation_abonnement'
   // Paramètres — Utilisateurs & Rôles
   | 'consulter_utilisateurs'
   | 'creer_utilisateurs'
@@ -165,6 +174,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "supprimer_profil", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
+    // Abonnements
+    "consulter_abonnements", "consulter_planning_abonnements", "consulter_facturation_abonnements", "creer_abonnement", "modifier_abonnement", "pause_standby_abonnement", "resilier_abonnement", "valider_facturation_abonnement",
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
@@ -195,6 +206,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "supprimer_profil", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
+    // Abonnements
+    "consulter_abonnements", "consulter_planning_abonnements", "consulter_facturation_abonnements", "creer_abonnement", "modifier_abonnement", "pause_standby_abonnement", "resilier_abonnement", "valider_facturation_abonnement",
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
@@ -225,6 +238,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_agents", "postuler_demande",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients",
+    // Abonnements
+    "consulter_abonnements", "consulter_planning_abonnements", "consulter_facturation_abonnements", "creer_abonnement", "modifier_abonnement", "pause_standby_abonnement", "resilier_abonnement", "valider_facturation_abonnement",
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
@@ -253,6 +268,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "supprimer_profil", "postuler_demande",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "affectation_client", "note_operationnelle", "note_commerciale", "geste_commercial", "modifier_clients", "blacklister_clients", "delete_client",
+    // Abonnements
+    "consulter_abonnements", "consulter_planning_abonnements", "creer_abonnement", "modifier_abonnement", "pause_standby_abonnement",
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
@@ -277,6 +294,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_agents", "consulter_docs_confidentiels", "creer_agents", "modifier_agents", "desactiver_profil", "mettre_standby_profil", "blacklister_agents", "postuler_demande", "assigner_charge_profil",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "note_operationnelle",
+    // Abonnements
+    "consulter_abonnements", "consulter_planning_abonnements", "modifier_abonnement",
     // Historique
     "consulter_historique_global", "filtrer_historique", "exporter_historique_csv",
     // Vue globale
@@ -303,6 +322,8 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "consulter_agents", "consulter_docs_confidentiels", "postuler_demande",
     // Listing clients
     "consulter_clients", "consulter_compte_client", "note_operationnelle",
+    // Abonnements
+    "consulter_abonnements", "consulter_planning_abonnements",
     // Historique
     "consulter_historique_global", "filtrer_historique",
     // Vue globale

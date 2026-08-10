@@ -889,7 +889,7 @@ export const getStatutMoisProchainCalculated = (
     statutFacturation?: string,
     explicitOverride?: string
 ): string => {
-    if (explicitOverride === 'Stand-by' || explicitOverride === 'Résilié') {
+    if (explicitOverride === 'Stand-by' || explicitOverride === 'Résilié' || explicitOverride === 'Suspendu') {
         return explicitOverride;
     }
 

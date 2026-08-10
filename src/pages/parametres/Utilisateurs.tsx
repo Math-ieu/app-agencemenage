@@ -84,6 +84,18 @@ const PERMISSIONS = [
   { key: "blacklister_clients", label: "Blacklister / archiver un client", group: "Listing clients" },
   { key: "delete_client", label: "Supprimer définitivement", group: "Listing clients" },
 
+  // Gestion des abonnements
+  { key: "consulter_abonnements", label: "Accéder & consulter la vue d'ensemble (Onglet 1)", group: "Gestion des abonnements", subgroup: "VUE D'ENSEMBLE ABONNEMENT" },
+  { key: "creer_abonnement", label: "Créer / souscrire un abonnement ou activer le mois prochain", group: "Gestion des abonnements", subgroup: "VUE D'ENSEMBLE ABONNEMENT" },
+  { key: "pause_standby_abonnement", label: "Mettre en pause / Stand-by un abonnement", group: "Gestion des abonnements", subgroup: "VUE D'ENSEMBLE ABONNEMENT" },
+
+  { key: "consulter_planning_abonnements", label: "Accéder & consulter le planning global (Onglet 2)", group: "Gestion des abonnements", subgroup: "PLANNING" },
+  { key: "modifier_abonnement", label: "Modifier le planning, les dates & affectations", group: "Gestion des abonnements", subgroup: "PLANNING" },
+
+  { key: "consulter_facturation_abonnements", label: "Accéder & consulter la facturation abonnement (Onglet 3)", group: "Gestion des abonnements", subgroup: "FACTURATION ABONNEMENT" },
+  { key: "valider_facturation_abonnement", label: "Confirmer le paiement & valider le statut de facturation", group: "Gestion des abonnements", subgroup: "FACTURATION ABONNEMENT" },
+  { key: "resilier_abonnement", label: "Résilier définitivement un abonnement", group: "Gestion des abonnements", subgroup: "FACTURATION ABONNEMENT" },
+
   // Historique
   { key: "consulter_historique_global", label: "Consulter l'historique des interventions", group: "Historique" },
   { key: "filtrer_historique", label: "Filtrer & rechercher dans l'historique", group: "Historique" },

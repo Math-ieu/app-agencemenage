@@ -99,7 +99,10 @@ export default function AppLayout() {
       return hasPermission(user, 'consulter_historique_global') ? item : null;
     }
     if (item.to === '/gestion-abonnement') {
-      return hasPermission(user, 'consulter_demandes') || hasPermission(user, 'consulter_clients') ? item : item;
+      const canAccess = hasPermission(user, 'consulter_abonnements') || 
+                        hasPermission(user, 'consulter_planning_abonnements') || 
+                        hasPermission(user, 'consulter_facturation_abonnements');
+      return canAccess ? item : null;
     }
     if (item.to === '/qualite') {
       return hasPermission(user, 'consulter_retours_qualite') ? item : null;
