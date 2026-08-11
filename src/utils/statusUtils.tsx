@@ -23,29 +23,24 @@ export const getStatusInfo = (statut: string, cao?: boolean | 'reporte'): Status
       }
       if (cao === true) {
         return { 
-          label: 'Confirmé', 
+          label: 'Prestation confirmée', 
           badgeClass: 'badge-green' 
         };
       }
       return { 
-        label: (
-          <React.Fragment>
-            <span>Nouveau</span>
-            <span>besoin</span>
-          </React.Fragment>
-        ), 
+        label: 'Client à appeler (Opé.)', 
         badgeClass: 'badge-nouveau' 
       };
 
     case 'pres_en_cours':
       return { 
-        label: 'Pres. en cours', 
+        label: 'Prestation confirmée', 
         badgeClass: 'badge-purple' 
       };
 
     case 'pres_terminee':
       return { 
-        label: 'Pres. terminée', 
+        label: 'Prestation terminée', 
         badgeClass: 'badge-orange' 
       };
 
@@ -63,19 +58,13 @@ export const getStatusInfo = (statut: string, cao?: boolean | 'reporte'): Status
 
     case 'en_attente':
       return { 
-        label: 'En attente', 
+        label: 'Client à appeler (Opé.)', 
         badgeClass: 'badge-status-attente' 
       };
 
     default:
-      // Si le statut est inconnu mais semble être un nouveau besoin
       return { 
-        label: (
-          <React.Fragment>
-            <span>Nouveau</span>
-            <span>besoin</span>
-          </React.Fragment>
-        ), 
+        label: 'Client à appeler (Opé.)', 
         badgeClass: 'badge-nouveau' 
       };
   }

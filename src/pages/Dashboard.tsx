@@ -268,7 +268,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({ en_cours: 0, en_cours_particulier: 0, en_cours_entreprise: 0, en_cours_nouveau: 0, en_attente: 0 });
   const [clientDemandeCounts, setClientDemandeCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'besoins' | 'abonnements'>('besoins');
+
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [showNoteModal, setShowNoteModal] = useState<{ demandeId: number; type: 'commercial' | 'operationnel'; note: string } | null>(null);
   const [showCAOModal, setShowCAOModal] = useState<Demande | null>(null);
@@ -356,6 +356,7 @@ export default function Dashboard() {
   };
 
   // Filtres
+  const [typeFilter, setTypeFilter] = useState<'tout' | 'oneshot' | 'abonnement' | 'airbnb'>('tout');
   const [search, setSearch] = useState('');
   const [serviceFilter, setServiceFilter] = useState('tous');
   const [prestationFilter, setPrestationFilter] = useState('toutes');
@@ -539,6 +540,27 @@ export default function Dashboard() {
       const enAttenteList = allResults.filter(d => d.statut === 'en_attente');
       const results = allResults.filter(d => {
         if (d.statut === 'en_attente') return false;
+
+        // Exclure les prestations terminées du tableau de bord
+        if (d.statut === 'pres_terminee' || d.statut === 'termine') {
+          return false;
+        }
+
+        // Filtre fenêtre 24h (Jour J et J+1)
+        const dateInterventionStr = d.date_intervention || d.formulaire_data?.date_intervention;
+        if (dateInterventionStr) {
+          const interDate = new Date(dateInterventionStr);
+          if (!isNaN(interDate.getTime())) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const limit24h = new Date(today);
+            limit24h.setDate(limit24h.getDate() + 1);
+            limit24h.setHours(23, 59, 59, 999);
+            if (interDate > limit24h) {
+              return false;
+            }
+          }
+        }
         
         const facturation = d.formulaire_data?.facturation || {};
         const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
@@ -1479,16 +1501,41 @@ export default function Dashboard() {
 
   const filtered = useMemo(() => {
     return demandes.filter((d) => {
-      // Filtre Onglet (Besoins vs Abonnements)
+      // Exclure les prestations terminées du tableau de bord
+      if (d.statut === 'pres_terminee' || d.statut === 'termine') {
+        return false;
+      }
+
+      // Filtre Type (Tout, One Shot, Abonnement, Airbnb)
+      const serviceLower = (d.service || '').toLowerCase();
+      const isAirbnb = serviceLower.includes('airbnb') || serviceLower.includes('air bnb');
       const isAbonn = d.frequency === 'abonnement' || !!d.parent_demande;
-      if (activeTab === 'abonnements' && !isAbonn) return false;
-      if (activeTab === 'besoins' && isAbonn) return false;
+
+      if (typeFilter === 'oneshot' && (isAbonn || isAirbnb)) return false;
+      if (typeFilter === 'abonnement' && !isAbonn) return false;
+      if (typeFilter === 'airbnb' && !isAirbnb) return false;
       
       // Exclure les missions payées du tableau de bord
       const facturation = d.formulaire_data?.facturation || {};
       const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
       if (statutUi === 'paye') {
         return false;
+      }
+
+      // Filtre fenêtre 24h (Jour J et J+1)
+      const dateInterventionStr = d.date_intervention || d.formulaire_data?.date_intervention;
+      if (dateInterventionStr) {
+        const interDate = new Date(dateInterventionStr);
+        if (!isNaN(interDate.getTime())) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const limit24h = new Date(today);
+          limit24h.setDate(limit24h.getDate() + 1);
+          limit24h.setHours(23, 59, 59, 999);
+          if (interDate > limit24h) {
+            return false;
+          }
+        }
       }
 
       // Recherche
@@ -1523,7 +1570,7 @@ export default function Dashboard() {
 
       return true;
     });
-  }, [demandes, activeTab, search, serviceFilter, prestationFilter, dateRange]);
+  }, [demandes, typeFilter, search, serviceFilter, prestationFilter, dateRange]);
 
   const busyAgentIds = useMemo(() => {
     const activeIds = new Set<number>();
@@ -1709,19 +1756,83 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="tabs">
+      {/* Boutons filtres - Tableau des demandes */}
+      <div className="type-filter-pills" style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
         <button
-          className={`tab ${activeTab === 'besoins' ? 'tab-active' : ''}`}
-          onClick={() => setActiveTab('besoins')}
+          type="button"
+          className={`pill-btn ${typeFilter === 'tout' ? 'active' : ''}`}
+          onClick={() => setTypeFilter('tout')}
+          style={{
+            padding: '8px 20px',
+            borderRadius: '20px',
+            border: typeFilter === 'tout' ? '1px solid #037265' : '1px solid #cbd5e1',
+            backgroundColor: typeFilter === 'tout' ? '#037265' : '#f1f5f9',
+            color: typeFilter === 'tout' ? '#ffffff' : '#334155',
+            fontWeight: 600,
+            fontSize: '14px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: typeFilter === 'tout' ? '0 2px 4px rgba(3,114,101,0.2)' : 'none'
+          }}
         >
-          Besoins ({demandes.filter(d => d.frequency !== 'abonnement' && !d.parent_demande).length})
+          Tout ({demandes.length})
         </button>
         <button
-          className={`tab ${activeTab === 'abonnements' ? 'tab-active' : ''}`}
-          onClick={() => setActiveTab('abonnements')}
+          type="button"
+          className={`pill-btn ${typeFilter === 'oneshot' ? 'active' : ''}`}
+          onClick={() => setTypeFilter('oneshot')}
+          style={{
+            padding: '8px 20px',
+            borderRadius: '20px',
+            border: typeFilter === 'oneshot' ? '1px solid #037265' : '1px solid #cbd5e1',
+            backgroundColor: typeFilter === 'oneshot' ? '#037265' : '#f1f5f9',
+            color: typeFilter === 'oneshot' ? '#ffffff' : '#334155',
+            fontWeight: 600,
+            fontSize: '14px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: typeFilter === 'oneshot' ? '0 2px 4px rgba(3,114,101,0.2)' : 'none'
+          }}
         >
-          Abonnements ({demandes.filter(d => d.frequency === 'abonnement' || !!d.parent_demande).length})
+          One Shot ({demandes.filter(d => d.frequency !== 'abonnement' && !d.parent_demande && !(d.service || '').toLowerCase().includes('airbnb') && !(d.service || '').toLowerCase().includes('air bnb')).length})
+        </button>
+        <button
+          type="button"
+          className={`pill-btn ${typeFilter === 'abonnement' ? 'active' : ''}`}
+          onClick={() => setTypeFilter('abonnement')}
+          style={{
+            padding: '8px 20px',
+            borderRadius: '20px',
+            border: typeFilter === 'abonnement' ? '1px solid #037265' : '1px solid #cbd5e1',
+            backgroundColor: typeFilter === 'abonnement' ? '#037265' : '#f1f5f9',
+            color: typeFilter === 'abonnement' ? '#ffffff' : '#334155',
+            fontWeight: 600,
+            fontSize: '14px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: typeFilter === 'abonnement' ? '0 2px 4px rgba(3,114,101,0.2)' : 'none'
+          }}
+        >
+          Abonnement ({demandes.filter(d => d.frequency === 'abonnement' || !!d.parent_demande).length})
+        </button>
+        <button
+          type="button"
+          className={`pill-btn ${typeFilter === 'airbnb' ? 'active' : ''}`}
+          onClick={() => setTypeFilter('airbnb')}
+          style={{
+            padding: '8px 20px',
+            borderRadius: '20px',
+            border: typeFilter === 'airbnb' ? '1px solid #037265' : '1px solid #cbd5e1',
+            backgroundColor: typeFilter === 'airbnb' ? '#037265' : '#f1f5f9',
+            color: typeFilter === 'airbnb' ? '#ffffff' : '#334155',
+            fontWeight: 600,
+            fontSize: '14px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: typeFilter === 'airbnb' ? '0 2px 4px rgba(3,114,101,0.2)' : 'none'
+          }}
+        >
+          Air bnb ({demandes.filter(d => (d.service || '').toLowerCase().includes('airbnb') || (d.service || '').toLowerCase().includes('air bnb')).length})
         </button>
       </div>
 
