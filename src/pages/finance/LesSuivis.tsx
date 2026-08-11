@@ -375,6 +375,9 @@ export default function LesSuivis() {
   // Search & Filters Tab 1
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [encaissementFilter, setEncaissementFilter] = useState('all');
+  const [kpiFilter, setKpiFilter] = useState<'all' | 'unpaid_agence' | 'unpaid_profil'>('all');
+  const [isGroupedByProfil, setIsGroupedByProfil] = useState(false);
   const [freqFilter, setFreqFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState(() => {
     const today = new Date();
@@ -1278,6 +1281,25 @@ export default function LesSuivis() {
         }
       }
 
+      // Encaissement filter
+      if (encaissementFilter !== 'all') {
+        const isCredit = isCreditRow(row);
+        const isDebit = isDebitRow(row);
+        if (encaissementFilter === 'crediteur' && !isCredit) return false;
+        if (encaissementFilter === 'debiteur' && !isDebit) return false;
+      }
+
+      // KPI Card quick filter (Part agence non réglée / Part profils non réglée)
+      if (kpiFilter === 'unpaid_agence') {
+        const isDebit = isDebitRow(row);
+        const isPaid = row.partAgenceReversee ?? row._partAgenceReversee;
+        if (!isDebit || isPaid || row.reglementInterne === 'Réglé') return false;
+      } else if (kpiFilter === 'unpaid_profil') {
+        const isCredit = isCreditRow(row);
+        const isPaid = row.partProfilVersee ?? row._partProfilVersee;
+        if (!isCredit || isPaid || row.reglementInterne === 'Réglé') return false;
+      }
+
       // Frequency filter
       if (freqFilter !== 'all') {
         const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement';
@@ -1295,7 +1317,56 @@ export default function LesSuivis() {
 
       return true;
     });
-  }, [expandedRows, searchQuery, statusFilter, freqFilter, dateFrom, dateTo]);
+  }, [expandedRows, searchQuery, statusFilter, encaissementFilter, kpiFilter, freqFilter, dateFrom, dateTo]);
+
+  // Tab 1: Grouped by Profile
+  const groupedProfiles = useMemo(() => {
+    const map = new Map<string, {
+      profilId?: number;
+      profilName: string;
+      phone?: string;
+      nbMissions: number;
+      profilDoitAgence: number;
+      agenceDoitProfil: number;
+      rows: FacturationRow[];
+    }>();
+
+    filteredRows.forEach((row) => {
+      const key = row.profilId ? `id-${row.profilId}` : row.profil || 'Non assigné';
+      if (!map.has(key)) {
+        map.set(key, {
+          profilId: row.profilId,
+          profilName: row.profil || 'Non assigné',
+          phone: row.phone,
+          nbMissions: 0,
+          profilDoitAgence: 0,
+          agenceDoitProfil: 0,
+          rows: [],
+        });
+      }
+
+      const item = map.get(key)!;
+      item.nbMissions += 1;
+      item.rows.push(row);
+
+      const isCredit = isCreditRow(row);
+      const isDebit = isDebitRow(row);
+
+      if (isCredit) {
+        const isPaid = row.partProfilVersee ?? row._partProfilVersee;
+        if (!isPaid && row.reglementInterne !== 'Réglé') {
+          item.agenceDoitProfil += row.partProfil;
+        }
+      } else if (isDebit) {
+        const isPaid = row.partAgenceReversee ?? row._partAgenceReversee;
+        if (!isPaid && row.reglementInterne !== 'Réglé') {
+          item.profilDoitAgence += row.partAgence;
+        }
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.nbMissions - a.nbMissions);
+  }, [filteredRows]);
 
   // Tab 2 Calculations: Commercials Performance
   const commercialPerformance = useMemo(() => {
@@ -1782,6 +1853,43 @@ export default function LesSuivis() {
 
   // CSV Exporters
   const exportDuesCsv = () => {
+    if (isGroupedByProfil) {
+      const headers = [
+        'Profil',
+        'Nombre de missions',
+        "Profil doit à l'agence",
+        'Agence doit au profil',
+        'Solde final',
+      ];
+
+      const rows = groupedProfiles.map((item) => {
+        const solde = item.agenceDoitProfil - item.profilDoitAgence;
+        let soldeText = '0,00 DH';
+        if (solde > 0) soldeText = `Profil : +${money(solde)}`;
+        else if (solde < 0) soldeText = `Agence : +${money(Math.abs(solde))}`;
+
+        return [
+          item.profilName,
+          item.nbMissions,
+          `${item.profilDoitAgence.toFixed(2)} DH`,
+          `${item.agenceDoitProfil.toFixed(2)} DH`,
+          soldeText,
+        ];
+      });
+
+      const csvContent =
+        'data:text/csv;charset=utf-8,\uFEFF' +
+        [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `recapitulatif_par_profil_${getISODateLocal(new Date())}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
     const headers = [
       'Date Prestation',
       'Profil',
@@ -1965,12 +2073,20 @@ export default function LesSuivis() {
                     <span className="ls-kpi-item-label">Total versé aux profils</span>
                     <span className="ls-kpi-item-sub">Montant versé aux intervenants (temps réel)</span>
                   </div>
-                  <div className="ls-kpi-item indicator-green">
+                  <div
+                    className={`ls-kpi-item indicator-green ls-kpi-clickable ${kpiFilter === 'unpaid_agence' ? 'active' : ''}`}
+                    onClick={() => setKpiFilter(prev => prev === 'unpaid_agence' ? 'all' : 'unpaid_agence')}
+                    title="Cliquer pour filtrer les parts agence non réglées"
+                  >
                     <span className="ls-kpi-item-value" style={{ color: '#10b981' }}>{money(kpiStats.unpaidPartAgence)}</span>
                     <span className="ls-kpi-item-label">Part agence non réglée</span>
                     <span className="ls-kpi-item-sub">Reste à percevoir par l'agence</span>
                   </div>
-                  <div className="ls-kpi-item indicator-red">
+                  <div
+                    className={`ls-kpi-item indicator-red ls-kpi-clickable ${kpiFilter === 'unpaid_profil' ? 'active' : ''}`}
+                    onClick={() => setKpiFilter(prev => prev === 'unpaid_profil' ? 'all' : 'unpaid_profil')}
+                    title="Cliquer pour filtrer les parts profils non réglées"
+                  >
                     <span className="ls-kpi-item-value" style={{ color: '#ef4444' }}>{money(kpiStats.unpaidPartProfil)}</span>
                     <span className="ls-kpi-item-label">Part profils non réglée</span>
                     <span className="ls-kpi-item-sub">Reste à verser aux profils</span>
@@ -1999,6 +2115,15 @@ export default function LesSuivis() {
                     <option value="paiement_partiel">Paiement partiel</option>
                     <option value="paye">Payé</option>
                     <option value="facturation_annulee">Facturation annulée</option>
+                  </select>
+                  <ChevronDown size={14} />
+                </div>
+
+                <div className="ls-select-wrap">
+                  <select value={encaissementFilter} onChange={(e) => setEncaissementFilter(e.target.value)}>
+                    <option value="all">Tous (Encaissement)</option>
+                    <option value="crediteur">Créditeur</option>
+                    <option value="debiteur">Débiteur</option>
                   </select>
                   <ChevronDown size={14} />
                 </div>
@@ -2034,13 +2159,121 @@ export default function LesSuivis() {
                     />
                   </label>
                 </div>
+
+                <button
+                  type="button"
+                  className={`ls-group-btn ${isGroupedByProfil ? 'active' : ''}`}
+                  onClick={() => setIsGroupedByProfil((prev) => !prev)}
+                >
+                  <Users size={15} />
+                  <span>Regrouper par profil</span>
+                  <ChevronDown
+                    size={14}
+                    style={{
+                      transform: isGroupedByProfil ? 'none' : 'rotate(180deg)',
+                      transition: 'transform 0.2s ease',
+                    }}
+                  />
+                </button>
               </div>
+
+              {kpiFilter !== 'all' && (
+                <div className="ls-active-kpi-banner">
+                  <span>
+                    Filtre actif : <strong>{kpiFilter === 'unpaid_agence' ? "Part agence non réglée (Débiteur non réglé)" : "Part profils non réglée (Créditeur non réglé)"}</strong>
+                  </span>
+                  <button type="button" onClick={() => setKpiFilter('all')} className="ls-clear-kpi-filter">
+                    Réinitialiser le filtre <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              {isGroupedByProfil && (
+                <div className="ls-group-summary-bar">
+                  <div className="ls-group-summary-title">
+                    <Users size={16} color="#0f766e" />
+                    <span>Récapitulatif par profil ({groupedProfiles.length})</span>
+                  </div>
+                  <span className="ls-group-summary-sub">Calcul automatique sur les missions filtrées</span>
+                </div>
+              )}
 
               {/* Main table */}
               <div className="ls-table-section">
                 <div className="ls-table-wrapper">
-                  <table className="ls-table">
-                    <thead>
+                  {isGroupedByProfil ? (
+                    <table className="ls-table">
+                      <thead>
+                        <tr>
+                          <th>PROFIL</th>
+                          <th>NB MISSIONS</th>
+                          <th>PROFIL DOIT À L'AGENCE</th>
+                          <th>AGENCE DOIT AU PROFIL</th>
+                          <th>SOLDE FINAL</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupedProfiles.map((item) => {
+                          const solde = item.agenceDoitProfil - item.profilDoitAgence;
+
+                          return (
+                            <tr key={item.profilName}>
+                              <td>
+                                {item.profilId ? (
+                                  <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(item.profilId)}>
+                                    {item.profilName}
+                                  </button>
+                                ) : (
+                                  <span>{item.profilName}</span>
+                                )}
+                              </td>
+                              <td>
+                                <span className="ls-badge-count">{item.nbMissions}</span>
+                              </td>
+                              <td className="ls-val-bold ls-val-teal">
+                                {money(item.profilDoitAgence)}
+                              </td>
+                              <td className="ls-val-bold ls-val-pink">
+                                {money(item.agenceDoitProfil)}
+                              </td>
+                              <td>
+                                {(() => {
+                                  if (solde > 0) {
+                                    return (
+                                      <span className="ls-pill-solde pink">
+                                        Profil : +{money(solde)}
+                                      </span>
+                                    );
+                                  }
+                                  if (solde < 0) {
+                                    return (
+                                      <span className="ls-pill-solde green">
+                                        Agence : +{money(Math.abs(solde))}
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span className="ls-pill-solde gray">
+                                      0,00 DH
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {groupedProfiles.length === 0 && (
+                          <tr>
+                            <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                              Aucun profil trouvé pour les filtres sélectionnés.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <table className="ls-table">
+                      <thead>
                       <tr>
                         <th>Date Prestation</th>
                         <th>Profil (FDM)</th>
@@ -2191,6 +2424,7 @@ export default function LesSuivis() {
                       )}
                     </tbody>
                   </table>
+                  )}
                 </div>
               </div>
             </>
