@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, X, AlertCircle, FileText } from 'lucide-react';
 import { Demande, Client } from '../../types';
 import { updateDemande, generateDocument } from '../../api/client';
-import { getContractBaselinePassages, calculateSinglePassagePrice, getDevisAmount, extractJoursPassage, getDynamicMonthPassagesCount } from '../../utils/pricing';
+import { getDevisDiscountDetails, extractJoursPassage, getDynamicMonthPassagesCount } from '../../utils/pricing';
 
 export interface InvoiceFormModalProps {
   show: boolean;
@@ -67,9 +67,9 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   // ═══════════════════════════════════════════════════════════════
   const [invNbPassages, setInvNbPassages] = useState('4');
   const [invPrixUnitaire, setInvPrixUnitaire] = useState('0');
-  const [invRemiseType, setInvRemiseType] = useState<'dh' | 'pct'>('dh');
-  const [invRemiseDh, setInvRemiseDh] = useState('0');
-  const [invRemisePct, setInvRemisePct] = useState('0');
+  const [devisReductionPct, setDevisReductionPct] = useState(0);
+  const [devisReductionDh, setDevisReductionDh] = useState(0);
+  const [devisReductionLabel, setDevisReductionLabel] = useState('');
   const [invApplyTva, setInvApplyTva] = useState<boolean>(() => {
     const formData = latest?.formulaire_data || {};
     if (formData.tva_active !== undefined) return Boolean(formData.tva_active);
@@ -137,41 +137,26 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       setInvJoursPassage(joursFormatted);
 
       // ═══════════════════════════════════════════════════════════
-      // DEVIS comme source unique de vérité
+      // DEVIS comme source unique de vérité & décomposition réduction
       // ═══════════════════════════════════════════════════════════
+      const discountInfo = getDevisDiscountDetails(latest);
+      setDevisTotal(discountInfo.devisTotal);
+      setPassagesBase(discountInfo.passagesBase);
+      setDevisReductionPct(discountInfo.reductionPct);
+      setDevisReductionDh(discountInfo.reductionAmountBase);
+      setDevisReductionLabel(discountInfo.reductionLabel);
 
-      // Devis total HT de référence (baseline contrat — APRÈS remise abonnement)
-      const rawDevisTotal = getDevisAmount(latest);
-      setDevisTotal(rawDevisTotal);
-
-      // Passages de base du contrat (diviseur fixe du devis, ex: 8 pour 2 fois/semaine)
-      const contractPassagesBase = getContractBaselinePassages(latest);
-      setPassagesBase(contractPassagesBase);
-
-      // Prix unitaire dérivé du devis = devisTotal / contractPassagesBase (inclut les produits optionnels)
-      const derivedPU = (contractPassagesBase > 0 && rawDevisTotal > 0)
-        ? Math.round((rawDevisTotal / contractPassagesBase) * 100) / 100
-        : (Number(formData.prix_unitaire) > 0
-          ? Number(formData.prix_unitaire)
-          : calculateSinglePassagePrice(latest));
+      // Prix unitaire brut (avant réduction) par défaut du devis
+      const derivedPU = Number(formData.prix_unitaire) > 0
+        ? Number(formData.prix_unitaire)
+        : discountInfo.prixUnitaireBrut;
       setInvPrixUnitaire(String(derivedPU));
 
       // Passages ce mois-ci (ex: 10 si mois à 5 semaines ou 5 si démarrage en cours de mois)
       const realMonthPassages = monthPassagesPlanifies !== undefined && monthPassagesPlanifies > 0
         ? monthPassagesPlanifies
-        : contractPassagesBase;
+        : discountInfo.passagesBase;
       setInvNbPassages(String(realMonthPassages));
-
-      // Remise additionnelle
-      const initRemiseDh = String(formData.remise_dh || formData.remise || '0');
-      const initRemisePct = String(formData.remise_pct || '0');
-      setInvRemiseDh(initRemiseDh);
-      setInvRemisePct(initRemisePct);
-      if (Number(initRemisePct) > 0 && Number(initRemiseDh) === 0) {
-        setInvRemiseType('pct');
-      } else {
-        setInvRemiseType('dh');
-      }
 
       // TVA — Non par défaut pour les particuliers
       const isClientEntreprise = (client?.segment || latest.segment || formData.segment) === 'entreprise';
@@ -188,13 +173,16 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const initialProduits = Boolean(latest?.avec_produit || latest?.formulaire_data?.produits_inclus || latest?.formulaire_data?.produits);
   useEffect(() => {
     if (!latest || !show) return;
-    const baseDevis = getDevisAmount(latest);
-    const passBase = getContractBaselinePassages(latest);
+    const discountInfo = getDevisDiscountDetails(latest);
+    const passBase = discountInfo.passagesBase;
     const produitsDiff = (invProduitsInclus ? 90 : 0) - (initialProduits ? 90 : 0);
-    const adjustedDevisTotal = Math.max(0, baseDevis + produitsDiff);
+    const adjustedDevisTotal = Math.max(0, discountInfo.devisTotal + produitsDiff);
     setDevisTotal(adjustedDevisTotal);
     if (passBase > 0) {
-      setInvPrixUnitaire(String(Math.round((adjustedDevisTotal / passBase) * 100) / 100));
+      const brutBase = discountInfo.reductionPct > 0
+        ? Math.round((adjustedDevisTotal / (1 - discountInfo.reductionPct / 100)) * 100) / 100
+        : adjustedDevisTotal;
+      setInvPrixUnitaire(String(Math.round((brutBase / passBase) * 100) / 100));
     }
   }, [invProduitsInclus, latest, show]);
 
@@ -226,10 +214,9 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     const newPassages = getDynamicMonthPassagesCount(syntheticDemande);
     if (newPassages > 0) {
       setInvNbPassages(String(newPassages));
-      // Recalculate PU from devis total and contract baseline
-      const contractBase = getContractBaselinePassages(latest);
-      if (contractBase > 0 && devisTotal > 0) {
-        setInvPrixUnitaire(String(Math.round((devisTotal / contractBase) * 100) / 100));
+      const discountInfo = getDevisDiscountDetails(latest);
+      if (discountInfo.passagesBase > 0) {
+        setInvPrixUnitaire(String(discountInfo.prixUnitaireBrut));
       }
     }
   }, [invJoursPassage, invDateStart, invFrequence, show]);
@@ -245,23 +232,17 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const pu = Math.max(0, Number(invPrixUnitaire) || 0);
   const tvaPct = invApplyTva ? Math.max(0, Number(invTvaPercent) || 0) : 0;
 
-  // Montant brut = PU × passages facturables
+  // Montant brut du service = PU brut × passages facturables
   const montantBrut = Math.round(pu * numNouvelles * 100) / 100;
 
-  // Calcul remise effective
+  // Réduction automatique issue du devis
   let remiseEffective = 0;
-  let reductionLabel = '';
-  if (invRemiseType === 'pct') {
-    const pctVal = Math.max(0, Number(invRemisePct) || 0);
-    remiseEffective = Math.round((montantBrut * pctVal) / 100 * 100) / 100;
-    if (pctVal > 0) reductionLabel = `${pctVal}%`;
-  } else {
-    remiseEffective = Math.max(0, Number(invRemiseDh) || 0);
-    if (remiseEffective > 0 && montantBrut > 0) {
-      const calcPct = Math.round((remiseEffective / montantBrut) * 100);
-      reductionLabel = calcPct > 0 ? `${calcPct}%` : `${remiseEffective} DH`;
-    }
+  if (devisReductionPct > 0) {
+    remiseEffective = Math.round((montantBrut * devisReductionPct) / 100 * 100) / 100;
+  } else if (devisReductionDh > 0 && passagesBase > 0) {
+    remiseEffective = Math.round((devisReductionDh / passagesBase * numNouvelles) * 100) / 100;
   }
+  const reductionLabel = devisReductionLabel || (devisReductionPct > 0 ? `${devisReductionPct}%` : '');
 
   // Total HT
   const totalHT = Math.max(0, Math.round((montantBrut - remiseEffective) * 100) / 100);
@@ -273,7 +254,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const netAPayer = Math.round((totalHT + tvaAmount) * 100) / 100;
 
   // Montant mensuel de base (full month, pour référence)
-  const mensuelBase = getDevisAmount(latest) || (pu * passagesBase) || 0;
+  const mensuelBase = devisTotal || (pu * passagesBase) || 0;
 
   // BDD derived counts
   const dateOverrides = latest?.formulaire_data?.date_overrides || {};
@@ -438,7 +419,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             <div style={{ fontWeight: 800, fontSize: 14, color: '#037265', marginBottom: 14 }}>
               Tarification & TVA
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr', gap: 14, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>
                   Prix unitaire (DH) — du devis
@@ -450,72 +431,9 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   onChange={e => setInvPrixUnitaire(e.target.value)}
                   style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }}
                 />
-              </div>
-
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#037265' }}>
-                    Réduction appliquée
-                  </label>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button
-                      type="button"
-                      onClick={() => setInvRemiseType('dh')}
-                      style={{
-                        padding: '1px 6px',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        borderRadius: 4,
-                        border: '1px solid #cbd5e1',
-                        background: invRemiseType === 'dh' ? '#037265' : '#f8fafc',
-                        color: invRemiseType === 'dh' ? 'white' : '#64748b',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      DH
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setInvRemiseType('pct')}
-                      style={{
-                        padding: '1px 6px',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        borderRadius: 4,
-                        border: '1px solid #cbd5e1',
-                        background: invRemiseType === 'pct' ? '#037265' : '#f8fafc',
-                        color: invRemiseType === 'pct' ? 'white' : '#64748b',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      %
-                    </button>
-                  </div>
-                </div>
-                {invRemiseType === 'pct' ? (
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      placeholder="Ex: 10"
-                      value={invRemisePct}
-                      onChange={e => setInvRemisePct(e.target.value)}
-                      style={{ width: '100%', padding: '7px 28px 7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }}
-                    />
-                    <span style={{ position: 'absolute', right: 10, top: 7, fontSize: 13, color: '#64748b', fontWeight: 700 }}>%</span>
-                  </div>
-                ) : (
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="Ex: 126"
-                      value={invRemiseDh}
-                      onChange={e => setInvRemiseDh(e.target.value)}
-                      style={{ width: '100%', padding: '7px 32px 7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }}
-                    />
-                    <span style={{ position: 'absolute', right: 10, top: 7, fontSize: 12, color: '#64748b', fontWeight: 700 }}>DH</span>
+                {devisReductionPct > 0 && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: '#037265', fontWeight: 600 }}>
+                    💡 Réduction du devis ({devisReductionPct}%) appliquée automatiquement
                   </div>
                 )}
               </div>
@@ -691,7 +609,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   nombre_passages: Number(invNbPassages) || 0,
                   remise: remiseEffective,
                   remise_dh: remiseEffective,
-                  remise_pct: invRemiseType === 'pct' ? Number(invRemisePct) || 0 : 0,
+                  remise_pct: devisReductionPct,
                   reduction_label: reductionLabel,
                   tva_active: invApplyTva,
                   tva: tvaPercentNum,
@@ -731,8 +649,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   prix_unitaire: invPrixUnitaire,
                   remise_dh: remiseEffective,
                   remise: remiseEffective,
-                  remise_pct: invRemiseType === 'pct' ? Number(invRemisePct) || 0 : 0,
-                  remise_type: invRemiseType,
+                  remise_pct: devisReductionPct,
                   reduction_label: reductionLabel,
                   tva_active: invApplyTva,
                   apply_tva: invApplyTva,

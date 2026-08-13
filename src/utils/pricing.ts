@@ -442,6 +442,118 @@ export const calculateSinglePassagePrice = (demande: any): number => {
  * Si le mois en cours a un nombre de passages différent (prorata),
  * le montant est ajusté proportionnellement.
  */
+export interface DevisDiscountInfo {
+    /** Montant brut total de base du devis (avant réduction) */
+    montantBrutBase: number;
+    /** Montant de la réduction sur la base devis */
+    reductionAmountBase: number;
+    /** Pourcentage de réduction (ex: 10 pour 10%) */
+    reductionPct: number;
+    /** Libellé de la réduction (ex: "10%") */
+    reductionLabel: string;
+    /** Montant net HT du devis */
+    devisTotal: number;
+    /** Prix unitaire brut (avant réduction) par passage */
+    prixUnitaireBrut: number;
+    /** Prix unitaire net (après réduction) par passage */
+    prixUnitaireNet: number;
+    /** Passages de base du devis */
+    passagesBase: number;
+}
+
+export const getDevisDiscountDetails = (demande: any): DevisDiscountInfo => {
+    if (!demande) {
+        return {
+            montantBrutBase: 0,
+            reductionAmountBase: 0,
+            reductionPct: 0,
+            reductionLabel: '',
+            devisTotal: 0,
+            prixUnitaireBrut: 0,
+            prixUnitaireNet: 0,
+            passagesBase: 4
+        };
+    }
+
+    const formData = demande.formulaire_data || {};
+    const passagesBase = getContractBaselinePassages(demande) || 4;
+    const devisTotal = getDevisAmount(demande);
+
+    const freqStr = String(
+        formData.frequence ||
+        formData.frequency_label ||
+        demande.frequency_label ||
+        demande.frequency ||
+        demande.type_demande ||
+        ''
+    ).toLowerCase();
+    const isSubscription = (
+        demande.type_demande === 'abonnement' ||
+        freqStr.includes('mensuel') ||
+        freqStr.includes('abonnement') ||
+        freqStr.includes('semaine') ||
+        freqStr.includes('mois') ||
+        freqStr.includes('/')
+    ) &&
+    !freqStr.includes('une fois') &&
+    !freqStr.includes('oneshot') &&
+    !freqStr.includes('ponctuel') &&
+    demande.frequency !== 'oneshot' &&
+    demande.type_demande !== 'ponctuel';
+
+    let reductionPct = 0;
+    let reductionAmountBase = 0;
+    let montantBrutBase = 0;
+    let reductionLabel = '';
+
+    // 1. Explicit base price in form data
+    const explicitPrixBase = Number(formData.prix_base || formData.prixBase || formData.montant_brut);
+    const explicitRemiseDh = Number(formData.remise_dh || formData.reduction_montant || formData.remise || formData.reduction);
+    const explicitRemisePct = Number(formData.remise_pct || formData.reduction_pourcentage || formData.reduction_abonnement || formData.taux_reduction || formData.code_promo_pct);
+
+    if (explicitPrixBase > 0 && devisTotal > 0) {
+        montantBrutBase = explicitPrixBase;
+        reductionAmountBase = Math.max(0, Math.round((montantBrutBase - devisTotal) * 100) / 100);
+        reductionPct = Math.round((reductionAmountBase / montantBrutBase) * 100);
+        reductionLabel = explicitRemisePct > 0 ? `${explicitRemisePct}%` : (reductionPct > 0 ? `${reductionPct}%` : '');
+    } else if (explicitRemisePct > 0 && devisTotal > 0) {
+        reductionPct = explicitRemisePct;
+        montantBrutBase = Math.round((devisTotal / (1 - reductionPct / 100)) * 100) / 100;
+        reductionAmountBase = Math.round((montantBrutBase - devisTotal) * 100) / 100;
+        reductionLabel = `${reductionPct}%`;
+    } else if (explicitRemiseDh > 0 && devisTotal > 0) {
+        reductionAmountBase = explicitRemiseDh;
+        montantBrutBase = Math.round((devisTotal + explicitRemiseDh) * 100) / 100;
+        reductionPct = Math.round((reductionAmountBase / montantBrutBase) * 100);
+        reductionLabel = reductionPct > 0 ? `${reductionPct}%` : `${reductionAmountBase} DH`;
+    } else if (isSubscription && devisTotal > 0) {
+        // Standard Agence Ménage subscription discount: 10% on service
+        reductionPct = 10;
+        montantBrutBase = Math.round((devisTotal / 0.9) * 100) / 100;
+        reductionAmountBase = Math.round((montantBrutBase - devisTotal) * 100) / 100;
+        reductionLabel = '10%';
+    } else {
+        montantBrutBase = devisTotal;
+        reductionAmountBase = 0;
+        reductionPct = 0;
+        reductionLabel = '';
+    }
+
+    const prixUnitaireBrut = passagesBase > 0 ? Math.round((montantBrutBase / passagesBase) * 100) / 100 : montantBrutBase;
+    const prixUnitaireNet = passagesBase > 0 ? Math.round((devisTotal / passagesBase) * 100) / 100 : devisTotal;
+
+    return {
+        montantBrutBase,
+        reductionAmountBase,
+        reductionPct,
+        reductionLabel,
+        devisTotal,
+        prixUnitaireBrut,
+        prixUnitaireNet,
+        passagesBase
+    };
+};
+
 export interface DevisInvoiceResult {
     /** Montant total HT du devis (base mensuelle complète) */
     devisTotal: number;
@@ -537,7 +649,6 @@ export const getContractBaselinePassages = (demande: any): number => {
         return days.length * 4;
     }
 
-    // 3. Robust string parsing of frequency (handles "2 fois / semaine", "2 fois par semaine", "2/sem", etc.)
     const freqStr = String(
         formData.frequence ||
         formData.frequency_label ||
@@ -547,6 +658,19 @@ export const getContractBaselinePassages = (demande: any): number => {
         ''
     ).toLowerCase().trim();
 
+    // 3. Oneshot / Ponctuel / Une fois check
+    if (
+        freqStr.includes('une fois') ||
+        freqStr.includes('oneshot') ||
+        freqStr.includes('ponctuel') ||
+        demande.frequency === 'oneshot' ||
+        demande.type_demande === 'ponctuel' ||
+        demande.type_demande === 'oneshot'
+    ) {
+        return 1;
+    }
+
+    // 4. Robust string parsing of frequency (handles "2 fois / semaine", "2 fois par semaine", "2/sem", etc.)
     const weekMatch = freqStr.match(/(\d+)\s*(?:fois|j|x)?\s*(?:\/|par)?\s*(?:semaine|sem|week)/i) ||
                       freqStr.match(/(\d+)\s*(?:fois|_fois|\/sem)/i);
     if (weekMatch && weekMatch[1]) {
@@ -564,7 +688,7 @@ export const getContractBaselinePassages = (demande: any): number => {
         }
     }
 
-    // 4. Derive from devis total & single passage price if available
+    // 5. Derive from devis total & single passage price if available
     const devisTotal = getDevisAmount(demande);
     const pu = Number(formData.prix_unitaire);
     if (devisTotal > 0 && pu > 0) {
@@ -574,7 +698,7 @@ export const getContractBaselinePassages = (demande: any): number => {
         }
     }
 
-    // 5. Soft fallback checks
+    // 6. Soft fallback checks
     if (freqStr.includes('7')) return 28;
     if (freqStr.includes('6')) return 24;
     if (freqStr.includes('5')) return 20;

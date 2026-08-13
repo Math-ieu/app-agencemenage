@@ -22,6 +22,8 @@ import { normalizeFrequence } from '../utils/formNormalizers';
 import ClientEditModal from './ClientEditModal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { SubscriptionManagementView } from '../components/client/SubscriptionManagementView';
+import { FacturesReglementsCard } from '../components/client/FacturesReglementsCard';
+import { InvoiceFormModal } from '../components/client/InvoiceFormModal';
 import './ClientDetails.css';
 
 export interface ActionLog {
@@ -512,6 +514,7 @@ export default function ClientDetails() {
   const [frequencyLabel, setFrequencyLabel] = useState('2/sem');
   const [deleteMonthConfirm, setDeleteMonthConfirm] = useState(false);
   const [monthToDelete, setMonthToDelete] = useState<number | null>(null);
+  const [showOneshotInvoiceModal, setShowOneshotInvoiceModal] = useState(false);
 
   useEffect(() => {
     if (latest) {
@@ -2042,13 +2045,35 @@ export default function ClientDetails() {
           {latest ? (
             latest.frequency === 'oneshot' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <span style={{ padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: 14, fontWeight: 700, color: '#475569', background: 'white' }}>
-                    {formatFrequencyLabel(latest.frequency_label) || latest.frequency || 'Une fois'}
-                  </span>
-                  <span style={{ fontSize: 14, fontWeight: 500, color: '#94a3b8' }}>
-                    Prestation Unique — {latest.nb_heures ? `${latest.nb_heures}h` : '—'}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <span style={{ padding: '6px 16px', border: '1px solid #e2e8f0', borderRadius: 99, fontSize: 14, fontWeight: 700, color: '#475569', background: 'white' }}>
+                      {formatFrequencyLabel(latest.frequency_label) || latest.frequency || 'Une fois'}
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: '#94a3b8' }}>
+                      Prestation Unique — {latest.service || latest.type_prestation || 'Service'} {latest.nb_heures ? `(${latest.nb_heures}h)` : ''}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowOneshotInvoiceModal(true)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 16px',
+                      background: '#037265',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(3, 114, 101, 0.2)'
+                    }}
+                  >
+                    <FileText size={16} /> Émettre / Modifier la facture
+                  </button>
                 </div>
                 <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #f1f5f9' }}>
                   <p style={{ margin: 0, fontSize: 14, color: '#64748b', fontWeight: 500 }}>
@@ -2060,6 +2085,29 @@ export default function ClientDetails() {
                     </p>
                   )}
                 </div>
+
+                {/* Factures & Règlements pour prestation ponctuelle */}
+                <FacturesReglementsCard
+                  latest={latest}
+                  onDownloadInvoice={handleDownloadInvoice}
+                  onGenerateInvoice={() => handleGenerateInvoice(latest.id)}
+                />
+
+                <InvoiceFormModal
+                  show={showOneshotInvoiceModal}
+                  onClose={() => setShowOneshotInvoiceModal(false)}
+                  latest={latest}
+                  client={client}
+                  monthDemandes={[latest]}
+                  selectedDays={[]}
+                  activeTabIndex={0}
+                  capitalizedMonthTitle="Prestation Ponctuelle"
+                  frequencyLabel={latest.frequency_label || 'Une fois'}
+                  dateDebut={latest.date_intervention || ''}
+                  monthPassagesPlanifies={1}
+                  addToast={addToast}
+                  fetchData={fetchData}
+                />
               </div>
             ) : (
               <SubscriptionManagementView

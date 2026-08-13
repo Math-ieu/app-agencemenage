@@ -224,7 +224,7 @@ export default function DemandesEnAttente() {
     duration_unit: 'heures',
     description: '',
     amount_ht: 0,
-    tva_active: true,
+    tva_active: false,
     quote_number: '',
     frequency_custom: '',
     options: [
@@ -680,7 +680,7 @@ export default function DemandesEnAttente() {
         salonMarocain: 0, salonEuropeen: 0, toilettesLavabo: 0, rooftop: 0, escalier: 0
       },
       formula: 'A', size_tier: '1chambre', conso: false, linen_sets: 0,
-      custom_service_type: '', property_category: 'logement', property_subtype: 'Appartement', duration_unit: 'heures', description: '', amount_ht: 0, tva_active: true,
+      custom_service_type: '', property_category: 'logement', property_subtype: 'Appartement', duration_unit: 'heures', description: '', amount_ht: 0, tva_active: false,
       quote_number: '', frequency_custom: '', 
       options: [
         { key: "produits", label: "Produits de nettoyage", price: 0, enabled: false },
@@ -800,7 +800,7 @@ export default function DemandesEnAttente() {
       duration_unit: d.formulaire_data?.duration_unit || 'heures',
       description: d.formulaire_data?.description || '',
       amount_ht: d.formulaire_data?.amount_ht || d.prix || 0,
-      tva_active: d.formulaire_data?.tva_active !== false,
+      tva_active: d.formulaire_data?.tva_active !== undefined ? Boolean(d.formulaire_data?.tva_active) : ((d.segment || '').toLowerCase() === 'entreprise'),
       quote_number: d.formulaire_data?.quote_number || '',
       frequency_custom: d.formulaire_data?.frequency_custom || '',
       options: d.formulaire_data?.options || [
@@ -925,7 +925,7 @@ export default function DemandesEnAttente() {
       duration_unit: d.formulaire_data?.duration_unit || 'heures',
       description: d.formulaire_data?.description || '',
       amount_ht: d.formulaire_data?.amount_ht || d.prix || 0,
-      tva_active: d.formulaire_data?.tva_active !== false,
+      tva_active: d.formulaire_data?.tva_active !== undefined ? Boolean(d.formulaire_data?.tva_active) : ((d.segment || '').toLowerCase() === 'entreprise'),
       quote_number: d.formulaire_data?.quote_number || '',
       frequency_custom: d.formulaire_data?.frequency_custom || '',
       options: d.formulaire_data?.options || [
