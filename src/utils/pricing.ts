@@ -819,6 +819,14 @@ export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = 
         if (startNormalized >= firstOfMonth && startNormalized <= lastOfMonth) {
             start = startNormalized;
         }
+    } else {
+        // No explicit start date: if target month is current month, use today as
+        // the effective start — we can't count passages that are already in the past.
+        const today = new Date();
+        const todayNorm = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+        if (todayNorm >= firstOfMonth && todayNorm <= lastOfMonth) {
+            start = todayNorm;
+        }
     }
 
     let end = lastOfMonth;
@@ -894,41 +902,46 @@ export const getStatutMoisProchainCalculated = (
     }
 
     const isPaid = statutFacturation === 'Payé' || ['paye', 'payee', 'integral'].includes((statutFacturation || '').toLowerCase());
-    if (isPaid || explicitOverride === 'Actif') {
+    if (isPaid) {
         return 'Actif';
+    }
+    // Clean up stale 'Actif' override when billing status is not paid
+    let effectiveOverride = explicitOverride;
+    if (effectiveOverride === 'Actif') {
+        effectiveOverride = undefined;
     }
 
     if (dayOfMonth < 15) {
-        if (explicitOverride && !['Suspendu', 'En attente', 'Actif', 'Non défini'].includes(explicitOverride)) {
-            return explicitOverride;
+        if (effectiveOverride && !['Suspendu', 'En attente', 'Actif', 'Non défini'].includes(effectiveOverride)) {
+            return effectiveOverride;
         }
         return 'Non défini';
     }
 
     if (dayOfMonth >= 15 && dayOfMonth <= 17) {
-        if (explicitOverride && ['Facture envoyée', 'Actif'].includes(explicitOverride)) {
-            return explicitOverride;
+        if (effectiveOverride && ['Facture envoyée'].includes(effectiveOverride)) {
+            return effectiveOverride;
         }
         return 'Facture envoyée';
     }
 
     if (dayOfMonth >= 18 && dayOfMonth <= 22) {
-        if (explicitOverride && ['1er rappel', 'Actif'].includes(explicitOverride)) {
-            return explicitOverride;
+        if (effectiveOverride && ['1er rappel'].includes(effectiveOverride)) {
+            return effectiveOverride;
         }
         return '1er rappel';
     }
 
     if (dayOfMonth >= 23 && dayOfMonth <= 26) {
-        if (explicitOverride && ['2e rappel', 'Actif'].includes(explicitOverride)) {
-            return explicitOverride;
+        if (effectiveOverride && ['2e rappel'].includes(effectiveOverride)) {
+            return effectiveOverride;
         }
         return '2e rappel';
     }
 
     if (dayOfMonth >= 27) {
-        if (explicitOverride && ['Suspendu', 'Actif'].includes(explicitOverride)) {
-            return explicitOverride;
+        if (effectiveOverride && ['Suspendu'].includes(effectiveOverride)) {
+            return effectiveOverride;
         }
         return 'Suspendu';
     }

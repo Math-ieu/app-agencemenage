@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, DollarSign, Send, Check } from 'lucide-react';
+import { FileText, DollarSign, Send } from 'lucide-react';
 import { Demande } from '../../types';
 
 export interface SubscriptionStatusBarProps {
@@ -12,8 +12,8 @@ export interface SubscriptionStatusBarProps {
   onGenerateInvoice: () => void;
   onOpenInvoiceModal: () => void;
   onSendInvoice: () => void;
-  onSavePlanning: () => void;
-  savingPlanning: boolean;
+  onSavePlanning?: () => void;
+  savingPlanning?: boolean;
 }
 
 export const SubscriptionStatusBar: React.FC<SubscriptionStatusBarProps> = ({
@@ -25,14 +25,25 @@ export const SubscriptionStatusBar: React.FC<SubscriptionStatusBarProps> = ({
   onFacturationChange,
   onGenerateInvoice,
   onOpenInvoiceModal,
-  onSendInvoice,
-  onSavePlanning,
-  savingPlanning
+  onSendInvoice
 }) => {
   return (
-    <div className="sub-status-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14 }}>
+    <div
+      className="sub-status-bar"
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        flexWrap: 'wrap',
+        gap: 16,
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
+        borderRadius: 10,
+        padding: '14px 18px'
+      }}
+    >
       {/* 3 Status Dropdowns */}
-      <div className="sub-status-dropdowns" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+      <div className="sub-status-dropdowns" style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
         {/* 1. MOIS EN COURS */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -42,7 +53,7 @@ export const SubscriptionStatusBar: React.FC<SubscriptionStatusBarProps> = ({
             value={statutMoisEnCours}
             disabled
             title="Statut défini automatiquement par le système et ne peut pas être modifié manuellement."
-            style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#475569', background: '#f1f5f9', cursor: 'not-allowed', outline: 'none' }}
+            style={{ padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#475569', background: '#f1f5f9', cursor: 'not-allowed', outline: 'none', height: 36 }}
           >
             <option value="Actif">Actif</option>
             <option value="Terminé">Terminé</option>
@@ -58,7 +69,7 @@ export const SubscriptionStatusBar: React.FC<SubscriptionStatusBarProps> = ({
           <select
             value={statutMoisProchain}
             onChange={e => onMoisProchainChange(e.target.value)}
-            style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#0f172a', background: 'white', cursor: 'pointer', outline: 'none' }}
+            style={{ padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#0f172a', background: 'white', cursor: 'pointer', outline: 'none', height: 36 }}
           >
             <option value="Non défini">Non défini</option>
             <option value="Actif">Actif</option>
@@ -79,7 +90,7 @@ export const SubscriptionStatusBar: React.FC<SubscriptionStatusBarProps> = ({
           <select
             value={statutFacturation}
             onChange={e => onFacturationChange(e.target.value)}
-            style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 700, color: statutFacturation === 'Payé' ? '#15803d' : '#b45309', background: statutFacturation === 'Payé' ? '#f0fdf4' : '#fffbeb', cursor: 'pointer', outline: 'none' }}
+            style={{ padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 700, color: statutFacturation === 'Payé' ? '#15803d' : '#b45309', background: statutFacturation === 'Payé' ? '#f0fdf4' : '#fffbeb', cursor: 'pointer', outline: 'none', height: 36 }}
           >
             <option value="Non défini">Non défini</option>
             <option value="Facture générée">Facture générée</option>
@@ -90,19 +101,16 @@ export const SubscriptionStatusBar: React.FC<SubscriptionStatusBarProps> = ({
         </div>
       </div>
 
-      {/* 4 Action Buttons */}
-      <div className="sub-status-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" onClick={onGenerateInvoice} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid #cbd5e1', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 600, color: '#037265', cursor: 'pointer' }}>
+      {/* Action Buttons */}
+      <div className="sub-status-actions" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <button type="button" onClick={onGenerateInvoice} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 14px', height: 36, fontSize: 13, fontWeight: 600, color: '#037265', cursor: 'pointer' }}>
           <FileText size={15} /> Générer facture
         </button>
-        <button type="button" onClick={onOpenInvoiceModal} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid #cbd5e1', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 600, color: '#034a3e', cursor: 'pointer' }}>
+        <button type="button" onClick={onOpenInvoiceModal} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 14px', height: 36, fontSize: 13, fontWeight: 600, color: '#034a3e', cursor: 'pointer' }}>
           <DollarSign size={15} /> Formulaire facture
         </button>
-        <button type="button" onClick={onSendInvoice} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid #cbd5e1', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+        <button type="button" onClick={onSendInvoice} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 14px', height: 36, fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
           <Send size={15} /> Envoyer facture
-        </button>
-        <button type="button" onClick={onSavePlanning} disabled={savingPlanning} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#037265', border: 'none', borderRadius: 8, padding: '7px 18px', fontSize: 13, fontWeight: 700, color: 'white', cursor: 'pointer' }}>
-          <Check size={16} /> Enregistrer
         </button>
       </div>
     </div>

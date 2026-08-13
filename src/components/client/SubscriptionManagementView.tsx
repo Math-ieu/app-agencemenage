@@ -80,23 +80,24 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   const planningNotes = externalPlanningNotes !== undefined ? externalPlanningNotes : localPlanningNotes;
   const setPlanningNotes = externalSetPlanningNotes || setLocalPlanningNotes;
 
+  // Sync local planning notes when latest prop changes
+  React.useEffect(() => {
+    const freshNotes = latest?.formulaire_data?.planning_notes || latest?.planning?.notes || '';
+    setLocalPlanningNotes(freshNotes);
+  }, [latest?.id, latest?.formulaire_data?.planning_notes, latest?.planning?.notes]);
+
   // Auto-save planning notes to database automatically
   React.useEffect(() => {
     if (!latest?.id || planningNotes === undefined) return;
     const timer = setTimeout(() => {
       const currentNotes = latest?.formulaire_data?.planning_notes || latest?.planning?.notes || '';
       if (planningNotes !== currentNotes) {
-        const updatedFormData = {
-          ...(latest.formulaire_data || {}),
-          planning_notes: planningNotes
-        };
-        const updatedPlanning = {
-          ...(latest.planning || {}),
-          notes: planningNotes
-        };
         updateDemande(latest.id, {
-          formulaire_data: updatedFormData,
-          planning: updatedPlanning
+          formulaire_data: { planning_notes: planningNotes },
+          planning: {
+            ...(latest.planning || {}),
+            notes: planningNotes
+          }
         } as any).catch(err => console.error("Auto-save notes error:", err));
       }
     }, 800);
@@ -249,6 +250,12 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     return latest?.formulaire_data?.date_overrides || {};
   });
 
+  React.useEffect(() => {
+    if (latest?.formulaire_data?.date_overrides) {
+      setAboDateOverridesState(latest.formulaire_data.date_overrides);
+    }
+  }, [latest?.id, latest?.formulaire_data?.date_overrides]);
+
   const handleUpdateDateOverrides = useCallback(async (newOverridesOrFn: any) => {
     let nextOverrides: Record<string, any> = {};
     setAboDateOverridesState((prev: Record<string, any>) => {
@@ -258,18 +265,15 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
     if (latest?.id) {
       try {
-        const updatedFormData = {
-          ...(latest.formulaire_data || {}),
-          date_overrides: nextOverrides
-        };
+        // Send only the changed key — the backend merge handles the rest
         await updateDemande(latest.id, {
-          formulaire_data: updatedFormData
+          formulaire_data: { date_overrides: nextOverrides }
         } as any);
       } catch (err) {
         console.error("Erreur d'enregistrement date_overrides:", err);
       }
     }
-  }, [latest?.id, latest?.formulaire_data]);
+  }, [latest?.id]);
 
   const [statutMoisEnCours] = useState<string>(() => {
     if (latest?.formulaire_data?.statut_mois_en_cours) {
@@ -287,13 +291,23 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     if (['integral', 'paye', 'payee'].includes(dbPaiement)) {
       return 'Payé';
     }
-    return 'Non payé';
+    return 'Non défini';
   });
 
   const [statutMoisProchain, setStatutMoisProchain] = useState<string>(() => {
     const rawOverride = latest?.formulaire_data?.statut_mois_prochain;
     return getStatutMoisProchainCalculated(new Date().getDate(), statutFacturation, rawOverride);
   });
+
+  // Keep statutFacturation and statutMoisProchain in sync with latest props
+  React.useEffect(() => {
+    if (!latest) return;
+    const fact = latest?.formulaire_data?.statut_facturation || (['integral', 'paye', 'payee'].includes((latest?.statut_paiement || '').toLowerCase()) ? 'Payé' : 'Non défini');
+    const rawOverride = latest?.formulaire_data?.statut_mois_prochain;
+    const calcProchain = getStatutMoisProchainCalculated(new Date().getDate(), fact, rawOverride);
+    setStatutFacturation(fact);
+    setStatutMoisProchain(calcProchain);
+  }, [latest?.id, latest?.formulaire_data?.statut_facturation, latest?.formulaire_data?.statut_mois_prochain, latest?.statut_paiement]);
 
   const handleMoisProchainChange = async (newVal: string) => {
     const perm = checkPermission(user, 'pause_standby_abonnement');
@@ -302,15 +316,25 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
       return;
     }
     setStatutMoisProchain(newVal);
+
+    let nextFacturation = statutFacturation;
+    if (newVal === 'Actif' && statutFacturation !== 'Payé') {
+      nextFacturation = 'Payé';
+      setStatutFacturation('Payé');
+    } else if (newVal !== 'Actif' && statutFacturation === 'Payé') {
+      nextFacturation = 'Non défini';
+      setStatutFacturation('Non défini');
+    }
+
     if (!latest?.id) return;
     try {
-      const updatedFormData = {
-        ...(latest.formulaire_data || {}),
-        statut_mois_prochain: newVal
-      };
+      // Send only the changed keys — the backend merge handles the rest
       await updateDemande(latest.id, {
-        statut_mois_prochain: newVal,
-        formulaire_data: updatedFormData
+        statut_paiement: nextFacturation === 'Payé' ? 'integral' : 'non_paye',
+        formulaire_data: {
+          statut_mois_prochain: newVal,
+          statut_facturation: nextFacturation
+        }
       } as any);
       await toggleAbonnementSuspend(latest.id, { statut_mois_prochain: newVal });
       addToast(`Statut mois prochain mis à jour : ${newVal}`, "success");
@@ -327,24 +351,42 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
       return;
     }
     setStatutFacturation(newVal);
-    const updatedStatutProchain = getStatutMoisProchainCalculated(new Date().getDate(), newVal, statutMoisProchain);
+    
+    // Pass undefined for explicitOverride if clearing 'Actif' on non-paid status
+    const updatedStatutProchain = getStatutMoisProchainCalculated(
+      new Date().getDate(),
+      newVal,
+      statutMoisProchain === 'Actif' && newVal !== 'Payé' ? undefined : statutMoisProchain
+    );
     setStatutMoisProchain(updatedStatutProchain);
+
     if (!latest?.id) return;
     try {
+      // Send only the changed keys — the backend merge handles the rest
+      const partialFormData: any = {
+        statut_facturation: newVal,
+        statut_mois_prochain: updatedStatutProchain
+      };
+
+      if (latest.formulaire_data?.facturation) {
+        partialFormData.facturation = {
+          ...latest.formulaire_data.facturation,
+          statut_facturation: newVal,
+          statut_paiement_ui: newVal === 'Payé' ? 'paye' : (newVal === 'Non payé' ? 'non_paye' : 'en_attente')
+        };
+      }
+
       if (newVal === 'Payé') {
         await confirmAbonnementPaiement(latest.id);
+        await updateDemande(latest.id, {
+          statut_paiement: 'integral',
+          formulaire_data: partialFormData
+        } as any);
         addToast("Paiement confirmé. Statut de facturation mis à jour sur Payé.", "success");
       } else {
-        const updatedFormData = {
-          ...(latest.formulaire_data || {}),
-          statut_facturation: newVal,
-          statut_mois_prochain: updatedStatutProchain
-        };
         await updateDemande(latest.id, {
-          statut_paiement: newVal === 'Payé' ? 'integral' : 'non_paye',
-          statut_paiement_ui: newVal === 'Payé' ? 'paye' : 'non_paye',
-          statut_mois_prochain: updatedStatutProchain,
-          formulaire_data: updatedFormData
+          statut_paiement: 'non_paye',
+          formulaire_data: partialFormData
         } as any);
         addToast(`Statut de facturation mis à jour : ${newVal}`, "info");
       }

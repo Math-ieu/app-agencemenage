@@ -33,6 +33,7 @@ interface SubscriptionRow {
   nextInterventionDay: string;
   nextInterventionHousekeeper: string;
   statutMoisEnCours: 'Actif' | 'Terminé';
+  statutFacturation: string;
   statutMoisProchain: string;
   dateDebut: string;
   dateFin?: string;
@@ -667,7 +668,7 @@ export default function GestionAbonnements() {
 
       const rawOverride = (d.formulaire_data as any)?.statut_mois_prochain;
       const isConfirmedPaid = confirmedPaymentIds.includes(d.id);
-      const statutFacturation = isConfirmedPaid ? 'Payé' : ((d.formulaire_data as any)?.statut_facturation || (['integral', 'paye', 'payee'].includes((d.statut_paiement || '').toLowerCase()) ? 'Payé' : undefined));
+      const statutFacturation = isConfirmedPaid ? 'Payé' : ((d.formulaire_data as any)?.statut_facturation || (['integral', 'paye', 'payee'].includes((d.statut_paiement || '').toLowerCase()) ? 'Payé' : 'Non défini'));
       const statutMoisProchain = getStatutMoisProchainCalculated(new Date().getDate(), statutFacturation, rawOverride);
 
       return {
@@ -689,6 +690,7 @@ export default function GestionAbonnements() {
         nextInterventionDay,
         nextInterventionHousekeeper,
         statutMoisEnCours,
+        statutFacturation,
         statutMoisProchain,
         dateDebut,
         dateFin,
@@ -1445,7 +1447,7 @@ export default function GestionAbonnements() {
   // Derived Factures list for Facturation Abonnement tab (REAL BDD DATA)
   const facturesList = useMemo(() => {
     return subscriptionRows.map((sub, idx) => {
-      const isPaid = confirmedPaymentIds.includes(sub.demandeId) || sub.statutMoisProchain === 'Actif';
+      const isPaid = confirmedPaymentIds.includes(sub.demandeId) || sub.statutFacturation === 'Payé';
       const num = `AM/F${String(118 + idx).padStart(3, '0')}/2026`;
       const fileName = `AM-F${String(118 + idx).padStart(3, '0')}-2026.pdf`;
       return {

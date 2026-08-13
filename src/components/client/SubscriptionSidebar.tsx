@@ -32,6 +32,12 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
   const [customTerrainLines, setCustomTerrainLines] = useState<string[]>(() => {
     return latest?.formulaire_data?.infos_terrain_custom || [];
   });
+
+  React.useEffect(() => {
+    if (latest?.formulaire_data?.infos_terrain_custom) {
+      setCustomTerrainLines(latest.formulaire_data.infos_terrain_custom);
+    }
+  }, [latest?.id, latest?.formulaire_data?.infos_terrain_custom]);
   const [showAddInput, setShowAddInput] = useState(false);
   const [newLineText, setNewLineText] = useState('');
 
@@ -42,11 +48,7 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
     setNewLineText('');
     setShowAddInput(false);
     try {
-      const updatedFormData = {
-        ...(latest.formulaire_data || {}),
-        infos_terrain_custom: updated
-      };
-      await updateDemande(latest.id, { formulaire_data: updatedFormData } as any);
+      await updateDemande(latest.id, { formulaire_data: { infos_terrain_custom: updated } } as any);
       addToast("Info terrain ajoutée avec succès", "success");
     } catch (e) {
       console.error("Erreur d'ajout info terrain:", e);
@@ -58,11 +60,7 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
     const updated = customTerrainLines.filter((_, i) => i !== index);
     setCustomTerrainLines(updated);
     try {
-      const updatedFormData = {
-        ...(latest.formulaire_data || {}),
-        infos_terrain_custom: updated
-      };
-      await updateDemande(latest.id, { formulaire_data: updatedFormData } as any);
+      await updateDemande(latest.id, { formulaire_data: { infos_terrain_custom: updated } } as any);
       addToast("Info terrain supprimée", "info");
     } catch (e) {
       console.error("Erreur de suppression info terrain:", e);
