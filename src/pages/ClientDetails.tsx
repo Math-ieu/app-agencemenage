@@ -911,14 +911,24 @@ export default function ClientDetails() {
     }
   };
 
-  const handleDownloadInvoice = async (demandeId: number) => {
+  const handleDownloadInvoice = async (demandeId: number, targetRef?: string) => {
     try {
       addToast("Chargement de la facture...", "info");
 
-      // 1. Chercher si un document "facture" existe déjà dans les documents de la demande
-      let invoiceDoc = (latest?.documents || []).find(
-        (doc: any) => doc.type_document === 'facture' || doc.nom?.toLowerCase().includes('facture')
-      );
+      // 1. Chercher si un document "facture" spécifique existe déjà dans les documents de la demande
+      let invoiceDoc = targetRef
+        ? (latest?.documents || []).find(
+            (doc: any) =>
+              (doc.type_document === 'facture' || doc.nom?.toLowerCase().includes('facture')) &&
+              (doc.nom?.toLowerCase().includes(targetRef.toLowerCase()) || doc.nom?.replace(/\.pdf$/i, '').toLowerCase() === targetRef.toLowerCase())
+          )
+        : null;
+
+      if (!invoiceDoc) {
+        invoiceDoc = (latest?.documents || []).find(
+          (doc: any) => doc.type_document === 'facture' || doc.nom?.toLowerCase().includes('facture')
+        );
+      }
 
       // 2. Si aucun document facture n'existe, demander au backend de générer la facture officielle
       if (!invoiceDoc && latest?.id) {

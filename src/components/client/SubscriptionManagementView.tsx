@@ -25,7 +25,7 @@ export interface SubscriptionManagementViewProps {
   demandes: Demande[];
   navigate: any;
   handleGenerateInvoice: (id: number) => Promise<void>;
-  handleDownloadInvoice: (id: number) => void;
+  handleDownloadInvoice: (id: number, reference?: string) => void;
   handleSavePlanning: () => Promise<void>;
   savingPlanning: boolean;
   dateDebut?: string;
@@ -797,7 +797,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
           <FacturesReglementsCard
             latest={latest}
             monthPassagesPlanifies={monthPassagesPlanifies}
-            onDownloadInvoice={() => handleDownloadInvoice && handleDownloadInvoice(latest.id)}
+            onDownloadInvoice={(reference) => handleDownloadInvoice && handleDownloadInvoice(latest.id, reference)}
           />
         </div>
 

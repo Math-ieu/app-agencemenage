@@ -63,11 +63,22 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const [invInterventionsRecup, setInvInterventionsRecup] = useState('0');
 
   // ═══════════════════════════════════════════════════════════════
-  // Tarification — dérivée du devis
+  // Tarification — dérivée du devis & TVA
   // ═══════════════════════════════════════════════════════════════
   const [invNbPassages, setInvNbPassages] = useState('4');
   const [invPrixUnitaire, setInvPrixUnitaire] = useState('0');
+  const [invRemiseType, setInvRemiseType] = useState<'dh' | 'pct'>('dh');
   const [invRemiseDh, setInvRemiseDh] = useState('0');
+  const [invRemisePct, setInvRemisePct] = useState('0');
+  const [invApplyTva, setInvApplyTva] = useState<boolean>(() => {
+    const formData = latest?.formulaire_data || {};
+    if (formData.tva_active !== undefined) return Boolean(formData.tva_active);
+    if (formData.apply_tva !== undefined) return Boolean(formData.apply_tva);
+    if (formData.tva !== undefined && formData.tva !== null) return Number(formData.tva) > 0;
+    const seg = client?.segment || latest?.segment || formData?.segment;
+    if (seg && String(seg).toLowerCase() === 'entreprise') return true;
+    return false;
+  });
   const [invTvaPercent, setInvTvaPercent] = useState('20');
 
   // ═══════════════════════════════════════════════════════════════
@@ -151,14 +162,27 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         : contractPassagesBase;
       setInvNbPassages(String(realMonthPassages));
 
-      // Remise additionnelle = 0 par défaut (la remise abonnement est déjà dans le devis total)
-      setInvRemiseDh('0');
+      // Remise additionnelle
+      const initRemiseDh = String(formData.remise_dh || formData.remise || '0');
+      const initRemisePct = String(formData.remise_pct || '0');
+      setInvRemiseDh(initRemiseDh);
+      setInvRemisePct(initRemisePct);
+      if (Number(initRemisePct) > 0 && Number(initRemiseDh) === 0) {
+        setInvRemiseType('pct');
+      } else {
+        setInvRemiseType('dh');
+      }
 
-      // TVA — lue depuis formulaire_data.tva (synchronisée bidirectionnellement)
-      const realTva = formData.tva !== undefined && formData.tva !== null ? Number(formData.tva) : 20;
-      setInvTvaPercent(String(realTva));
+      // TVA — Non par défaut pour les particuliers
+      const isClientEntreprise = (client?.segment || latest.segment || formData.segment) === 'entreprise';
+      const formDataTvaActive = formData.tva_active ?? formData.apply_tva;
+      const initialTvaActive = formDataTvaActive !== undefined
+        ? Boolean(formDataTvaActive)
+        : (formData.tva !== undefined && formData.tva !== null ? Number(formData.tva) > 0 : isClientEntreprise);
+      setInvApplyTva(initialTvaActive);
+      setInvTvaPercent(String(Number(formData.tva) || 20));
     }
-  }, [show, latest, monthDemandes, selectedDays, dateDebut, frequencyLabel, monthPassagesPlanifies]);
+  }, [show, latest, monthDemandes, selectedDays, dateDebut, frequencyLabel, monthPassagesPlanifies, client?.segment]);
 
   // Synchronisation dynamique si le bouton "Produits ménagers inclus" est coché / décoché dans le modal
   const initialProduits = Boolean(latest?.avec_produit || latest?.formulaire_data?.produits_inclus || latest?.formulaire_data?.produits);
@@ -219,14 +243,34 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const numRecup = Math.max(0, Number(invInterventionsRecup) || 0);
   const numNouvelles = Math.max(0, numPassages - numRecup);
   const pu = Math.max(0, Number(invPrixUnitaire) || 0);
-  const remise = Math.max(0, Number(invRemiseDh) || 0);
-  const tvaPct = Math.max(0, Number(invTvaPercent) || 0);
+  const tvaPct = invApplyTva ? Math.max(0, Number(invTvaPercent) || 0) : 0;
 
-  // Montant HT = PU × passages facturables - remise
+  // Montant brut = PU × passages facturables
   const montantBrut = Math.round(pu * numNouvelles * 100) / 100;
-  const totalHT = Math.max(0, Math.round((montantBrut - remise) * 100) / 100);
-  const tvaAmount = Math.round((totalHT * tvaPct) / 100);
-  const totalTTC = Math.round((totalHT + tvaAmount) * 100) / 100;
+
+  // Calcul remise effective
+  let remiseEffective = 0;
+  let reductionLabel = '';
+  if (invRemiseType === 'pct') {
+    const pctVal = Math.max(0, Number(invRemisePct) || 0);
+    remiseEffective = Math.round((montantBrut * pctVal) / 100 * 100) / 100;
+    if (pctVal > 0) reductionLabel = `${pctVal}%`;
+  } else {
+    remiseEffective = Math.max(0, Number(invRemiseDh) || 0);
+    if (remiseEffective > 0 && montantBrut > 0) {
+      const calcPct = Math.round((remiseEffective / montantBrut) * 100);
+      reductionLabel = calcPct > 0 ? `${calcPct}%` : `${remiseEffective} DH`;
+    }
+  }
+
+  // Total HT
+  const totalHT = Math.max(0, Math.round((montantBrut - remiseEffective) * 100) / 100);
+
+  // TVA
+  const tvaAmount = invApplyTva ? Math.round((totalHT * tvaPct) / 100 * 100) / 100 : 0;
+
+  // Net à payer
+  const netAPayer = Math.round((totalHT + tvaAmount) * 100) / 100;
 
   // Montant mensuel de base (full month, pour référence)
   const mensuelBase = getDevisAmount(latest) || (pu * passagesBase) || 0;
@@ -389,53 +433,189 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             </div>
           </div>
 
-          {/* 4. Tarification — dérivée du devis */}
+          {/* 4. Tarification & TVA — dérivée du devis */}
           <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16 }}>
             <div style={{ fontWeight: 800, fontSize: 14, color: '#037265', marginBottom: 14 }}>
-              Tarification
+              Tarification & TVA
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr', gap: 14, marginBottom: 16 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Prix unitaire (DH) — du devis</label>
-                <input type="number" step="0.01" value={invPrixUnitaire} onChange={e => setInvPrixUnitaire(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>
+                  Prix unitaire (DH) — du devis
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={invPrixUnitaire}
+                  onChange={e => setInvPrixUnitaire(e.target.value)}
+                  style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }}
+                />
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Remise additionnelle (DH)</label>
-                <input type="number" value={invRemiseDh} onChange={e => setInvRemiseDh(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#037265' }}>
+                    Réduction appliquée
+                  </label>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => setInvRemiseType('dh')}
+                      style={{
+                        padding: '1px 6px',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        borderRadius: 4,
+                        border: '1px solid #cbd5e1',
+                        background: invRemiseType === 'dh' ? '#037265' : '#f8fafc',
+                        color: invRemiseType === 'dh' ? 'white' : '#64748b',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      DH
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInvRemiseType('pct')}
+                      style={{
+                        padding: '1px 6px',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        borderRadius: 4,
+                        border: '1px solid #cbd5e1',
+                        background: invRemiseType === 'pct' ? '#037265' : '#f8fafc',
+                        color: invRemiseType === 'pct' ? 'white' : '#64748b',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      %
+                    </button>
+                  </div>
+                </div>
+                {invRemiseType === 'pct' ? (
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      placeholder="Ex: 10"
+                      value={invRemisePct}
+                      onChange={e => setInvRemisePct(e.target.value)}
+                      style={{ width: '100%', padding: '7px 28px 7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }}
+                    />
+                    <span style={{ position: 'absolute', right: 10, top: 7, fontSize: 13, color: '#64748b', fontWeight: 700 }}>%</span>
+                  </div>
+                ) : (
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Ex: 126"
+                      value={invRemiseDh}
+                      onChange={e => setInvRemiseDh(e.target.value)}
+                      style={{ width: '100%', padding: '7px 32px 7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }}
+                    />
+                    <span style={{ position: 'absolute', right: 10, top: 7, fontSize: 12, color: '#64748b', fontWeight: 700 }}>DH</span>
+                  </div>
+                )}
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>TVA (%)</label>
-                <input type="number" value={invTvaPercent} onChange={e => setInvTvaPercent(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>
+                  Appliquer la TVA : Oui / Non
+                </label>
+                <div style={{ display: 'flex', gap: 6, height: 34 }}>
+                  <button
+                    type="button"
+                    onClick={() => setInvApplyTva(false)}
+                    style={{
+                      flex: 1,
+                      borderRadius: 8,
+                      border: '1px solid',
+                      borderColor: !invApplyTva ? '#037265' : '#cbd5e1',
+                      background: !invApplyTva ? '#f0fdfa' : '#f8fafc',
+                      color: !invApplyTva ? '#037265' : '#64748b',
+                      fontWeight: !invApplyTva ? 800 : 600,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4
+                    }}
+                  >
+                    Non (0%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInvApplyTva(true)}
+                    style={{
+                      flex: 1,
+                      borderRadius: 8,
+                      border: '1px solid',
+                      borderColor: invApplyTva ? '#037265' : '#cbd5e1',
+                      background: invApplyTva ? '#f0fdfa' : '#f8fafc',
+                      color: invApplyTva ? '#037265' : '#64748b',
+                      fontWeight: invApplyTva ? 800 : 600,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4
+                    }}
+                  >
+                    Oui ({invTvaPercent}%)
+                  </button>
+                </div>
+                {invApplyTva && (
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Taux TVA :</span>
+                    <input
+                      type="number"
+                      value={invTvaPercent}
+                      onChange={e => setInvTvaPercent(e.target.value)}
+                      style={{ width: 55, padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, textAlign: 'center' }}
+                    />
+                    <span style={{ fontSize: 11, color: '#64748b' }}>%</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
+            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 32px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748b' }}>Montant brut ({numNouvelles} × {pu.toFixed(2).replace('.', ',')} DH)</span>
+                  <span style={{ color: '#64748b' }}>Montant du service ({numNouvelles} × {pu.toFixed(2).replace('.', ',')} DH) :</span>
                   <strong style={{ color: '#0f172a' }}>{montantBrut.toFixed(2).replace('.', ',')} DH</strong>
                 </div>
-                {remise > 0 && (
+                {remiseEffective > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#64748b' }}>Remise additionnelle</span>
-                    <strong style={{ color: '#dc2626' }}>– {remise.toFixed(2).replace('.', ',')} DH</strong>
+                    <span style={{ color: '#64748b' }}>Réduction appliquée {reductionLabel ? `(${reductionLabel})` : ''} :</span>
+                    <strong style={{ color: '#dc2626' }}>– {remiseEffective.toFixed(2).replace('.', ',')} DH</strong>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748b' }}>Total HT</span>
-                  <strong style={{ color: '#0f172a' }}>{totalHT.toFixed(2).replace('.', ',')} DH</strong>
-                </div>
-                {tvaPct > 0 && (
+                {(remiseEffective > 0 || invApplyTva) && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#64748b' }}>TVA ({tvaPct}%)</span>
+                    <span style={{ color: '#64748b' }}>Total HT :</span>
+                    <strong style={{ color: '#0f172a' }}>{totalHT.toFixed(2).replace('.', ',')} DH</strong>
+                  </div>
+                )}
+                {invApplyTva && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#64748b' }}>TVA ({tvaPct}%) :</span>
                     <strong style={{ color: '#0f172a' }}>{tvaAmount.toFixed(2).replace('.', ',')} DH</strong>
                   </div>
                 )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #e2e8f0', paddingTop: 12, marginTop: 4 }}>
-                <span style={{ fontWeight: 800, fontSize: 15, color: '#037265' }}>{tvaPct > 0 ? 'Total TTC' : 'Total HT'}</span>
-                <strong style={{ fontWeight: 800, fontSize: 18, color: '#037265' }}>{(tvaPct > 0 ? totalTTC : totalHT).toFixed(2).replace('.', ',')} DH</strong>
+                <span style={{ fontWeight: 800, fontSize: 15, color: '#037265' }}>
+                  {invApplyTva ? 'Net à payer (TTC) :' : 'Net à payer :'}
+                </span>
+                <strong style={{ fontWeight: 800, fontSize: 18, color: '#037265' }}>
+                  {netAPayer.toFixed(2).replace('.', ',')} DH
+                </strong>
               </div>
             </div>
           </div>
@@ -450,9 +630,11 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               <div>Interventions ce mois : <strong>{numPassages}</strong>{isProrata ? ` (prorata ${numPassages}/${passagesBase})` : ''}</div>
               <div>Interventions récupérées : <strong>{numRecup}</strong></div>
               <div>Nouvelles interventions facturables : <strong>{numNouvelles}</strong></div>
-              <div>Prix unitaire (du devis) : <strong>{pu.toFixed(2).replace('.', ',')} DH</strong></div>
-              <div>Montant à facturer : <strong>{numNouvelles} × {pu.toFixed(2).replace('.', ',')} DH = {montantBrut.toFixed(2).replace('.', ',')} DH HT</strong></div>
-              {tvaPct > 0 && <div>Total TTC : <strong>{totalTTC.toFixed(2).replace('.', ',')} DH</strong></div>}
+              <div>Montant du service : <strong>{montantBrut.toFixed(2).replace('.', ',')} DH</strong></div>
+              {remiseEffective > 0 && <div>Réduction appliquée : <strong style={{ color: '#dc2626' }}>– {remiseEffective.toFixed(2).replace('.', ',')} DH {reductionLabel ? `(${reductionLabel})` : ''}</strong></div>}
+              <div>Total HT : <strong>{totalHT.toFixed(2).replace('.', ',')} DH</strong></div>
+              {invApplyTva && <div>TVA ({tvaPct}%) : <strong>{tvaAmount.toFixed(2).replace('.', ',')} DH</strong></div>}
+              <div>Net à payer : <strong>{netAPayer.toFixed(2).replace('.', ',')} DH</strong></div>
             </div>
             <div style={{ marginTop: 10, fontSize: 12, color: '#15803d', fontStyle: 'italic' }}>
               Interventions déjà réglées : {numPayees} · Interventions facturées ce mois : {numNouvelles}
@@ -476,13 +658,49 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               try {
                 addToast("Enregistrement et génération de la facture...", "info");
 
-                const totalHTNum = Number(totalHT) || 0;
-                const totalTTCNum = Number(totalTTC) || 0;
-                const tvaPercentNum = Number(invTvaPercent) || 0;
-                const tvaAmountNum = Math.round((totalHTNum * tvaPercentNum) / 100 * 100) / 100;
-                const finalMontantFacture = tvaPercentNum > 0 ? totalTTCNum : totalHTNum;
+                const totalHTNum = totalHT;
+                const totalTTCNum = netAPayer;
+                const tvaPercentNum = invApplyTva ? (Number(invTvaPercent) || 0) : 0;
+                const tvaAmountNum = tvaAmount;
+                const finalMontantFacture = netAPayer;
 
                 const parsedDays = extractJoursPassage(invJoursPassage);
+
+                const clientDisplayName = client?.display_name || latest?.client_name || (latest?.formulaire_data as any)?.nom || 'Client';
+                const monthNum = activeTabIndex + 1;
+                const refName = `FACTURE_${clientDisplayName.replace(/\s+/g, '_')}_${latest.id}_M${monthNum}`;
+
+                const currentFacturesValidees = Array.isArray(latest.formulaire_data?.factures_validees)
+                  ? [...latest.formulaire_data.factures_validees]
+                  : [];
+
+                const filteredFactures = currentFacturesValidees.filter(
+                  (f: any) => f.month_index !== monthNum && f.id !== `M${monthNum}`
+                );
+
+                filteredFactures.push({
+                  id: `M${monthNum}`,
+                  month_index: monthNum,
+                  reference: refName,
+                  periode: capitalizedMonthTitle || `Mois ${monthNum}`,
+                  montant: finalMontantFacture,
+                  montant_service: montantBrut,
+                  montant_ht: totalHTNum,
+                  montant_ttc: totalTTCNum,
+                  prix_unitaire: Number(invPrixUnitaire) || 0,
+                  nombre_passages: Number(invNbPassages) || 0,
+                  remise: remiseEffective,
+                  remise_dh: remiseEffective,
+                  remise_pct: invRemiseType === 'pct' ? Number(invRemisePct) || 0 : 0,
+                  reduction_label: reductionLabel,
+                  tva_active: invApplyTva,
+                  tva: tvaPercentNum,
+                  tva_amount: tvaAmountNum,
+                  date_validation: new Date().toISOString(),
+                  date_envoi: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+                  statut: 'envoyee',
+                  statut_label: 'Envoyée'
+                });
 
                 // Sync ALL changes bidirectionally back to formulaire_data
                 const updatedFormData = {
@@ -505,11 +723,19 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
 
                   // Standard devis & invoice properties
                   montant_devis: devisTotal,
+                  montant_service: montantBrut,
                   montant_facture: finalMontantFacture,
+                  factures_validees: filteredFactures,
 
-                  // Tarification & TVA
+                  // Tarification, Remise & TVA
                   prix_unitaire: invPrixUnitaire,
-                  remise_dh: invRemiseDh,
+                  remise_dh: remiseEffective,
+                  remise: remiseEffective,
+                  remise_pct: invRemiseType === 'pct' ? Number(invRemisePct) || 0 : 0,
+                  remise_type: invRemiseType,
+                  reduction_label: reductionLabel,
+                  tva_active: invApplyTva,
+                  apply_tva: invApplyTva,
                   tva: tvaPercentNum,
                   tva_amount: tvaAmountNum,
                   montant_ht: totalHTNum,
