@@ -1,10 +1,11 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
-import { Demande } from '../../types';
+import { Demande, Client } from '../../types';
 import { getDevisAmount } from '../../utils/pricing';
 
 export interface SubscriptionParamsCardProps {
   latest: Demande;
+  client?: Client;
   frequencyLabel?: string;
   selectedDays: string[];
   dateDebut?: string;
@@ -20,6 +21,7 @@ export interface SubscriptionParamsCardProps {
 
 export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
   latest,
+  client,
   frequencyLabel,
   selectedDays,
   dateDebut,
@@ -110,7 +112,19 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
   const rawModePaiement = latest.mode_paiement || latest.mode_paiement_label || latest.formulaire_data?.mode_paiement;
   const formattedModePaiement = formatSafeValue(rawModePaiement, 'Virement');
 
-  const rawCom = latest.commercial_name || (latest as any).commission || (latest as any).commercial || latest.formulaire_data?.com;
+  const rawCom =
+    latest.assigned_to_name ||
+    latest.commercial_name ||
+    (latest as any).assigned_to_user_name ||
+    (latest as any).assigned_to_detail?.full_name ||
+    client?.assigned_commercial_name ||
+    (client as any)?.assigned_commercial?.full_name ||
+    latest.formulaire_data?.commercial ||
+    latest.formulaire_data?.commercial_name ||
+    latest.formulaire_data?.com ||
+    latest.formulaire_data?.facturation?.commercial_name ||
+    (latest as any).commission ||
+    (latest as any).commercial;
   const formattedCom = formatSafeValue(rawCom, '—');
 
   const formattedTauxReduc = tauxReduction !== undefined && tauxReduction !== null ? `${tauxReduction}%` : (latest.formulaire_data?.taux_reduction || latest.geste_commercial?.reduction_value ? `${latest.formulaire_data?.taux_reduction || latest.geste_commercial?.reduction_value}%` : '10%');

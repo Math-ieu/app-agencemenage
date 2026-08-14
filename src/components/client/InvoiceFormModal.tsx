@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, X, AlertCircle, FileText } from 'lucide-react';
 import { Demande, Client } from '../../types';
-import { updateDemande, generateDocument } from '../../api/client';
+import { updateDemande, generateDocument, getUsers, affecterDemande } from '../../api/client';
 import { getDevisDiscountDetails, extractJoursPassage, getDynamicMonthPassagesCount } from '../../utils/pricing';
 
 export interface InvoiceFormModalProps {
@@ -51,13 +51,42 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   // ═══════════════════════════════════════════════════════════════
   // Form States — Paramètres de l'abonnement
   // ═══════════════════════════════════════════════════════════════
+  const [commerciaux, setCommerciaux] = useState<any[]>([]);
+
+  useEffect(() => {
+    getUsers({ role: 'commercial' })
+      .then(res => {
+        const list = res.data?.results || res.data || [];
+        setCommerciaux(Array.isArray(list) ? list : []);
+      })
+      .catch(console.error);
+  }, []);
+
+  const getInitialCommercial = () => {
+    return (
+      latest?.assigned_to_name ||
+      latest?.commercial_name ||
+      (latest as any)?.assigned_to_user_name ||
+      (latest as any)?.assigned_to_detail?.full_name ||
+      client?.assigned_commercial_name ||
+      (client as any)?.assigned_commercial?.full_name ||
+      latest?.formulaire_data?.commercial ||
+      latest?.formulaire_data?.commercial_name ||
+      latest?.formulaire_data?.com ||
+      latest?.formulaire_data?.facturation?.commercial_name ||
+      (latest as any)?.commission ||
+      (latest as any)?.commercial ||
+      ''
+    );
+  };
+
   const [invService, setInvService] = useState(() => latest?.service || latest?.type_prestation || 'Grand ménage');
   const [invFrequence, setInvFrequence] = useState(() => formatFrequenceOption(latest?.formulaire_data?.frequence || latest?.frequency_label || frequencyLabel, selectedDays?.length));
   const [invDateStart, setInvDateStart] = useState(() => dateDebut || latest?.date_intervention || '');
   const [invNbPersonnes, setInvNbPersonnes] = useState(() => String(latest?.nb_intervenants || latest?.formulaire_data?.nb_intervenants || 1));
   const [invDuree, setInvDuree] = useState(() => String(latest?.nb_heures || latest?.formulaire_data?.duree || 4));
   const [invModePaiement, setInvModePaiement] = useState(() => latest?.mode_paiement || 'Virement');
-  const [invCommission, setInvCommission] = useState(() => String((latest as any)?.commission || ''));
+  const [invCommission, setInvCommission] = useState(() => String(getInitialCommercial()));
   const [invJoursPassage, setInvJoursPassage] = useState(() => selectedDays && selectedDays.length > 0 ? selectedDays.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' + ') : 'Lundi + Jeudi');
   const [invProduitsInclus, setInvProduitsInclus] = useState(false);
   const [invInterventionsRecup, setInvInterventionsRecup] = useState('0');
@@ -120,11 +149,11 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       const initialRecup = String(formData.interventions_recuperees || recupCount);
       setInvInterventionsRecup(initialRecup);
 
-      // ── Mode paiement & commission ──
+      // ── Mode paiement & commercial ──
       const realModePaiement = latest.mode_paiement || latest.mode_paiement_label || formData.mode_paiement || 'Virement';
       setInvModePaiement(realModePaiement);
 
-      const realCom = latest.commercial_name || (latest as any)?.commission || (latest as any)?.commercial || formData.com || '';
+      const realCom = getInitialCommercial();
       setInvCommission(String(realCom));
 
       // ── Jours de passage ──
@@ -356,7 +385,24 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Com</label>
-                <input type="text" value={invCommission} onChange={e => setInvCommission(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }} />
+                <select
+                  value={invCommission}
+                  onChange={e => setInvCommission(e.target.value)}
+                  style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }}
+                >
+                  <option value="">Sélectionner un commercial</option>
+                  {commerciaux.map(c => {
+                    const cName = c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.username;
+                    return (
+                      <option key={c.id} value={cName}>
+                        {cName}
+                      </option>
+                    );
+                  })}
+                  {invCommission && !commerciaux.some(c => (c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.username) === invCommission) && (
+                    <option value={invCommission}>{invCommission}</option>
+                  )}
+                </select>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Nombre de passages ce mois</label>
@@ -398,10 +444,6 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                 <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>Passages base devis / mois</span>
                 <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 10px', borderRadius: 6, fontWeight: 800, fontSize: 13 }}>{passagesBase}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9' }}>
-                <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>Nouvelles interventions à facturer</span>
-                <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 10px', borderRadius: 6, fontWeight: 800, fontSize: 13 }}>{numNouvelles}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9' }}>
                 <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>Interventions déjà payées (lecture seule)</span>
@@ -620,6 +662,12 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   statut_label: 'Envoyée'
                 });
 
+                // Find matching commercial user if available
+                const matchingComm = (commerciaux || []).find((c: any) => {
+                  const cName = c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.username;
+                  return cName.toLowerCase() === invCommission.trim().toLowerCase();
+                });
+
                 // Sync ALL changes bidirectionally back to formulaire_data
                 const updatedFormData = {
                   ...(latest.formulaire_data || {}),
@@ -632,6 +680,8 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   nb_heures: invDuree,
                   mode_paiement: invModePaiement,
                   com: invCommission,
+                  commercial: invCommission,
+                  commercial_name: invCommission,
                   nombre_passages: invNbPassages,
                   jours_passage: invJoursPassage,
                   jours_intervention: parsedDays,
@@ -659,7 +709,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   montant_ttc: totalTTCNum
                 };
 
-                await updateDemande(latest.id, {
+                const updatePayload: any = {
                   prix: Math.round(devisTotal) || latest.prix,
                   montant_devis: devisTotal || latest.montant_devis || latest.prix,
                   montant_facture: finalMontantFacture,
@@ -670,7 +720,21 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                     jours_intervention: parsedDays.length > 0 ? parsedDays : latest.planning?.jours_intervention
                   },
                   formulaire_data: updatedFormData
-                } as any);
+                };
+
+                if (matchingComm?.id) {
+                  updatePayload.assigned_to = matchingComm.id;
+                }
+
+                await updateDemande(latest.id, updatePayload);
+
+                if (matchingComm?.id) {
+                  try {
+                    await affecterDemande(latest.id, matchingComm.id);
+                  } catch (affErr) {
+                    console.warn("affecterDemande:", affErr);
+                  }
+                }
 
                 try {
                   await generateDocument(latest.id, 'facture', activeTabIndex + 1);

@@ -743,6 +743,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
           {/* Subscription Contract Parameters Card matching screenshot */}
           <SubscriptionParamsCard
             latest={latest}
+            client={client}
             frequencyLabel={frequencyLabel}
             selectedDays={selectedDays}
             dateDebut={dateDebut}

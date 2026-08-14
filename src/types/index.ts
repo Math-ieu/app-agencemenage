@@ -17,6 +17,8 @@ export interface Client {
   phone: string;
   whatsapp?: string;
   assigned_commercial?: string;
+  assigned_commercial_name?: string;
+  commercial_name?: string;
   email: string;
   segment: 'particulier' | 'entreprise';
   city: string;
