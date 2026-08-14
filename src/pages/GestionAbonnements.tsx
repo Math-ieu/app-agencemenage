@@ -1030,6 +1030,20 @@ export default function GestionAbonnements() {
       const dbStatut = (d.statut || '').toLowerCase();
       if (['resilie', 'suspendu'].includes(dbStatut)) return;
 
+      const dStartStr =
+        d.planning?.date_debut ||
+        (d.formulaire_data as any)?.date_demarrage ||
+        (d.formulaire_data as any)?.date_debut ||
+        d.date_intervention ||
+        (d.created_at ? d.created_at.slice(0, 10) : '');
+      const dStartIso = dStartStr ? (dStartStr.includes('T') ? dStartStr.slice(0, 10) : dStartStr.slice(0, 10)) : '';
+
+      const dEndStr =
+        d.planning?.date_fin ||
+        (d.formulaire_data as any)?.date_fin ||
+        '';
+      const dEndIso = dEndStr ? (dEndStr.includes('T') ? dEndStr.slice(0, 10) : dEndStr.slice(0, 10)) : '';
+
       if (d.planning?.semaines && Array.isArray(d.planning.semaines)) {
         d.planning.semaines.forEach((week: any) => {
           const wStart = week.date_debut;
@@ -1051,6 +1065,10 @@ export default function GestionAbonnements() {
                       actualDateObj.setDate(weekStartObj.getDate() + dayIndex);
                       const actualDateIso = fmtIso(actualDateObj);
                       if (actualDateIso >= mondayIso && actualDateIso <= sundayIso) {
+                        // Do NOT count days before subscription start or after subscription end
+                        if (dStartIso && actualDateIso < dStartIso) return;
+                        if (dEndIso && actualDateIso > dEndIso) return;
+
                         const key = `${d.id}_${actualDateIso}`;
                         if (!countedKeys.has(key)) {
                           countedKeys.add(key);
@@ -1075,10 +1093,20 @@ export default function GestionAbonnements() {
           (d.formulaire_data as any)?.jours_passage ||
           (d as any).jours_passage;
         const joursIntervention: string[] = extractJoursPassage(rawJours);
+        const dateOverrides = (d.formulaire_data as any)?.date_overrides || {};
+
         for (let cur = new Date(monday); cur <= sunday; cur.setDate(cur.getDate() + 1)) {
           const curIso = fmtIso(cur);
+          // Do NOT count days before subscription start or after subscription end
+          if (dStartIso && curIso < dStartIso) continue;
+          if (dEndIso && curIso > dEndIso) continue;
+
           const dayName = daysMap[cur.getDay()];
-          if (joursIntervention.includes(dayName)) {
+          const override = dateOverrides[curIso];
+          const isExcludedByOverride = override?.excluded || ['annule', 'annulee', 'reporte', 'reportee', 'retirer'].includes((override?.statut || '').toLowerCase());
+          if (isExcludedByOverride) continue;
+
+          if (joursIntervention.includes(dayName) || override?.statut === 'a_venir' || (override?.heure && !override?.excluded)) {
             const key = `${d.id}_${curIso}`;
             if (!countedKeys.has(key)) {
               const isChildCanceled = demandes.some(c => 
