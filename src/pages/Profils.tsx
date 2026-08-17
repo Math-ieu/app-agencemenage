@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAgents, deleteAgent, getDemandes, updateAgent, sendProfilToDemande } from '../api/client';
-import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2, UserPlus, Send, Ban, Pause } from 'lucide-react';
+import { getAgents, deleteAgent, getDemandes, updateAgent, sendProfilToDemande, removeProfilFromDemande } from '../api/client';
+import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2, UserPlus, UserMinus, Send, Ban, Pause } from 'lucide-react';
 import { Agent } from '../types';
 import { encodeId } from '../utils/obfuscation';
 import AddProfileModal from './ProfilEditModal';
@@ -83,6 +83,15 @@ const dividerStyle: React.CSSProperties = {
   background: '#e2e8f0',
   flexShrink: 0,
 };
+
+const getPaymentUiValue = (statutPaiement: string, facturationAnnulee: boolean): string => {
+  if (facturationAnnulee) return 'facturation_annulee';
+  if (statutPaiement === 'integral') return 'paye';
+  if (statutPaiement === 'acompte') return 'paiement_en_attente';
+  if (statutPaiement === 'partiel') return 'paiement_partiel';
+  return 'non_confirme';
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Profils() {
@@ -117,6 +126,68 @@ export default function Profils() {
   const [standbyDays, setStandbyDays] = useState(7);
   const [selectedAgentForResume, setSelectedAgentForResume] = useState<Agent | null>(null);
   const [selectedAgentForBlacklist, setSelectedAgentForBlacklist] = useState<Agent | null>(null);
+
+  // Variables pour le modal de retrait de profil d'une demande
+  const [showRetirerModal, setShowRetirerModal] = useState(false);
+  const [selectedAgentForRetirer, setSelectedAgentForRetirer] = useState<Agent | null>(null);
+  const [removingId, setRemovingId] = useState<number | null>(null);
+
+  const fetchDemandes = async () => {
+    try {
+      const res = await getDemandes({ no_page: 'true' });
+      const data = res.data;
+      setAllDemandes(Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []));
+    } catch (err) {
+      console.error('Failed to fetch demandes in Profils:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDemandes();
+  }, []);
+
+  // Fetch all demandes when Postuler or Retirer modal opens
+  useEffect(() => {
+    if (!showPostulerModal && !showRetirerModal) return;
+    setDemandesLoading(true);
+    fetchDemandes().finally(() => setDemandesLoading(false));
+  }, [showPostulerModal, showRetirerModal]);
+
+  const assignedDemandesForAgent = useMemo(() => {
+    const map: Record<number, any[]> = {};
+    const activeList = allDemandes.filter(d => {
+      if (d.statut === 'en_attente' || d.statut === 'pres_terminee' || d.statut === 'termine') return false;
+      const facturation = d.formulaire_data?.facturation || {};
+      const statutUi = facturation.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
+      if (statutUi === 'paye') return false;
+      return true;
+    });
+
+    agents.forEach(ag => {
+      map[ag.id] = activeList.filter(d => {
+        const inProfils = Array.isArray(d.profils_envoyes) && d.profils_envoyes.some((p: any) => Number(p.id || p) === ag.id);
+        const inParts = Array.isArray(d.parts_repartition) && d.parts_repartition.some((p: any) => Number(p.profile_id) === ag.id);
+        return inProfils || inParts;
+      });
+    });
+    return map;
+  }, [allDemandes, agents]);
+
+  const handleRetirerProfil = async (demandeId: number, agentId: number) => {
+    setRemovingId(demandeId);
+    try {
+      await removeProfilFromDemande(demandeId, agentId);
+      addToast(`Femme de ménage retirée de la demande #${demandeId} avec succès !`, 'success');
+      setShowRetirerModal(false);
+      setSelectedAgentForRetirer(null);
+      await Promise.all([fetchData(), fetchDemandes()]);
+    } catch (err) {
+      console.error(err);
+      addToast("Erreur lors du retrait du profil.", 'error');
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -200,19 +271,6 @@ export default function Profils() {
     }
   };
 
-  // Fetch all demandes when Postuler modal opens
-  useEffect(() => {
-    if (!showPostulerModal) return;
-    setDemandesLoading(true);
-    getDemandes({ no_page: 'true' })
-      .then(res => {
-        const data = res.data;
-        setAllDemandes(Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []));
-      })
-      .catch(console.error)
-      .finally(() => setDemandesLoading(false));
-  }, [showPostulerModal]);
-
   const handleEnvoyerProfil = async () => {
     if (!selectedAgentForPostuler || !selectedDemande) return;
     setSending(true);
@@ -222,7 +280,7 @@ export default function Profils() {
       setShowPostulerModal(false);
       setSelectedDemande(null);
       setDemandesSearch('');
-      await fetchData();
+      await Promise.all([fetchData(), fetchDemandes()]);
     } catch (err) {
       console.error(err);
       addToast("Erreur lors de l'envoi du profil.", 'error');
@@ -317,15 +375,6 @@ export default function Profils() {
       setLoading(false);
     }
   };
-
-  const getPaymentUiValue = (statutPaiement: string, facturationAnnulee: boolean): string => {
-    if (facturationAnnulee) return 'facturation_annulee';
-    if (statutPaiement === 'integral') return 'paye';
-    if (statutPaiement === 'acompte') return 'paiement_en_attente';
-    if (statutPaiement === 'partiel') return 'paiement_partiel';
-    return 'non_confirme';
-  };
-
 
   useEffect(() => { 
     fetchData(); 
@@ -686,6 +735,37 @@ export default function Profils() {
                       >
                         <UserPlus size={16} />
                       </button>
+
+                      {(() => {
+                        const assignedList = assignedDemandesForAgent[agent.id] || [];
+                        const isAssigned = assignedList.length > 0;
+                        return (
+                          <button
+                            onClick={() => {
+                              if (!isAssigned) return;
+                              setSelectedAgentForRetirer(agent);
+                              setShowRetirerModal(true);
+                            }}
+                            disabled={!isAssigned}
+                            title={isAssigned ? `Retirer de la demande (${assignedList.length} affectation${assignedList.length > 1 ? 's' : ''})` : "Aucune demande affectée"}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '8px',
+                              backgroundColor: isAssigned ? '#fee2e2' : '#f8fafc',
+                              color: isAssigned ? '#ef4444' : '#cbd5e1',
+                              border: isAssigned ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                              borderRadius: '8px',
+                              cursor: isAssigned ? 'pointer' : 'not-allowed',
+                              opacity: isAssigned ? 1 : 0.45,
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <UserMinus size={16} />
+                          </button>
+                        );
+                      })()}
 
                       {(hasPermission(user, 'blacklister_agents') || hasPermission(user, 'mettre_standby_profil')) && (
                         <div className="pause-dropdown-container relative" style={{ display: 'inline-block' }}>
@@ -1082,6 +1162,139 @@ export default function Profils() {
                 style={{ padding: '8px 16px', fontSize: 13, backgroundColor: '#0d9488', border: 'none' }}
               >
                 Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Retirer de la demande Modal */}
+      {showRetirerModal && selectedAgentForRetirer && (
+        <div
+          className="modal-overlay z-[110]"
+          onClick={() => setShowRetirerModal(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 300,
+            backdropFilter: 'blur(2px)'
+          }}
+        >
+          <div
+            className="modal-content"
+            onClick={e => e.stopPropagation()}
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '520px',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+              overflow: 'hidden',
+              border: 'none'
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid #fee2e2', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fef2f2' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
+                  <UserMinus size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                    Retirer d'une demande
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+                    {selectedAgentForRetirer.first_name} {selectedAgentForRetirer.last_name}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRetirerModal(false)}
+                style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px 24px', maxHeight: '380px', overflowY: 'auto' }}>
+              <p style={{ fontSize: '13px', color: '#475569', margin: '0 0 14px 0' }}>
+                Sélectionnez la demande de laquelle vous souhaitez retirer ce profil :
+              </p>
+
+              {(() => {
+                const assignedList = assignedDemandesForAgent[selectedAgentForRetirer.id] || [];
+                if (assignedList.length === 0) {
+                  return (
+                    <p style={{ fontSize: '13px', color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', padding: '24px 0' }}>
+                      Ce profil n'est actuellement affecté à aucune demande active.
+                    </p>
+                  );
+                }
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {assignedList.map((d: any) => (
+                      <div
+                        key={d.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '12px 14px',
+                          borderRadius: '10px',
+                          border: '1px solid #e2e8f0',
+                          backgroundColor: '#f8fafc'
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#0d9488' }}>#{d.id}</span>
+                            <span style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{d.client_name || 'Client inconnu'}</span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748b' }}>
+                            {d.service || 'Prestation'} {d.date_intervention ? `• ${new Date(d.date_intervention).toLocaleDateString('fr-FR')}` : ''}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={removingId === d.id}
+                          onClick={() => handleRetirerProfil(d.id, selectedAgentForRetirer.id)}
+                          style={{
+                            padding: '7px 14px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: 'white',
+                            backgroundColor: '#ef4444',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: removingId === d.id ? 'not-allowed' : 'pointer',
+                            opacity: removingId === d.id ? 0.6 : 1,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            flexShrink: 0
+                          }}
+                        >
+                          <UserMinus size={14} /> {removingId === d.id ? 'Retrait...' : 'Retirer'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', backgroundColor: '#f8fafc' }}>
+              <button
+                onClick={() => setShowRetirerModal(false)}
+                style={{ padding: '7px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: 'white', color: '#475569', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+              >
+                Fermer
               </button>
             </div>
           </div>

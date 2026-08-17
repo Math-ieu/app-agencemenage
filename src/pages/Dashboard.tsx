@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
   CheckCircle, UserCheck, MessageSquare, AlertTriangle, Gift, Lock,
-  Check, ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, Eye, Download, Send, Save, XCircle, Calendar, Trash2, Plus, Pencil
+  Check, ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, UserMinus, Eye, Download, Send, Save, XCircle, Calendar, Trash2, Plus, Pencil
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
@@ -4407,20 +4407,80 @@ export default function Dashboard() {
                     <CheckCircle size={16} /> Opération confirmée avec le client
                   </p>
 
-                  <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #d1d5db', padding: '10px 12px', marginBottom: '10px' }}>
-                    <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Fiche candidat
-                    </p>
-                    <p style={{ margin: '8px 0 4px 0', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
-                      {showCAOModal.profils_envoyes?.length
-                        ? `${showCAOModal.profils_envoyes[showCAOModal.profils_envoyes.length - 1].full_name || `${showCAOModal.profils_envoyes[showCAOModal.profils_envoyes.length - 1].first_name} ${showCAOModal.profils_envoyes[showCAOModal.profils_envoyes.length - 1].last_name}`}`
-                        : 'Aucun candidat assigné'}
-                    </p>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
-                      {showCAOModal.profils_envoyes?.length
-                        ? `Tel: ${showCAOModal.profils_envoyes[showCAOModal.profils_envoyes.length - 1].phone || '—'}`
-                        : 'Affectez un profil pour préparer la suite opérationnelle.'}
-                    </p>
+                  <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #d1d5db', padding: '12px', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Fiche candidat {showCAOModal.profils_envoyes?.length ? `(${showCAOModal.profils_envoyes.length})` : ''}
+                      </p>
+                    </div>
+
+                    {showCAOModal.profils_envoyes?.length ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {showCAOModal.profils_envoyes.map((p: any) => {
+                          const pName = p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`;
+                          return (
+                            <div
+                              key={p.id}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '8px 12px',
+                                background: '#f8fafc',
+                                borderRadius: '8px',
+                                border: '1px solid #e2e8f0',
+                              }}
+                            >
+                              <div>
+                                <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>{pName}</p>
+                                <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>Tel : {p.phone || '—'}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    await removeProfilFromDemande(showCAOModal.id, p.id);
+                                    addToast(`Femme de ménage (${pName}) retirée de la demande`, 'success');
+                                    setShowCAOModal(prev => {
+                                      if (!prev) return null;
+                                      return {
+                                        ...prev,
+                                        profils_envoyes: (prev.profils_envoyes || []).filter((item: any) => item.id !== p.id)
+                                      };
+                                    });
+                                    await fetchData();
+                                  } catch (err) {
+                                    console.error("Erreur retrait profil CAO:", err);
+                                    addToast("Erreur lors du retrait du profil", "error");
+                                  }
+                                }}
+                                title="Retirer ce profil de la demande"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '5px 10px',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                  color: '#ef4444',
+                                  background: '#fef2f2',
+                                  border: '1px solid #fca5a5',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                <UserMinus size={14} /> Retirer
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontStyle: 'italic' }}>
+                        Aucun candidat assigné. Affectez un profil pour préparer la suite opérationnelle.
+                      </p>
+                    )}
                   </div>
 
                   {(() => {
