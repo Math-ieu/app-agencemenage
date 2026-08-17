@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Users, UserCheck, History, Calendar,
-  DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X, Globe, ChevronDown
+  DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X, Globe, ChevronDown, Building2
 } from 'lucide-react';
 import { useAuthStore, useNotificationStore } from '../../store/auth';
 import { hasPermission } from '../../utils/permissions';
@@ -16,6 +16,21 @@ const navItems = [
   { to: '/clients', icon: Users, label: 'Listing clients' },
   { to: '/historique', icon: History, label: 'Historique' },
   { to: '/gestion-abonnement', icon: Calendar, label: 'Gestion Abonnement' },
+  {
+    id: 'airbnb',
+    icon: Building2,
+    label: 'Airbnb & Conciergerie',
+    children: [
+      { to: '/airbnb/clients-biens', label: 'Clients & Biens' },
+      { to: '/airbnb/nouvelle-commande', label: 'Nouvelle Commande' },
+      { to: '/airbnb/commandes', label: 'Dossier Commande' },
+      { to: '/airbnb/runner-laverie', label: 'Runner & Laverie' },
+      { to: '/airbnb/planning', label: 'Planning & Exécution' },
+      { to: '/airbnb/facturation', label: 'Facturation Conciergerie' },
+      { to: '/airbnb/espace-conciergerie', label: 'Espace Conciergerie' },
+      { to: '/airbnb/parametres', label: 'Paramètres' },
+    ]
+  },
   {
     id: 'finance',
     icon: DollarSign,

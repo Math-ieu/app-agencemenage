@@ -1,0 +1,303 @@
+/* NouvelleCommande.css — Prise de Commande Turnover */
+
+.nc-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 1.5rem;
+  align-items: flex-start;
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .nc-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nc-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.nc-right-col {
+  position: sticky;
+  top: 1.5rem;
+}
+
+/* Section Card */
+.nc-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.nc-card-header {
+  padding: 1rem 1.25rem;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nc-card-header h2 {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.nc-card-body {
+  padding: 1.25rem;
+}
+
+/* Property Specs preview box */
+.nc-property-preview {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.625rem;
+  padding: 1rem;
+  margin-top: 0.875rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.nc-prop-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.nc-prop-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.nc-prop-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Selectable Cards (Creneaux & Linge) */
+.nc-selectable-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.nc-select-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 0.625rem;
+  padding: 0.875rem 1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  text-align: left;
+}
+
+.nc-select-card:hover {
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+}
+
+.nc-select-card.selected {
+  border-color: #00473E;
+  background-color: #f0fdfa;
+  box-shadow: 0 0 0 1px #00473E;
+}
+
+.nc-card-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nc-select-card.selected .nc-card-title {
+  color: #00473E;
+}
+
+.nc-card-desc {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+/* Options checkboxes */
+.nc-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.nc-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nc-option-row:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.nc-option-row.checked {
+  background: #f0fdfa;
+  border-color: #0d9488;
+}
+
+.nc-option-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.nc-option-left input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #00473E;
+  cursor: pointer;
+}
+
+.nc-option-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.nc-option-price {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #0d9488;
+  background: #f0fdfa;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid #ccfbf1;
+}
+
+/* ══════════ RIGHT STICKY PRICING CARD ══════════ */
+.nc-pricing-card {
+  background: linear-gradient(180deg, #00473E 0%, #053b34 100%);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  color: #ffffff;
+  box-shadow: 0 10px 25px -5px rgba(0, 71, 62, 0.3), 0 8px 10px -6px rgba(0, 71, 62, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nc-pricing-head {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #99f6e4;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.nc-pricing-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.nc-pricing-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #e2e8f0;
+}
+
+.nc-pricing-row .val {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.nc-pricing-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0.75rem 0;
+}
+
+.nc-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.nc-total-label {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.nc-total-value {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #fde047;
+  letter-spacing: -0.025em;
+}
+
+.nc-pricing-disclaimer {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  font-size: 0.725rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+  margin-bottom: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.nc-btn-validate {
+  width: 100%;
+  padding: 0.875rem;
+  background: #fde047;
+  color: #0f172a;
+  font-size: 0.95rem;
+  font-weight: 800;
+  border-radius: 0.625rem;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 12px rgba(253, 224, 71, 0.3);
+  transition: all 0.2s ease;
+}
+
+.nc-btn-validate:hover:not(:disabled) {
+  background: #facc15;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(253, 224, 71, 0.4);
+}
+
+.nc-btn-validate:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

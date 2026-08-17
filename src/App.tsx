@@ -32,6 +32,17 @@ import MoteurDevis from './pages/MoteurDevis';
 import DevisList from './pages/devis/DevisList';
 import DevisNouveau from './pages/devis/DevisNouveau';
 
+// Airbnb Module
+import AirbnbLayout from './pages/airbnb/AirbnbLayout';
+import ClientsBiensView from './pages/airbnb/ClientsBiensView';
+import NouvelleCommandeView from './pages/airbnb/NouvelleCommandeView';
+import DossierCommandeView from './pages/airbnb/DossierCommandeView';
+import RunnerLaverieView from './pages/airbnb/RunnerLaverieView';
+import PlanningExecutionView from './pages/airbnb/PlanningExecutionView';
+import FacturationAirbnbView from './pages/airbnb/FacturationAirbnbView';
+import EspaceConciergerieView from './pages/airbnb/EspaceConciergerieView';
+import ParametresAirbnbView from './pages/airbnb/ParametresAirbnbView';
+
 
 // Navigation guard function
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -91,6 +102,20 @@ export default function App() {
           <Route path="profils" element={<PermissionRoute permission="consulter_agents"><Profils /></PermissionRoute>} />
           <Route path="historique" element={<PermissionRoute permission="consulter_historique_global"><Historique /></PermissionRoute>} />
           <Route path="gestion-abonnement" element={<PermissionRoute permission="consulter_abonnements|consulter_planning_abonnements|consulter_facturation_abonnements"><GestionAbonnements /></PermissionRoute>} />
+          
+          {/* Airbnb & Conciergerie Routes */}
+          <Route path="airbnb" element={<AirbnbLayout />}>
+            <Route index element={<Navigate to="/airbnb/clients-biens" replace />} />
+            <Route path="clients-biens" element={<ClientsBiensView />} />
+            <Route path="nouvelle-commande" element={<NouvelleCommandeView />} />
+            <Route path="commandes" element={<DossierCommandeView />} />
+            <Route path="runner-laverie" element={<RunnerLaverieView />} />
+            <Route path="planning" element={<PlanningExecutionView />} />
+            <Route path="facturation" element={<FacturationAirbnbView />} />
+            <Route path="espace-conciergerie" element={<EspaceConciergerieView />} />
+            <Route path="parametres" element={<ParametresAirbnbView />} />
+          </Route>
+
           <Route path="finance">
             <Route path="vue-globale" element={<PermissionRoute permission="voir_la_caisse"><VueGlobale /></PermissionRoute>} />
             <Route path="les-suivis" element={<PermissionRoute permission="consulter_dus_agences_profils|consulter_suivi_commerciaux"><LesSuivis /></PermissionRoute>} />

@@ -1,0 +1,167 @@
+/* PlanningExecution.css — Planning & Exécution des Missions Airbnb */
+
+.pe-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+/* 18h J-1 Alert Strip */
+.pe-alert-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  color: #92400e;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.pe-alert-strip svg {
+  color: #d97706;
+}
+
+/* Subtabs Segmented Control */
+.pe-subtabs {
+  display: flex;
+  gap: 0.5rem;
+  background: #ffffff;
+  padding: 0.35rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  width: fit-content;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.pe-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.2rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pe-tab-btn:hover {
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+.pe-tab-btn.active {
+  background: #00473E;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 71, 62, 0.2);
+}
+
+/* Table Card */
+.pe-table-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.875rem;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.pe-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.pe-table thead th {
+  background: #f8fafc;
+  padding: 0.875rem 1rem;
+  font-size: 0.725rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.pe-table tbody td {
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  vertical-align: middle;
+}
+
+/* 2-Column Split for Fiche de Mission */
+.pe-split-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+@media (max-width: 960px) {
+  .pe-split-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pe-mission-list {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.875rem;
+  overflow: hidden;
+  max-height: 700px;
+  overflow-y: auto;
+}
+
+.pe-mission-item {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pe-mission-item:hover {
+  background: #f8fafc;
+}
+
+.pe-mission-item.selected {
+  background: #f0fdfa;
+  border-left: 4px solid #00473E;
+}
+
+.pe-sheet-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.875rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Live Suivi Cards */
+.pe-suivi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.pe-suivi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.875rem;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
