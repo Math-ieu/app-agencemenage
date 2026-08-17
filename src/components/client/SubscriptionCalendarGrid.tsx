@@ -313,9 +313,31 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
             const override = aboDateOverrides[key];
             const isPattern = interventionSet.has(key);
             const isIntervention = (isPattern && !override?.excluded) || (!!override?.heure && !override?.excluded);
-            const heure = override?.heure || (isPattern ? heureByDow[d.getDay()] : "");
+
+            // Get child demande linked to this date if exists in BDD
+            const realDemande = childDemandes?.find((cd: Demande) => {
+              if (!cd?.date_intervention) return false;
+              const dDate = cd.date_intervention.includes('T') ? cd.date_intervention.split('T')[0] : cd.date_intervention.slice(0, 10);
+              return dDate === key;
+            });
+
+            // Determine effective status from BDD child demande or overrides
+            let effectiveStatut = override?.statut || null;
+            if (realDemande) {
+              const st = (realDemande.statut || '').toLowerCase().trim();
+              const isReported = realDemande.cao === 'reporte' || ['reporte', 'reportee', 'reportée'].includes(st);
+              const isCancelled = ['annule', 'annulee', 'annulée'].includes(st);
+              const isCompleted = ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st);
+              const isRecup = st.includes('recup');
+
+              if (isCompleted) effectiveStatut = 'termine';
+              else if (isCancelled) effectiveStatut = 'annule';
+              else if (isReported) effectiveStatut = 'reporte';
+              else if (isRecup) effectiveStatut = 'a_recuperer';
+            }
+
+            const heure = override?.heure || (realDemande?.heure_intervention ? realDemande.heure_intervention.slice(0, 5) : '') || (isPattern ? heureByDow[d.getDay()] : "");
             const heureFin = override?.heure_fin || (isPattern ? heureFinByDow[d.getDay()] : "");
-            const statut = override?.statut || null;
             const isToday = isSameDay(d, new Date());
 
             let cellBg = 'white';
@@ -326,23 +348,23 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
             if (!inMonth) {
               cellBg = '#f8fafc';
               dateNumCol = '#cbd5e1';
-            } else if (isIntervention || statut === 'a_recuperer' || statut === 'reporte') {
-              if (statut === 'termine') {
+            } else if (isIntervention || effectiveStatut === 'a_recuperer' || effectiveStatut === 'reporte') {
+              if (effectiveStatut === 'termine') {
                 cellBg = '#f0fdf4';
                 dateNumCol = '#15803d';
                 badgeBg = '#16a34a';
                 badgeText = 'TERMINÉ';
-              } else if (statut === 'annule') {
+              } else if (effectiveStatut === 'annule') {
                 cellBg = '#fff1f2';
                 dateNumCol = '#dc2626';
                 badgeBg = '#dc2626';
                 badgeText = 'ANNULÉ';
-              } else if (statut === 'a_recuperer') {
+              } else if (effectiveStatut === 'a_recuperer') {
                 cellBg = '#fffbeb';
                 dateNumCol = '#d97706';
                 badgeBg = '#d97706';
                 badgeText = 'À RÉCUP.';
-              } else if (statut === 'reporte') {
+              } else if (effectiveStatut === 'reporte') {
                 cellBg = '#f5f3ff';
                 dateNumCol = '#7c3aed';
                 badgeBg = '#7c3aed';
@@ -379,7 +401,7 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                       {format(d, "d")}
                     </span>
 
-                    {(isIntervention || statut === "a_recuperer" || statut === "reporte") && inMonth && (
+                    {(isIntervention || effectiveStatut === "a_recuperer" || effectiveStatut === "reporte") && inMonth && (
                       <div style={{ width: '100%', marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <span style={{
                           display: 'block',
@@ -392,7 +414,7 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                           padding: '3px 4px',
                           textAlign: 'center',
                           letterSpacing: '0.03em',
-                          textDecoration: statut === 'annule' ? 'line-through' : 'none'
+                          textDecoration: effectiveStatut === 'annule' ? 'line-through' : 'none'
                         }}>
                           {badgeText}
                         </span>
@@ -469,9 +491,9 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                           fontSize: 12,
                           fontWeight: 700,
                           borderRadius: 8,
-                          border: !statut ? 'none' : '1px solid #cbd5e1',
-                          background: !statut ? '#037265' : '#f8fafc',
-                          color: !statut ? 'white' : '#334155',
+                          border: !effectiveStatut ? 'none' : '1px solid #cbd5e1',
+                          background: !effectiveStatut ? '#037265' : '#f8fafc',
+                          color: !effectiveStatut ? 'white' : '#334155',
                           cursor: 'pointer'
                         }}
                       >
@@ -492,9 +514,9 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                           fontSize: 12,
                           fontWeight: 700,
                           borderRadius: 8,
-                          border: statut === "termine" ? 'none' : '1px solid #cbd5e1',
-                          background: statut === "termine" ? '#16a34a' : '#f8fafc',
-                          color: statut === "termine" ? 'white' : '#334155',
+                          border: effectiveStatut === "termine" ? 'none' : '1px solid #cbd5e1',
+                          background: effectiveStatut === "termine" ? '#16a34a' : '#f8fafc',
+                          color: effectiveStatut === "termine" ? 'white' : '#334155',
                           cursor: 'pointer'
                         }}
                       >
@@ -515,9 +537,9 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                           fontSize: 12,
                           fontWeight: 700,
                           borderRadius: 8,
-                          border: statut === "annule" ? 'none' : '1px solid #cbd5e1',
-                          background: statut === "annule" ? '#dc2626' : '#f8fafc',
-                          color: statut === "annule" ? 'white' : '#334155',
+                          border: effectiveStatut === "annule" ? 'none' : '1px solid #cbd5e1',
+                          background: effectiveStatut === "annule" ? '#dc2626' : '#f8fafc',
+                          color: effectiveStatut === "annule" ? 'white' : '#334155',
                           cursor: 'pointer'
                         }}
                       >
@@ -538,9 +560,9 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                           fontSize: 12,
                           fontWeight: 700,
                           borderRadius: 8,
-                          border: statut === "a_recuperer" ? 'none' : '1px solid #cbd5e1',
-                          background: statut === "a_recuperer" ? '#d97706' : '#f8fafc',
-                          color: statut === "a_recuperer" ? 'white' : '#334155',
+                          border: effectiveStatut === "a_recuperer" ? 'none' : '1px solid #cbd5e1',
+                          background: effectiveStatut === "a_recuperer" ? '#d97706' : '#f8fafc',
+                          color: effectiveStatut === "a_recuperer" ? 'white' : '#334155',
                           cursor: 'pointer'
                         }}
                       >
@@ -564,9 +586,9 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                           fontWeight: 700,
                           borderRadius: 8,
                           gridColumn: 'span 2',
-                          border: statut === "reporte" ? 'none' : '1px solid #cbd5e1',
-                          background: statut === "reporte" ? '#a3e635' : '#f8fafc',
-                          color: statut === "reporte" ? '#1e3a8a' : '#334155',
+                          border: effectiveStatut === "reporte" ? 'none' : '1px solid #cbd5e1',
+                          background: effectiveStatut === "reporte" ? '#a3e635' : '#f8fafc',
+                          color: effectiveStatut === "reporte" ? '#1e3a8a' : '#334155',
                           cursor: 'pointer'
                         }}
                       >
@@ -679,7 +701,7 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                   )}
 
                   {/* Sub-box 1 : Reprogrammer cette intervention (Annulé à récupérer) */}
-                  {statut === "a_recuperer" && !override?.reprogrammed_to && (
+                  {effectiveStatut === "a_recuperer" && !override?.reprogrammed_to && (
                     <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 12, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e' }}>Reprogrammer cette intervention</div>
                       <div style={{ display: 'flex', gap: 6 }}>

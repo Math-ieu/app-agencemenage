@@ -450,8 +450,33 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   };
 
   const monthPassagesRealises = useMemo(() => {
-    return monthDemandes.filter((c: Demande) => ['termine', 'terminee'].includes((c.statut || '').toLowerCase())).length;
-  }, [monthDemandes]);
+    let count = 0;
+    const countedSet = new Set<string>();
+
+    Object.entries(aboDateOverrides).forEach(([k, ov]: [string, any]) => {
+      if (k.startsWith(monthIsoPrefix)) {
+        const st = (ov?.statut || '').toLowerCase().trim();
+        if (['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st)) {
+          countedSet.add(k);
+          count++;
+        }
+      }
+    });
+
+    monthDemandes.forEach((c: Demande) => {
+      if (c.date_intervention) {
+        const dIso = c.date_intervention.includes('T') ? c.date_intervention.split('T')[0] : c.date_intervention.slice(0, 10);
+        if (dIso.startsWith(monthIsoPrefix) && ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes((c.statut || '').toLowerCase().trim())) {
+          if (!countedSet.has(dIso)) {
+            countedSet.add(dIso);
+            count++;
+          }
+        }
+      }
+    });
+
+    return count;
+  }, [aboDateOverrides, monthDemandes, monthIsoPrefix]);
 
   const monthPassagesAnnules = useMemo(() => {
     let count = 0;

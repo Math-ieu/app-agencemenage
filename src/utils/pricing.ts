@@ -1072,3 +1072,202 @@ export const getStatutMoisProchainCalculated = (
 
     return 'Non défini';
 };
+
+export interface NextInterventionResult {
+    date: string;
+    formattedDay: string;
+    formattedFullDay: string;
+    housekeeper: string;
+    childDemande?: any;
+}
+
+export const formatShortDayMonth = (dateStr?: string | null): string => {
+    if (!dateStr) return '—';
+    try {
+        const d = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`);
+        if (isNaN(d.getTime())) return '—';
+        const dayName = d.toLocaleDateString('fr-FR', { weekday: 'short' });
+        const day = d.getDate();
+        const month = d.toLocaleDateString('fr-FR', { month: 'short' });
+        const capDay = dayName.charAt(0).toUpperCase() + dayName.slice(1, 3);
+        return `${capDay}, ${day} ${month}`;
+    } catch {
+        return '—';
+    }
+};
+
+export const formatFullDayMonth = (dateStr?: string | null): string => {
+    if (!dateStr) return '—';
+    try {
+        const d = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`);
+        if (isNaN(d.getTime())) return '—';
+        const dayName = d.toLocaleDateString('fr-FR', { weekday: 'long' });
+        const day = d.getDate();
+        const month = d.toLocaleDateString('fr-FR', { month: 'long' });
+        const capDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+        return `${capDay} ${day} ${month}`;
+    } catch {
+        return '—';
+    }
+};
+
+export const getNextIntervention = (
+    demande: any,
+    allDemandes: any[] = [],
+    referenceDate: Date = new Date()
+): NextInterventionResult => {
+    const todayIso = `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, '0')}-${String(referenceDate.getDate()).padStart(2, '0')}`;
+    
+    if (!demande) {
+        return {
+            date: '',
+            formattedDay: '—',
+            formattedFullDay: '—',
+            housekeeper: 'Non affecté'
+        };
+    }
+
+    const dAny = demande as any;
+    const isCompletedStatut = (st?: string) => {
+        if (!st) return false;
+        const lower = st.toLowerCase().trim();
+        return ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(lower);
+    };
+    const isCancelledStatut = (st?: string) => {
+        if (!st) return false;
+        const lower = st.toLowerCase().trim();
+        return ['annule', 'annulee', 'annulée', 'retirer', 'facturation_annulee'].includes(lower);
+    };
+    const isReportedStatut = (st?: string, cao?: string) => {
+        if (cao === 'reporte') return true;
+        if (!st) return false;
+        const lower = st.toLowerCase().trim();
+        return ['reporte', 'reportee', 'reportée'].includes(lower);
+    };
+
+    // 1. Get child interventions
+    const children = allDemandes.filter(c => Number(c.parent_demande) === Number(demande.id));
+    const childMap: Record<string, any> = {};
+    children.forEach(c => {
+        if (c.date_intervention) {
+            const dIso = c.date_intervention.includes('T') ? c.date_intervention.split('T')[0] : c.date_intervention.slice(0, 10);
+            childMap[dIso] = c;
+        }
+    });
+
+    const dateOverrides = (demande.formulaire_data as any)?.date_overrides || {};
+
+    // 2. Extract recurrence days
+    let jours: string[] = extractJoursPassage(
+        dAny.jours_intervention_detail ||
+        dAny.jours_intervention ||
+        demande.planning?.jours_intervention ||
+        (demande.formulaire_data as any)?.jours_intervention ||
+        (demande.formulaire_data as any)?.jours_passage ||
+        dAny.jours_passage
+    );
+
+    if (jours.length === 0) {
+        const freqStr = demande.frequency_label || (demande.formulaire_data as any)?.frequence || (demande.formulaire_data as any)?.subFrequency || '';
+        if (freqStr.includes('3') || freqStr.includes('3fois')) {
+            jours = ['lundi', 'mercredi', 'vendredi'];
+        } else if (freqStr.includes('2') || freqStr.includes('2fois')) {
+            jours = ['mardi', 'jeudi'];
+        } else if (freqStr.includes('4') || freqStr.includes('4fois')) {
+            jours = ['lundi', 'mardi', 'mercredi', 'jeudi'];
+        } else if (freqStr.includes('5') || freqStr.includes('5fois')) {
+            jours = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
+        } else if (freqStr.includes('1') || freqStr.includes('1fois')) {
+            jours = ['samedi'];
+        }
+    }
+
+    const dayMap: Record<string, number> = {
+        dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6
+    };
+    const selectedDows = jours.map(j => dayMap[j.toLowerCase()]).filter(v => v !== undefined);
+
+    const dateDebutStr = demande.planning?.date_debut || (demande.formulaire_data as any)?.date_debut || demande.date_intervention || demande.created_at?.slice(0, 10) || todayIso;
+    const parsedStart = parseDateRobust(dateDebutStr) || new Date();
+    const startDate = new Date(parsedStart.getFullYear(), parsedStart.getMonth(), parsedStart.getDate(), 0, 0, 0, 0);
+
+    const dateFinStr = demande.planning?.date_fin || (demande.formulaire_data as any)?.date_fin || dAny.date_fin;
+    let endDate: Date;
+    if (dateFinStr) {
+        const parsedEnd = parseDateRobust(dateFinStr);
+        endDate = parsedEnd ? new Date(parsedEnd.getFullYear(), parsedEnd.getMonth(), parsedEnd.getDate(), 23, 59, 59, 999) : new Date(startDate.getFullYear() + 1, startDate.getMonth(), 0);
+    } else {
+        const nbMois = Number((demande.formulaire_data as any)?.nb_mois || (demande.formulaire_data as any)?.duree_mois || 12);
+        endDate = new Date(startDate.getFullYear(), startDate.getMonth() + nbMois, 0, 23, 59, 59);
+    }
+
+    // 3. Collect all candidate dates starting from startDate up to endDate
+    const candidateSet = new Set<string>();
+    for (let cur = new Date(startDate); cur <= endDate; cur.setDate(cur.getDate() + 1)) {
+        if (selectedDows.includes(cur.getDay())) {
+            const isoKey = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+            candidateSet.add(isoKey);
+        }
+    }
+
+    // Add extra child intervention dates
+    Object.keys(childMap).forEach(dIso => candidateSet.add(dIso));
+    // Add date overrides
+    Object.keys(dateOverrides).forEach(dIso => {
+        if (dateOverrides[dIso]?.heure && !dateOverrides[dIso]?.excluded) {
+            candidateSet.add(dIso);
+        }
+    });
+
+    const sortedDates = Array.from(candidateSet).sort();
+
+    // Default housekeeper
+    const defaultHousekeeper = demande.assigned_to_operations_name ||
+        dAny.profil_affecte_name ||
+        dAny.intervenant_name ||
+        dAny.intervenante ||
+        demande.profils_envoyes?.[0]?.full_name ||
+        'Non affecté';
+
+    for (const dIso of sortedDates) {
+        const child = childMap[dIso];
+        const ov = dateOverrides[dIso];
+
+        // Check if date is completed
+        const isChildCompleted = child && isCompletedStatut(child.statut);
+        const isOvCompleted = ov?.statut === 'termine';
+        if (isChildCompleted || isOvCompleted) {
+            continue; // Completed -> skip to next
+        }
+
+        // Check if date is cancelled or excluded or reported away
+        const isChildCancelled = child && (isCancelledStatut(child.statut) || isReportedStatut(child.statut, child.cao));
+        const isOvCancelled = ov && (ov.excluded || isCancelledStatut(ov.statut) || isReportedStatut(ov.statut));
+        if (isChildCancelled || isOvCancelled) {
+            continue; // Cancelled / excluded -> skip
+        }
+
+        // Must be on or after reference today
+        if (dIso >= todayIso) {
+            const hk = child
+                ? (child.assigned_to_operations_name || (child as any).profil_affecte_name || (child as any).intervenant_name || (child as any).intervenante || (child.profils_envoyes?.[0]?.full_name) || defaultHousekeeper)
+                : defaultHousekeeper;
+
+            return {
+                date: dIso,
+                formattedDay: formatShortDayMonth(dIso),
+                formattedFullDay: formatFullDayMonth(dIso),
+                housekeeper: hk,
+                childDemande: child
+            };
+        }
+    }
+
+    return {
+        date: dateDebutStr,
+        formattedDay: formatShortDayMonth(dateDebutStr),
+        formattedFullDay: formatFullDayMonth(dateDebutStr),
+        housekeeper: defaultHousekeeper
+    };
+};
+

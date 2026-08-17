@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import { getDemandes, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
-import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage, getStatutMoisProchainCalculated } from '../utils/pricing';
+import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage, getStatutMoisProchainCalculated, getNextIntervention } from '../utils/pricing';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '../store/auth';
 import { checkPermission, hasPermission } from '../utils/permissions';
@@ -333,10 +333,10 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
                 // Determine effective status
                 let effectiveStatut = statut;
                 if (realDemande) {
-                  const st = (realDemande.statut || '').toLowerCase();
-                  const isReported = realDemande.cao === 'reporte' || st === 'reporte' || st.includes('report');
-                  const isCancelled = st === 'annule' || st === 'annulee';
-                  const isCompleted = st === 'termine' || st === 'terminee';
+                  const st = (realDemande.statut || '').toLowerCase().trim();
+                  const isReported = realDemande.cao === 'reporte' || ['reporte', 'reportee', 'reportée'].includes(st) || st.includes('report');
+                  const isCancelled = ['annule', 'annulee', 'annulée'].includes(st);
+                  const isCompleted = ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st);
                   const isRecup = st.includes('recup');
                   if (isCompleted) effectiveStatut = 'termine';
                   else if (isCancelled) effectiveStatut = 'annule';
@@ -560,12 +560,6 @@ export default function GestionAbonnements() {
       console.error('Failed to load demandes for subscriptions:', err);
     }
   };
-  const formatShortDayMonth = (dateStr: string) => {
-    if (!dateStr) return '—';
-    const d = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`);
-    if (isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-  };
 
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const tomorrowStr = useMemo(() => {
@@ -637,30 +631,24 @@ export default function GestionAbonnements() {
       const children = demandes.filter(c => Number(c.parent_demande) === Number(d.id));
 
       const interventionsCompleted = children.filter(c => {
-        const st = (c.statut || '').toLowerCase();
-        return st === 'termine' || st === 'terminee';
+        const st = (c.statut || '').toLowerCase().trim();
+        return ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st);
       }).length;
 
       const interventionsCancelled = children.filter(c => {
-        const st = (c.statut || '').toLowerCase();
-        return st === 'annule' || st === 'annulee';
+        const st = (c.statut || '').toLowerCase().trim();
+        return ['annule', 'annulee', 'annulée'].includes(st);
       }).length;
 
       const interventionsTotal = getDynamicMonthPassagesCount(d, demandes);
 
       const realTarifMensuel = getInvoiceMonthlyAmount(d, interventionsTotal);
 
-      // Find next upcoming intervention
-      const upcoming = children
-        .filter(c => c.date_intervention && c.date_intervention >= todayStr && !['annule', 'annulee'].includes((c.statut || '').toLowerCase()))
-        .sort((a, b) => (a.date_intervention || '').localeCompare(b.date_intervention || ''));
-
-      const nextChild = upcoming[0];
-      const nextInterventionDate = nextChild?.date_intervention || d.date_intervention || dateDebut;
-      const nextInterventionDay = formatShortDayMonth(nextInterventionDate);
-      const nextInterventionHousekeeper = nextChild
-        ? (nextChild.assigned_to_operations_name || (nextChild as any).profil_affecte_name || (nextChild as any).intervenant_name || (nextChild as any).intervenante || (nextChild.profils_envoyes?.[0]?.full_name) || 'Non affecté')
-        : (d.assigned_to_operations_name || dAny.profil_affecte_name || dAny.intervenant_name || dAny.intervenante || (d.profils_envoyes?.[0]?.full_name) || 'Non affecté');
+      // Find next upcoming active intervention (dynamically computed)
+      const nextInterventionRes = getNextIntervention(d, demandes);
+      const nextInterventionDate = nextInterventionRes.date;
+      const nextInterventionDay = nextInterventionRes.formattedDay;
+      const nextInterventionHousekeeper = nextInterventionRes.housekeeper;
 
       // Status calculation from DB fields
       const dbStatut = (d.statut || '').toLowerCase();
@@ -915,14 +903,14 @@ export default function GestionAbonnements() {
       statsMap[day].interventions += 1;
       totalMonthInterventions += 1;
 
-      const st = (d.statut || '').toLowerCase();
-      if (st === 'termine' || st === 'terminee') {
+      const st = (d.statut || '').toLowerCase().trim();
+      if (['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st)) {
         statsMap[day].termine += 1;
-      } else if (d.cao === 'reporte' || st === 'reporte' || st === 'reportee') {
+      } else if (d.cao === 'reporte' || ['reporte', 'reportee', 'reportée'].includes(st)) {
         statsMap[day].reporte += 1;
       } else if (st.includes('recup')) {
         statsMap[day].a_recuperer += 1;
-      } else if (st === 'annule' || st === 'annulee') {
+      } else if (['annule', 'annulee', 'annulée'].includes(st)) {
         statsMap[day].annule += 1;
       } else {
         statsMap[day].a_venir += 1;
@@ -978,14 +966,14 @@ export default function GestionAbonnements() {
             statsMap[dayNum].interventions += 1;
             totalMonthInterventions += 1;
 
-            const st = (statut || '').toLowerCase();
-            if (st === 'termine' || st === 'terminee') {
+            const st = (statut || '').toLowerCase().trim();
+            if (['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st)) {
               statsMap[dayNum].termine += 1;
-            } else if (st === 'reporte' || st === 'reportee') {
+            } else if (['reporte', 'reportee', 'reportée'].includes(st)) {
               statsMap[dayNum].reporte += 1;
-            } else if (st === 'a_recuperer') {
+            } else if (st.includes('recup')) {
               statsMap[dayNum].a_recuperer += 1;
-            } else if (st === 'annule' || st === 'annulee') {
+            } else if (['annule', 'annulee', 'annulée'].includes(st)) {
               statsMap[dayNum].annule += 1;
             } else {
               statsMap[dayNum].a_venir += 1;

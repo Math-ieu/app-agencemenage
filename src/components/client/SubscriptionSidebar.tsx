@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Slash, Clock, MessageSquare, XCircle, Plus, Trash2 } from 'lucide-react';
 import { Client, Demande } from '../../types';
 import { updateDemande } from '../../api/client';
+import { getNextIntervention } from '../../utils/pricing';
 
 const INVALID_INTERVENANT_NAMES = [
   'mathdev', 'mathieu dev', 'admin', 'administrator', 'system', 'chargée opérationnelle', 'à attribuer', 'aucun', 'undefined', 'null'
@@ -66,13 +67,9 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
       console.error("Erreur de suppression info terrain:", e);
     }
   };
-  const nextIntervention = React.useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const upcoming = childDemandes
-      .filter((d: Demande) => d.date_intervention && d.date_intervention >= todayStr && !['annule', 'annulee'].includes((d.statut || '').toLowerCase()))
-      .sort((a: Demande, b: Demande) => (a.date_intervention || '').localeCompare(b.date_intervention || ''));
-    return upcoming[0];
-  }, [childDemandes]);
+  const nextInterventionResult = React.useMemo(() => {
+    return getNextIntervention(latest, childDemandes);
+  }, [latest, childDemandes]);
 
   const extractRealAgentNames = (d: Demande): string[] => {
     if (!d) return [];
@@ -109,13 +106,15 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
   };
 
   const nextIntervenantDisplay = React.useMemo(() => {
-    if (!nextIntervention) return 'À assigner par la chargée opérationnelle';
-    const names = extractRealAgentNames(nextIntervention);
-    if (names.length > 0) {
-      return names.join(', ');
+    if (nextInterventionResult?.childDemande) {
+      const names = extractRealAgentNames(nextInterventionResult.childDemande);
+      if (names.length > 0) return names.join(', ');
+    }
+    if (nextInterventionResult?.housekeeper && nextInterventionResult.housekeeper !== 'Non affecté') {
+      return nextInterventionResult.housekeeper;
     }
     return 'À assigner par la chargée opérationnelle';
-  }, [nextIntervention]);
+  }, [nextInterventionResult]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -124,10 +123,10 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
         <div style={{ fontWeight: 700, fontSize: 13, color: '#92400e', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
           » Prochain passage
         </div>
-        {nextIntervention ? (
+        {nextInterventionResult?.date ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontWeight: 700, fontSize: 16, color: '#037265' }}>
-              {new Date(nextIntervention.date_intervention).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).replace(/^\w/, (c) => c.toUpperCase())}
+              {nextInterventionResult.formattedFullDay}
             </div>
             <div style={{ fontSize: 12, color: '#64748b' }}>—</div>
             <div>
