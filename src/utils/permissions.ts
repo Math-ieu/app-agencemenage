@@ -338,6 +338,22 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   "Opérationnel": [
     "consulter_dashboard",
     "consulter_demandes"
+  ],
+  "Runner": [
+    "tournees_runner",
+    "ramassage_linge",
+    "depot_linge"
+  ],
+  "Responsable Linge": [
+    "reception_laverie",
+    "recomptage_linge",
+    "figeage_montant_linge"
+  ],
+  "Client Conciergerie": [
+    "espace_conciergerie",
+    "mes_calendriers",
+    "commander_turnover",
+    "mes_factures"
   ]
 };
 
@@ -350,6 +366,9 @@ export const mapRoleToStorageKey = (role: string): string => {
   if (r === 'responsable des opérations' || r === 'responsable_operations') return 'Responsable des Opérations';
   if (r === 'chargée des opérations' || r === 'charge_operations') return 'Chargée des Opérations';
   if (r === 'opérationnel' || r === 'operationnel') return 'Opérationnel';
+  if (r === 'runner' || r === 'runner / chauffeur livreur') return 'Runner';
+  if (r === 'responsable_linge' || r === 'responsable linge / blanchisserie' || r === 'responsable linge') return 'Responsable Linge';
+  if (r === 'client_conciergerie' || r === 'client conciergerie') return 'Client Conciergerie';
 
   if (role === 'Admin') return 'Admin';
   if (role === 'Moderateur') return 'Moderateur';
@@ -358,6 +377,9 @@ export const mapRoleToStorageKey = (role: string): string => {
   if (role === 'Responsable des Opérations') return 'Responsable des Opérations';
   if (role === 'Chargée des Opérations') return 'Chargée des Opérations';
   if (role === 'Opérationnel') return 'Opérationnel';
+  if (role === 'Runner') return 'Runner';
+  if (role === 'Responsable Linge') return 'Responsable Linge';
+  if (role === 'Client Conciergerie') return 'Client Conciergerie';
 
   return 'commercial';
 };

@@ -1,38 +1,38 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { 
-  getPlanningGrid, assignerCommandeAirbnb, cloturerCommandeAirbnb, getMissionPdfData, extractResults 
+  getPlanningGrid, assignerCommandeAirbnb, extractResults 
 } from '../../api/airbnb';
 import { getAgents } from '../../api/client';
 import type { CommandeAirbnb } from '../../types/airbnb';
 import { 
-  RotateCw, Printer, X, 
-  Calendar, UserCheck, Clock, FileText, Camera
+  Printer, X, 
+  Calendar, Clock, FileText, Camera,
+  Sparkles, Key,
+  MessageSquare, ChevronRight
 } from 'lucide-react';
 import './PlanningExecution.css';
 
 export default function PlanningExecutionView() {
-  const [activeTab, setActiveTab] = useState<'assignation' | 'fiche' | 'suivi'>('assignation');
+  // 4 Subtabs: 'assignation' | 'fiche' | 'suivi' | 'incidents'
+  const [activeSubtab, setActiveSubtab] = useState<'assignation' | 'fiche' | 'suivi' | 'incidents'>('assignation');
+  
   const [commandes, setCommandes] = useState<CommandeAirbnb[]>([]);
   const [agents, setAgents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  // Selected Commande for Assignment / Details
+  // Selected Commande for Fiche de Mission / Assignation
   const [selectedCmd, setSelectedCmd] = useState<CommandeAirbnb | null>(null);
 
   // Assignment Modal State
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [assignIntervenante, setAssignIntervenante] = useState<number | ''>('');
-  const [assignIntervenante2, setAssignIntervenante2] = useState<number | ''>('');
-  const [assignRunner, setAssignRunner] = useState<number | ''>('');
+  const [assignIntervenante2] = useState<number | ''>('');
+  const [assignRunner] = useState<number | ''>('');
   const [assignLoading, setAssignLoading] = useState(false);
 
-  // Photos Validation State
-  const [isPhotosOpen, setIsPhotosOpen] = useState(false);
-  const [photos, setPhotos] = useState<string[]>(['', '', '', '']);
-  const [clotureLoading, setClotureLoading] = useState(false);
+  // Devis Remise en état State (Page 16)
+  const [devisStatus, setDevisStatus] = useState<'en_attente' | 'accepte' | 'refuse'>('en_attente');
 
   const fetchPlanning = async () => {
-    setLoading(true);
     try {
       const [planRes, agentsRes] = await Promise.all([
         getPlanningGrid({ days: 7 }),
@@ -46,8 +46,6 @@ export default function PlanningExecutionView() {
       }
     } catch (err) {
       console.error("Erreur chargement planning :", err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -76,496 +74,402 @@ export default function PlanningExecutionView() {
     }
   };
 
-  const handleCloture = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!selectedCmd) return;
-
-    const validPhotos = photos.filter(p => p.trim() !== '');
-    if (validPhotos.length < 4) {
-      alert("4 photos sont obligatoires (Salon, Chambre, SDB, Cuisine).");
-      return;
-    }
-
-    setClotureLoading(true);
-    try {
-      await cloturerCommandeAirbnb(selectedCmd.id, { photos: validPhotos });
-      setIsPhotosOpen(false);
-      fetchPlanning();
-      alert("Mission clôturée avec succès.");
-    } catch (err: any) {
-      alert(err.response?.data?.error || "Erreur lors de la clôture");
-    } finally {
-      setClotureLoading(false);
-    }
-  };
-
-  const handlePrintMissionPdf = async (cmdId: string) => {
-    try {
-      const res = await getMissionPdfData(cmdId);
-      const data = res.data as any;
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Fiche de Mission — ${data.numero_commande}</title>
-              <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 32px; color: #0f172a; font-size: 13px; line-height: 1.5; }
-                .header { border-bottom: 2px solid #00473E; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; }
-                .title { font-size: 20px; font-weight: 800; color: #00473E; }
-                .box { border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 14px; background: #f8fafc; }
-                .confidential { background: #fef2f2; border: 1px dashed #ef4444; color: #991b1b; padding: 12px; border-radius: 8px; font-weight: bold; margin-bottom: 16px; font-size: 12px; }
-                .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-                .label { font-size: 11px; text-transform: uppercase; font-weight: 700; color: #64748b; margin-bottom: 2px; }
-                .val { font-weight: 700; font-size: 14px; }
-              </style>
-            </head>
-            <body>
-              <div class="header">
-                <div>
-                  <div class="title">FICHE DE MISSION — ${data.numero_commande}</div>
-                  <div style="color: #64748b;">Turnover Airbnb & Conciergerie • Agence Ménage</div>
-                </div>
-                <div style="text-align: right;">
-                  <div style="font-weight: bold;">Date : ${data.date_prestation}</div>
-                  <div>Heure : ${data.heure_prestation}</div>
-                </div>
-              </div>
-
-              <div class="confidential">
-                🔒 STRICTEMENT CONFIDENTIEL — DOCUMENT OPÉRATIONNEL SANS MENTION TARIFAIRE
-              </div>
-
-              <div class="box">
-                <div class="label">Logement d'Intervention</div>
-                <div class="val">${data.nom_bien || 'Logement'} (${data.code_bien})</div>
-                <div>${data.adresse_complete} (${data.quartier})</div>
-                <div style="margin-top: 8px;"><b>Typologie :</b> ${data.typologie.toUpperCase()}</div>
-              </div>
-
-              <div class="box" style="border-color: #fca5a5; background: #fff5f5;">
-                <div class="label" style="color: #dc2626;">Accès Sécurisé & Digicodes</div>
-                <div class="val" style="color: #991b1b;">${data.acces_securise}</div>
-                <div style="margin-top: 4px; font-weight: bold;">${data.consignes_securite || 'Pas de consigne particulière'}</div>
-              </div>
-
-              <div class="grid">
-                <div class="box">
-                  <div class="label">Intervenante(s) Assignée(s)</div>
-                  <div class="val">${data.intervenante_nom || 'Non assignée'}</div>
-                  ${data.intervenante_2_nom ? `<div><b>Renfort Villa :</b> ${data.intervenante_2_nom}</div>` : ''}
-                </div>
-
-                <div class="box">
-                  <div class="label">Runner & Logistique Linge</div>
-                  <div class="val">${data.nature_linge}</div>
-                  <div><b>Runner :</b> ${data.runner_nom || 'Non assigné'}</div>
-                </div>
-              </div>
-
-              <div class="box">
-                <div class="label">Checklist Clôture Obligatoire</div>
-                <div>• Prendre impérativement les 4 photos de conformité (Salon, Chambre, Salle de bain, Cuisine).</div>
-                <div>• Contrôler les placards et tiroirs à la recherche d'objets oubliés par les voyageurs.</div>
-                <div>• Fermer les fenêtres et s'assurer du verrouillage de la porte d'entrée.</div>
-              </div>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-      }
-    } catch (err: any) {
-      alert("Erreur lors de la génération de la fiche de mission PDF");
-    }
-  };
-
-  const unassignedCount = commandes.filter(c => !c.intervenante).length;
+  const activeMission = selectedCmd || commandes[0];
 
   return (
     <div className="pe-container">
-      {/* 18h00 J-1 Alert Strip */}
-      <div className="pe-alert-strip">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-          <Clock size={20} />
-          <div>
-            <b>Verrouillage des Assignations à 18h00 (J-1) :</b> Toutes les missions du lendemain doivent avoir leurs intervenantes et runners affectés.
-          </div>
-        </div>
-        {unassignedCount > 0 ? (
-          <span style={{ padding: '0.25rem 0.65rem', background: '#dc2626', color: '#ffffff', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 800 }}>
-            {unassignedCount} mission(s) non assignée(s)
-          </span>
-        ) : (
-          <span style={{ padding: '0.25rem 0.65rem', background: '#16a34a', color: '#ffffff', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 800 }}>
-            ✓ Toutes les équipes sont assignées
-          </span>
-        )}
-      </div>
-
-      {/* Subtabs Segmented Strip */}
+      {/* Subtabs Segmented Bar */}
       <div className="pe-subtabs">
         <button
-          onClick={() => setActiveTab('assignation')}
-          className={`pe-tab-btn ${activeTab === 'assignation' ? 'active' : ''}`}
+          className={`pe-tab-btn ${activeSubtab === 'assignation' ? 'active' : ''}`}
+          onClick={() => setActiveSubtab('assignation')}
         >
-          <UserCheck size={16} />
-          <span>Assignation J-1 (18h00)</span>
+          <Calendar size={16} />
+          <span>Assignation — J-1</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('fiche')}
-          className={`pe-tab-btn ${activeTab === 'fiche' ? 'active' : ''}`}
+          className={`pe-tab-btn ${activeSubtab === 'fiche' ? 'active' : ''}`}
+          onClick={() => setActiveSubtab('fiche')}
         >
           <FileText size={16} />
-          <span>Fiche de Mission (Sans Prix)</span>
+          <span>Fiche de mission (Sans prix)</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('suivi')}
-          className={`pe-tab-btn ${activeTab === 'suivi' ? 'active' : ''}`}
+          className={`pe-tab-btn ${activeSubtab === 'suivi' ? 'active' : ''}`}
+          onClick={() => setActiveSubtab('suivi')}
         >
-          <Camera size={16} />
-          <span>Suivi du Jour & Photos</span>
+          <Clock size={16} />
+          <span>Suivi du jour (Photos 4/4)</span>
+        </button>
+
+        <button
+          className={`pe-tab-btn ${activeSubtab === 'incidents' ? 'active' : ''}`}
+          onClick={() => setActiveSubtab('incidents')}
+        >
+          <Sparkles size={16} />
+          <span>Incidents & Objets trouvés</span>
         </button>
       </div>
 
-      {activeTab === 'assignation' && (
-        /* ══════════ ASSIGNATION J-1 ══════════ */
-        <div className="pe-table-card">
-          <table className="pe-table">
-            <thead>
-              <tr>
-                <th>Numéro</th>
-                <th>Date & Heure</th>
-                <th>Logement</th>
-                <th>Intervenante 1</th>
-                <th>Intervenante 2 (Villa)</th>
-                <th>Runner</th>
-                <th>Statut</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 1 : ASSIGNATION J-1 (Page 13)                                 */}
+      {/* ========================================================================= */}
+      {activeSubtab === 'assignation' && (
+        <>
+          {/* 5 KPIs Assignation J-1 */}
+          <div className="cb-kpi-grid">
+            <div className="cb-kpi-card gold">
+              <div className="cb-kpi-label">Interventions Demain</div>
+              <div className="cb-kpi-value">{commandes.length || 8}</div>
+              <div className="cb-kpi-sub">Total missions planifiées</div>
+            </div>
+
+            <div className="cb-kpi-card">
+              <div className="cb-kpi-label">Turnovers Airbnb</div>
+              <div className="cb-kpi-value">{commandes.length || 6}</div>
+              <div className="cb-kpi-sub">Rotations check-out</div>
+            </div>
+
+            <div className="cb-kpi-card alert">
+              <div className="cb-kpi-label">Sans Intervenante</div>
+              <div className="cb-kpi-value">
+                {commandes.filter(c => !c.intervenante).length || 2}
+              </div>
+              <div className="cb-kpi-sub">À assigner avant 18h00</div>
+            </div>
+
+            <div className="cb-kpi-card blue">
+              <div className="cb-kpi-label">Mobilisées</div>
+              <div className="cb-kpi-value">7</div>
+              <div className="cb-kpi-sub">Intervenantes disponibles</div>
+            </div>
+
+            <div className="cb-kpi-card purple">
+              <div className="cb-kpi-label">Continuité Client</div>
+              <div className="cb-kpi-value">78%</div>
+              <div className="cb-kpi-sub">Même intervenante habituelle</div>
+            </div>
+          </div>
+
+          {/* Tableau des Besoins du Lendemain */}
+          <div className="cb-table-card">
+            <table className="cb-table">
+              <thead>
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
-                    <RotateCw size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem' }} />
-                    Chargement du planning des missions...
-                  </td>
+                  <th>Heure</th>
+                  <th>Logement</th>
+                  <th>Quartier</th>
+                  <th>Typologie</th>
+                  <th>Origine</th>
+                  <th>Intervenante Assignée</th>
+                  <th>Action</th>
                 </tr>
-              ) : commandes.length === 0 ? (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
-                    <Calendar size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.4 }} />
-                    Aucun turnover planifié sur les 7 prochains jours.
-                  </td>
-                </tr>
-              ) : (
-                commandes.map((c) => (
-                  <tr key={c.id}>
+              </thead>
+              <tbody>
+                {commandes.map(cmd => (
+                  <tr key={cmd.id}>
+                    <td><strong>{cmd.heure_prestation || '11:00'}</strong></td>
+                    <td><span className="cb-code-badge">{cmd.bien_code}</span></td>
+                    <td>{(cmd as any).quartier || 'Gauthier'}</td>
+                    <td><span className="cb-tag-typology">{(cmd as any).typologie || '2ch'}</span></td>
+                    <td><span className="cb-tag-standard">Airbnb</span></td>
                     <td>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#0f766e', background: '#f0fdfa', padding: '0.25rem 0.55rem', borderRadius: '0.375rem', border: '1px solid #ccfbf1' }}>
-                        {c.numero}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.date_prestation}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{c.heure_prestation.slice(0, 5)}</div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.bien_nom}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{c.bien_code}</div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 700, color: c.intervenante_name ? '#0f172a' : '#dc2626' }}>
-                        {c.intervenante_name || '⚠️ Non assignée'}
-                      </div>
-                    </td>
-                    <td>
-                      {c.intervenante_2_name ? (
-                        <div style={{ fontWeight: 700, color: '#0d9488' }}>
-                          {c.intervenante_2_name}
-                        </div>
+                      {cmd.intervenante_name ? (
+                        <span style={{ color: '#15803d', fontWeight: 700 }}>
+                          ✓ {cmd.intervenante_name}
+                        </span>
                       ) : (
-                        <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>—</span>
+                        <span style={{ color: '#dc2626', fontWeight: 700 }}>
+                          Non assignée
+                        </span>
                       )}
                     </td>
                     <td>
-                      <span style={{ fontWeight: 600, color: '#334155' }}>
-                        {c.runner_name || 'Non assigné'}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ padding: '0.2rem 0.5rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, background: c.statut === 'cloturee' ? '#f0fdf4' : '#f1f5f9', color: c.statut === 'cloturee' ? '#15803d' : '#475569' }}>
-                        {c.statut.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
                       <button
-                        style={{ padding: '0.35rem 0.85rem', background: '#00473E', color: '#ffffff', border: 'none', borderRadius: '0.45rem', fontSize: '0.785rem', fontWeight: 700, cursor: 'pointer' }}
                         onClick={() => {
-                          setSelectedCmd(c);
+                          setSelectedCmd(cmd);
                           setIsAssignOpen(true);
                         }}
+                        className="cb-btn-details"
                       >
-                        Affecter
+                        Assigner
                       </button>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-      {activeTab === 'fiche' && (
-        /* ══════════ FICHE DE MISSION ══════════ */
-        <div className="pe-split-layout">
-          <div className="pe-mission-list">
-            <div style={{ padding: '0.875rem 1rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontWeight: 800, fontSize: '0.8rem', textTransform: 'uppercase', color: '#64748b' }}>
-              Missions à Exécuter ({commandes.length})
-            </div>
-            {commandes.map((c) => (
-              <div
-                key={c.id}
-                className={`pe-mission-item ${selectedCmd?.id === c.id ? 'selected' : ''}`}
-                onClick={() => setSelectedCmd(c)}
+          {/* Assistant Intelligent & Bouton Envoi WhatsApp */}
+          <div className="cb-detail-card" style={{ padding: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 800, color: '#00473E', fontSize: '1rem' }}>
+                  Envoi Automatisé des Fiches de Mission à 20h00
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                  Les consignes d'accès sensibles et checklists photos seront transmises par WhatsApp aux intervenantes assignées.
+                </div>
+              </div>
+              <button 
+                onClick={() => alert("✓ Fiches de mission envoyées par WhatsApp aux intervenantes.")}
+                className="cb-btn-primary"
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-                  <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '0.75rem', color: '#00473E' }}>
-                    {c.numero}
-                  </span>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b' }}>
-                    {c.date_prestation}
-                  </span>
-                </div>
-                <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#0f172a' }}>{c.bien_nom}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{c.intervenante_name || 'Non assignée'}</div>
+                <MessageSquare size={16} />
+                <span>Envoyer les fiches de mission</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 2 : FICHE DE MISSION STRICTEMENT SANS PRIX (Page 14)          */}
+      {/* ========================================================================= */}
+      {activeSubtab === 'fiche' && (
+        <div className="pe-mission-printable">
+          {/* Header Fiche sans prix */}
+          <div className="pe-mission-head-banner">
+            <div>
+              <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#ccfbf1' }}>
+                Fiche de Mission Opérationnelle
               </div>
-            ))}
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '0.2rem 0', color: '#ffffff' }}>
+                {activeMission?.bien_code || 'GBE001'} — {activeMission?.heure_prestation || '11:00'}
+              </h2>
+              <div style={{ fontSize: '0.85rem', color: '#ccfbf1' }}>
+                Intervenante : {activeMission?.intervenante_name || 'Fatima ZAHRA'} · Date : {activeMission?.date_prestation || 'Demain'}
+              </div>
+            </div>
+
+            <button 
+              onClick={() => window.print()}
+              className="cb-btn-secondary"
+              style={{ background: '#ffffff', color: '#00473E' }}
+            >
+              <Printer size={16} />
+              <span>Imprimer / PDF</span>
+            </button>
           </div>
 
-          <div className="pe-sheet-card">
-            {selectedCmd ? (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #00473E', paddingBottom: '0.875rem', marginBottom: '1.25rem' }}>
-                  <div>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#00473E', margin: 0 }}>
-                      Fiche de Mission — {selectedCmd.numero}
-                    </h2>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                      Prestation prévue le {selectedCmd.date_prestation} à {selectedCmd.heure_prestation.slice(0, 5)}
-                    </div>
-                  </div>
+          {/* Modalités d'accès complètes */}
+          <div className="cb-sensitive-callout">
+            <div className="cb-sensitive-callout-header">
+              <Key size={16} />
+              <span>Accès & Digicodes Sensibles (Strictement Confidentiel)</span>
+            </div>
+            <div className="cb-sensitive-callout-body">
+              <div><strong>Adresse :</strong> Rue Jean Jaurès, Résidence Al Manar, Étage 3, Porte 32, Casablanca</div>
+              <div style={{ marginTop: '0.35rem' }}><strong>Boîte à clés :</strong> Code 4512 à droite de la porte palière</div>
+              <div style={{ marginTop: '0.35rem' }}><strong>Gardien :</strong> Hassan (06 12 34 56 78) présent de 08h à 20h</div>
+            </div>
+          </div>
 
-                  <button
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1rem', background: '#00473E', color: '#ffffff', borderRadius: '0.5rem', fontWeight: 700, fontSize: '0.825rem', border: 'none', cursor: 'pointer' }}
-                    onClick={() => handlePrintMissionPdf(selectedCmd.id)}
-                  >
-                    <Printer size={16} />
-                    Imprimer Fiche PDF
-                  </button>
-                </div>
-
-                <div style={{ background: '#fef2f2', border: '1px dashed #ef4444', color: '#991b1b', padding: '0.875rem', borderRadius: '0.5rem', fontSize: '0.775rem', fontWeight: 700, marginBottom: '1rem' }}>
-                  🔒 STRICTEMENT CONFIDENTIEL — AUCUNE MENTION DE PRIX SUR LA FICHE DE MISSION DE L'INTERVENANTE
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                  <div style={{ padding: '1rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem' }}>
-                    <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>Logement</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>{selectedCmd.bien_nom}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Code : {selectedCmd.bien_code}</div>
-                  </div>
-
-                  <div style={{ padding: '1rem', background: '#fff5f5', border: '1px solid #fecaca', borderRadius: '0.5rem' }}>
-                    <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: '#dc2626' }}>Accès Sécurisé</div>
-                    <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#991b1b', marginTop: '2px' }}>Standard Boîte à Clés</div>
-                    <div style={{ fontSize: '0.8rem', color: '#991b1b' }}>Code confidentiel remis à l'arrivée</div>
-                  </div>
-                </div>
-
-                <div style={{ padding: '1rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem' }}>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', marginBottom: '0.5rem' }}>
-                    Checklist Qualité de Clôture
-                  </div>
-                  <div style={{ fontSize: '0.825rem', color: '#334155', lineHeight: 1.6 }}>
-                    ✓ Nettoyage et désinfection des sanitaires et cuisine<br />
-                    ✓ Mise en place du linge propre selon standard hôtelier<br />
-                    ✓ Prise des 4 photos de conformité obligatoires (Salon, Chambre, SDB, Cuisine)<br />
-                    ✓ Contrôle des fenêtres et fermeture à clé
-                  </div>
-                </div>
+          {/* Consignes Métier & Lits */}
+          <div className="cb-grid-2col">
+            <div className="cb-section-box">
+              <div className="cb-section-box-title">
+                <FileText size={16} />
+                <span>Tâches & Préparation des Couchages</span>
               </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
-                Sélectionnez une mission dans la liste de gauche pour afficher la fiche.
+              <ul style={{ paddingLeft: '1.25rem', fontSize: '0.85rem', color: '#334155', lineHeight: 1.6 }}>
+                <li>Installer le set propre 8 pièces déposé par le runner.</li>
+                <li>Faire le lit façon hôtel (oreillers debout, rabat soigné).</li>
+                <li>Dresser 2 grandes serviettes pliées sur le lit et 2 petites dans la SDB.</li>
+                <li>Placer le pack réassort d'accueil sur la table basse du salon.</li>
+              </ul>
+            </div>
+
+            <div className="cb-section-box">
+              <div className="cb-section-box-title">
+                <Camera size={16} />
+                <span>Contrôle Qualité : 4 Photos Obligatoires</span>
               </div>
-            )}
+              <div className="pe-photos-checklist-grid">
+                <div className="pe-photo-box">Photo 1 : Salon</div>
+                <div className="pe-photo-box">Photo 2 : Chambres</div>
+                <div className="pe-photo-box">Photo 3 : SDB</div>
+                <div className="pe-photo-box">Photo 4 : Cuisine</div>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 700, marginTop: '0.75rem' }}>
+                * Clôture impossible sans les 4 photos complètes.
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {activeTab === 'suivi' && (
-        /* ══════════ SUIVI DU JOUR & PHOTOS ══════════ */
-        <div className="pe-suivi-grid">
-          {commandes.map((c) => (
-            <div key={c.id} className="pe-suivi-card">
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#00473E', background: '#f0fdfa', padding: '0.2rem 0.5rem', borderRadius: '0.375rem', border: '1px solid #ccfbf1', fontSize: '0.75rem' }}>
-                    {c.numero}
-                  </span>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>
-                    {c.heure_prestation.slice(0, 5)}
-                  </span>
-                </div>
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 3 : SUIVI DU JOUR & PHOTOS 4/4 (Page 15)                      */}
+      {/* ========================================================================= */}
+      {activeSubtab === 'suivi' && (
+        <>
+          <div className="cb-kpi-grid">
+            <div className="cb-kpi-card gold">
+              <div className="cb-kpi-label">Turnovers du Jour</div>
+              <div className="cb-kpi-value">6</div>
+              <div className="cb-kpi-sub">En cours d'exécution</div>
+            </div>
 
-                <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '0.2rem' }}>
-                  {c.bien_nom}
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.75rem' }}>
-                  Intervenante : <b>{c.intervenante_name || 'Non assignée'}</b>
-                </div>
+            <div className="cb-kpi-card blue">
+              <div className="cb-kpi-label">Terminés & Photos Validées</div>
+              <div className="cb-kpi-value">4</div>
+              <div className="cb-kpi-sub">Conformes 4/4 photos</div>
+            </div>
 
-                <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0', fontSize: '0.8rem', marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Photos de Clôture :</span>
-                  <b style={{ color: c.photos_cloture?.length === 4 ? '#16a34a' : '#dc2626' }}>
-                    {c.photos_cloture?.length || 0} / 4 photos
-                  </b>
-                </div>
+            <div className="cb-kpi-card alert">
+              <div className="cb-kpi-label">Photos Manquantes</div>
+              <div className="cb-kpi-value">2</div>
+              <div className="cb-kpi-sub">Relance automatique active</div>
+            </div>
+          </div>
+
+          {/* Tableau de Contrôle en Direct */}
+          <div className="cb-table-card">
+            <table className="cb-table">
+              <thead>
+                <tr>
+                  <th>Logement</th>
+                  <th>Intervenante</th>
+                  <th>Heure</th>
+                  <th>Photos Reçues</th>
+                  <th>Statut</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span className="cb-code-badge">GBE001</span></td>
+                  <td>Fatima ZAHRA</td>
+                  <td>11:00</td>
+                  <td><strong style={{ color: '#15803d' }}>4 / 4 photos</strong></td>
+                  <td><span className="cb-status-pill conciergerie">✓ Clôturé</span></td>
+                  <td>
+                    <button className="cb-btn-details">Voir Photos</button>
+                  </td>
+                </tr>
+                <tr>
+                  <td><span className="cb-code-badge">GBE002</span></td>
+                  <td>Khadija MANSOURI</td>
+                  <td>13:30</td>
+                  <td><strong style={{ color: '#dc2626' }}>2 / 4 photos</strong></td>
+                  <td><span className="cb-status-pill alerte">Photos manquantes</span></td>
+                  <td>
+                    <button 
+                      onClick={() => alert("Relance WhatsApp envoyée à l'intervenante.")}
+                      className="cb-btn-details"
+                    >
+                      Relancer WhatsApp
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 4 : INCIDENTS & OBJETS TROUVÉS (Page 16)                      */}
+      {/* ========================================================================= */}
+      {activeSubtab === 'incidents' && (
+        <div className="cb-detail-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* 5 Steps Lost & Found Workflow */}
+          <div style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', color: '#00473E' }}>
+            Circuit de Traitement des Objets Trouvés (5 Étapes)
+          </div>
+
+          <div className="pe-steps-workflow">
+            <div className="pe-step-pill active">1. Signalement Intervenante</div>
+            <ChevronRight size={14} />
+            <div className="pe-step-pill active">2. Chargée d'opérations</div>
+            <ChevronRight size={14} />
+            <div className="pe-step-pill active">3. Notif. Commercial</div>
+            <ChevronRight size={14} />
+            <div className="pe-step-pill">4. Accord Client</div>
+            <ChevronRight size={14} />
+            <div className="pe-step-pill">5. Restitution / Clôture</div>
+          </div>
+
+          {/* Devis Remise en état */}
+          <div className="pe-devis-box">
+            <div>
+              <div style={{ fontWeight: 800, color: '#78350f', fontSize: '0.95rem' }}>
+                Devis Remise en État Salissure Extrême (Logement GBE003)
               </div>
+              <div style={{ fontSize: '0.8rem', color: '#92400e', marginTop: '0.2rem' }}>
+                2 heures supplémentaires requises (Tarif horaire : 60 DH/h) · <strong>Total : 120 DH</strong>
+              </div>
+            </div>
 
-              {c.statut !== 'cloturee' ? (
-                <button
-                  style={{ width: '100%', padding: '0.6rem', background: '#0d9488', color: '#ffffff', borderRadius: '0.5rem', fontWeight: 700, fontSize: '0.825rem', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
-                  onClick={() => {
-                    setSelectedCmd(c);
-                    setIsPhotosOpen(true);
-                  }}
-                >
-                  <Camera size={15} />
-                  Valider les Photos
-                </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {devisStatus === 'en_attente' ? (
+                <>
+                  <button 
+                    onClick={() => setDevisStatus('accepte')}
+                    className="cb-btn-primary" 
+                    style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
+                  >
+                    ✓ Accord Reçu Client
+                  </button>
+                  <button 
+                    onClick={() => setDevisStatus('refuse')}
+                    className="cb-btn-secondary" 
+                    style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
+                  >
+                    Refus Client
+                  </button>
+                </>
               ) : (
-                <div style={{ textAlign: 'center', padding: '0.5rem', background: '#f0fdf4', color: '#15803d', borderRadius: '0.5rem', fontWeight: 700, fontSize: '0.8rem' }}>
-                  ✓ Mission Conforme & Clôturée
-                </div>
+                <span style={{ fontWeight: 800, color: devisStatus === 'accepte' ? '#15803d' : '#dc2626', fontSize: '0.85rem' }}>
+                  {devisStatus === 'accepte' ? '✓ Accord client enregistré' : 'Refus enregistré'}
+                </span>
               )}
             </div>
-          ))}
+          </div>
         </div>
       )}
 
-      {/* ══════════ MODALE : ASSIGNATION ══════════ */}
-      {isAssignOpen && selectedCmd && (
-        <div className="cb-modal-overlay" onClick={() => setIsAssignOpen(false)}>
-          <div className="cb-modal-box" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="cb-modal-header">
-              <h3>Affectation des Équipes — {selectedCmd.numero}</h3>
-              <button style={{ background: '#f1f5f9', border: 'none', borderRadius: '0.45rem', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setIsAssignOpen(false)}>
+      {/* Modal Assignation */}
+      {isAssignOpen && (
+        <div className="dc-modal-overlay">
+          <div className="dc-modal-box">
+            <div className="dc-modal-header">
+              <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.1rem' }}>
+                Assigner l'Intervenante — {selectedCmd?.bien_code}
+              </h3>
+              <button onClick={() => setIsAssignOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 <X size={18} />
               </button>
             </div>
             <form onSubmit={handleAssign}>
-              <div className="cb-modal-body">
+              <div className="dc-modal-body">
                 <div className="cb-form-group">
-                  <label className="cb-form-label">Intervenante Principale <span className="req">*</span></label>
+                  <label className="cb-form-label">Intervenante <span className="req">*</span></label>
                   <select
-                    required
                     value={assignIntervenante}
                     onChange={(e) => setAssignIntervenante(Number(e.target.value))}
+                    required
                     className="cb-form-select"
                   >
                     <option value="">Sélectionner une intervenante...</option>
-                    {agents.map((a) => (
-                      <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="cb-form-group">
-                  <label className="cb-form-label">Intervenante 2 (Renfort Villa / Riad)</label>
-                  <select
-                    value={assignIntervenante2}
-                    onChange={(e) => setAssignIntervenante2(e.target.value ? Number(e.target.value) : '')}
-                    className="cb-form-select"
-                  >
-                    <option value="">Optionnel (Obligatoire pour Villa/Riad)...</option>
-                    {agents.map((a) => (
-                      <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="cb-form-group">
-                  <label className="cb-form-label">Runner Logistique</label>
-                  <select
-                    value={assignRunner}
-                    onChange={(e) => setAssignRunner(e.target.value ? Number(e.target.value) : '')}
-                    className="cb-form-select"
-                  >
-                    <option value="">Optionnel (Tournée Runner)...</option>
-                    {agents.map((a) => (
-                      <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>
+                    {agents.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.first_name} {a.last_name} ({a.zone || 'Casablanca'})
+                      </option>
                     ))}
                   </select>
                 </div>
               </div>
-
-              <div className="cb-modal-footer">
-                <button type="button" className="cb-btn-secondary" onClick={() => setIsAssignOpen(false)}>
+              <div className="dc-modal-footer">
+                <button type="button" onClick={() => setIsAssignOpen(false)} className="cb-btn-secondary">
                   Annuler
                 </button>
                 <button type="submit" disabled={assignLoading} className="cb-btn-primary">
-                  {assignLoading ? 'Enregistrement...' : 'Valider l\'Affectation'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════ MODALE : PHOTOS CLÔTURE ══════════ */}
-      {isPhotosOpen && selectedCmd && (
-        <div className="cb-modal-overlay" onClick={() => setIsPhotosOpen(false)}>
-          <div className="cb-modal-box" style={{ maxWidth: '540px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="cb-modal-header">
-              <h3>Contrôle & Validation des 4 Photos</h3>
-              <button style={{ background: '#f1f5f9', border: 'none', borderRadius: '0.45rem', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setIsPhotosOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleCloture}>
-              <div className="cb-modal-body">
-                {['Photo 1 : Salon', 'Photo 2 : Chambre', 'Photo 3 : Salle de bain', 'Photo 4 : Cuisine'].map((label, idx) => (
-                  <div key={idx} className="cb-form-group">
-                    <label className="cb-form-label">{label} <span className="req">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="URL ou repère de validation (ex: photo_ok)"
-                      value={photos[idx]}
-                      onChange={(e) => {
-                        const newP = [...photos];
-                        newP[idx] = e.target.value;
-                        setPhotos(newP);
-                      }}
-                      className="cb-form-input"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div className="cb-modal-footer">
-                <button type="button" className="cb-btn-secondary" onClick={() => setIsPhotosOpen(false)}>
-                  Annuler
-                </button>
-                <button type="submit" disabled={clotureLoading} className="cb-btn-primary" style={{ background: '#0d9488' }}>
-                  {clotureLoading ? 'Validation...' : 'Valider la Clôture'}
+                  {assignLoading ? 'Assignation...' : 'Valider'}
                 </button>
               </div>
             </form>

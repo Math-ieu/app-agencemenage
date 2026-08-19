@@ -1,10 +1,51 @@
-/* DossierCommande.css — Dossier Opérationnel de Commande Airbnb */
+/* DossierCommande.css — Console & 6 Blocs du Dossier Commande (Pages 07, 08, 09) */
 
 .dc-container {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   width: 100%;
+}
+
+/* Subtabs bar */
+.dc-subtabs-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #ffffff;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  overflow-x: auto;
+}
+
+.dc-subtab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.dc-subtab-btn:hover {
+  color: #00473E;
+  background: #f8fafc;
+}
+
+.dc-subtab-btn.active {
+  background: #00473E;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(0, 71, 62, 0.2);
 }
 
 /* Toolbar */
@@ -138,7 +179,7 @@
   letter-spacing: 0.025em;
 }
 
-.dc-status-badge.creee {
+.dc-status-badge.saisie {
   background: #f1f5f9;
   color: #475569;
   border: 1px solid #e2e8f0;
@@ -162,13 +203,234 @@
   border: 1px solid #bbf7d0;
 }
 
+.dc-status-badge.ecart_linge {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
 .dc-status-badge.annulee {
   background: #fef2f2;
   color: #b91c1c;
   border: 1px solid #fecaca;
 }
 
-/* Operational Console Drawer / Modal */
+/* ========================================================================= */
+/* DOSSIER COMMANDE 6 BLOCS CONSOLE (Page 07)                                */
+/* ========================================================================= */
+.dc-dossier-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+  .dc-dossier-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dc-dossier-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.dc-dossier-header {
+  background: linear-gradient(135deg, #00473E 0%, #0d9488 100%);
+  padding: 1.25rem 1.5rem;
+  color: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dc-dossier-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 6 Lifecycle Blocks */
+.dc-bloc-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1.15rem;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.dc-bloc-item.done {
+  border-left: 4px solid #10b981;
+}
+
+.dc-bloc-item.current {
+  border-left: 4px solid #f59e0b;
+  background: #fffdfa;
+}
+
+.dc-bloc-item.pending {
+  border-left: 4px solid #cbd5e1;
+  opacity: 0.85;
+}
+
+.dc-bloc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.dc-bloc-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.dc-bloc-actor {
+  font-size: 0.75rem;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.dc-bloc-desc {
+  font-size: 0.825rem;
+  color: #475569;
+  line-height: 1.4;
+}
+
+/* Right Sticky Column for Dossier */
+.dc-sidebar-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.dc-price-card {
+  background: #00473E;
+  color: #ffffff;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.dc-price-card-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #ccfbf1;
+  font-weight: 800;
+}
+
+.dc-price-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #ccfbf1;
+}
+
+.dc-price-total {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #C9A84C;
+}
+
+/* Runner 2 Moments Simulator (Page 08) */
+.dc-moments-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .dc-moments-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dc-moment-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.dc-moment-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.75rem;
+}
+
+.dc-moment-badge {
+  background: #00473E;
+  color: #ffffff;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+/* Amina Laundry Manager Screen (Page 09) */
+.dc-laverie-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  padding: 1.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.dc-laverie-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 1rem;
+}
+
+.dc-arbitrage-box {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-top: 1rem;
+}
+
+.dc-message-preview {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: #334155;
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
+}
+
+/* Modals */
 .dc-modal-overlay {
   position: fixed;
   inset: 0;
@@ -184,9 +446,9 @@
 .dc-modal-box {
   background: #ffffff;
   border-radius: 1rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 860px;
+  max-width: 600px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -206,55 +468,12 @@
   overflow-y: auto;
 }
 
-/* 5 Console Blocks */
-.dc-console-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-bottom: 1.25rem;
-}
-
-@media (max-width: 768px) {
-  .dc-console-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.dc-block {
+.dc-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  padding: 1.1rem;
-}
-
-.dc-block-title {
-  font-size: 0.75rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #475569;
-  margin-bottom: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 0.45rem;
-}
-
-.dc-block-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.825rem;
-  margin-bottom: 0.45rem;
-  color: #334155;
-}
-
-.dc-block-row .lbl {
-  color: #64748b;
-}
-
-.dc-block-row .val {
-  font-weight: 700;
-  color: #0f172a;
+  border-top: 1px solid #e2e8f0;
 }

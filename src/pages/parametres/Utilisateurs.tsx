@@ -173,6 +173,9 @@ const ROLES = [
   { key: "Responsable des Opérations", label: "Resp. Opérations" },
   { key: "Chargée des Opérations", label: "Chargée Opérations" },
   { key: "Opérationnel", label: "Opérationnel" },
+  { key: "Runner", label: "Runner / Chauffeur" },
+  { key: "Responsable Linge", label: "Resp. Blanchisserie" },
+  { key: "Client Conciergerie", label: "Client Conciergerie" },
 ];
 
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
@@ -308,6 +311,22 @@ const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   "Opérationnel": [
     "consulter_dashboard",
     "consulter_demandes"
+  ],
+  "Runner": [
+    "tournees_runner",
+    "ramassage_linge",
+    "depot_linge"
+  ],
+  "Responsable Linge": [
+    "reception_laverie",
+    "recomptage_linge",
+    "figeage_montant_linge"
+  ],
+  "Client Conciergerie": [
+    "espace_conciergerie",
+    "mes_calendriers",
+    "commander_turnover",
+    "mes_factures"
   ]
 };
 
@@ -525,6 +544,9 @@ const mapPositionToRole = (position: string): string => {
   if (p === 'responsable des opérations' || p === 'responsable_operations') return 'responsable_operations';
   if (p === 'chargée des opérations' || p === 'charge_operations') return 'charge_operations';
   if (p === 'opérationnel' || p === 'operationnel') return 'operationnel';
+  if (p === 'runner' || p === 'runner / chauffeur') return 'runner';
+  if (p === 'responsable linge' || p === 'resp. blanchisserie') return 'responsable_linge';
+  if (p === 'client conciergerie') return 'client_conciergerie';
   return 'commercial';
 };
 
@@ -537,6 +559,9 @@ const mapRoleToPosition = (role: string): string => {
   if (r === 'responsable_operations') return 'Responsable des Opérations';
   if (r === 'charge_operations') return 'Chargée des Opérations';
   if (r === 'operationnel') return 'Opérationnel';
+  if (r === 'runner') return 'Runner';
+  if (r === 'responsable_linge') return 'Responsable Linge';
+  if (r === 'client_conciergerie') return 'Client Conciergerie';
   return 'commercial';
 };
 

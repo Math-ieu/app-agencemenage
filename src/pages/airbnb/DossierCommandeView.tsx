@@ -1,23 +1,26 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { 
   getCommandesAirbnb, assignerCommandeAirbnb, cloturerCommandeAirbnb, 
-  createObjetTrouve, getMissionPdfData, extractResults 
+  extractResults 
 } from '../../api/airbnb';
 import { getAgents } from '../../api/client';
 import type { CommandeAirbnb } from '../../types/airbnb';
 import { 
-  Search, RotateCw, X, Printer, UserCheck, 
-  Camera, PackageSearch, Building2, Truck, Shirt, DollarSign
+  X, UserCheck, 
+  Camera, PackageSearch, Shirt,
+  CheckCircle2, Clock, Truck, ShieldCheck
 } from 'lucide-react';
 import './DossierCommande.css';
 
 export default function DossierCommandeView() {
+  // Navigation subtabs: 'dossier' | 'moments' | 'laverie'
+  const [activeSubtab, setActiveSubtab] = useState<'dossier' | 'moments' | 'laverie'>('dossier');
+
   const [commandes, setCommandes] = useState<CommandeAirbnb[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [search] = useState('');
+  const [statusFilter] = useState('');
   
-  // Selected Commande for Detail Drawer/Modal
+  // Selected Commande for Detail Inspection
   const [selectedCmd, setSelectedCmd] = useState<CommandeAirbnb | null>(null);
 
   // Intervenantes for Assignment
@@ -25,7 +28,7 @@ export default function DossierCommandeView() {
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [assignIntervenante, setAssignIntervenante] = useState<number | ''>('');
   const [assignIntervenante2, setAssignIntervenante2] = useState<number | ''>('');
-  const [assignRunner, setAssignRunner] = useState<number | ''>('');
+  const [assignRunner] = useState<number | ''>('');
   const [assignLoading, setAssignLoading] = useState(false);
 
   // Cloture Modal State
@@ -33,25 +36,25 @@ export default function DossierCommandeView() {
   const [photos, setPhotos] = useState<string[]>(['', '', '', '']);
   const [clotureLoading, setClotureLoading] = useState(false);
 
-  // Objet Trouve Modal State
-  const [isObjetOpen, setIsObjetOpen] = useState(false);
-  const [descriptionObjet, setDescriptionObjet] = useState('');
-  const [pieceObjet, setPieceObjet] = useState('');
-  const [objetLoading, setObjetLoading] = useState(false);
+  // Responsable Linge Arbitrage State (Page 09)
+  const [damagedFeeApplied, setDamagedFeeApplied] = useState(true);
+  const [damagedNote, setDamagedNote] = useState('1 grande serviette tachée d\'huile solaire non récupérable');
 
   const fetchCommandes = async () => {
-    setLoading(true);
     try {
       const [cmdRes, agRes] = await Promise.all([
         getCommandesAirbnb({ search, statut: statusFilter }),
         getAgents()
       ]);
-      setCommandes(extractResults<CommandeAirbnb>(cmdRes.data));
+      const loadedCmds = extractResults<CommandeAirbnb>(cmdRes.data);
+      setCommandes(loadedCmds);
       setAgentsList(extractResults<any>(agRes.data));
+
+      if (loadedCmds.length > 0 && !selectedCmd) {
+        setSelectedCmd(loadedCmds[0]);
+      }
     } catch (err) {
       console.error("Erreur chargement commandes :", err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -112,389 +115,406 @@ export default function DossierCommandeView() {
     }
   };
 
-  const handleCreateObjet = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!selectedCmd || !descriptionObjet) return;
-
-    setObjetLoading(true);
-    try {
-      await createObjetTrouve({
-        commande: selectedCmd.id,
-        bien: selectedCmd.bien,
-        description: descriptionObjet,
-        piece: pieceObjet,
-      });
-      setIsObjetOpen(false);
-      setDescriptionObjet('');
-      setPieceObjet('');
-      alert("Objet trouvé enregistré et rattaché au logement.");
-    } catch (err: any) {
-      alert(err.response?.data?.error || "Erreur lors de la déclaration de l'objet");
-    } finally {
-      setObjetLoading(false);
-    }
-  };
-
-  const handlePrintMissionPdf = async (cmdId: string) => {
-    try {
-      const res = await getMissionPdfData(cmdId);
-      const data = res.data as any;
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Fiche de Mission — ${data.numero_commande}</title>
-              <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 32px; color: #0f172a; font-size: 13px; line-height: 1.5; }
-                .header { border-bottom: 2px solid #00473E; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; }
-                .title { font-size: 20px; font-weight: 800; color: #00473E; }
-                .box { border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 14px; background: #f8fafc; }
-                .confidential { background: #fef2f2; border: 1px dashed #ef4444; color: #991b1b; padding: 12px; border-radius: 8px; font-weight: bold; margin-bottom: 16px; font-size: 12px; }
-                .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-                .label { font-size: 11px; text-transform: uppercase; font-weight: 700; color: #64748b; margin-bottom: 2px; }
-                .val { font-weight: 700; font-size: 14px; }
-              </style>
-            </head>
-            <body>
-              <div class="header">
-                <div>
-                  <div class="title">FICHE DE MISSION — ${data.numero_commande}</div>
-                  <div style="color: #64748b;">Turnover Airbnb & Conciergerie • Agence Ménage</div>
-                </div>
-                <div style="text-align: right;">
-                  <div style="font-weight: bold;">Date : ${data.date_prestation}</div>
-                  <div>Heure : ${data.heure_prestation}</div>
-                </div>
-              </div>
-
-              <div class="confidential">
-                🔒 STRICTEMENT CONFIDENTIEL — DOCUMENT OPÉRATIONNEL SANS MENTION TARIFAIRE
-              </div>
-
-              <div class="box">
-                <div class="label">Logement d'Intervention</div>
-                <div class="val">${data.nom_bien || 'Logement'} (${data.code_bien})</div>
-                <div>${data.adresse_complete} (${data.quartier})</div>
-                <div style="margin-top: 8px;"><b>Typologie :</b> ${data.typologie.toUpperCase()}</div>
-              </div>
-
-              <div class="box" style="border-color: #fca5a5; background: #fff5f5;">
-                <div class="label" style="color: #dc2626;">Accès Sécurisé & Digicodes</div>
-                <div class="val" style="color: #991b1b;">${data.acces_securise}</div>
-                <div style="margin-top: 4px; font-weight: bold;">${data.consignes_securite || 'Pas de consigne particulière'}</div>
-              </div>
-
-              <div class="grid">
-                <div class="box">
-                  <div class="label">Intervenante(s) Assignée(s)</div>
-                  <div class="val">${data.intervenante_nom || 'Non assignée'}</div>
-                  ${data.intervenante_2_nom ? `<div><b>Renfort Villa :</b> ${data.intervenante_2_nom}</div>` : ''}
-                </div>
-
-                <div class="box">
-                  <div class="label">Runner & Logistique Linge</div>
-                  <div class="val">${data.nature_linge}</div>
-                  <div><b>Runner :</b> ${data.runner_nom || 'Non assigné'}</div>
-                </div>
-              </div>
-
-              <div class="box">
-                <div class="label">Checklist Clôture Obligatoire</div>
-                <div>• Prendre impérativement les 4 photos de conformité (Salon, Chambre, Salle de bain, Cuisine).</div>
-                <div>• Contrôler les placards et tiroirs à la recherche d'objets oubliés par les voyageurs.</div>
-                <div>• Fermer les fenêtres et s'assurer du verrouillage de la porte d'entrée.</div>
-              </div>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-      }
-    } catch (err: any) {
-      alert("Erreur lors de la génération de la fiche de mission PDF");
-    }
-  };
+  const activeCmd = selectedCmd || commandes[0];
 
   return (
     <div className="dc-container">
-      {/* Toolbar & Filters */}
-      <div className="dc-toolbar">
-        <div className="dc-toolbar-left">
-          <div className="dc-search-wrapper">
-            <Search size={16} className="dc-search-icon" />
-            <input
-              type="text"
-              placeholder="Rechercher par numéro, logement, client..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="dc-search-input"
-            />
-          </div>
+      {/* Subtabs Bar */}
+      <div className="dc-subtabs-nav">
+        <button 
+          className={`dc-subtab-btn ${activeSubtab === 'dossier' ? 'active' : ''}`}
+          onClick={() => setActiveSubtab('dossier')}
+        >
+          <PackageSearch size={16} />
+          <span>Dossier Commande (6 Blocs)</span>
+        </button>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="dc-filter-select"
-          >
-            <option value="">Tous les statuts</option>
-            <option value="saisie">Saisie (En attente)</option>
-            <option value="assignee">Assignée</option>
-            <option value="en_cours">En cours</option>
-            <option value="cloturee">Clôturée</option>
-            <option value="annulee">Annulée</option>
-          </select>
-        </div>
+        <button 
+          className={`dc-subtab-btn ${activeSubtab === 'moments' ? 'active' : ''}`}
+          onClick={() => setActiveSubtab('moments')}
+        >
+          <Truck size={16} />
+          <span>Les 2 moments du runner</span>
+        </button>
+
+        <button 
+          className={`dc-subtab-btn ${activeSubtab === 'laverie' ? 'active' : ''}`}
+          onClick={() => setActiveSubtab('laverie')}
+        >
+          <Shirt size={16} />
+          <span>Écran responsable linge</span>
+        </button>
       </div>
 
-      {/* Main Table Card */}
-      <div className="dc-table-card">
-        <table className="dc-table">
-          <thead>
-            <tr>
-              <th>Numéro</th>
-              <th>Date & Heure</th>
-              <th>Logement</th>
-              <th>Client</th>
-              <th>Chaîne Linge</th>
-              <th>Intervenante(s)</th>
-              <th>Total TTC</th>
-              <th>Statut</th>
-              <th style={{ textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
-                  <RotateCw size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem' }} />
-                  Chargement des dossiers de commandes...
-                </td>
-              </tr>
-            ) : commandes.length === 0 ? (
-              <tr>
-                <td colSpan={9} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
-                  Aucune commande Airbnb trouvée.
-                </td>
-              </tr>
-            ) : (
-              commandes.map((c) => (
-                <tr key={c.id} onClick={() => setSelectedCmd(c)}>
-                  <td>
-                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0f766e', background: '#f0fdfa', padding: '0.2rem 0.5rem', borderRadius: '0.375rem', border: '1px solid #ccfbf1' }}>
-                      {c.numero}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.date_prestation}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{c.heure_prestation.slice(0, 5)} ({c.creneau})</div>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.bien_nom}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{c.bien_code}</div>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 600, color: '#1e293b' }}>{c.client_name}</div>
-                  </td>
-                  <td>
-                    <span style={{ fontSize: '0.8rem', color: '#475569' }}>
-                      {c.nature_linge.replace(/_/g, ' ')}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 600, color: c.intervenante_name ? '#0f172a' : '#dc2626' }}>
-                      {c.intervenante_name || 'Non assignée'}
-                    </div>
-                    {c.intervenante_2_name && (
-                      <div style={{ fontSize: '0.75rem', color: '#0d9488' }}>+ {c.intervenante_2_name}</div>
-                    )}
-                  </td>
-                  <td style={{ fontWeight: 800, color: '#00473E' }}>
-                    {c.total_ttc} DH
-                  </td>
-                  <td>
-                    <span className={`dc-status-badge ${c.statut}`}>
-                      {c.statut.replace(/_/g, ' ')}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button
-                      style={{ padding: '0.35rem 0.85rem', background: '#f1f5f9', color: '#0f172a', border: '1px solid #e2e8f0', borderRadius: '0.45rem', fontSize: '0.785rem', fontWeight: 600, cursor: 'pointer' }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedCmd(c);
-                      }}
-                    >
-                      Dossier
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ══════════ MODALE : DOSSIER CENTRAL OPÉRATIONNEL (5 BLOCS) ══════════ */}
-      {selectedCmd && (
-        <div className="dc-modal-overlay" onClick={() => setSelectedCmd(null)}>
-          <div className="dc-modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="dc-modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#00473E', background: '#f0fdfa', padding: '0.25rem 0.65rem', borderRadius: '0.5rem', border: '1px solid #ccfbf1' }}>
-                  {selectedCmd.numero}
-                </span>
-                <span className={`dc-status-badge ${selectedCmd.statut}`}>
-                  {selectedCmd.statut.replace(/_/g, ' ')}
-                </span>
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 1 : DOSSIER COMMANDE 6 BLOCS CONSOLE (Page 07)                */}
+      {/* ========================================================================= */}
+      {activeSubtab === 'dossier' && (
+        <div className="dc-dossier-layout">
+          {/* Colonne Gauche : Sélecteur Commande + 6 Blocs */}
+          <div className="dc-dossier-card">
+            {/* Header Commande Active */}
+            <div className="dc-dossier-header">
+              <div>
+                <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#ccfbf1' }}>
+                  Dossier Turnover Unique
+                </div>
+                <h2 style={{ fontSize: '1.3rem', fontWeight: 800, margin: '0.2rem 0', color: '#ffffff' }}>
+                  {activeCmd ? `${activeCmd.numero} · ${activeCmd.bien_code || 'GBE001'}` : 'Aucune commande'}
+                </h2>
+                <div style={{ fontSize: '0.8rem', color: '#ccfbf1' }}>
+                  Date : {activeCmd?.date_prestation} · Créneau : {activeCmd?.heure_prestation} ({activeCmd?.creneau})
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <button
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontSize: '0.8rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}
-                  onClick={() => handlePrintMissionPdf(selectedCmd.id)}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <select
+                  value={activeCmd?.id || ''}
+                  onChange={(e) => {
+                    const found = commandes.find(c => c.id === e.target.value);
+                    if (found) setSelectedCmd(found);
+                  }}
+                  className="dc-filter-select"
+                  style={{ background: '#ffffff', color: '#00473E', fontWeight: 700 }}
                 >
-                  <Printer size={15} />
-                  Fiche Mission PDF (Sans Prix)
-                </button>
-                <button style={{ background: '#f1f5f9', border: 'none', borderRadius: '0.45rem', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setSelectedCmd(null)}>
-                  <X size={18} />
-                </button>
+                  {commandes.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.numero} — {c.bien_code} ({c.date_prestation})
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <div className="dc-modal-body">
-              {/* 5 Operational Blocks */}
-              <div className="dc-console-grid">
-                {/* 1. Commercial & Logement */}
-                <div className="dc-block">
-                  <div className="dc-block-title">
-                    <Building2 size={16} color="#00473E" />
-                    1. Commercial & Logement
+            {/* Corps : Les 6 Blocs Chronologiques */}
+            <div className="dc-dossier-body">
+              {/* BLOC 1 : Commande Créée */}
+              <div className="dc-bloc-item done">
+                <div className="dc-bloc-head">
+                  <div className="dc-bloc-title">
+                    <CheckCircle2 size={16} color="#10b981" />
+                    <span>1. Commande créée</span>
                   </div>
-                  <div className="dc-block-row">
-                    <span className="lbl">Client :</span>
-                    <span className="val">{selectedCmd.client_name}</span>
-                  </div>
-                  <div className="dc-block-row">
-                    <span className="lbl">Logement :</span>
-                    <span className="val">{selectedCmd.bien_nom} ({selectedCmd.bien_code})</span>
-                  </div>
-                  <div className="dc-block-row">
-                    <span className="lbl">Date & Créneau :</span>
-                    <span className="val">{selectedCmd.date_prestation} • {selectedCmd.creneau}</span>
-                  </div>
+                  <span className="dc-bloc-actor">Commercial · Kawtar</span>
                 </div>
-
-                {/* 2. Runner & Logistique */}
-                <div className="dc-block">
-                  <div className="dc-block-title">
-                    <Truck size={16} color="#00473E" />
-                    2. Runner & Logistique
-                  </div>
-                  <div className="dc-block-row">
-                    <span className="lbl">Runner Assigné :</span>
-                    <span className="val">{selectedCmd.runner_name || 'En attente'}</span>
-                  </div>
-                  <div className="dc-block-row">
-                    <span className="lbl">Prestation Linge :</span>
-                    <span className="val">{selectedCmd.nature_linge.replace(/_/g, ' ')}</span>
-                  </div>
-                  <div className="dc-block-row">
-                    <span className="lbl">Sacs de linge :</span>
-                    <span className="val" style={{ color: '#0d9488' }}>
-                      {selectedCmd.filets_ramasses?.length || 0} sac(s) rattaché(s)
-                    </span>
-                  </div>
+                <div className="dc-bloc-desc">
+                  Saisie via le portail conciergerie ou backoffice. Logement <strong>{activeCmd?.bien_code}</strong>. 
+                  Options réassort : {activeCmd?.options?.length || 0} pack(s).
                 </div>
+              </div>
 
-                {/* 3. Laverie & Comptage */}
-                <div className="dc-block">
-                  <div className="dc-block-title">
+              {/* BLOC 2 : Dépôt Filet Propre */}
+              <div className="dc-bloc-item done">
+                <div className="dc-bloc-head">
+                  <div className="dc-bloc-title">
+                    <CheckCircle2 size={16} color="#10b981" />
+                    <span>2. Dépôt du filet propre</span>
+                  </div>
+                  <span className="dc-bloc-actor">Runner · Youssef</span>
+                </div>
+                <div className="dc-bloc-desc">
+                  Filet propre <strong>SAC-{activeCmd?.bien_code || 'GBE001'}-01</strong> déposé sur place. 
+                  <em>(Non facturé sur cette commande — rattaché à la commande d'origine).</em>
+                </div>
+              </div>
+
+              {/* BLOC 3 : Comptage Linge Sale */}
+              <div className={`dc-bloc-item ${activeCmd?.statut === 'saisie' ? 'current' : 'done'}`}>
+                <div className="dc-bloc-head">
+                  <div className="dc-bloc-title">
                     <Shirt size={16} color="#00473E" />
-                    3. Blanchisserie & Linge
+                    <span>3. Comptage du linge sale ramassé</span>
                   </div>
-                  <div className="dc-block-row">
-                    <span className="lbl">Tarif Linge Figé :</span>
-                    <span className="val" style={{ color: '#00473E', fontWeight: 800 }}>
-                      {selectedCmd.montant_linge ? `${selectedCmd.montant_linge} DH` : 'En attente décompte'}
-                    </span>
-                  </div>
-                  <div className="dc-block-row">
-                    <span className="lbl">Barème standard :</span>
-                    <span className="val">8 pièces = 50 DH</span>
-                  </div>
+                  <span className="dc-bloc-actor">Runner · Youssef</span>
                 </div>
+                <div className="dc-bloc-desc">
+                  16 pièces ramassées (1 set 8 pcs + 8 pièces supplémentaires). Facturable sur ce dossier.
+                </div>
+              </div>
 
-                {/* 4. Intervenantes & Exécution */}
-                <div className="dc-block">
-                  <div className="dc-block-title">
-                    <UserCheck size={16} color="#00473E" />
-                    4. Intervenantes & Exécution
+              {/* BLOC 4 : Recomptage et Observations Laverie */}
+              <div className={`dc-bloc-item ${activeCmd?.statut === 'en_cours' || activeCmd?.statut === 'cloturee' ? 'done' : 'pending'}`}>
+                <div className="dc-bloc-head">
+                  <div className="dc-bloc-title">
+                    <ShieldCheck size={16} color="#0d9488" />
+                    <span>4. Recomptage & figeage du montant</span>
                   </div>
-                  <div className="dc-block-row">
-                    <span className="lbl">Intervenante 1 :</span>
-                    <span className="val">{selectedCmd.intervenante_name || 'Non assignée'}</span>
+                  <span className="dc-bloc-actor">Resp. Linge · Amina</span>
+                </div>
+                <div className="dc-bloc-desc">
+                  Contrôle contradictoire : 16 pièces confirmées (écart 0). Montant du linge <strong>{activeCmd?.montant_linge || 90} DH</strong> figé.
+                </div>
+              </div>
+
+              {/* BLOC 5 : Notification au Commercial */}
+              <div className={`dc-bloc-item ${activeCmd?.statut === 'cloturee' ? 'done' : 'pending'}`}>
+                <div className="dc-bloc-head">
+                  <div className="dc-bloc-title">
+                    <Clock size={16} color="#64748b" />
+                    <span>5. Notification au commercial</span>
                   </div>
-                  {selectedCmd.intervenante_2_name && (
-                    <div className="dc-block-row">
-                      <span className="lbl">Intervenante 2 (Villa) :</span>
-                      <span className="val" style={{ color: '#0d9488' }}>{selectedCmd.intervenante_2_name}</span>
-                    </div>
+                  <span className="dc-bloc-actor">Système Automatisé</span>
+                </div>
+                <div className="dc-bloc-desc">
+                  Compte-rendu envoyé à la chargée de clientèle. Signalement linge taché validé avec proposition de refacturation.
+                </div>
+              </div>
+
+              {/* BLOC 6 : Commande Facturable */}
+              <div className={`dc-bloc-item ${activeCmd?.statut === 'cloturee' ? 'done' : 'pending'}`}>
+                <div className="dc-bloc-head">
+                  <div className="dc-bloc-title">
+                    <CheckCircle2 size={16} color={activeCmd?.statut === 'cloturee' ? '#10b981' : '#cbd5e1'} />
+                    <span>6. Commande Facturable</span>
+                  </div>
+                  <span className="dc-bloc-actor">Système Facturation</span>
+                </div>
+                <div className="dc-bloc-desc">
+                  {activeCmd?.statut === 'cloturee' ? (
+                    <span style={{ color: '#15803d', fontWeight: 700 }}>
+                      ✓ Facturable — Intégrée au cycle du 26 du mois (Total : {activeCmd?.total_ttc} DH).
+                    </span>
+                  ) : (
+                    <span style={{ color: '#64748b' }}>
+                      En attente de la validation des 4 photos obligatoires et du décompte contradictoire.
+                    </span>
                   )}
-                  <div className="dc-block-row">
-                    <span className="lbl">Photos de Clôture :</span>
-                    <span className="val" style={{ color: selectedCmd.photos_cloture?.length === 4 ? '#16a34a' : '#dc2626' }}>
-                      {selectedCmd.photos_cloture?.length || 0} / 4 photos validées
-                    </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions Bar Footer */}
+            <div style={{ display: 'flex', gap: '0.75rem', padding: '1.25rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+              <button 
+                onClick={() => setIsAssignOpen(true)}
+                className="cb-btn-secondary"
+              >
+                <UserCheck size={16} />
+                <span>Assigner Intervenante</span>
+              </button>
+
+              <button 
+                onClick={() => setIsClotureOpen(true)}
+                className="cb-btn-primary"
+              >
+                <Camera size={16} />
+                <span>Valider Clôture Photos (4/4)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Colonne Droite : Décomposition Financière & Rotation Linge */}
+          <div className="dc-sidebar-col">
+            <div className="dc-price-card">
+              <div className="dc-price-card-title">Décomposition Financière</div>
+              <div className="dc-price-row">
+                <span>Ménage remise en état :</span>
+                <strong>{activeCmd?.prix_menage || 160} DH</strong>
+              </div>
+              {Number(activeCmd?.supplement_zone) > 0 && (
+                <div className="dc-price-row">
+                  <span>Zone éloignée (+50 DH) :</span>
+                  <strong>+{activeCmd?.supplement_zone} DH</strong>
+                </div>
+              )}
+              {Number(activeCmd?.prix_options) > 0 && (
+                <div className="dc-price-row">
+                  <span>Options souscrites :</span>
+                  <strong>+{activeCmd?.prix_options} DH</strong>
+                </div>
+              )}
+              <div className="dc-price-row">
+                <span>Linge ramassé (16 pcs) :</span>
+                <strong>+{activeCmd?.montant_linge || 90} DH</strong>
+              </div>
+              <div className="dc-price-total">
+                <span>Total TTC :</span>
+                <span>{activeCmd?.total_ttc || 250} DH</span>
+              </div>
+            </div>
+
+            <div className="cb-section-box">
+              <div className="cb-section-box-title">
+                <Shirt size={16} />
+                <span>Prochain Dépôt & Rotation Linge</span>
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div><strong>Délai de lavage :</strong> 48 heures contractuelles</div>
+                <div><strong>Disponibilité au départ :</strong> Après-demain 09h00</div>
+                <div><strong>Stock logement :</strong> 3 sets complets dédiés</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 2 : LES 2 MOMENTS DU RUNNER (Page 08)                         */}
+      {/* ========================================================================= */}
+      {activeSubtab === 'moments' && (
+        <div className="dc-moments-grid">
+          {/* Moment 1 : Retrait au Bureau */}
+          <div className="dc-moment-card">
+            <div className="dc-moment-header">
+              <span className="dc-moment-badge">Moment 1</span>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                  Retrait au Bureau (Avant le départ)
+                </h3>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Contrôle contradictoire rapide</div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.5 }}>
+              Le runner vérifie la plaque nominative et le nombre de pièces sous film plastique scellé.
+            </div>
+
+            <div className="cb-pricing-box" style={{ background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#00473E' }}>
+                Filet GBE001 — 16 pièces annoncées
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
+                1 housse, 1 drap, 2 taies, 2 grdes serv., 2 ptes serv., 8 pièces supp.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
+              <button className="cb-btn-primary" style={{ flex: 1 }}>
+                ✓ Confirmer le retrait
+              </button>
+              <button className="cb-btn-secondary">
+                Contester
+              </button>
+            </div>
+          </div>
+
+          {/* Moment 2 : Ramassage Linge Sale */}
+          <div className="dc-moment-card">
+            <div className="dc-moment-header">
+              <span className="dc-moment-badge">Moment 2</span>
+              <div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                  Ramassage Linge Sale (Sur place)
+                </h3>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Comptage article par article</div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.5 }}>
+              Le runner compte les pièces réelles laissées par les voyageurs et saisit le décompte avec les 6 steppers.
+            </div>
+
+            <div className="cb-section-box">
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+                <span>Total Pièces Constatées :</span>
+                <strong>16 pièces</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+                <span>Décomposition Moteur :</span>
+                <strong>1 set (8 pcs) + 8 suppl.</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#00473E', fontWeight: 800 }}>
+                <span>Montant Facturable :</span>
+                <span>90 DH</span>
+              </div>
+            </div>
+
+            <button className="cb-btn-primary" style={{ marginTop: 'auto' }}>
+              Valider le décompte & la photo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 3 : ÉCRAN RESPONSABLE LINGE (Page 09)                         */}
+      {/* ========================================================================= */}
+      {activeSubtab === 'laverie' && (
+        <div className="dc-laverie-card">
+          <div className="dc-laverie-header">
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#00473E', margin: 0 }}>
+                Contrôle & Arbitrage Laverie — Amina
+              </h2>
+              <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                Filet GBE001 · Recomptage réception & signalement des anomalies
+              </div>
+            </div>
+            <span className="cb-code-badge" style={{ fontSize: '0.85rem' }}>
+              SAC-GBE001-01
+            </span>
+          </div>
+
+          <div className="cb-grid-2col">
+            <div>
+              <h4 style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', marginBottom: '0.75rem' }}>
+                Recomptage Laverie Contradictoire
+              </h4>
+              <div className="cb-section-box">
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
+                  <span>Annoncé par Runner Youssef :</span>
+                  <strong>16 pièces</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
+                  <span>Recompté par Laverie Amina :</span>
+                  <strong>16 pièces</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#15803d', fontWeight: 800 }}>
+                  <span>Écart constaté :</span>
+                  <span>0 pièce (Conforme)</span>
+                </div>
+              </div>
+
+              {/* Encadré d'Arbitrage Linge Abîmé */}
+              <div className="dc-arbitrage-box">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 800, color: '#c2410c', fontSize: '0.85rem' }}>
+                    Signalement Linge Abîmé / Taché
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <input 
+                      type="checkbox" 
+                      id="damageToggle" 
+                      checked={damagedFeeApplied}
+                      onChange={(e) => setDamagedFeeApplied(e.target.checked)}
+                      style={{ width: '16px', height: '16px' }}
+                    />
+                    <label htmlFor="damageToggle" style={{ fontSize: '0.8rem', fontWeight: 700, color: '#9a3412' }}>
+                      Facturer 10 DH
+                    </label>
                   </div>
                 </div>
+
+                <input 
+                  type="text" 
+                  value={damagedNote}
+                  onChange={(e) => setDamagedNote(e.target.value)}
+                  className="cb-form-input"
+                  style={{ marginTop: '0.6rem' }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <h4 style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', marginBottom: '0.75rem' }}>
+                Message Pré-rédigé pour Kawtar (WhatsApp)
+              </h4>
+              <div className="dc-message-preview">
+{`Bonjour Kawtar,
+
+Lors du contrôle du filet GBE001 (Commande ${activeCmd?.numero || 'CMD-2026-0418'}), Amina signale :
+• ${damagedNote}
+• Montant linge figé : 90 DH
+
+Action recommandée : informer le client Ghali Bensouda.`}
               </div>
 
-              {/* 5. Finance & Facturation */}
-              <div style={{ background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: '0.75rem', padding: '1.25rem', marginBottom: '1.25rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 800, textTransform: 'uppercase', color: '#0f766e', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <DollarSign size={16} />
-                    5. Synthèse Financière & Clôture
-                  </span>
-                  <span style={{ fontSize: '1.35rem', fontWeight: 900, color: '#00473E' }}>
-                    Total TTC : {selectedCmd.total_ttc} DH
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#134e4a', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.5rem' }}>
-                  <div>Ménage base : <b>{selectedCmd.prix_menage} DH</b></div>
-                  <div>Suppl. Zone : <b>{selectedCmd.supplement_zone} DH</b></div>
-                  <div>Linge Laverie : <b>{selectedCmd.montant_linge || 0} DH</b></div>
-                </div>
-              </div>
-
-              {/* Actions strip */}
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <button
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1.1rem', background: '#00473E', color: '#ffffff', borderRadius: '0.5rem', fontWeight: 700, fontSize: '0.825rem', border: 'none', cursor: 'pointer' }}
-                  onClick={() => setIsAssignOpen(true)}
-                >
-                  <UserCheck size={16} />
-                  Assigner les Équipes
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                <button className="cb-btn-primary" style={{ flex: 1 }}>
+                  ✓ Figer le montant (90 DH)
                 </button>
-
-                {selectedCmd.statut !== 'cloturee' && (
-                  <button
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1.1rem', background: '#0d9488', color: '#ffffff', borderRadius: '0.5rem', fontWeight: 700, fontSize: '0.825rem', border: 'none', cursor: 'pointer' }}
-                    onClick={() => setIsClotureOpen(true)}
-                  >
-                    <Camera size={16} />
-                    Clôturer (4 Photos)
-                  </button>
-                )}
-
-                <button
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1.1rem', background: '#ffffff', color: '#334155', borderRadius: '0.5rem', fontWeight: 700, fontSize: '0.825rem', border: '1px solid #cbd5e1', cursor: 'pointer' }}
-                  onClick={() => setIsObjetOpen(true)}
-                >
-                  <PackageSearch size={16} />
-                  Déclarer Objet Trouvé
+                <button className="cb-btn-secondary">
+                  Joindre photo preuve
                 </button>
               </div>
             </div>
@@ -502,74 +522,59 @@ export default function DossierCommandeView() {
         </div>
       )}
 
-      {/* ══════════ MODALE : ASSIGNATION INTERVENANTES ══════════ */}
-      {isAssignOpen && selectedCmd && (
-        <div className="dc-modal-overlay" onClick={() => setIsAssignOpen(false)}>
-          <div className="dc-modal-box" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
+      {/* Modal Assignation Intervenante */}
+      {isAssignOpen && (
+        <div className="dc-modal-overlay">
+          <div className="dc-modal-box">
             <div className="dc-modal-header">
-              <h3>Assignation des Équipes</h3>
-              <button style={{ background: '#f1f5f9', border: 'none', borderRadius: '0.45rem', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setIsAssignOpen(false)}>
+              <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.1rem' }}>
+                Assigner l'Intervenante — {selectedCmd?.numero}
+              </h3>
+              <button onClick={() => setIsAssignOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 <X size={18} />
               </button>
             </div>
             <form onSubmit={handleAssign}>
               <div className="dc-modal-body">
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                    Intervenante Principale *
-                  </label>
+                <div className="cb-form-group">
+                  <label className="cb-form-label">Intervenante Principale <span className="req">*</span></label>
                   <select
-                    required
                     value={assignIntervenante}
                     onChange={(e) => setAssignIntervenante(Number(e.target.value))}
-                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600 }}
+                    required
+                    className="cb-form-select"
                   >
                     <option value="">Sélectionner une intervenante...</option>
-                    {agentsList.map((a) => (
-                      <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>
+                    {agentsList.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.first_name} {a.last_name} — {a.zone || 'Casablanca'}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                    Intervenante 2 (Renfort Villa / Riad)
-                  </label>
+                <div className="cb-form-group">
+                  <label className="cb-form-label">Intervenante Secondaire (Optionnelle)</label>
                   <select
                     value={assignIntervenante2}
                     onChange={(e) => setAssignIntervenante2(e.target.value ? Number(e.target.value) : '')}
-                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600 }}
+                    className="cb-form-select"
                   >
-                    <option value="">Optionnel (requis pour Villa/Riad)...</option>
-                    {agentsList.map((a) => (
-                      <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                    Runner Logistique
-                  </label>
-                  <select
-                    value={assignRunner}
-                    onChange={(e) => setAssignRunner(e.target.value ? Number(e.target.value) : '')}
-                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600 }}
-                  >
-                    <option value="">Optionnel (Tournée Runner)...</option>
-                    {agentsList.map((a) => (
-                      <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>
+                    <option value="">Aucune</option>
+                    {agentsList.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.first_name} {a.last_name}
+                      </option>
                     ))}
                   </select>
                 </div>
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-                <button type="button" style={{ padding: '0.55rem 1.1rem', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }} onClick={() => setIsAssignOpen(false)}>
+              <div className="dc-modal-footer">
+                <button type="button" onClick={() => setIsAssignOpen(false)} className="cb-btn-secondary">
                   Annuler
                 </button>
-                <button type="submit" disabled={assignLoading} style={{ padding: '0.55rem 1.1rem', background: '#00473E', color: '#ffffff', border: 'none', borderRadius: '0.5rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
-                  {assignLoading ? 'Enregistrement...' : 'Valider l\'assignation'}
+                <button type="submit" disabled={assignLoading} className="cb-btn-primary">
+                  {assignLoading ? 'Assignation...' : 'Valider l\'assignation'}
                 </button>
               </div>
             </form>
@@ -577,102 +582,47 @@ export default function DossierCommandeView() {
         </div>
       )}
 
-      {/* ══════════ MODALE : CLÔTURE 4 PHOTOS ══════════ */}
-      {isClotureOpen && selectedCmd && (
-        <div className="dc-modal-overlay" onClick={() => setIsClotureOpen(false)}>
-          <div className="dc-modal-box" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
+      {/* Modal Clôture Photos */}
+      {isClotureOpen && (
+        <div className="dc-modal-overlay">
+          <div className="dc-modal-box">
             <div className="dc-modal-header">
-              <h3>Clôture de Mission (4 Photos Obligatoires)</h3>
-              <button style={{ background: '#f1f5f9', border: 'none', borderRadius: '0.45rem', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setIsClotureOpen(false)}>
+              <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.1rem' }}>
+                Clôture avec 4 Photos Obligatoires
+              </h3>
+              <button onClick={() => setIsClotureOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 <X size={18} />
               </button>
             </div>
             <form onSubmit={handleCloture}>
               <div className="dc-modal-body">
-                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '0.5rem', padding: '0.875rem', color: '#1e40af', fontSize: '0.8rem', marginBottom: '1rem' }}>
-                  Conformément aux règles contractuelles Agence Ménage, 4 photos doivent être transmises pour attester de la conformité du ménage.
-                </div>
-
-                {['Photo 1 : Salon', 'Photo 2 : Chambre', 'Photo 3 : Salle de bain', 'Photo 4 : Cuisine'].map((label, idx) => (
-                  <div key={idx} style={{ marginBottom: '0.875rem' }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                      {label} *
-                    </label>
+                <p style={{ fontSize: '0.825rem', color: '#64748b', marginBottom: '1rem' }}>
+                  Conformément au cahier des charges, 4 photos horodatées sont requises : Salon, Chambre(s), SDB, et Cuisine.
+                </p>
+                {['Photo 1 : Salon / Séjour', 'Photo 2 : Chambre principale & Lits', 'Photo 3 : Salle de bain & Serviettes', 'Photo 4 : Cuisine & Évier'].map((label, idx) => (
+                  <div key={idx} className="cb-form-group">
+                    <label className="cb-form-label">{label} <span className="req">*</span></label>
                     <input
-                      type="text"
-                      required
-                      placeholder="URL ou repère photo (ex: https://storage.../salon.jpg)"
-                      value={photos[idx]}
+                      type="url"
+                      placeholder="https://..."
+                      value={photos[idx] || ''}
                       onChange={(e) => {
                         const newP = [...photos];
                         newP[idx] = e.target.value;
                         setPhotos(newP);
                       }}
-                      style={{ width: '100%', padding: '0.55rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', boxSizing: 'border-box' }}
+                      required
+                      className="cb-form-input"
                     />
                   </div>
                 ))}
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-                <button type="button" style={{ padding: '0.55rem 1.1rem', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }} onClick={() => setIsClotureOpen(false)}>
+              <div className="dc-modal-footer">
+                <button type="button" onClick={() => setIsClotureOpen(false)} className="cb-btn-secondary">
                   Annuler
                 </button>
-                <button type="submit" disabled={clotureLoading} style={{ padding: '0.55rem 1.1rem', background: '#0d9488', color: '#ffffff', border: 'none', borderRadius: '0.5rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
-                  {clotureLoading ? 'Validation...' : 'Valider la Clôture'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════ MODALE : OBJET TROUVÉ ══════════ */}
-      {isObjetOpen && selectedCmd && (
-        <div className="dc-modal-overlay" onClick={() => setIsObjetOpen(false)}>
-          <div className="dc-modal-box" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="dc-modal-header">
-              <h3>Déclarer un Objet Trouvé</h3>
-              <button style={{ background: '#f1f5f9', border: 'none', borderRadius: '0.45rem', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} onClick={() => setIsObjetOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleCreateObjet}>
-              <div className="dc-modal-body">
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                    Description de l'objet *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Montre dorée oubliée sur la table de chevet"
-                    value={descriptionObjet}
-                    onChange={(e) => setDescriptionObjet(e.target.value)}
-                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                    Pièce / Emplacement
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Chambre parentale"
-                    value={pieceObjet}
-                    onChange={(e) => setPieceObjet(e.target.value)}
-                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-                <button type="button" style={{ padding: '0.55rem 1.1rem', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '0.5rem', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }} onClick={() => setIsObjetOpen(false)}>
-                  Annuler
-                </button>
-                <button type="submit" disabled={objetLoading} style={{ padding: '0.55rem 1.1rem', background: '#00473E', color: '#ffffff', border: 'none', borderRadius: '0.5rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
-                  {objetLoading ? 'Enregistrement...' : 'Enregistrer l\'objet'}
+                <button type="submit" disabled={clotureLoading} className="cb-btn-primary">
+                  {clotureLoading ? 'Validation...' : 'Valider et Clôturer'}
                 </button>
               </div>
             </form>

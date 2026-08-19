@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { 
   Building2, PlusCircle, FileText, Shirt, Calendar, Receipt, Globe, Settings, Sparkles 
 } from 'lucide-react';
+import './AirbnbCore.css';
 import './AirbnbLayout.css';
 
 export default function AirbnbLayout() {

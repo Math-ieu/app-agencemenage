@@ -1,4 +1,4 @@
-/* RunnerLaverie.css — Blanchisserie Laverie & Tournée Mobile Runner */
+/* RunnerLaverie.css — Blanchisserie Laverie & Tournée Mobile Runner (Pages 06, 10, 11, 12) */
 
 .rl-container {
   display: flex;
@@ -12,11 +12,12 @@
   display: flex;
   gap: 0.5rem;
   background: #ffffff;
-  padding: 0.35rem;
+  padding: 0.35rem 0.5rem;
   border-radius: 0.75rem;
   border: 1px solid #e2e8f0;
   width: fit-content;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  overflow-x: auto;
 }
 
 .rl-tab-btn {
@@ -32,10 +33,11 @@
   color: #64748b;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .rl-tab-btn:hover {
-  color: #0f172a;
+  color: #00473E;
   background: #f1f5f9;
 }
 
@@ -60,64 +62,166 @@
   line-height: 1.5;
 }
 
-/* Table Card */
-.rl-table-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.875rem;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+/* ========================================================================= */
+/* BORNE RUNNER MOBILE FRAME (Pages 10 & 11)                                 */
+/* ========================================================================= */
+.rl-phone-container {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0;
 }
 
-.rl-table {
+.rl-phone-frame {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 0.85rem;
-  text-align: left;
-}
-
-.rl-table thead th {
+  max-width: 440px;
   background: #f8fafc;
-  padding: 0.875rem 1rem;
-  font-size: 0.725rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #64748b;
-  border-bottom: 1px solid #e2e8f0;
-  white-space: nowrap;
-}
-
-.rl-table tbody td {
-  padding: 0.95rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
-  color: #334155;
-  vertical-align: middle;
-}
-
-/* Runner Tournée Cards */
-.rl-runner-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1rem;
-}
-
-.rl-mission-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.875rem;
-  padding: 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 4px solid #1e293b;
+  border-radius: 2rem;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  transition: all 0.2s ease;
 }
 
-.rl-mission-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+.rl-phone-topbar {
+  background: #00473E;
+  color: #ffffff;
+  padding: 1rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rl-phone-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 680px;
+  overflow-y: auto;
+}
+
+.rl-phone-kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.rl-phone-kpi {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  text-align: center;
+}
+
+.rl-phone-kpi-val {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #00473E;
+}
+
+.rl-phone-kpi-lbl {
+  font-size: 0.675rem;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.rl-phone-stop-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rl-phone-stop-card:hover {
+  border-color: #00473E;
+  transform: translateY(-1px);
+}
+
+.rl-phone-stop-card.done {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+/* ========================================================================= */
+/* CYCLE DU LINGE KANBAN 5 COLONNES (Page 06)                                */
+/* ========================================================================= */
+.rl-kanban-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+@media (max-width: 1200px) {
+  .rl-kanban-grid {
+    grid-template-columns: repeat(5, 240px);
+  }
+}
+
+.rl-kanban-col {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  overflow: hidden;
+}
+
+.rl-kanban-col-head {
+  padding: 0.85rem 1rem;
+  background: #e2e8f0;
+  font-size: 0.775rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #334155;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rl-kanban-badge {
+  background: #ffffff;
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  font-size: 0.725rem;
+  color: #0f172a;
+}
+
+.rl-kanban-col-body {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.rl-kanban-card {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.625rem;
+  padding: 0.875rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.rl-kanban-card-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  color: #00473E;
+  font-size: 0.85rem;
 }
 
 /* Stepper Counter in Modals */

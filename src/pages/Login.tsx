@@ -34,7 +34,17 @@ export default function LoginPage() {
     try {
       const { data } = await login(loginVal, password);
       setAuth(data.user);
-      navigate('/');
+      
+      const role = (data.user?.role || '').toLowerCase().trim();
+      if (role === 'runner' || role === 'runner / chauffeur livreur') {
+        navigate('/runner');
+      } else if (role === 'responsable_linge' || role === 'responsable linge / blanchisserie' || role === 'responsable linge') {
+        navigate('/laverie');
+      } else if (role === 'client_conciergerie' || role === 'client conciergerie') {
+        navigate('/portail-conciergerie');
+      } else {
+        navigate('/');
+      }
     } catch {
       setError('Identifiants incorrects.');
     } finally {

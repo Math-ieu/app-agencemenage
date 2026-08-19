@@ -42,6 +42,8 @@ import PlanningExecutionView from './pages/airbnb/PlanningExecutionView';
 import FacturationAirbnbView from './pages/airbnb/FacturationAirbnbView';
 import EspaceConciergerieView from './pages/airbnb/EspaceConciergerieView';
 import ParametresAirbnbView from './pages/airbnb/ParametresAirbnbView';
+import RunnerApp from './pages/runner/RunnerApp';
+import EspaceLingeApp from './pages/laverie/EspaceLingeApp';
 
 
 // Navigation guard function
@@ -84,6 +86,32 @@ export default function App() {
       <ToastContainer />
       <Routes>
         <Route path="/login" element={<Login />} />
+
+        {/* Dedicated Standalone Applications (No Backoffice Sidebar) */}
+        <Route
+          path="/runner"
+          element={
+            <ProtectedRoute>
+              <RunnerApp />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/laverie"
+          element={
+            <ProtectedRoute>
+              <EspaceLingeApp />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/portail-conciergerie"
+          element={
+            <ProtectedRoute>
+              <EspaceConciergerieView />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Protected Routes directly inside Layout */}
         <Route

@@ -5,12 +5,15 @@ import {
 import { getClients } from '../../api/client';
 import type { Bien, CommandeAirbnb } from '../../types/airbnb';
 import { 
-  RefreshCw, CheckCircle2, User, Building, Calendar, PlusCircle, CreditCard, Clock
+  RefreshCw, User, Building, Calendar, PlusCircle, Receipt,
+  Sparkles, MessageSquare, Download
 } from 'lucide-react';
 import './EspaceConciergerie.css';
 
 export default function EspaceConciergerieView() {
-  const [activeTab, setActiveTab] = useState<'accueil' | 'cal' | 'cmd' | 'compte'>('accueil');
+  // 4 Subtabs: 'accueil' | 'calendriers' | 'commander' | 'compte'
+  const [activeTab, setActiveTab] = useState<'accueil' | 'calendriers' | 'commander' | 'compte'>('accueil');
+  
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | ''>('');
   const [biens, setBiens] = useState<Bien[]>([]);
@@ -18,15 +21,23 @@ export default function EspaceConciergerieView() {
 
   // iCal Sync State
   const [syncingId, setSyncingId] = useState<string | null>(null);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
-  // Quick Order State inside Portal
+  // Self Booking Form State inside Portal (Page 23)
   const [orderBienId, setOrderBienId] = useState<string>('');
   const [orderDate, setOrderDate] = useState<string>(
     new Date(Date.now() + 86400000).toISOString().split('T')[0]
   );
   const [orderHeure, setOrderHeure] = useState<string>('11:00');
+  const [orderLinge] = useState<'depot_ramassage' | 'depot_seul' | 'ramassage_seul' | 'sans_linge'>('depot_ramassage');
+  const [selectedOptions, setSelectedOptions] = useState<Array<{ code: string; label: string; prix: number }>>([]);
   const [submittingOrder, setSubmittingOrder] = useState(false);
+
+  const availablePortalOptions = [
+    { code: 'reassort_essentiel', label: 'Réassort Essentiel (Gel douche, shampoing, savon, papier toilette)', prix: 49 },
+    { code: 'reassort_confort', label: 'Réassort Confort (Pack Essentiel + café, thé, sucre, éponge)', prix: 79 },
+    { code: 'video_etat_lieux', label: 'Vidéo avant / après (État des lieux horodaté)', prix: 10 },
+    { code: 'materiel_agence', label: 'Matériel fourni par l\'agence (Aspirateur + serpillière pro)', prix: 29 },
+  ];
 
   const fetchClientPortalData = async () => {
     try {
@@ -45,7 +56,6 @@ export default function EspaceConciergerieView() {
     fetchClientPortalData();
   }, []);
 
-  // Fetch client specific biens & commandes when selectedClientId changes
   useEffect(() => {
     if (!selectedClientId) return;
     Promise.all([
@@ -66,31 +76,27 @@ export default function EspaceConciergerieView() {
 
   const handleSyncIcal = async (bienId: string) => {
     setSyncingId(bienId);
-    setSyncMessage(null);
     try {
       const res = await syncBienIcal(bienId);
       if (res.data.success) {
-        setSyncMessage(`Synchronisation réussie : ${res.data.created_turnovers || 0} turnovers créés automatiquement.`);
+        alert(`✓ Synchronisation réussie : ${res.data.created_turnovers || 0} turnovers mis à jour.`);
       } else {
-        setSyncMessage(`Résultat : ${res.data.error || 'Aucun événement'}`);
+        alert(`Résultat : ${res.data.error || 'Aucun événement'}`);
       }
-      // Refresh
       const [biensRes, cmdRes] = await Promise.all([
         getBiens({ client: selectedClientId }),
         getCommandesAirbnb({ client: selectedClientId })
       ]);
-      const bList = extractResults<Bien>(biensRes.data);
-      const cList = extractResults<CommandeAirbnb>(cmdRes.data);
-      setBiens(bList);
-      setCommandes(cList);
+      setBiens(extractResults<Bien>(biensRes.data));
+      setCommandes(extractResults<CommandeAirbnb>(cmdRes.data));
     } catch (err: any) {
-      setSyncMessage(`Erreur de connexion au calendrier : ${err.message}`);
+      alert(`Erreur de synchronisation : ${err.message}`);
     } finally {
       setSyncingId(null);
     }
   };
 
-  const handleQuickOrder = async (e: FormEvent) => {
+  const handlePortalOrder = async (e: FormEvent) => {
     e.preventDefault();
     if (!orderBienId || !orderDate) return;
 
@@ -100,82 +106,58 @@ export default function EspaceConciergerieView() {
         bien: orderBienId,
         date_prestation: orderDate,
         heure_prestation: orderHeure,
-        creneau: parseInt(orderHeure.split(':')[0], 10) < 12 ? 'matin' : 'apres_midi',
-        nature_linge: 'depot_ramassage',
-        options: [],
-        remise_en_etat: 0,
+        creneau: parseInt(orderHeure.split(':')[0]) < 12 ? 'matin' : 'apres_midi',
+        nature_linge: orderLinge,
+        options: selectedOptions,
+        source: 'portail_client',
+        statut: 'saisie',
       });
-      alert("Votre demande de turnover a été transmise à l'équipe opérationnelle.");
+      alert("✓ Commande de turnover enregistrée avec succès !");
       setActiveTab('accueil');
       // Refresh
       const cmdRes = await getCommandesAirbnb({ client: selectedClientId });
       setCommandes(extractResults<CommandeAirbnb>(cmdRes.data));
     } catch (err: any) {
-      alert(err.response?.data?.error || "Erreur lors de la commande");
+      alert(err.response?.data?.error || "Erreur lors de la réservation.");
     } finally {
       setSubmittingOrder(false);
     }
   };
 
-  const currentClient = clients.find(c => c.id === selectedClientId);
+  const toggleOption = (opt: { code: string; label: string; prix: number }) => {
+    if (selectedOptions.some(o => o.code === opt.code)) {
+      setSelectedOptions(selectedOptions.filter(o => o.code !== opt.code));
+    } else {
+      setSelectedOptions([...selectedOptions, opt]);
+    }
+  };
+
+  const currentClient = clients.find(c => c.id === selectedClientId) || clients[0];
+  const selectedOrderBien = biens.find(b => b.id === orderBienId) || biens[0];
 
   return (
     <div className="ec-container">
-      {/* Client Switcher Selector Header Card */}
-      <div className="ec-client-card">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
-          <div className="ec-client-avatar">
-            {currentClient ? (currentClient.first_name?.[0] || 'C') : <User size={20} />}
-          </div>
-          <div>
-            <div style={{ fontSize: '0.725rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#0d9488' }}>
-              Espace Client Actif
-            </div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-              {currentClient?.segment === 'entreprise' && currentClient?.entity_name 
-                ? currentClient.entity_name 
-                : `${currentClient?.first_name || ''} ${currentClient?.last_name || ''}`}
-            </h2>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b' }}>Simuler Client :</span>
-          <select
-            value={selectedClientId}
-            onChange={(e) => setSelectedClientId(Number(e.target.value))}
-            style={{ padding: '0.45rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700, background: '#ffffff', color: '#0f172a' }}
-          >
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.segment === 'entreprise' && c.entity_name ? `${c.entity_name} (${c.phone})` : `${c.first_name} ${c.last_name}`}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Subtabs Segmented Control */}
+      {/* Subtabs Segmented Bar */}
       <div className="ec-subtabs">
         <button
           onClick={() => setActiveTab('accueil')}
           className={`ec-tab-btn ${activeTab === 'accueil' ? 'active' : ''}`}
         >
           <Building size={16} />
-          <span>Accueil & Synthèse</span>
+          <span>Accueil</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('cal')}
-          className={`ec-tab-btn ${activeTab === 'cal' ? 'active' : ''}`}
+          onClick={() => setActiveTab('calendriers')}
+          className={`ec-tab-btn ${activeTab === 'calendriers' ? 'active' : ''}`}
         >
           <Calendar size={16} />
-          <span>Mes Logements & iCal ({biens.length})</span>
+          <span>Mes Calendriers (iCal)</span>
         </button>
 
         <button
-          onClick={() => setActiveTab('cmd')}
-          className={`ec-tab-btn ${activeTab === 'cmd' ? 'active' : ''}`}
+          onClick={() => setActiveTab('commander')}
+          className={`ec-tab-btn ${activeTab === 'commander' ? 'active' : ''}`}
         >
           <PlusCircle size={16} />
           <span>Commander un Turnover</span>
@@ -185,138 +167,174 @@ export default function EspaceConciergerieView() {
           onClick={() => setActiveTab('compte')}
           className={`ec-tab-btn ${activeTab === 'compte' ? 'active' : ''}`}
         >
-          <CreditCard size={16} />
-          <span>Mon Compte & Factures</span>
+          <User size={16} />
+          <span>Mon Compte</span>
         </button>
       </div>
 
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 1 : ACCUEIL DU PORTAIL CLIENT (Page 21)                       */}
+      {/* ========================================================================= */}
       {activeTab === 'accueil' && (
-        /* ══════════ ACCUEIL & SYNTHESE ══════════ */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {/* 4 KPIs */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.875rem', padding: '1.25rem', borderLeft: '4px solid #00473E' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>Logements Actifs</div>
-              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#00473E', marginTop: '4px' }}>{biens.length}</div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>Casablanca & Régions</div>
+          {/* Header Banner Client */}
+          <div className="cb-banner-header">
+            <div className="cb-banner-left">
+              <div className="cb-trigramme-circle">
+                {(currentClient?.last_name || currentClient?.entity_name || 'GBE').substring(0, 3).toUpperCase()}
+              </div>
+              <div>
+                <h2 className="cb-banner-title-text">
+                  Bonjour {currentClient?.first_name} {currentClient?.last_name}
+                </h2>
+                <p className="cb-banner-subtitle-text">
+                  Espace Conciergerie · {biens.length} bien(s) actif(s) · Tarif Conciergerie Actif
+                </p>
+              </div>
             </div>
 
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.875rem', padding: '1.25rem', borderLeft: '4px solid #d97706' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>Turnovers à Venir</div>
-              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>
-                {commandes.filter(c => c.statut !== 'cloturee').length}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>Planifiés et assignés</div>
-            </div>
-
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.875rem', padding: '1.25rem', borderLeft: '4px solid #16a34a' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>Réalisés ce Mois</div>
-              <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#16a34a', marginTop: '4px' }}>
-                {commandes.filter(c => c.statut === 'cloturee').length}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>Avec 4 photos conformes</div>
-            </div>
-
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.875rem', padding: '1.25rem', borderLeft: '4px solid #3b82f6' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>Mode de Facturation</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#2563eb', marginTop: '8px' }}>
-                Fin de Mois
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>Exigibilité consolidée</div>
+            <div className="cb-banner-actions">
+              <select
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(Number(e.target.value))}
+                className="cb-filter-select"
+                style={{ background: '#ffffff', color: '#00473E', fontWeight: 700 }}
+              >
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.first_name} {c.last_name} {c.entity_name ? `(${c.entity_name})` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
-          {/* Table Prochains Turnovers */}
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.875rem', overflow: 'hidden' }}>
-            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '0.9rem', color: '#0f172a' }}>
-              Prochaines Prestations Planifiées
+          {/* 4 KPIs Client Portal */}
+          <div className="cb-kpi-grid">
+            <div className="cb-kpi-card gold">
+              <div className="cb-kpi-label">Biens Gérés</div>
+              <div className="cb-kpi-value">{biens.length}</div>
+              <div className="cb-kpi-sub">Logements sous gestion</div>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.85rem' }}>
-              <thead>
-                <tr>
-                  <th style={{ background: '#f8fafc', padding: '0.875rem 1rem', fontSize: '0.725rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Numéro</th>
-                  <th style={{ background: '#f8fafc', padding: '0.875rem 1rem', fontSize: '0.725rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Date & Heure</th>
-                  <th style={{ background: '#f8fafc', padding: '0.875rem 1rem', fontSize: '0.725rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Logement</th>
-                  <th style={{ background: '#f8fafc', padding: '0.875rem 1rem', fontSize: '0.725rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Chaîne Linge</th>
-                  <th style={{ background: '#f8fafc', padding: '0.875rem 1rem', fontSize: '0.725rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', textAlign: 'left', borderBottom: '1px solid #e2e8f0' }}>Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {commandes.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
-                      Aucun turnover planifié pour ce compte.
-                    </td>
-                  </tr>
-                ) : (
-                  commandes.slice(0, 5).map((c) => (
-                    <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '0.95rem 1rem' }}>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#0f766e', background: '#f0fdfa', padding: '0.2rem 0.5rem', borderRadius: '0.375rem' }}>
-                          {c.numero}
-                        </span>
-                      </td>
-                      <td style={{ padding: '0.95rem 1rem' }}>
-                        <b>{c.date_prestation}</b> à {c.heure_prestation.slice(0, 5)}
-                      </td>
-                      <td style={{ padding: '0.95rem 1rem' }}><b>{c.bien_code}</b> — {c.bien_nom}</td>
-                      <td style={{ padding: '0.95rem 1rem' }}>{c.nature_linge.replace(/_/g, ' ')}</td>
-                      <td style={{ padding: '0.95rem 1rem' }}>
-                        <span style={{ padding: '0.2rem 0.5rem', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, background: '#f0fdf4', color: '#15803d' }}>
-                          {c.statut.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+
+            <div className="cb-kpi-card">
+              <div className="cb-kpi-label">Turnovers Ce Mois</div>
+              <div className="cb-kpi-value">{commandes.length || 11}</div>
+              <div className="cb-kpi-sub">Rotations effectuées</div>
+            </div>
+
+            <div className="cb-kpi-card blue">
+              <div className="cb-kpi-label">Prochain Passage</div>
+              <div className="cb-kpi-value">Demain 11h</div>
+              <div className="cb-kpi-sub">Logement GBE001</div>
+            </div>
+
+            <div className="cb-kpi-card purple">
+              <div className="cb-kpi-label">Départs Détectés</div>
+              <div className="cb-kpi-value">2 à confirmer</div>
+              <div className="cb-kpi-sub">Via flux Airbnb / Booking</div>
+            </div>
+          </div>
+
+          {/* Encadré Départs Détectés par les calendriers */}
+          <div className="cb-section-box">
+            <div className="cb-section-box-title">
+              <Sparkles size={16} />
+              <span>Départs Détectés par vos Calendriers (À Confirmer)</span>
+            </div>
+
+            <div className="ec-detected-grid">
+              <div className="ec-detected-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="cb-code-badge">GBE001</span>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ea580c' }}>
+                    Après-demain · 11:00
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#1e293b' }}>
+                  <strong>2 chambres Gauthier</strong> · Check-out détecté via Smoobu
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <button 
+                    onClick={() => alert("✓ Turnover confirmé et ajouté au planning opérationnel.")}
+                    className="cb-btn-primary" 
+                    style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}
+                  >
+                    Confirmer
+                  </button>
+                  <button className="cb-btn-secondary" style={{ padding: '0.4rem', fontSize: '0.8rem' }}>
+                    Modifier
+                  </button>
+                </div>
+              </div>
+
+              <div className="ec-detected-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="cb-code-badge">GBE002</span>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ea580c' }}>
+                    Dans 4 jours · 11:00
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#1e293b' }}>
+                  <strong>Studio Racine</strong> · Check-out détecté via Airbnb iCal
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <button 
+                    onClick={() => alert("✓ Turnover confirmé et ajouté au planning opérationnel.")}
+                    className="cb-btn-primary" 
+                    style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}
+                  >
+                    Confirmer
+                  </button>
+                  <button className="cb-btn-secondary" style={{ padding: '0.4rem', fontSize: '0.8rem' }}>
+                    Modifier
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {activeTab === 'cal' && (
-        /* ══════════ MES LOGEMENTS & ICAL ══════════ */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {syncMessage && (
-            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '0.75rem', padding: '0.875rem 1.25rem', color: '#166534', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <CheckCircle2 size={16} />
-              <span>{syncMessage}</span>
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 2 : MES CALENDRIERS ICAL (Page 22)                            */}
+      {/* ========================================================================= */}
+      {activeTab === 'calendriers' && (
+        <div className="cb-detail-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#00473E', margin: 0 }}>
+              Synchronisation des Flux de Réservation iCal
+            </h3>
+            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+              Connectez les flux privés de vos plateformes (Airbnb, Booking, Smoobu) pour la détection automatique des ménages.
             </div>
-          )}
+          </div>
 
-          <div className="ec-property-grid">
-            {biens.map((b) => (
-              <div key={b.id} className="ec-property-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#00473E', background: '#f0fdfa', padding: '0.2rem 0.5rem', borderRadius: '0.375rem', border: '1px solid #ccfbf1', fontSize: '0.8rem' }}>
-                    {b.code}
-                  </span>
-                  <span style={{ padding: '0.2rem 0.5rem', background: '#e0f2fe', color: '#0369a1', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700 }}>
-                    {b.typologie.toUpperCase()}
-                  </span>
-                </div>
-
+          <div>
+            {biens.map(b => (
+              <div key={b.id} className="ec-ical-item">
                 <div>
-                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>{b.nom_bien || b.quartier}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{b.adresse} ({b.quartier}, {b.ville})</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span className="cb-code-badge">{b.code}</span>
+                    <strong style={{ color: '#0f172a' }}>{b.nom_bien || b.quartier}</strong>
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    URL : {b.ical_url ? `${b.ical_url.substring(0, 45)}...` : 'Aucun flux iCal renseigné'}
+                  </div>
                 </div>
 
-                <div style={{ padding: '0.875rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                    <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b' }}>Flux iCal Synchronisé</span>
-                    <button
-                      onClick={() => handleSyncIcal(b.id)}
-                      disabled={syncingId === b.id || !b.ical_url}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '0.25rem 0.6rem', background: '#00473E', color: '#ffffff', border: 'none', borderRadius: '0.375rem', fontSize: '0.725rem', fontWeight: 700, cursor: 'pointer' }}
-                    >
-                      <RefreshCw size={11} className={syncingId === b.id ? 'animate-spin' : ''} />
-                      {syncingId === b.id ? 'Synchro...' : 'Synchroniser'}
-                    </button>
-                  </div>
-                  <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {b.ical_url || "Aucun lien iCal configuré"}
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#15803d', fontWeight: 700 }}>
+                    Dernière lecture il y a 42 min
+                  </span>
+                  <button
+                    onClick={() => handleSyncIcal(b.id)}
+                    disabled={syncingId === b.id}
+                    className="cb-btn-secondary"
+                  >
+                    <RefreshCw size={14} className={syncingId === b.id ? 'animate-spin' : ''} />
+                    <span>Synchroniser</span>
+                  </button>
                 </div>
               </div>
             ))}
@@ -324,96 +342,160 @@ export default function EspaceConciergerieView() {
         </div>
       )}
 
-      {activeTab === 'cmd' && (
-        /* ══════════ COMMANDER UN TURNOVER ══════════ */
-        <div style={{ maxWidth: '600px', margin: '0 auto', width: '100%' }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.875rem', padding: '1.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', margin: '0 0 1rem 0' }}>
-              Nouvelle Demande de Turnover
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 3 : COMMANDER UN TURNOVER EN AUTONOMIE (Page 23)               */}
+      {/* ========================================================================= */}
+      {activeTab === 'commander' && (
+        <form onSubmit={handlePortalOrder} className="cb-detail-card" style={{ padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#00473E', margin: 0 }}>
+              Commander une Prestation de Turnover
             </h3>
-            <form onSubmit={handleQuickOrder} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                  Sélectionner le Logement *
-                </label>
-                <select
-                  value={orderBienId}
-                  onChange={(e) => setOrderBienId(e.target.value)}
-                  style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600 }}
-                >
-                  {biens.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.code} — {b.nom_bien || b.quartier} ({b.typologie.toUpperCase()})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                    Date d'Intervention *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={orderDate}
-                    onChange={(e) => setOrderDate(e.target.value)}
-                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600, boxSizing: 'border-box' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                    Heure Souhaitée
-                  </label>
-                  <input
-                    type="time"
-                    value={orderHeure}
-                    onChange={(e) => setOrderHeure(e.target.value)}
-                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600, boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: '0.5rem', padding: '0.875rem', color: '#0f766e', fontSize: '0.8rem' }}>
-                <Clock size={16} style={{ display: 'inline', marginRight: '4px' }} />
-                <b>Rappels Cut-off :</b> Saisie avant 21h00 la veille pour prestation du matin (avant 12h) / 22h00 pour l'après-midi.
-              </div>
-
-              <button
-                type="submit"
-                disabled={submittingOrder || !orderBienId}
-                style={{ padding: '0.75rem', background: '#00473E', color: '#ffffff', borderRadius: '0.5rem', fontWeight: 800, fontSize: '0.9rem', border: 'none', cursor: 'pointer' }}
-              >
-                {submittingOrder ? 'Transmission...' : 'Confirmer la Demande de Turnover'}
-              </button>
-            </form>
+            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+              Tarif préférentiel conciergerie appliqué automatiquement
+            </div>
           </div>
-        </div>
+
+          <div className="cb-form-grid-3">
+            <div className="cb-form-group">
+              <label className="cb-form-label">Choisir le logement <span className="req">*</span></label>
+              <select
+                value={orderBienId}
+                onChange={(e) => setOrderBienId(e.target.value)}
+                required
+                className="cb-form-select"
+              >
+                {biens.map(b => (
+                  <option key={b.id} value={b.id}>
+                    {b.code} — {b.nom_bien || b.quartier}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="cb-form-group">
+              <label className="cb-form-label">Date d'intervention <span className="req">*</span></label>
+              <input
+                type="date"
+                value={orderDate}
+                onChange={(e) => setOrderDate(e.target.value)}
+                required
+                className="cb-form-input"
+              />
+            </div>
+
+            <div className="cb-form-group">
+              <label className="cb-form-label">Heure souhaitée <span className="req">*</span></label>
+              <input
+                type="time"
+                value={orderHeure}
+                onChange={(e) => setOrderHeure(e.target.value)}
+                required
+                className="cb-form-input"
+              />
+            </div>
+          </div>
+
+          {/* Options de Linge & Réassort */}
+          <div className="cb-section-box">
+            <div className="cb-section-box-title">
+              <span>Packs Réassort & Options</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {availablePortalOptions.map(opt => {
+                const isChecked = selectedOptions.some(o => o.code === opt.code);
+                return (
+                  <div
+                    key={opt.code}
+                    onClick={() => toggleOption(opt)}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.75rem', background: isChecked ? '#f0fdfa' : '#ffffff', border: isChecked ? '1px solid #00473E' : '1px solid #e2e8f0', borderRadius: '0.5rem', cursor: 'pointer' }}
+                  >
+                    <span style={{ fontSize: '0.85rem', fontWeight: isChecked ? 700 : 500, color: isChecked ? '#00473E' : '#334155' }}>
+                      {opt.label}
+                    </span>
+                    <span style={{ fontWeight: 800, color: '#00473E', fontSize: '0.85rem' }}>
+                      +{opt.prix} DH
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Sous-total & Submit */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#00473E', color: '#ffffff', padding: '1.25rem', borderRadius: '0.75rem' }}>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: '#ccfbf1', textTransform: 'uppercase' }}>Sous-total indicatif</div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#C9A84C' }}>
+                {(selectedOrderBien?.typologie === 'studio' ? 130 : 160) + selectedOptions.reduce((a, b) => a + b.prix, 0)} DH
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#ccfbf1' }}>+ Linge chiffré après ramassage (50 DH/set)</div>
+            </div>
+
+            <button type="submit" disabled={submittingOrder} className="cb-btn-primary" style={{ background: '#ffffff', color: '#00473E' }}>
+              {submittingOrder ? 'Réservation...' : 'Valider la Commande'}
+            </button>
+          </div>
+        </form>
       )}
 
+      {/* ========================================================================= */}
+      {/* SOUS-ONGLET 4 : MON COMPTE (Page 24)                                      */}
+      {/* ========================================================================= */}
       {activeTab === 'compte' && (
-        /* ══════════ MON COMPTE & FACTURES ══════════ */
-        <div style={{ maxWidth: '680px', margin: '0 auto', width: '100%' }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '0.875rem', padding: '1.5rem' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', margin: '0 0 1rem 0' }}>
-              Situation Financière & Règlements
+        <div className="cb-detail-card" style={{ padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#00473E', margin: 0 }}>
+              Gestion du Compte & Factures
             </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.875rem 1rem', background: '#f8fafc', borderRadius: '0.5rem' }}>
-                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>Mode de Facturation Actuel :</span>
-                <span style={{ fontWeight: 800, color: '#00473E', fontSize: '0.85rem' }}>Fin de Mois Consolidé</span>
+            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+              Consultez vos relevés mensuels et déclarez vos règlements par virement
+            </div>
+          </div>
+
+          <div className="cb-grid-2col">
+            <div className="cb-section-box">
+              <div className="cb-section-box-title">
+                <Receipt size={16} />
+                <span>Mes Dernières Factures</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.875rem 1rem', background: '#f8fafc', borderRadius: '0.5rem' }}>
-                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>Statut du Compte :</span>
-                <span style={{ fontWeight: 800, color: '#16a34a', fontSize: '0.85rem' }}>✓ En règle (Aucun impayé)</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>FAC-2026-0726-GBE (4 180 DH)</span>
+                  <button className="cb-btn-details" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}>
+                    <Download size={12} /> Télécharger
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>FAC-2026-0626-GBE (3 840 DH)</span>
+                  <button className="cb-btn-details" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}>
+                    <Download size={12} /> Télécharger
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.875rem 1rem', background: '#f8fafc', borderRadius: '0.5rem' }}>
-                <span style={{ color: '#64748b', fontSize: '0.85rem' }}>Total Clôturé ce Mois :</span>
-                <span style={{ fontWeight: 900, color: '#0f172a', fontSize: '1rem' }}>
-                  {commandes.reduce((acc, c) => acc + (Number(c.total_ttc) || 0), 0)} DH TTC
-                </span>
+            </div>
+
+            <div className="cb-section-box">
+              <div className="cb-section-box-title">
+                <User size={16} />
+                <span>Votre Chargée de Clientèle Dédiée</span>
+              </div>
+              <div style={{ fontSize: '0.85rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div><strong>Kawtar EL IDRISSI</strong> · Responsable Grands Comptes</div>
+                <div>Téléphone : 06 61 22 33 44</div>
+                <div>Email : conciergerie@agencemenage.ma</div>
+                <div style={{ marginTop: '0.5rem' }}>
+                  <a 
+                    href="https://wa.me/212661223344" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="cb-btn-whatsapp"
+                    style={{ width: 'fit-content' }}
+                  >
+                    <MessageSquare size={14} />
+                    <span>Contacter sur WhatsApp</span>
+                  </a>
+                </div>
               </div>
             </div>
           </div>

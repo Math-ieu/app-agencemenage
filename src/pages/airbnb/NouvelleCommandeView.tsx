@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, RotateCw, Check } from 'lucide-react';
+import { CheckCircle2, Clock, Sparkles, Shirt, Check, PlusCircle, ArrowRight } from 'lucide-react';
 import { getBiens, calculateCommandePrice, createCommandeAirbnb, extractResults } from '../../api/airbnb';
 import type { Bien, NatureLinge, CreneauCommande } from '../../types/airbnb';
 import './NouvelleCommande.css';
@@ -13,7 +13,7 @@ export default function NouvelleCommandeView() {
   // Form State
   const [selectedBienId, setSelectedBienId] = useState<string>('');
   const [datePrestation, setDatePrestation] = useState<string>(
-    new Date(Date.now() + 86400000).toISOString().split('T')[0] // Demain par défaut
+    new Date(Date.now() + 86400000).toISOString().split('T')[0]
   );
   const [heurePrestation, setHeurePrestation] = useState<string>('11:00');
   const [creneau, setCreneau] = useState<CreneauCommande>('matin');
@@ -31,10 +31,10 @@ export default function NouvelleCommandeView() {
 
   // Available options catalog
   const availableOptions = [
-    { code: 'capsules_cafe', label: 'Pack Capsules Café & Thé Premium (10 caps)', prix: 30 },
-    { code: 'kit_vip', label: 'Kit Produits d\'Accueil VIP (Shampoing, Savon, Gel)', prix: 40 },
-    { code: 'papier_essuie', label: 'Pack Réassort Papier Toilette & Essuie-tout (4 rouleaux)', prix: 25 },
-    { code: 'express_laverie', label: 'Supplément Traitement Express Laverie < 24h', prix: 50 },
+    { code: 'reassort_essentiel', label: 'Réassort Essentiel (Gel douche, shampoing, savon, papier toilette)', prix: 49 },
+    { code: 'reassort_confort', label: 'Réassort Confort (Pack Essentiel + café 6 capsules, thé, sucre, éponge)', prix: 79 },
+    { code: 'video_etat_lieux', label: 'Vidéo avant / après (Vidéo panoramique horodatée de l\'état des lieux)', prix: 10 },
+    { code: 'materiel_agence', label: 'Matériel fourni par l\'agence (Aspirateur + serpillière pro transportés)', prix: 29 },
   ];
 
   // Fetch Biens on Mount
@@ -101,309 +101,228 @@ export default function NouvelleCommandeView() {
       });
       navigate('/airbnb/commandes');
     } catch (err: any) {
-      alert(err.response?.data?.error || "Erreur lors de la création de la commande");
+      alert(err.response?.data?.error || "Erreur lors de l'enregistrement du turnover.");
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      {/* ══════════ TOP ALERT CUT-OFF ══════════ */}
-      {cutoffStatus && (
-        <div style={{ marginBottom: '1.25rem', padding: '1rem 1.25rem', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem', background: !cutoffStatus.is_late ? '#f0fdf4' : '#fef2f2', border: `1px solid ${!cutoffStatus.is_late ? '#bbf7d0' : '#fecaca'}`, color: !cutoffStatus.is_late ? '#166534' : '#991b1b' }}>
-          {!cutoffStatus.is_late ? <CheckCircle2 size={20} color="#16a34a" /> : <AlertTriangle size={20} color="#dc2626" />}
-          <div>
-            <span style={{ fontWeight: 700, display: 'block', fontSize: '0.85rem' }}>{cutoffStatus.message}</span>
-            <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>
-              {!cutoffStatus.is_late 
-                ? "Délai contractuel J-1 respecté. Le turnover sera automatiquement planifié et assigné." 
-                : "Attention : Commande tardive saisie après l'heure de cut-off. Majoration d'urgence applicable."}
-            </span>
-          </div>
+    <div className="nc-container">
+      {/* Alerte Délais de Cut-off */}
+      <div className="nc-banner-presentation">
+        <Clock size={20} />
+        <div>
+          <span className="nc-banner-presentation-title">Règle de Présentation & Délais Cut-off</span>
+          Intervention avant 11h00 : commande impérative avant 21h00 la veille. Intervention à partir de 12h00 : saisie possible jusqu'à 22h00 la veille.
         </div>
-      )}
+      </div>
 
-      {/* ══════════ MAIN 2-COLUMN LAYOUT ══════════ */}
-      <div className="nc-layout">
-        {/* LEFT COLUMN: The 4 Steps */}
-        <div className="nc-left-col">
-          {/* STEP 1: Logement & Client */}
+      <div className="nc-layout-grid">
+        {/* Colonne Formulaire Principal */}
+        <form onSubmit={handleSubmit} className="nc-form-col">
+          {/* Bloc 1 : Logement & Planning */}
           <div className="nc-card">
             <div className="nc-card-header">
-              <h2>1. Logement & Client</h2>
+              <Sparkles size={18} />
+              <h3>1. Choix du Logement & Date d'Intervention</h3>
             </div>
             <div className="nc-card-body">
-              <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                Sélectionner le Logement Airbnb *
-              </label>
-              <select
-                value={selectedBienId}
-                onChange={(e) => setSelectedBienId(e.target.value)}
-                disabled={loadingBiens}
-                style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', background: '#ffffff', outline: 'none' }}
-              >
-                {biens.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.code} — {b.nom_bien || b.quartier} [{b.typologie.toUpperCase()}] ({b.client_name})
-                  </option>
-                ))}
-              </select>
+              <div className="nc-form-group">
+                <label className="nc-form-label">Logement Airbnb <span className="req">*</span></label>
+                {loadingBiens ? (
+                  <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Chargement des logements...</div>
+                ) : (
+                  <select
+                    value={selectedBienId}
+                    onChange={(e) => setSelectedBienId(e.target.value)}
+                    required
+                    className="nc-form-select"
+                  >
+                    {biens.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.code} — {b.nom_bien || b.quartier} ({b.typologie} {b.zone_eloignee ? '· Zone éloignée' : ''})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
 
-              {selectedBien && (
-                <div className="nc-property-preview">
-                  <div className="nc-prop-item">
-                    <span className="nc-prop-label">Adresse & Quartier</span>
-                    <span className="nc-prop-value">{selectedBien.adresse} ({selectedBien.quartier})</span>
-                  </div>
-                  <div className="nc-prop-item">
-                    <span className="nc-prop-label">Accès Sécurisé</span>
-                    <span className="nc-prop-value">{selectedBien.acces_type?.replace(/_/g, ' ') || 'Standard'}</span>
-                  </div>
-                  <div className="nc-prop-item">
-                    <span className="nc-prop-label">Typologie & Couchages</span>
-                    <span className="nc-prop-value" style={{ color: '#0d9488' }}>{selectedBien.typologie.toUpperCase()}</span>
-                  </div>
-                  <div className="nc-prop-item">
-                    <span className="nc-prop-label">Zone Éloignée</span>
-                    <span className="nc-prop-value" style={{ color: selectedBien.zone_eloignee ? '#dc2626' : '#16a34a' }}>
-                      {selectedBien.zone_eloignee ? 'Oui (+50 DH)' : 'Non (Standard)'}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* STEP 2: Date & Créneau */}
-          <div className="nc-card">
-            <div className="nc-card-header">
-              <h2>2. Date & Créneau d'Intervention</h2>
-            </div>
-            <div className="nc-card-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
-                <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                    Date de Prestation *
-                  </label>
+              <div className="nc-form-grid-3">
+                <div className="nc-form-group">
+                  <label className="nc-form-label">Date du Check-out <span className="req">*</span></label>
                   <input
                     type="date"
-                    required
                     value={datePrestation}
                     onChange={(e) => setDatePrestation(e.target.value)}
-                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', background: '#ffffff', boxSizing: 'border-box' }}
+                    required
+                    className="nc-form-input"
                   />
                 </div>
 
-                <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>
-                    Heure Souhaitée
-                  </label>
+                <div className="nc-form-group">
+                  <label className="nc-form-label">Heure Souhaitée <span className="req">*</span></label>
                   <input
                     type="time"
                     value={heurePrestation}
-                    onChange={(e) => setHeurePrestation(e.target.value)}
-                    style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', background: '#ffffff', boxSizing: 'border-box' }}
+                    onChange={(e) => {
+                      const time = e.target.value;
+                      setHeurePrestation(time);
+                      const hour = parseInt(time.split(':')[0], 10);
+                      setCreneau(hour < 12 ? 'matin' : 'apres_midi');
+                    }}
+                    required
+                    className="nc-form-input"
                   />
                 </div>
-              </div>
 
-              <label style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '0.5rem' }}>
-                Créneau Réglementaire (Cut-Off)
-              </label>
-              <div className="nc-selectable-grid">
-                <div
-                  className={`nc-select-card ${creneau === 'matin' ? 'selected' : ''}`}
-                  onClick={() => setCreneau('matin')}
-                >
-                  <div className="nc-card-title">
-                    <span>Matin (avant 12h)</span>
-                    {creneau === 'matin' && <Check size={16} color="#00473E" />}
-                  </div>
-                  <div className="nc-card-desc">
-                    Cut-off de saisie : 21h00 la veille (J-1).
-                  </div>
-                </div>
-
-                <div
-                  className={`nc-select-card ${creneau === 'apres_midi' ? 'selected' : ''}`}
-                  onClick={() => setCreneau('apres_midi')}
-                >
-                  <div className="nc-card-title">
-                    <span>Après-midi (après 12h)</span>
-                    {creneau === 'apres_midi' && <Check size={16} color="#00473E" />}
-                  </div>
-                  <div className="nc-card-desc">
-                    Cut-off de saisie : 22h00 la veille (J-1).
+                <div className="nc-form-group">
+                  <label className="nc-form-label">Créneau Opérationnel</label>
+                  <div className="nc-creneau-badge">
+                    {creneau === 'matin' ? 'Matin (avant 12h)' : 'Après-midi (après 12h)'}
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* STEP 3: Chaîne du Linge */}
+          {/* Bloc 2 : Chaîne du Linge */}
           <div className="nc-card">
             <div className="nc-card-header">
-              <h2>3. Chaîne du Linge</h2>
+              <Shirt size={18} />
+              <h3>2. Gestion de la Chaîne du Linge</h3>
             </div>
             <div className="nc-card-body">
-              <div className="nc-selectable-grid">
-                <div
-                  className={`nc-select-card ${natureLinge === 'depot_ramassage' ? 'selected' : ''}`}
-                  onClick={() => setNatureLinge('depot_ramassage')}
-                >
-                  <div className="nc-card-title">
-                    <span>Dépôt + Ramassage</span>
-                    {natureLinge === 'depot_ramassage' && <Check size={16} color="#00473E" />}
-                  </div>
-                  <div className="nc-card-desc">
-                    Standard complet (Linge propre mis en place + sac sale collecté).
-                  </div>
-                </div>
-
-                <div
-                  className={`nc-select-card ${natureLinge === 'depot_seul' ? 'selected' : ''}`}
-                  onClick={() => setNatureLinge('depot_seul')}
-                >
-                  <div className="nc-card-title">
-                    <span>Dépôt Seul</span>
-                    {natureLinge === 'depot_seul' && <Check size={16} color="#00473E" />}
-                  </div>
-                  <div className="nc-card-desc">
-                    Mise en place propre uniquement.
-                  </div>
-                </div>
-
-                <div
-                  className={`nc-select-card ${natureLinge === 'ramassage_seul' ? 'selected' : ''}`}
-                  onClick={() => setNatureLinge('ramassage_seul')}
-                >
-                  <div className="nc-card-title">
-                    <span>Ramassage Seul</span>
-                    {natureLinge === 'ramassage_seul' && <Check size={16} color="#00473E" />}
-                  </div>
-                  <div className="nc-card-desc">
-                    Collecte sac sale vers la blanchisserie.
-                  </div>
-                </div>
-
-                <div
-                  className={`nc-select-card ${natureLinge === 'sans_linge' ? 'selected' : ''}`}
-                  onClick={() => setNatureLinge('sans_linge')}
-                >
-                  <div className="nc-card-title">
-                    <span>Sans Linge</span>
-                    {natureLinge === 'sans_linge' && <Check size={16} color="#00473E" />}
-                  </div>
-                  <div className="nc-card-desc">
-                    Ménage et remise en état uniquement.
-                  </div>
-                </div>
+              <label className="nc-form-label">Nature de l'opération linge</label>
+              <div className="nc-nature-grid">
+                {[
+                  { value: 'sans_linge', title: 'Aucun (sans linge)', desc: 'Ménage uniquement' },
+                  { value: 'depot_seul', title: 'Dépôt seul', desc: 'Livraison linge propre' },
+                  { value: 'ramassage_seul', title: 'Ramassage seul', desc: 'Collecte linge sale' },
+                  { value: 'depot_ramassage', title: 'Dépôt + Ramassage', desc: 'Cycle standard complet' },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setNatureLinge(item.value as NatureLinge)}
+                    className={`nc-nature-card ${natureLinge === item.value ? 'selected' : ''}`}
+                  >
+                    <div className="nc-nature-title">{item.title}</div>
+                    <div className="nc-nature-desc">{item.desc}</div>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* STEP 4: Options Réassort */}
+          {/* Bloc 3 : Options & Réassort */}
           <div className="nc-card">
             <div className="nc-card-header">
-              <h2>4. Options de Réassort & Consommables</h2>
+              <PlusCircle size={18} />
+              <h3>3. Packs Réassort & Options Complémentaires</h3>
             </div>
             <div className="nc-card-body">
               <div className="nc-options-list">
                 {availableOptions.map((opt) => {
-                  const isChecked = selectedOptions.some(o => o.code === opt.code);
+                  const isChecked = selectedOptions.some((o) => o.code === opt.code);
                   return (
                     <div
                       key={opt.code}
-                      className={`nc-option-row ${isChecked ? 'checked' : ''}`}
                       onClick={() => toggleOption(opt)}
+                      className={`nc-option-row ${isChecked ? 'selected' : ''}`}
                     >
-                      <div className="nc-option-left">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {}}
-                        />
-                        <span className="nc-option-name">{opt.label}</span>
+                      <div className="nc-checkbox-custom">
+                        {isChecked && <Check size={14} />}
                       </div>
-                      <span className="nc-option-price">+{opt.prix} DH</span>
+                      <div className="nc-option-info">
+                        <div className="nc-option-label">{opt.label}</div>
+                      </div>
+                      <div className="nc-option-price">+{opt.prix} DH</div>
                     </div>
                   );
                 })}
               </div>
             </div>
           </div>
-        </div>
 
-        {/* RIGHT STICKY COLUMN: Luxury Pricing Box */}
-        <div className="nc-right-col">
-          <div className="nc-pricing-card">
-            <div className="nc-pricing-head">
-              Récapitulatif Financier Prévisionnel
-            </div>
+          {/* Bouton de Validation */}
+          <button
+            type="submit"
+            disabled={submitting || (cutoffStatus && !cutoffStatus.is_valid)}
+            className="nc-btn-submit"
+          >
+            {submitting ? (
+              'Enregistrement de la commande...'
+            ) : (
+              <>
+                <span>Confirmer et Enregistrer la Commande</span>
+                <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+        </form>
 
-            <div className="nc-pricing-rows">
-              <div className="nc-pricing-row">
-                <span>Ménage de base ({selectedBien?.typologie.toUpperCase() || 'Studio'})</span>
-                <span className="val">{pricingBreakdown?.prix_menage || 130} DH</span>
+        {/* Colonne Sticky : Tarification & Décomposition Financière */}
+        <div className="nc-pricing-col">
+          <div className="nc-pricing-box">
+            <h4 className="nc-pricing-box-title">Synthèse Financière</h4>
+
+            {calculating ? (
+              <div style={{ textAlign: 'center', padding: '1rem', color: '#ccfbf1', fontSize: '0.85rem' }}>
+                Calcul du tarif en direct...
               </div>
+            ) : (
+              <>
+                <div className="nc-pricing-rows">
+                  <div className="nc-p-row">
+                    <span>Ménage Turnover ({selectedBien?.typologie || 'studio'}) :</span>
+                    <strong>{pricingBreakdown?.prix_menage || (selectedBien?.typologie === 'studio' ? 130 : 160)} DH</strong>
+                  </div>
 
-              {selectedBien?.zone_eloignee && (
-                <div className="nc-pricing-row">
-                  <span>Supplément Zone Éloignée</span>
-                  <span className="val" style={{ color: '#fde047' }}>+50 DH</span>
+                  {pricingBreakdown?.supplement_zone > 0 && (
+                    <div className="nc-p-row alert-row">
+                      <span>Zone Éloignée ({selectedBien?.quartier}) :</span>
+                      <strong>+{pricingBreakdown.supplement_zone} DH</strong>
+                    </div>
+                  )}
+
+                  {selectedOptions.length > 0 && (
+                    <div className="nc-p-row">
+                      <span>Options Réassort ({selectedOptions.length}) :</span>
+                      <strong>+{pricingBreakdown?.prix_options || selectedOptions.reduce((a, b) => a + b.prix, 0)} DH</strong>
+                    </div>
+                  )}
+
+                  {/* Mention réglementaire linge */}
+                  <div className="nc-p-row linen-row">
+                    <span>Linge ramassé :</span>
+                    <span style={{ fontSize: '0.75rem', fontStyle: 'italic' }}>Chiffré au ramassage (50 DH/set)</span>
+                  </div>
                 </div>
-              )}
 
-              <div className="nc-pricing-row">
-                <span>Chaîne du Linge</span>
-                <span className="val" style={{ fontStyle: 'italic', fontSize: '0.8rem', color: '#99f6e4' }}>
-                  Facturé après pesée
-                </span>
+                <div className="nc-pricing-total-box">
+                  <div className="nc-p-total-lbl">Sous-total Immédiat</div>
+                  <div className="nc-p-total-val">
+                    {pricingBreakdown?.total_ttc_hors_linge || 
+                      ((selectedBien?.typologie === 'studio' ? 130 : 160) + 
+                       (selectedBien?.zone_eloignee ? 50 : 0) + 
+                       selectedOptions.reduce((a, b) => a + b.prix, 0))} DH
+                  </div>
+                  <div className="nc-p-total-sub">+ Linge comptabilisé après passage runner</div>
+                </div>
+              </>
+            )}
+
+            {/* Règles de facturation */}
+            <div className="nc-pricing-notes">
+              <CheckCircle2 size={16} />
+              <div>
+                Facturation groupée le 26 du mois sous réserve des 4 photos validées et du décompte linge contradictoire.
               </div>
-
-              {selectedOptions.map(opt => (
-                <div key={opt.code} className="nc-pricing-row">
-                  <span style={{ fontSize: '0.785rem' }}>{opt.label.split('(')[0]}</span>
-                  <span className="val">+{opt.prix} DH</span>
-                </div>
-              ))}
             </div>
-
-            <div className="nc-pricing-divider" />
-
-            <div className="nc-total-row">
-              <span className="nc-total-label">Total Prévisionnel TTC</span>
-              <span className="nc-total-value">
-                {calculating ? '...' : `${pricingBreakdown?.total_ttc_hors_linge || pricingBreakdown?.total_ttc || 130} DH`}
-              </span>
-            </div>
-
-            <div className="nc-pricing-disclaimer">
-              <b>Règle de Facturation du Linge :</b><br />
-              Le montant du linge (8 pièces = 50 DH) sera figé lors du comptage contradictoire en laverie et imputé sur la présente commande.
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting || !selectedBienId}
-              className="nc-btn-validate"
-            >
-              {submitting ? (
-                <>
-                  <RotateCw size={18} className="animate-spin" />
-                  Validation en cours...
-                </>
-              ) : (
-                <>
-                  <Check size={18} />
-                  Valider la Commande
-                </>
-              )}
-            </button>
           </div>
         </div>
       </div>
-    </form>
+    </div>
   );
 }

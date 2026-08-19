@@ -1,4 +1,4 @@
-/* PlanningExecution.css — Planning & Exécution des Missions Airbnb */
+/* PlanningExecution.css — Planning, Assignation J-1, Fiche Mission & Suivi (Pages 13, 14, 15, 16) */
 
 .pe-container {
   display: flex;
@@ -7,35 +7,17 @@
   width: 100%;
 }
 
-/* 18h J-1 Alert Strip */
-.pe-alert-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: 0.75rem;
-  padding: 0.875rem 1.25rem;
-  color: #92400e;
-  font-size: 0.85rem;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.pe-alert-strip svg {
-  color: #d97706;
-}
-
 /* Subtabs Segmented Control */
 .pe-subtabs {
   display: flex;
   gap: 0.5rem;
   background: #ffffff;
-  padding: 0.35rem;
+  padding: 0.35rem 0.5rem;
   border-radius: 0.75rem;
   border: 1px solid #e2e8f0;
   width: fit-content;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  overflow-x: auto;
 }
 
 .pe-tab-btn {
@@ -51,10 +33,11 @@
   color: #64748b;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .pe-tab-btn:hover {
-  color: #0f172a;
+  color: #00473E;
   background: #f1f5f9;
 }
 
@@ -101,67 +84,85 @@
   vertical-align: middle;
 }
 
-/* 2-Column Split for Fiche de Mission */
-.pe-split-layout {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 1.25rem;
-  align-items: flex-start;
+/* ========================================================================= */
+/* FICHE DE MISSION STRICTEMENT SANS PRIX (Page 14)                         */
+/* ========================================================================= */
+.pe-mission-printable {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
-@media (max-width: 960px) {
-  .pe-split-layout {
-    grid-template-columns: 1fr;
+.pe-mission-head-banner {
+  background: #00473E;
+  color: #ffffff;
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pe-photos-checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .pe-photos-checklist-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
-.pe-mission-list {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.875rem;
-  overflow: hidden;
-  max-height: 700px;
-  overflow-y: auto;
-}
-
-.pe-mission-item {
-  padding: 0.875rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.pe-mission-item:hover {
+.pe-photo-box {
   background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.85rem;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
 }
 
-.pe-mission-item.selected {
-  background: #f0fdfa;
-  border-left: 4px solid #00473E;
-}
-
-.pe-sheet-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.875rem;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-/* Live Suivi Cards */
-.pe-suivi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1rem;
-}
-
-.pe-suivi-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.875rem;
-  padding: 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+/* ========================================================================= */
+/* OBJETS TROUVÉS 5 ÉTAPES & DEVIS (Page 16)                                 */
+/* ========================================================================= */
+.pe-steps-workflow {
   display: flex;
-  flex-direction: column;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
   justify-content: space-between;
+  overflow-x: auto;
+}
+
+.pe-step-pill {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pe-step-pill.active {
+  color: #00473E;
+}
+
+.pe-devis-box {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Users, UserCheck, History, Calendar,
@@ -70,6 +70,17 @@ export default function AppLayout() {
   const { pendingCount } = useNotificationStore();
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const role = (user?.role || '').toLowerCase().trim();
+    if (role === 'runner' || role === 'runner / chauffeur livreur') {
+      navigate('/runner', { replace: true });
+    } else if (role === 'responsable_linge' || role === 'responsable linge / blanchisserie' || role === 'responsable linge') {
+      navigate('/laverie', { replace: true });
+    } else if (role === 'client_conciergerie' || role === 'client conciergerie') {
+      navigate('/portail-conciergerie', { replace: true });
+    }
+  }, [user, navigate]);
 
   const filteredNavItems = navItems.map(item => {
     // If item has children, filter children
