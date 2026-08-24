@@ -1218,6 +1218,7 @@ export default function GestionAbonnements() {
   const currentDayNum = todayDate.getDate();
   const daysInCurrentMonth = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).getDate();
   const gaugePct = Math.min(100, Math.max(0, (currentDayNum / (daysInCurrentMonth || 31)) * 100));
+  const currentMonthCycleTitle = todayDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 
   // Planning month navigation variables
   const monthNamesFr = [
@@ -1319,9 +1320,9 @@ export default function GestionAbonnements() {
     doc.setTextColor(textDark[0], textDark[1], textDark[2]);
     doc.text(`N° Facture : ${inv.num}`, 130, 24);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
+    const defaultPeriode = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
     doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 130, 32);
-    doc.text(`Période : ${inv.periode || 'Juillet 2026'}`, 130, 38);
+    doc.text(`Période : ${inv.periode || defaultPeriode}`, 130, 38);
     doc.text(`Statut : ${inv.statut}`, 130, 44);
 
     // Divider Line
@@ -1362,7 +1363,7 @@ export default function GestionAbonnements() {
     doc.setFontSize(10);
     doc.setTextColor(30, 41, 59);
     doc.text(`Prestation Abonnement - ${inv.client}`, 25, 117);
-    doc.text(inv.periode || 'Juillet 2026', 120, 117);
+    doc.text(inv.periode || defaultPeriode, 120, 117);
     doc.text(inv.montant, 155, 117);
 
     doc.setDrawColor(226, 232, 240);
@@ -2130,7 +2131,7 @@ export default function GestionAbonnements() {
           <div className="ga-timeline-card">
             <div className="ga-timeline-header">
               <div className="ga-timeline-title">
-                Cycle de facturation — juillet 2026 <span className="ga-timeline-sub">pour les prestations du mois suivant</span>
+                Cycle de facturation — {currentMonthCycleTitle} <span className="ga-timeline-sub">pour les prestations du mois suivant</span>
               </div>
             </div>
 
