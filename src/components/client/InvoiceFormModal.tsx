@@ -581,7 +581,6 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               </div>
             </div>
           </div>
-
           {/* 5. Aperçu de la facturation */}
           <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: 16 }}>
             <div style={{ fontWeight: 800, fontSize: 14, color: '#15803d', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -591,7 +590,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               <div>Devis mensuel de référence : <strong>{devisTotal.toLocaleString('fr-FR')} DH</strong> ({passagesBase} passages/mois)</div>
               <div>Interventions ce mois : <strong>{numPassages}</strong>{isProrata ? ` (prorata ${numPassages}/${passagesBase})` : ''}</div>
               <div>Interventions récupérées : <strong>{numRecup}</strong></div>
-              <div>Nouvelles interventions facturables : <strong>{numNouvelles}</strong></div>
+              {/* <div>Nouvelles interventions facturables : <strong>{numNouvelles}</strong></div> */}
               <div>Montant du service : <strong>{montantBrut.toFixed(2).replace('.', ',')} DH</strong></div>
               {remiseEffective > 0 && <div>Réduction appliquée : <strong style={{ color: '#dc2626' }}>– {remiseEffective.toFixed(2).replace('.', ',')} DH {reductionLabel ? `(${reductionLabel})` : ''}</strong></div>}
               <div>Total HT : <strong>{totalHT.toFixed(2).replace('.', ',')} DH</strong></div>
