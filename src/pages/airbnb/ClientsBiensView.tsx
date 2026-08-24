@@ -62,20 +62,33 @@ export default function ClientsBiensView() {
     try {
       const [biensRes, clientsRes, statsRes, cmdsRes] = await Promise.all([
         getBiens(),
-        getClients(),
+        getClients({ is_airbnb: 1 }),
         getBienStats(),
         getCommandesAirbnb().catch(() => ({ data: [] }))
       ]);
       const loadedBiens = extractResults<Bien>(biensRes.data);
-      const loadedClients = extractResults<any>(clientsRes.data);
+      const allLoadedClients = extractResults<any>(clientsRes.data);
       const loadedCmds = extractResults<CommandeAirbnb>(cmdsRes.data);
+
+      // Only retain clients who have an Airbnb demand, are tagged is_airbnb, or have registered biens/orders
+      const airbnbClients = allLoadedClients.filter((c: any) =>
+        c.is_airbnb ||
+        loadedBiens.some((b: any) => Number(b.client) === Number(c.id)) ||
+        loadedCmds.some((cmd: any) => Number(cmd.client) === Number(c.id)) ||
+        (c.latest_demande?.service && (
+          c.latest_demande.service.toLowerCase().includes('airbnb') ||
+          c.latest_demande.service.toLowerCase().includes('air bnb') ||
+          c.latest_demande.service.toLowerCase().includes('conciergerie')
+        ))
+      );
+
       setBiens(loadedBiens);
-      setClients(loadedClients);
+      setClients(airbnbClients);
       setCommandes(loadedCmds);
       setStats(statsRes.data);
 
-      if (loadedClients.length > 0 && !selectedClientId) {
-        setSelectedClientId(loadedClients[0].id);
+      if (airbnbClients.length > 0 && (!selectedClientId || !airbnbClients.some((c: any) => c.id === selectedClientId))) {
+        setSelectedClientId(airbnbClients[0].id);
       }
       if (loadedBiens.length > 0 && !selectedBienId) {
         setSelectedBienId(loadedBiens[0].id);

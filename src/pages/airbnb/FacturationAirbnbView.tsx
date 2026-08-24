@@ -29,13 +29,24 @@ export default function FacturationAirbnbView() {
     try {
       const [cmdRes, clientsRes] = await Promise.all([
         getCommandesAirbnb(),
-        getClients()
+        getClients({ is_airbnb: 1 })
       ]);
-      setCommandes(extractResults<CommandeAirbnb>(cmdRes.data));
-      const cls = extractResults<any>(clientsRes.data);
-      setClients(cls);
-      if (cls.length > 0 && !selectedClientId) {
-        setSelectedClientId(cls[0].id);
+      const loadedCmds = extractResults<CommandeAirbnb>(cmdRes.data);
+      const allClients = extractResults<any>(clientsRes.data);
+      const airbnbClients = allClients.filter((c: any) =>
+        c.is_airbnb ||
+        loadedCmds.some((cmd: any) => Number(cmd.client) === Number(c.id)) ||
+        (c.latest_demande?.service && (
+          c.latest_demande.service.toLowerCase().includes('airbnb') ||
+          c.latest_demande.service.toLowerCase().includes('air bnb') ||
+          c.latest_demande.service.toLowerCase().includes('conciergerie')
+        ))
+      );
+
+      setCommandes(loadedCmds);
+      setClients(airbnbClients);
+      if (airbnbClients.length > 0 && (!selectedClientId || !airbnbClients.some((c: any) => c.id === selectedClientId))) {
+        setSelectedClientId(airbnbClients[0].id);
       }
     } catch (err) {
       console.error("Erreur chargement facturation :", err);

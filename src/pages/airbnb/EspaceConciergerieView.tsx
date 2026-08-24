@@ -41,11 +41,19 @@ export default function EspaceConciergerieView() {
 
   const fetchClientPortalData = async () => {
     try {
-      const clientsRes = await getClients();
-      const cls = extractResults<any>(clientsRes.data);
-      setClients(cls);
-      if (cls.length > 0 && !selectedClientId) {
-        setSelectedClientId(cls[0].id);
+      const clientsRes = await getClients({ is_airbnb: 1 });
+      const allClients = extractResults<any>(clientsRes.data);
+      const airbnbClients = allClients.filter((c: any) =>
+        c.is_airbnb ||
+        (c.latest_demande?.service && (
+          c.latest_demande.service.toLowerCase().includes('airbnb') ||
+          c.latest_demande.service.toLowerCase().includes('air bnb') ||
+          c.latest_demande.service.toLowerCase().includes('conciergerie')
+        ))
+      );
+      setClients(airbnbClients);
+      if (airbnbClients.length > 0 && (!selectedClientId || !airbnbClients.some((c: any) => c.id === selectedClientId))) {
+        setSelectedClientId(airbnbClients[0].id);
       }
     } catch (err) {
       console.error("Erreur chargement clients conciergerie :", err);
