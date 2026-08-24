@@ -15,7 +15,7 @@ import { SubscriptionCalendarGrid } from './SubscriptionCalendarGrid';
 import { SubscriptionSidebar } from './SubscriptionSidebar';
 import { FacturesReglementsCard } from './FacturesReglementsCard';
 import { InvoiceFormModal } from './InvoiceFormModal';
-import { extractJoursPassage, parseDateRobust, getStatutMoisProchainCalculated } from '../../utils/pricing';
+import { extractJoursPassage, parseDateRobust, getStatutMoisProchainCalculated, getDemandeStartDate } from '../../utils/pricing';
 import { useAuthStore } from '../../store/auth';
 import { checkPermission } from '../../utils/permissions';
 
@@ -114,10 +114,10 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   }, [monthTabs, activeMonthTab]);
 
   const baseDate = useMemo(() => {
-    const dStr = dateDebut || latest?.formulaire_data?.date_demarrage || latest?.formulaire_data?.date_debut || latest?.planning?.date_debut || latest?.date_intervention || latest?.created_at;
+    const dStr = dateDebut || getDemandeStartDate(latest);
     if (dStr) {
-      const parsed = new Date(dStr.includes('T') ? dStr : `${dStr.slice(0, 10)}T00:00:00`);
-      if (!isNaN(parsed.getTime())) return parsed;
+      const parsed = parseDateRobust(dStr);
+      if (parsed) return parsed;
     }
     return new Date();
   }, [dateDebut, latest]);
@@ -239,12 +239,23 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   }, [demandes, latest?.id, client?.id]);
 
   const monthDemandes = useMemo(() => {
-    return childDemandes.filter((c: Demande) => {
+    const list = [...childDemandes];
+    if (latest && latest.date_intervention) {
+      const parentDate = getDemandeStartDate(latest);
+      const exists = list.some((c: Demande) => {
+        const dDate = c.date_intervention?.includes('T') ? c.date_intervention.split('T')[0] : c.date_intervention?.slice(0, 10);
+        return dDate === parentDate;
+      });
+      if (!exists) {
+        list.push(latest);
+      }
+    }
+    return list.filter((c: Demande) => {
       if (!c.date_intervention) return false;
       const dDate = c.date_intervention.includes('T') ? c.date_intervention.split('T')[0] : c.date_intervention.slice(0, 10);
       return dDate.startsWith(monthIsoPrefix);
     });
-  }, [childDemandes, monthIsoPrefix]);
+  }, [childDemandes, latest, monthIsoPrefix]);
 
   const [aboDateOverrides, setAboDateOverridesState] = useState<Record<string, any>>(() => {
     return latest?.formulaire_data?.date_overrides || {};
@@ -410,6 +421,9 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
         return dDate === dayIso;
       });
 
+      const parentStartDate = getDemandeStartDate(latest);
+      const isParentDate = parentStartDate === dayIso;
+
       const stLower = (newStatut || '').toLowerCase();
       const isRemovalOrReport = ['retirer', 'annule', 'annulee', 'reporte', 'reportee'].includes(stLower);
 
@@ -424,6 +438,11 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
           });
           addToast("Statut mis à jour", "success");
         }
+      } else if (isParentDate) {
+        await updateDemande(latest.id, {
+          statut: newStatut
+        });
+        addToast("Statut de la première intervention mis à jour", "success");
       } else if (!isRemovalOrReport) {
         const tom = new Date();
         tom.setDate(tom.getDate() + 1);
@@ -555,7 +574,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     const lastOfMonth = new Date(y, m + 1, 0, 23, 59, 59, 999);
 
     let start = firstOfMonth;
-    const startStr = dateDebut || latest?.formulaire_data?.date_demarrage || latest?.formulaire_data?.date_debut || latest?.planning?.date_debut || latest?.date_intervention;
+    const startStr = dateDebut || getDemandeStartDate(latest);
     const parsedStart = parseDateRobust(startStr);
     if (parsedStart) {
       const startNormalized = new Date(parsedStart.getFullYear(), parsedStart.getMonth(), parsedStart.getDate(), 0, 0, 0, 0);
@@ -782,7 +801,8 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
           {/* Interactive Monthly Calendar Grid matching clientCompte.tsx */}
           <SubscriptionCalendarGrid
             calMonth={activeCalendarDate}
-            aboDateDebut={dateDebut || latest?.date_intervention || latest?.formulaire_data?.date_demarrage || ''}
+            parentDemande={latest}
+            aboDateDebut={dateDebut || getDemandeStartDate(latest)}
             dateFinAuto={latest?.formulaire_data?.date_fin || ''}
             aboFrequence={latest?.formulaire_data?.frequence || latest?.frequency_label || frequencyLabel || ''}
             aboJours={detailedAboJours}

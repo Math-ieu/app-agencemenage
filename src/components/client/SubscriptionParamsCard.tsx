@@ -1,7 +1,7 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 import { Demande, Client } from '../../types';
-import { getDevisAmount } from '../../utils/pricing';
+import { getDevisAmount, getDemandeStartDate } from '../../utils/pricing';
 
 export interface SubscriptionParamsCardProps {
   latest: Demande;
@@ -57,9 +57,10 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
   
   const rawFreq = frequencyLabel || latest.frequency_label || (selectedDays.length > 0 ? `${selectedDays.length} fois par semaine` : (latest.frequency ? `${latest.frequency}` : '—'));
 
-  const startDateFormatted = dateDebut 
-    ? new Date(dateDebut.includes('T') ? dateDebut : `${dateDebut.slice(0, 10)}T00:00:00`).toLocaleDateString('fr-FR') 
-    : (latest.planning?.date_debut ? new Date(latest.planning.date_debut).toLocaleDateString('fr-FR') : (latest.date_intervention ? new Date(latest.date_intervention).toLocaleDateString('fr-FR') : '—'));
+  const effectiveStart = dateDebut || getDemandeStartDate(latest);
+  const startDateFormatted = effectiveStart 
+    ? new Date(effectiveStart.includes('T') ? effectiveStart : `${effectiveStart.slice(0, 10)}T00:00:00`).toLocaleDateString('fr-FR') 
+    : '—';
 
   const daysLabel = selectedDays.length > 0 
     ? selectedDays.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' + ') 

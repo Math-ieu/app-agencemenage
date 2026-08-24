@@ -249,6 +249,19 @@ export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData
 
     const selectedKeys = currentDetail.map(d => d.jour.toLowerCase());
 
+    React.useEffect(() => {
+        if (isAbo && !formData.date_demarrage && !formData.date_debut) {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const initialDate = formData.date || todayStr;
+            setFormData({
+                ...formData,
+                date_demarrage: initialDate,
+                date_debut: initialDate,
+                date: initialDate
+            });
+        }
+    }, [isAbo]);
+
     const updateDaysAndFreq = (newDetail: Array<{ jour: string; heure_debut: string; heure_fin: string }>, newFreq?: string) => {
         const daysList = newDetail.map(d => d.jour.toLowerCase());
         const daysFormattedStr = newDetail.map(d => {
@@ -700,7 +713,15 @@ export const PlanningBlock: React.FC<FormBlockProps> = ({ formData, setFormData 
                         type="date"
                         required={!isAbo}
                         value={formData.date || ''}
-                        onChange={e => setFormData({ ...formData, date: e.target.value })}
+                        onChange={e => {
+                            const val = e.target.value;
+                            setFormData({
+                                ...formData,
+                                date: val,
+                                date_demarrage: val,
+                                date_debut: val
+                            });
+                        }}
                         disabled={isAbo}
                         style={{ padding: '0.5rem', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem' }}
                     />

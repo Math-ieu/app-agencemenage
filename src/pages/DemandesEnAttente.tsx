@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { extractJoursPassage } from '../utils/pricing';
+import { extractJoursPassage, getDemandeStartDate } from '../utils/pricing';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient, uploadDocument } from '../api/client';
 import { decodeId } from '../utils/obfuscation';
@@ -667,8 +667,9 @@ export default function DemandesEnAttente() {
     setEditingDemande(null);
     setDirectPhone('');
     setWhatsappPhone('');
+    const todayIso = new Date().toISOString().slice(0, 10);
     setFormData({
-      nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: '', date_demarrage: '', date_debut: '', heure: '',
+      nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: todayIso, date_demarrage: todayIso, date_debut: todayIso, heure: '',
       scheduling_type: 'fixed', preference_horaire: '', type_habitation: '', frequence: 'une fois', jours_passage: '', jours_intervention: [] as string[], jours_intervention_detail: [] as any[], intervention_nature: 'sinistre', accommodation_state: '', cleanliness_type: '', nb_intervenants: 1,
       surface: 50, details_pieces: '', duree: 4, produits: false, torchons: false,
       montant: '', mode_paiement: 'virement', statut_paiement_ui: 'non_confirme', heard_about_us: '', notes: '',
@@ -744,6 +745,8 @@ export default function DemandesEnAttente() {
     setWhatsappPhone(cleanWhatsApp);
     setSyncWhatsApp(!rawWhatsApp || cleanWhatsApp === cleanPhone);
 
+    const dStartDate = getDemandeStartDate(d);
+
     setFormData({
       nom: d.client_name || d.formulaire_data?.nom || d.formulaire_data?.fullName || '',
       email: d.client_email || d.formulaire_data?.email || d.client_detail?.email || '',
@@ -752,9 +755,9 @@ export default function DemandesEnAttente() {
       ville: d.client_city || d.formulaire_data?.ville || 'Casablanca',
       quartier: normalizeQuartier(d.client_neighborhood || d.formulaire_data?.quartier || ''),
       adresse: d.client_address || d.formulaire_data?.adresse || '',
-      date: d.date_intervention || d.formulaire_data?.date || d.formulaire_data?.scheduledDate || '',
-      date_demarrage: d.formulaire_data?.date_demarrage || d.formulaire_data?.date_debut || d.planning?.date_debut || d.date_intervention || '',
-      date_debut: d.formulaire_data?.date_demarrage || d.formulaire_data?.date_debut || d.planning?.date_debut || d.date_intervention || '',
+      date: dStartDate,
+      date_demarrage: dStartDate,
+      date_debut: dStartDate,
       heure: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime || '',
       scheduling_type: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime ? 'fixed' : 'flexible',
       preference_horaire: normalizeTimePref(d.preference_horaire || d.formulaire_data?.preference_horaire || (d.formulaire_data?.schedulingTime === 'morning' ? 'matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? 'apres_midi' : '')),
@@ -869,6 +872,8 @@ export default function DemandesEnAttente() {
     setWhatsappPhone(cleanWhatsApp);
     setSyncWhatsApp(!rawWhatsApp || cleanWhatsApp === cleanPhone);
 
+    const dStartDate = getDemandeStartDate(d);
+
     setFormData({
       nom: d.client_name || d.formulaire_data?.nom || d.formulaire_data?.fullName || '',
       email: d.client_email || d.formulaire_data?.email || d.client_detail?.email || '',
@@ -877,9 +882,9 @@ export default function DemandesEnAttente() {
       ville: d.client_city || d.formulaire_data?.ville || 'Casablanca',
       quartier: normalizeQuartier(d.client_neighborhood || d.formulaire_data?.quartier || ''),
       adresse: d.client_address || d.formulaire_data?.adresse || '',
-      date: d.date_intervention || d.formulaire_data?.date || d.formulaire_data?.scheduledDate || '',
-      date_demarrage: d.formulaire_data?.date_demarrage || d.formulaire_data?.date_debut || d.planning?.date_debut || d.date_intervention || '',
-      date_debut: d.formulaire_data?.date_demarrage || d.formulaire_data?.date_debut || d.planning?.date_debut || d.date_intervention || '',
+      date: dStartDate,
+      date_demarrage: dStartDate,
+      date_debut: dStartDate,
       heure: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime || '',
       scheduling_type: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime ? 'fixed' : 'flexible',
       preference_horaire: normalizeTimePref(d.preference_horaire || d.formulaire_data?.preference_horaire || (d.formulaire_data?.schedulingTime === 'morning' ? 'matin' : d.formulaire_data?.schedulingTime === 'afternoon' ? 'apres_midi' : '')),
@@ -1097,14 +1102,17 @@ export default function DemandesEnAttente() {
       avance_pourcentage: formData.avance_pourcentage,
       avance_fixe: formData.avance_fixe,
       frequence: formData.frequence,
-      date_demarrage: formData.date_demarrage || formData.date_debut || formData.date || null,
-      date_debut: formData.date_demarrage || formData.date_debut || formData.date || null,
+      date_demarrage: formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10),
+      date_debut: formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10),
+      date: formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10),
       jours_passage: formData.jours_passage || (Array.isArray(formData.jours_intervention) ? formData.jours_intervention.join(' + ') : ''),
       jours_intervention: formData.jours_intervention || [],
       jours_intervention_detail: formData.jours_intervention_detail || [],
       jours_par_semaine: joursParSemaine,
       subFrequency: mappedSubFrequency
     };
+
+    const effectiveDate = formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10);
 
     return {
       ...(baseDemande || {}),
@@ -1113,7 +1121,7 @@ export default function DemandesEnAttente() {
       client_whatsapp: finalWhatsApp,
       service: finalService,
       segment: activeSegment,
-      date_intervention: formData.date || null,
+      date_intervention: effectiveDate,
       heure_intervention: isFixedSchedule ? (formData.heure || '') : '',
       prix: formData.montant || null,
       is_devis: selectedService === 'Autre service' || isDevisRequired({ service: selectedService, segment: activeSegment, formulaire_data: formData } as any),
@@ -1214,13 +1222,15 @@ export default function DemandesEnAttente() {
 
       const mappedSubFrequency = uiSubFreqMap[formData.frequence || ''] || (formData.frequence === 'quotidien' ? 'quotidien' : undefined);
 
+      const effectiveStartDate = formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10);
+
       const payload = {
         client_name: clientDisplayName,
         client_phone: finalPhone,
         client_whatsapp: finalWhatsApp,
         service: finalService,
         segment: activeSegment,
-        date_intervention: formData.date || null,
+        date_intervention: effectiveStartDate,
         heure_intervention: isFixedSchedule ? (formData.heure || '') : '',
         prix: formData.montant || null,
         is_devis: selectedService === 'Autre service' || isDevisRequired({ service: selectedService, segment: activeSegment, formulaire_data: formData } as any),
@@ -1236,7 +1246,7 @@ export default function DemandesEnAttente() {
         // Sync planning so Client Detail calendar reflects updated days
         planning: {
           ...(editingDemande?.planning || {}),
-          date_debut: formData.date_demarrage || formData.date_debut || formData.date || null,
+          date_debut: effectiveStartDate,
           jours_intervention: Array.isArray(formData.jours_intervention) && formData.jours_intervention.length > 0
             ? formData.jours_intervention
             : extractJoursPassage(formData.jours_passage),
@@ -1260,7 +1270,7 @@ export default function DemandesEnAttente() {
           adresse: formData.adresse,
           preference_horaire: isFixedSchedule ? '' : formData.preference_horaire,
           schedulingType: formData.scheduling_type,
-          schedulingDate: formData.date || null,
+          schedulingDate: effectiveStartDate,
           fixedTime: isFixedSchedule ? (formData.heure || '') : '',
           schedulingTime: isFixedSchedule ? '' : (formData.preference_horaire === 'matin' ? 'morning' : formData.preference_horaire === 'apres_midi' ? 'afternoon' : ''),
           type_habitation: selectedService === 'Autre service'
@@ -1341,8 +1351,9 @@ export default function DemandesEnAttente() {
           avance_pourcentage: formData.avance_pourcentage,
           avance_fixe: formData.avance_fixe,
           frequence: formData.frequence,
-          date_demarrage: formData.date_demarrage || formData.date_debut || formData.date || null,
-          date_debut: formData.date_demarrage || formData.date_debut || formData.date || null,
+          date_demarrage: effectiveStartDate,
+          date_debut: effectiveStartDate,
+          date: effectiveStartDate,
           jours_passage: formData.jours_passage || (Array.isArray(formData.jours_intervention) ? formData.jours_intervention.join(' + ') : ''),
           jours_intervention: formData.jours_intervention || [],
           jours_intervention_detail: formData.jours_intervention_detail || [],

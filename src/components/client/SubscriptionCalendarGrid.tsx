@@ -6,7 +6,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Demande } from '../../types';
 import { createPlanningIntervention, updateDemande, deleteDemande } from '../../api/client';
-import { parseDateRobust } from '../../utils/pricing';
+import { parseDateRobust, getDemandeStartDate } from '../../utils/pricing';
 
 export interface DateOverrideItem {
   heure?: string;
@@ -19,6 +19,7 @@ export interface DateOverrideItem {
 
 export interface SubscriptionCalendarGridProps {
   calMonth: Date;
+  parentDemande?: Demande;
   aboDateDebut?: string;
   dateFinAuto?: string;
   aboFrequence?: string;
@@ -44,6 +45,7 @@ const JOURS_SEMAINE = [
 
 export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> = ({
   calMonth,
+  parentDemande,
   aboDateDebut = '',
   dateFinAuto = '',
   aboFrequence = '',
@@ -314,12 +316,14 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
             const isPattern = interventionSet.has(key);
             const isIntervention = (isPattern && !override?.excluded) || (!!override?.heure && !override?.excluded);
 
-            // Get child demande linked to this date if exists in BDD
+            // Get child demande linked to this date if exists in BDD, or parent demande for its start date
+            const parentStartDate = parentDemande ? getDemandeStartDate(parentDemande) : '';
+            const isParentDate = parentStartDate === key;
             const realDemande = childDemandes?.find((cd: Demande) => {
               if (!cd?.date_intervention) return false;
               const dDate = cd.date_intervention.includes('T') ? cd.date_intervention.split('T')[0] : cd.date_intervention.slice(0, 10);
               return dDate === key;
-            });
+            }) || (isParentDate ? parentDemande : undefined);
 
             // Determine effective status from BDD child demande or overrides
             let effectiveStatut = override?.statut || null;

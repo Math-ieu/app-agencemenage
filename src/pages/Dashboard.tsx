@@ -12,7 +12,7 @@ import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
-import { getDynamicMonthPassagesCount } from '../utils/pricing';
+import { getDynamicMonthPassagesCount, getDemandeStartDate } from '../utils/pricing';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -547,7 +547,7 @@ export default function Dashboard() {
         }
 
         // Filtre fenêtre 24h (Jour J et J+1)
-        const dateInterventionStr = d.date_intervention || d.formulaire_data?.date_intervention;
+        const dateInterventionStr = getDemandeStartDate(d);
         if (dateInterventionStr) {
           const interDate = new Date(dateInterventionStr);
           if (!isNaN(interDate.getTime())) {
@@ -1031,6 +1031,10 @@ export default function Dashboard() {
 
       const previousFormData = selectedDemande.formulaire_data || {};
       const previousAdditional = previousFormData.additionalServices || {};
+      const effectiveStartDate = editFormData.date_demarrage || editFormData.date_debut || editFormData.date || editFormData.date_intervention || '';
+      if (effectiveStartDate) {
+        updateData.date_intervention = effectiveStartDate;
+      }
 
       updateData.formulaire_data = {
         ...(selectedDemande.formulaire_data || {}),
@@ -1064,7 +1068,10 @@ export default function Dashboard() {
         conso: Boolean(editFormData.conso),
         linen_sets: parseInt(editFormData.linen_sets) || 0,
         linenSets: parseInt(editFormData.linen_sets) || 0,
-        date: editFormData.date || editFormData.date_intervention || '',
+        date: effectiveStartDate || previousFormData.date || '',
+        date_demarrage: effectiveStartDate || previousFormData.date_demarrage || '',
+        date_debut: effectiveStartDate || previousFormData.date_debut || '',
+        schedulingDate: effectiveStartDate || previousFormData.schedulingDate || '',
         nb_personnel: cleanerCount,
         lieu_garde: editFormData.lieu_garde || 'domicile',
         age_personne: editFormData.age_personne || '',
@@ -1370,8 +1377,10 @@ export default function Dashboard() {
       montant_profil_doit_agence: toNumber(facturationData.montant_profil_doit_agence),
       nb_heures: d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '',
       duree: formData.duree || d.nb_heures || formData.duration || '',
-      date_intervention: d.date_intervention || formData.date || '',
-      date: formData.date || d.date_intervention || '',
+      date_intervention: getDemandeStartDate(d),
+      date: getDemandeStartDate(d),
+      date_demarrage: getDemandeStartDate(d),
+      date_debut: getDemandeStartDate(d),
       heure_intervention: d.heure_intervention || formData.heure || '',
       heure: formData.heure || d.heure_intervention || '',
       note_commercial: d.note_commercial || '',
@@ -1523,7 +1532,7 @@ export default function Dashboard() {
       }
 
       // Filtre fenêtre 24h (Jour J et J+1)
-      const dateInterventionStr = d.date_intervention || d.formulaire_data?.date_intervention;
+      const dateInterventionStr = getDemandeStartDate(d);
       if (dateInterventionStr) {
         const interDate = new Date(dateInterventionStr);
         if (!isNaN(interDate.getTime())) {
@@ -1555,10 +1564,10 @@ export default function Dashboard() {
 
       // Filtre Date
       if (dateRange.start || dateRange.end) {
-        // En Dashboard, on utilise la date d'intervention
-        const dateInterventionStr = d.date_intervention || d.formulaire_data?.date_intervention;
-        if (dateInterventionStr) {
-          const dateInterObj = new Date(dateInterventionStr);
+        // En Dashboard, on utilise la date de démarrage / d'intervention canonique
+        const dateRangeStr = getDemandeStartDate(d);
+        if (dateRangeStr) {
+          const dateInterObj = new Date(dateRangeStr);
           if (dateRange.start && dateInterObj < new Date(dateRange.start)) return false;
           if (dateRange.end) {
             const endObj = new Date(dateRange.end);
@@ -1923,7 +1932,7 @@ export default function Dashboard() {
                       </td>
                       <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
                       <td>{abbreviateName(d.assigned_to_operations_name)}</td>
-                      <td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}</td>
+                      <td>{(() => { const sd = getDemandeStartDate(d); return sd ? new Date(sd).toLocaleDateString('fr-FR') : '—'; })()}</td>
                       <td>
                         {renderStatusBadge(d.statut, d.cao)}
                       </td>
@@ -2338,7 +2347,7 @@ export default function Dashboard() {
                     <div>
                       <span className="text-muted" style={{ marginRight: '4px' }}>Date :</span>
                       <span style={{ fontWeight: '500' }}>
-                        {d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (d.formulaire_data?.date_intervention || '—')}
+                        {(() => { const sd = getDemandeStartDate(d); return sd ? new Date(sd).toLocaleDateString('fr-FR') : '—'; })()}
                       </span>
                     </div>
                     <div>
@@ -3892,7 +3901,7 @@ export default function Dashboard() {
                     <h3>Détails Prestation</h3>
                     <div className="detail-grid">
                       <div className="detail-item"><span>Service:</span> {selectedDemande.service}</div>
-                      <div className="detail-item"><span>Date:</span> {selectedDemande.date_intervention ? new Date(selectedDemande.date_intervention).toLocaleDateString('fr-FR') : (selectedDemande.formulaire_data?.date_intervention || selectedDemande.formulaire_data?.date || '—')}</div>
+                      <div className="detail-item"><span>Date:</span> {(() => { const sd = getDemandeStartDate(selectedDemande); return sd ? new Date(sd).toLocaleDateString('fr-FR') : '—'; })()}</div>
                       <div className="detail-item"><span>Heures:</span> {selectedDemande.nb_heures || selectedDemande.formulaire_data?.duree || selectedDemande.formulaire_data?.nb_heures || '—'}h</div>
                       <div className="detail-item"><span>Fréquence:</span> {selectedDemande.frequency_label || (selectedDemande.frequency === 'oneshot' ? 'Une fois' : 'Abonnement')}</div>
                       <div className="detail-item"><span>Avec produit:</span> {selectedDemande.service.toLowerCase().includes('bureaux') ? (selectedDemande.avec_produit ? 'Oui' : 'Non') : (selectedDemande.avec_produit ? `Oui (${selectedDemande.tarif_produit} MAD)` : 'Non')}</div>
@@ -4255,7 +4264,7 @@ export default function Dashboard() {
               <div style={{ backgroundColor: '#f1f5f9', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <p style={{ margin: 0, fontSize: '13.5px', color: '#374151' }}><span style={{ color: '#9ca3af' }}>Client : </span><strong>{showCAOModal.client_name || showCAOModal.formulaire_data?.nom || '—'}</strong></p>
-                  <p style={{ margin: 0, fontSize: '13.5px', color: '#374151' }}><span style={{ color: '#9ca3af' }}>Date : </span><strong>{showCAOModal.date_intervention ? new Date(showCAOModal.date_intervention).toLocaleDateString('fr-FR') : (showCAOModal.formulaire_data?.date_intervention || '—')}</strong></p>
+                  <p style={{ margin: 0, fontSize: '13.5px', color: '#374151' }}><span style={{ color: '#9ca3af' }}>Date : </span><strong>{(() => { const sd = getDemandeStartDate(showCAOModal); return sd ? new Date(sd).toLocaleDateString('fr-FR') : '—'; })()}</strong></p>
                   <p style={{ margin: 0, fontSize: '13.5px', color: '#374151' }}><span style={{ color: '#9ca3af' }}>Heure : </span><strong>{showCAOModal.formulaire_data?.heure || '—'}</strong></p>
                   <p style={{ margin: 0, fontSize: '13.5px', color: '#374151' }}><span style={{ color: '#9ca3af' }}>Lieu : </span><strong>{[showCAOModal.formulaire_data?.quartier || showCAOModal.client_neighborhood, showCAOModal.formulaire_data?.ville || showCAOModal.client_city].filter(Boolean).join(', ') || '—'}</strong></p>
                 </div>

@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import { getDemandes, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
-import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage, getStatutMoisProchainCalculated, getNextIntervention } from '../utils/pricing';
+import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage, getStatutMoisProchainCalculated, getNextIntervention, getDemandeStartDate } from '../utils/pricing';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '../store/auth';
 import { checkPermission, hasPermission } from '../utils/permissions';
@@ -323,12 +323,14 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
                 const isIntervention = (isPattern && !override?.excluded) || (!!override?.heure && !override?.excluded);
                 const statut = override?.statut || null;
 
-                // Get the child demande status if it exists in BDD (takes priority)
+                // Get the child demande status or parent demande status if it exists in BDD (takes priority)
+                const parentStartDate = parentDemande ? getDemandeStartDate(parentDemande) : '';
+                const isParentDate = parentStartDate === dayIso;
                 const realDemande = childDemandes.find(d => {
                   if (!d.date_intervention) return false;
                   const dDate = d.date_intervention.includes('T') ? d.date_intervention.split('T')[0] : d.date_intervention.slice(0, 10);
                   return dDate === dayIso;
-                });
+                }) || (isParentDate ? parentDemande : undefined);
 
                 // Determine effective status
                 let effectiveStatut = statut;
@@ -617,7 +619,7 @@ export default function GestionAbonnements() {
         }
       }
 
-      const dateDebut = d.planning?.date_debut || d.date_intervention || d.created_at?.slice(0, 10) || todayStr;
+      const dateDebut = getDemandeStartDate(d) || todayStr;
       const dateFin = d.planning?.date_fin || dAny.date_fin || undefined;
 
       // Determine if starting mid-month (e.g. day > 1)
@@ -630,15 +632,23 @@ export default function GestionAbonnements() {
       // Child interventions for this subscription
       const children = demandes.filter(c => Number(c.parent_demande) === Number(d.id));
 
+      const parentDate = getDemandeStartDate(d);
+      const hasChildOnParentDate = children.some(c => (c.date_intervention?.slice(0, 10)) === parentDate);
+      const isParentCompleted = ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes((d.statut || '').toLowerCase().trim());
+      const isParentCancelled = ['annule', 'annulee', 'annulée'].includes((d.statut || '').toLowerCase().trim());
+
+      const parentCompletedBonus = (isParentCompleted && !hasChildOnParentDate) ? 1 : 0;
+      const parentCancelledBonus = (isParentCancelled && !hasChildOnParentDate) ? 1 : 0;
+
       const interventionsCompleted = children.filter(c => {
         const st = (c.statut || '').toLowerCase().trim();
         return ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st);
-      }).length;
+      }).length + parentCompletedBonus;
 
       const interventionsCancelled = children.filter(c => {
         const st = (c.statut || '').toLowerCase().trim();
         return ['annule', 'annulee', 'annulée'].includes(st);
-      }).length;
+      }).length + parentCancelledBonus;
 
       const interventionsTotal = getDynamicMonthPassagesCount(d, demandes);
 
@@ -1018,13 +1028,7 @@ export default function GestionAbonnements() {
       const dbStatut = (d.statut || '').toLowerCase();
       if (['resilie', 'suspendu'].includes(dbStatut)) return;
 
-      const dStartStr =
-        d.planning?.date_debut ||
-        (d.formulaire_data as any)?.date_demarrage ||
-        (d.formulaire_data as any)?.date_debut ||
-        d.date_intervention ||
-        (d.created_at ? d.created_at.slice(0, 10) : '');
-      const dStartIso = dStartStr ? (dStartStr.includes('T') ? dStartStr.slice(0, 10) : dStartStr.slice(0, 10)) : '';
+      const dStartIso = getDemandeStartDate(d);
 
       const dEndStr =
         d.planning?.date_fin ||

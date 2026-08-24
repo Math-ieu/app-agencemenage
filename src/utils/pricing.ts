@@ -42,6 +42,42 @@ export const calculateSurchargeMultiplier = (
     return 1;
 };
 
+/**
+ * Canonical helper to retrieve the start date of a demand or subscription.
+ * Strictly adheres to the priority:
+ * 1. formulaire_data.date_demarrage
+ * 2. formulaire_data.date_debut
+ * 3. planning.date_debut
+ * 4. date_intervention
+ * 5. formulaire_data.date
+ * 6. formulaire_data.schedulingDate
+ * 7. created_at (YYYY-MM-DD)
+ */
+export const getDemandeStartDate = (demande?: any): string => {
+    if (!demande) return '';
+    const fd = (demande.formulaire_data as any) || {};
+    const planning = (demande as any).planning || {};
+    const rawDate =
+        fd.date_demarrage ||
+        fd.date_debut ||
+        planning.date_debut ||
+        demande.date_intervention ||
+        fd.date ||
+        fd.schedulingDate ||
+        (demande.created_at ? String(demande.created_at).slice(0, 10) : '');
+    if (!rawDate) return '';
+    const str = String(rawDate).trim();
+    if (str.includes('T')) return str.split('T')[0];
+    if (str.includes('/')) {
+        const parts = str.split('/');
+        if (parts.length === 3) {
+            const [d, m, y] = parts;
+            return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+    }
+    return str.slice(0, 10);
+};
+
 export interface PricingInput {
     service: string;
     duree: number;
@@ -870,7 +906,7 @@ export const extractJoursPassage = (raw: any): string[] => {
 export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = [], targetMonthDate?: Date | string): number => {
     if (!demande) return 0;
 
-    const startStr = (demande.formulaire_data as any)?.date_demarrage || (demande.formulaire_data as any)?.date_debut || demande.planning?.date_debut || demande.date_intervention;
+    const startStr = getDemandeStartDate(demande);
     const parsedStart = parseDateRobust(startStr);
 
     let targetDateObj: Date;
@@ -1155,6 +1191,11 @@ export const getNextIntervention = (
         }
     });
 
+    const parentStartDate = getDemandeStartDate(demande);
+    if (parentStartDate && !childMap[parentStartDate]) {
+        childMap[parentStartDate] = demande;
+    }
+
     const dateOverrides = (demande.formulaire_data as any)?.date_overrides || {};
 
     // 2. Extract recurrence days
@@ -1187,7 +1228,7 @@ export const getNextIntervention = (
     };
     const selectedDows = jours.map(j => dayMap[j.toLowerCase()]).filter(v => v !== undefined);
 
-    const dateDebutStr = demande.planning?.date_debut || (demande.formulaire_data as any)?.date_debut || demande.date_intervention || demande.created_at?.slice(0, 10) || todayIso;
+    const dateDebutStr = getDemandeStartDate(demande) || todayIso;
     const parsedStart = parseDateRobust(dateDebutStr) || new Date();
     const startDate = new Date(parsedStart.getFullYear(), parsedStart.getMonth(), parsedStart.getDate(), 0, 0, 0, 0);
 

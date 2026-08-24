@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
+import { getDemandeStartDate } from '../utils/pricing';
 import { Agent } from '../types';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
@@ -1427,7 +1428,7 @@ export default function ProfilDetails() {
                   return (
                     <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <Td mono>{isMission ? `MSN-${String(item.data.id).padStart(5, '0')}` : `#${d.id}`}</Td>
-                      <Td>{d.date_intervention ? new Date(d.date_intervention).toLocaleDateString('fr-FR') : (isMission && item.data.date_debut ? new Date(item.data.date_debut).toLocaleDateString('fr-FR') : '—')}</Td>
+                      <Td>{(() => { const sd = getDemandeStartDate(d) || (isMission ? item.data.date_debut : ''); return sd ? new Date(sd).toLocaleDateString('fr-FR') : '—'; })()}</Td>
                       <Td bold color="#475569">
                         {d.client ? (
                           <Link to={`/clients/${encodeId(d.client)}`} style={{ color: '#037265', textDecoration: 'none' }}>

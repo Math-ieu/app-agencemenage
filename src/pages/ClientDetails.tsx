@@ -19,6 +19,7 @@ import { useAuthStore } from '../store/auth';
 import { Client, Demande } from '../types';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
 import { normalizeFrequence } from '../utils/formNormalizers';
+import { getDemandeStartDate } from '../utils/pricing';
 import ClientEditModal from './ClientEditModal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { SubscriptionManagementView } from '../components/client/SubscriptionManagementView';
@@ -521,7 +522,7 @@ export default function ClientDetails() {
       const ji = latest.planning?.jours_intervention || [];
       const hd = latest.planning?.heure_debut ? latest.planning.heure_debut.slice(0, 5) : (latest.heure_intervention ? latest.heure_intervention.slice(0, 5) : '09:00');
       const hf = latest.planning?.heure_fin ? latest.planning.heure_fin.slice(0, 5) : '11:00';
-      const db = latest.planning?.date_debut || latest.formulaire_data?.date_demarrage || latest.formulaire_data?.date_debut || latest.date_intervention || '';
+      const db = getDemandeStartDate(latest);
       const s = latest.planning?.semaines || [];
       let df = latest.planning?.date_fin || (db ? getOneMonthLater(db) : '');
       
@@ -867,9 +868,17 @@ export default function ClientDetails() {
         nombre_passages_mois: totalPlannedPassages,
       };
       
+      if (updatedFormData) {
+        updatedFormData.date_demarrage = dateDebut;
+        updatedFormData.date_debut = dateDebut;
+        updatedFormData.date = dateDebut;
+        updatedFormData.schedulingDate = dateDebut;
+      }
+      
       await Promise.all([
         savePlanning(latest.id, data),
         updateDemande(latest.id, { 
+          date_intervention: dateDebut,
           frequency_label: frequencyLabel,
           prix: newPrice,
           formulaire_data: updatedFormData

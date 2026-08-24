@@ -119,6 +119,9 @@ export default function DevisNouveau() {
         frequency_label: data.frequency === "oneshot" ? "une fois" : "abonnement",
         formulaire_data: {
           ...data,
+          date_demarrage: data.service_date || null,
+          date_debut: data.service_date || null,
+          date: data.service_date || null,
           total: totals.amount_ttc,
           is_autre_service: true,
           custom_service_type: data.service_type,

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, X, AlertCircle, FileText } from 'lucide-react';
 import { Demande, Client } from '../../types';
 import { updateDemande, generateDocument, getUsers, affecterDemande } from '../../api/client';
-import { getDevisDiscountDetails, extractJoursPassage, getDynamicMonthPassagesCount } from '../../utils/pricing';
+import { getDevisDiscountDetails, extractJoursPassage, getDynamicMonthPassagesCount, getDemandeStartDate } from '../../utils/pricing';
 
 export interface InvoiceFormModalProps {
   show: boolean;
@@ -130,7 +130,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       const rawFreq = latest.frequency_label || formData.frequence || frequencyLabel;
       setInvFrequence(formatFrequenceOption(rawFreq, selectedDays?.length));
 
-      const realStartDate = dateDebut || latest.planning?.date_debut || formData.date_demarrage || formData.date_debut || latest.date_intervention || (latest.created_at ? latest.created_at.slice(0, 10) : '');
+      const realStartDate = dateDebut || getDemandeStartDate(latest);
       setInvDateStart(realStartDate);
 
       const realNbPersonnes = latest.nb_intervenants || formData.nb_personnes || formData.nb_intervenants || formData.nb_intervenantes || 1;
@@ -228,12 +228,14 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     const syntheticDemande = {
       ...latest,
       frequency_label: freqLabel,
-      date_intervention: invDateStart || latest.date_intervention,
+      date_intervention: invDateStart || getDemandeStartDate(latest),
       formulaire_data: {
         ...(latest.formulaire_data || {}),
         frequence: freqLabel,
-        date_demarrage: invDateStart || latest.formulaire_data?.date_demarrage || latest.date_intervention,
-        date_debut: invDateStart || latest.formulaire_data?.date_debut || latest.date_intervention,
+        date_demarrage: invDateStart || getDemandeStartDate(latest),
+        date_debut: invDateStart || getDemandeStartDate(latest),
+        date: invDateStart || getDemandeStartDate(latest),
+        schedulingDate: invDateStart || getDemandeStartDate(latest),
         jours_passage: invJoursPassage,
         jours_intervention: parsedDays,
         jours_intervention_detail: parsedDays.map(j => ({ jour: j, heure_debut: '09:00', heure_fin: '13:00' }))
@@ -674,6 +676,9 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   type_prestation: invService,
                   frequence: invFrequence,
                   date_demarrage: invDateStart,
+                  date_debut: invDateStart,
+                  date: invDateStart,
+                  schedulingDate: invDateStart,
                   nb_personnes: invNbPersonnes,
                   nb_intervenants: invNbPersonnes,
                   duree: invDuree,
@@ -710,6 +715,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 };
 
                 const updatePayload: any = {
+                  date_intervention: invDateStart || latest.date_intervention,
                   prix: Math.round(devisTotal) || latest.prix,
                   montant_devis: devisTotal || latest.montant_devis || latest.prix,
                   montant_facture: finalMontantFacture,
