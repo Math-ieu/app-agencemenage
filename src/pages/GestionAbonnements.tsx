@@ -1,11 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar, Eye, Pause, Play, Search, ChevronLeft, ChevronRight,
   Sun, CheckCircle2, Clock, RefreshCw, X, ArrowDownRight, MoreHorizontal, FileText, ExternalLink, Moon, Download
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { getDemandes, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
+import { getDemandes, updateDemande, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
+import { SubscriptionCalendarGrid } from '../components/client/SubscriptionCalendarGrid';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
 import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage, getStatutMoisProchainCalculated, getNextIntervention, getDemandeStartDate } from '../utils/pricing';
@@ -113,26 +114,55 @@ export function calculateMidMonthProrata(
 }
 
 // Helper Sub-Component for Calendar Popup Modal — Synchronized with SubscriptionCalendarGrid
-function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; demandes: Demande[]; onClose: () => void }) {
+function CalendarModal({
+  row,
+  demandes,
+  onClose,
+  onRefresh
+}: {
+  row: SubscriptionRow;
+  demandes: Demande[];
+  onClose: () => void;
+  onRefresh?: () => Promise<void>;
+}) {
   const navigate = useNavigate();
+  const { toast } = useToast();
 
-  const [activeDate, setActiveDate] = useState(() => new Date());
-
-  const year = activeDate.getFullYear();
-  const month = activeDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthIsoPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [activeDate] = useState(() => new Date());
 
   // Find the parent subscription demande to access date_overrides and jours_intervention_detail
   const parentDemande = useMemo(() => {
     return demandes.find(d => d.id === row.demandeId);
   }, [demandes, row.demandeId]);
 
-  const dateOverrides: Record<string, any> = useMemo(() => {
+  const [aboDateOverrides, setAboDateOverridesState] = useState<Record<string, any>>(() => {
     return parentDemande?.formulaire_data?.date_overrides || {};
-  }, [parentDemande]);
+  });
+
+  useEffect(() => {
+    if (parentDemande?.formulaire_data?.date_overrides) {
+      setAboDateOverridesState(parentDemande.formulaire_data.date_overrides);
+    }
+  }, [parentDemande?.id, parentDemande?.formulaire_data?.date_overrides]);
+
+  const handleUpdateDateOverrides = useCallback(async (newOverridesOrFn: any) => {
+    let nextOverrides: Record<string, any> = {};
+    setAboDateOverridesState((prev: Record<string, any>) => {
+      nextOverrides = typeof newOverridesOrFn === 'function' ? newOverridesOrFn(prev) : newOverridesOrFn;
+      return nextOverrides;
+    });
+
+    if (parentDemande?.id) {
+      try {
+        await updateDemande(parentDemande.id, {
+          formulaire_data: { date_overrides: nextOverrides }
+        } as any);
+        if (onRefresh) await onRefresh();
+      } catch (err) {
+        console.error("Erreur d'enregistrement date_overrides:", err);
+      }
+    }
+  }, [parentDemande?.id, onRefresh]);
 
   // Real child demandes / programmed interventions linked to this subscription in BDD
   const childDemandes = useMemo(() => {
@@ -150,103 +180,48 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
     return (row.joursChoice || []).map(j => ({ jour: j, heure_debut: '09:00', heure_fin: '13:00' }));
   }, [parentDemande, row.joursChoice]);
 
-  const dayMap: Record<string, number> = {
-    dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6,
-  };
-  const heureByDow: Record<number, { heure_debut: string; heure_fin: string }> = {};
-  joursDetail.forEach((j) => { heureByDow[dayMap[j.jour]] = { heure_debut: j.heure_debut, heure_fin: j.heure_fin }; });
-  const selectedDows = joursDetail.map((j) => dayMap[j.jour]);
-
-  // Compute intervention dates ONLY for the visible month (scoped to subscription period)
-  const interventionSet = useMemo(() => {
-    const set = new Set<string>();
-    const startStr = row.dateDebut || parentDemande?.date_intervention || todayStr;
-    let subStart: Date;
-    try { subStart = new Date(startStr.includes('T') ? startStr : `${startStr}T00:00:00`); } catch { subStart = new Date(); }
-    const endStr = row.dateFin || parentDemande?.formulaire_data?.date_fin || parentDemande?.planning?.date_fin;
-    let subEnd: Date;
-    if (endStr) {
-      try { subEnd = new Date(endStr.includes('T') ? endStr : `${endStr.slice(0, 10)}T23:59:59`); } catch { subEnd = new Date(year, month + 1, 0); }
-    } else {
-      const nbMois = Number(parentDemande?.formulaire_data?.nb_mois || parentDemande?.formulaire_data?.duree_mois || 1);
-      subEnd = new Date(subStart.getFullYear(), subStart.getMonth() + nbMois, 0, 23, 59, 59);
-    }
-
-    // Scope to visible month only
-    const monthStart = new Date(year, month, 1);
-    const monthEnd = new Date(year, month + 1, 0); // last day of month
-
-    // Intersect: loop only within [max(subStart, monthStart), min(subEnd, monthEnd)]
-    const loopStart = subStart > monthStart ? subStart : monthStart;
-    const loopEnd = subEnd < monthEnd ? subEnd : monthEnd;
-
-    const subStartMs = subStart.getTime();
-    const freqStr = (parentDemande?.formulaire_data?.frequence || parentDemande?.frequency_label || '').toLowerCase();
-    const seenMonth = new Set<string>();
-
-    for (let d = new Date(loopStart); d <= loopEnd; d.setDate(d.getDate() + 1)) {
-      if (!selectedDows.includes(d.getDay())) continue;
-      if (freqStr.includes('bi_hebdomadaire')) {
-        const weekNo = Math.floor((d.getTime() - subStartMs) / (7 * 24 * 3600 * 1000));
-        if (weekNo % 2 !== 0) continue;
-      }
-      if (freqStr.includes('1_fois_mois')) {
-        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDay()}`;
-        if (seenMonth.has(key)) continue;
-        seenMonth.add(key);
-      }
-      const dayIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      set.add(dayIso);
-    }
-
-    // Also add dates from child demandes (only this month)
-    childDemandes.forEach((cd) => {
-      if (cd.date_intervention) {
-        const dIso = cd.date_intervention.includes('T') ? cd.date_intervention.split('T')[0] : cd.date_intervention.slice(0, 10);
-        if (dIso.startsWith(monthIsoPrefix)) {
-          set.add(dIso);
-        }
-      }
-    });
-
-    return set;
-  }, [row, parentDemande, childDemandes, selectedDows, todayStr, year, month, monthIsoPrefix]);
-
   const handleOpenGestion = () => {
     const targetId = row.clientId || row.demandeId || row.id;
     navigate(`/clients/${encodeId(targetId)}`);
     onClose();
   };
 
-  const monthTitle = useMemo(() => {
-    const monthName = activeDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-    return monthName.charAt(0).toUpperCase() + monthName.slice(1);
-  }, [activeDate]);
+  const handleSetCellStatus = async (dayIso: string, newStatut: string) => {
+    if (!parentDemande?.id) return;
+    try {
+      const currentOverrides = { ...aboDateOverrides };
+      const currentVal = currentOverrides[dayIso] || {};
+      
+      let statutValue: string | null = null;
+      let isExcluded = false;
 
-  const handlePrevMonth = () => setActiveDate(new Date(year, month - 1, 1));
-  const handleNextMonth = () => setActiveDate(new Date(year, month + 1, 1));
+      if (newStatut === 'terminee' || newStatut === 'termine') statutValue = 'termine';
+      else if (newStatut === 'annulee' || newStatut === 'annule') { statutValue = 'annule'; isExcluded = true; }
+      else if (newStatut === 'reportee' || newStatut === 'reporte') { statutValue = 'reporte'; isExcluded = true; }
+      else if (newStatut === 'a_recuperer') statutValue = 'a_recuperer';
+      else statutValue = null;
 
-  // Build grid with Sunday-first alignment (matching SubscriptionCalendarGrid)
-  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0 = Sun
-  const prevMonthDaysCount = firstDayOfWeek;
-  const prevMonthLastDate = new Date(year, month, 0).getDate();
-  const prevMonthDays = Array.from({ length: prevMonthDaysCount }, (_, i) => prevMonthLastDate - prevMonthDaysCount + 1 + i);
+      currentOverrides[dayIso] = {
+        ...currentVal,
+        statut: statutValue,
+        excluded: isExcluded,
+      };
 
-  const totalCells = prevMonthDaysCount + daysInMonth;
-  const remainingCells = (7 - (totalCells % 7)) % 7;
-  const nextMonthDays = Array.from({ length: remainingCells }, (_, i) => i + 1);
-
-
-
-  const headers = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
+      await handleUpdateDateOverrides(currentOverrides);
+      toast({ title: "Statut mis à jour", description: `Date ${dayIso} actualisée avec succès.` });
+    } catch (err) {
+      console.error("Erreur statut intervention:", err);
+      toast({ title: "Erreur", description: "Erreur lors de la mise à jour de l'intervention", variant: "destructive" });
+    }
+  };
 
   return (
     <div className="ga-modal-backdrop" onClick={onClose}>
-      <div className="ga-modal" style={{ maxWidth: '680px', width: '100%', borderRadius: '12px' }} onClick={e => e.stopPropagation()}>
+      <div className="ga-modal" style={{ maxWidth: '840px', width: '100%', borderRadius: '16px', maxHeight: '92vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         {/* Modal Header */}
         <div className="ga-modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div className="ga-modal-title" style={{ fontSize: '1.2rem', fontWeight: 700, color: '#03362e' }}>
-            Calendrier — {row.clientName}
+            Planning & Calendrier — {row.clientName}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -267,7 +242,7 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
                 cursor: 'pointer'
               }}
             >
-              <ExternalLink size={15} color="#334155" /> Ouvrir la gestion
+              <ExternalLink size={15} color="#334155" /> Ouvrir la fiche client
             </button>
 
             <button className="ga-modal-close" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
@@ -276,205 +251,23 @@ function CalendarModal({ row, demandes, onClose }: { row: SubscriptionRow; deman
           </div>
         </div>
 
-        {/* Modal Body */}
+        {/* Modal Body: Canonical SubscriptionCalendarGrid */}
         <div className="ga-modal-body" style={{ padding: '0 1.5rem 1.5rem 1.5rem' }}>
-          {/* Month Title Navigation */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
-            <button type="button" onClick={handlePrevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#037265', display: 'flex', padding: 4 }}>
-              <ChevronLeft size={20} />
-            </button>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#037265', margin: 0 }}>
-              {monthTitle}
-            </h3>
-            <button type="button" onClick={handleNextMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#037265', display: 'flex', padding: 4 }}>
-              <ChevronRight size={20} />
-            </button>
-          </div>
-
-          {/* Calendar Card Box — Identical to SubscriptionCalendarGrid */}
-          <div style={{ border: '1px solid #d0e3e0', borderRadius: 16, overflow: 'hidden', background: 'white' }}>
-            {/* Header row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#e6f2f0', borderBottom: '1px solid #d0e3e0' }}>
-              {headers.map((h) => (
-                <div key={h} style={{ color: '#037265', fontWeight: 800, fontSize: 12, textAlign: 'center', padding: '12px 0', letterSpacing: '0.05em' }}>
-                  {h}
-                </div>
-              ))}
-            </div>
-
-            {/* Calendar Days Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#d0e3e0', gap: '1px' }}>
-              {/* Prev Month Days Offset */}
-              {prevMonthDays.map(dayNum => (
-                <div key={`prev-${dayNum}`} style={{ minHeight: 74, background: '#f8fafc', padding: 8, display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: '#cbd5e1' }}>{dayNum}</span>
-                </div>
-              ))}
-
-              {/* Days of Month */}
-              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(dayNum => {
-                const dayIso = `${monthIsoPrefix}-${String(dayNum).padStart(2, '0')}`;
-                const dayDate = new Date(year, month, dayNum);
-                const isToday = dayIso === todayStr;
-
-                // Check override from date_overrides
-                const override = dateOverrides[dayIso];
-                const isPattern = interventionSet.has(dayIso);
-                const isIntervention = (isPattern && !override?.excluded) || (!!override?.heure && !override?.excluded);
-                const statut = override?.statut || null;
-
-                // Get the child demande status or parent demande status if it exists in BDD (takes priority)
-                const parentStartDate = parentDemande ? getDemandeStartDate(parentDemande) : '';
-                const isParentDate = parentStartDate === dayIso;
-                const realDemande = childDemandes.find(d => {
-                  if (!d.date_intervention) return false;
-                  const dDate = d.date_intervention.includes('T') ? d.date_intervention.split('T')[0] : d.date_intervention.slice(0, 10);
-                  return dDate === dayIso;
-                }) || (isParentDate ? parentDemande : undefined);
-
-                // Determine effective status
-                let effectiveStatut = statut;
-                if (realDemande) {
-                  const st = (realDemande.statut || '').toLowerCase().trim();
-                  const isReported = realDemande.cao === 'reporte' || ['reporte', 'reportee', 'reportée'].includes(st) || st.includes('report');
-                  const isCancelled = ['annule', 'annulee', 'annulée'].includes(st);
-                  const isCompleted = ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st);
-                  const isRecup = st.includes('recup');
-                  if (isCompleted) effectiveStatut = 'termine';
-                  else if (isCancelled) effectiveStatut = 'annule';
-                  else if (isReported) effectiveStatut = 'reporte';
-                  else if (isRecup) effectiveStatut = 'a_recuperer';
-                  else effectiveStatut = null; // "à venir"
-                }
-
-                const hasContent = isIntervention || effectiveStatut === 'a_recuperer' || effectiveStatut === 'reporte';
-
-                // Get hour info
-                const dowInfo = heureByDow[dayDate.getDay()];
-                const heure = override?.heure || (isPattern && dowInfo ? dowInfo.heure_debut : '') || (realDemande?.heure_intervention || '');
-                const heureFin = override?.heure_fin || (isPattern && dowInfo ? dowInfo.heure_fin : '') || '';
-
-                // Determine cell styling — exactly matching SubscriptionCalendarGrid
-                let cellBg = 'white';
-                let dateNumCol = '#0f172a';
-                let badgeBg = '#037265';
-                let badgeText = 'À VENIR';
-
-                if (hasContent) {
-                  if (effectiveStatut === 'termine') {
-                    cellBg = '#f0fdf4';
-                    dateNumCol = '#15803d';
-                    badgeBg = '#16a34a';
-                    badgeText = 'TERMINÉ';
-                  } else if (effectiveStatut === 'annule') {
-                    cellBg = '#fff1f2';
-                    dateNumCol = '#dc2626';
-                    badgeBg = '#dc2626';
-                    badgeText = 'ANNULÉ';
-                  } else if (effectiveStatut === 'a_recuperer') {
-                    cellBg = '#fffbeb';
-                    dateNumCol = '#d97706';
-                    badgeBg = '#d97706';
-                    badgeText = 'À RÉCUP.';
-                  } else if (effectiveStatut === 'reporte') {
-                    cellBg = '#f5f3ff';
-                    dateNumCol = '#7c3aed';
-                    badgeBg = '#7c3aed';
-                    badgeText = 'REPORTÉE';
-                  } else {
-                    cellBg = '#e6f2f0';
-                    dateNumCol = '#037265';
-                    badgeBg = '#037265';
-                    badgeText = 'À VENIR';
-                  }
-                }
-
-                return (
-                  <div
-                    key={dayNum}
-                    style={{
-                      minHeight: 74,
-                      background: cellBg,
-                      padding: 8,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      border: isToday ? '2px solid #facc15' : 'none',
-                    }}
-                  >
-                    <span style={{ fontSize: 13, fontWeight: isToday ? 800 : 700, color: dateNumCol }}>
-                      {dayNum}
-                    </span>
-
-                    {hasContent && (
-                      <div style={{ width: '100%', marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <span style={{
-                          display: 'block',
-                          fontSize: 9,
-                          fontWeight: 800,
-                          textTransform: 'uppercase',
-                          background: badgeBg,
-                          color: 'white',
-                          borderRadius: 4,
-                          padding: '3px 4px',
-                          textAlign: 'center',
-                          letterSpacing: '0.03em',
-                          textDecoration: effectiveStatut === 'annule' ? 'line-through' : 'none'
-                        }}>
-                          {badgeText}
-                        </span>
-                        {heure && (
-                          <span style={{
-                            display: 'block',
-                            fontSize: 9,
-                            fontWeight: 700,
-                            background: '#0d9488',
-                            color: 'white',
-                            borderRadius: 4,
-                            padding: '2px 4px',
-                            textAlign: 'center',
-                            letterSpacing: '0.02em'
-                          }}>
-                            {heure.slice(0, 5)}{heureFin ? `–${heureFin.slice(0, 5)}` : ''}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Next Month Days Offset */}
-              {nextMonthDays.map(dayNum => (
-                <div key={`next-${dayNum}`} style={{ minHeight: 74, background: '#f8fafc', padding: 8, display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: '#cbd5e1' }}>{dayNum}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-
-
-          {/* Legend — Identical to SubscriptionCalendarGrid */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 16, fontSize: 12, color: '#64748b' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 14, height: 14, borderRadius: 3, border: '2px solid #037265', display: 'inline-block' }} />
-              <span>Passage prévu</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 14, height: 14, borderRadius: 3, border: '2px solid #7c3aed', display: 'inline-block' }} />
-              <span>5ème semaine (facturée en +)</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 14, height: 14, borderRadius: 3, border: '2px solid #d97706', display: 'inline-block' }} />
-              <span>Suspension fête religieuse</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 14, height: 14, borderRadius: 3, border: '2px solid #facc15', display: 'inline-block' }} />
-              <span>Aujourd'hui</span>
-            </div>
-          </div>
+          <SubscriptionCalendarGrid
+            calMonth={activeDate}
+            parentDemande={parentDemande}
+            aboDateDebut={row.dateDebut || (parentDemande ? getDemandeStartDate(parentDemande) : '')}
+            dateFinAuto={row.dateFin || parentDemande?.formulaire_data?.date_fin || ''}
+            aboFrequence={parentDemande?.formulaire_data?.frequence || parentDemande?.frequency_label || row.frequenceLabel || ''}
+            aboJours={joursDetail}
+            aboDateOverrides={aboDateOverrides}
+            setAboDateOverrides={handleUpdateDateOverrides}
+            childDemandes={childDemandes}
+            addToast={(msg, type) => toast({ title: msg, variant: type === 'error' ? 'destructive' : 'default' })}
+            onSetCellStatus={handleSetCellStatus}
+            latestId={parentDemande?.id}
+            fetchData={onRefresh}
+          />
         </div>
       </div>
     </div>
@@ -632,23 +425,23 @@ export default function GestionAbonnements() {
       // Child interventions for this subscription
       const children = demandes.filter(c => Number(c.parent_demande) === Number(d.id));
 
-      const parentDate = getDemandeStartDate(d);
-      const hasChildOnParentDate = children.some(c => (c.date_intervention?.slice(0, 10)) === parentDate);
+      const hasChildren = children.length > 0;
       const isParentCompleted = ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes((d.statut || '').toLowerCase().trim());
       const isParentCancelled = ['annule', 'annulee', 'annulée'].includes((d.statut || '').toLowerCase().trim());
 
-      const parentCompletedBonus = (isParentCompleted && !hasChildOnParentDate) ? 1 : 0;
-      const parentCancelledBonus = (isParentCancelled && !hasChildOnParentDate) ? 1 : 0;
+      const interventionsCompleted = hasChildren
+        ? children.filter(c => {
+            const st = (c.statut || '').toLowerCase().trim();
+            return ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st);
+          }).length
+        : (isParentCompleted ? 1 : 0);
 
-      const interventionsCompleted = children.filter(c => {
-        const st = (c.statut || '').toLowerCase().trim();
-        return ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st);
-      }).length + parentCompletedBonus;
-
-      const interventionsCancelled = children.filter(c => {
-        const st = (c.statut || '').toLowerCase().trim();
-        return ['annule', 'annulee', 'annulée'].includes(st);
-      }).length + parentCancelledBonus;
+      const interventionsCancelled = hasChildren
+        ? children.filter(c => {
+            const st = (c.statut || '').toLowerCase().trim();
+            return ['annule', 'annulee', 'annulée'].includes(st);
+          }).length
+        : (isParentCancelled ? 1 : 0);
 
       const interventionsTotal = getDynamicMonthPassagesCount(d, demandes);
 
@@ -2461,6 +2254,7 @@ export default function GestionAbonnements() {
           row={selectedSubForCalendar}
           demandes={demandes}
           onClose={() => setSelectedSubForCalendar(null)}
+          onRefresh={fetchData}
         />
       ) : null}
     </>

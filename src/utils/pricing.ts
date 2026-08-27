@@ -57,6 +57,17 @@ export const getDemandeStartDate = (demande?: any): string => {
     if (!demande) return '';
     const fd = (demande.formulaire_data as any) || {};
     const planning = (demande as any).planning || {};
+
+    // For child demands (demandes filles d'un abonnement), the date of the intervention is strictly its own date_intervention
+    if (demande.parent_demande) {
+        const childDate = demande.date_intervention || fd.date || fd.date_demarrage || fd.date_debut || (demande.created_at ? String(demande.created_at).slice(0, 10) : '');
+        if (childDate) {
+            const str = String(childDate).trim();
+            if (str.includes('T')) return str.split('T')[0];
+            return str.slice(0, 10);
+        }
+    }
+
     const rawDate =
         fd.date_demarrage ||
         fd.date_debut ||

@@ -970,8 +970,14 @@ export default function LesSuivis() {
       return Number(rParentId) === Number(parentId);
     });
 
+    const hasChildRows = allSubRows.some(r => !!r.parentDemandeId || !!r.originalDemande?.parent_demande);
+
     const monthSubRows = allSubRows
       .filter(r => {
+        // If child rows exist, the actual intervention sessions are the child rows
+        if (hasChildRows && !r.parentDemandeId && !r.originalDemande?.parent_demande) {
+          return false;
+        }
         if (r.subscriptionMonth && r.subscriptionMonth === subMonthIndex) {
           return true;
         }

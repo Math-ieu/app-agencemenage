@@ -346,13 +346,15 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
 
             let cellBg = 'white';
             let dateNumCol = '#0f172a';
-            let badgeBg = '#037265';
+            let badgeBg = '#64748b';
             let badgeText = 'À VENIR';
+
+            const isCreatedInBdd = !!realDemande && !['annule', 'annulee', 'annulée', 'reporte', 'reportee', 'reportée'].includes((realDemande.statut || '').toLowerCase());
 
             if (!inMonth) {
               cellBg = '#f8fafc';
               dateNumCol = '#cbd5e1';
-            } else if (isIntervention || effectiveStatut === 'a_recuperer' || effectiveStatut === 'reporte') {
+            } else if (isIntervention || effectiveStatut === 'a_recuperer' || effectiveStatut === 'reporte' || isCreatedInBdd) {
               if (effectiveStatut === 'termine') {
                 cellBg = '#f0fdf4';
                 dateNumCol = '#15803d';
@@ -373,10 +375,15 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                 dateNumCol = '#7c3aed';
                 badgeBg = '#7c3aed';
                 badgeText = 'REPORTÉE';
-              } else {
+              } else if (isCreatedInBdd) {
                 cellBg = '#e6f2f0';
                 dateNumCol = '#037265';
-                badgeBg = '#037265';
+                badgeBg = '#0284c7';
+                badgeText = 'CRÉÉE';
+              } else {
+                cellBg = '#f8fafc';
+                dateNumCol = '#475569';
+                badgeBg = '#64748b';
                 badgeText = 'À VENIR';
               }
             }

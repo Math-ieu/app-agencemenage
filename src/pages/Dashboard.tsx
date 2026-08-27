@@ -320,8 +320,14 @@ export default function Dashboard() {
       return Number(xParentId) === Number(parentId);
     });
 
+    const hasChildDemands = allSubDemands.some(x => !!x.parent_demande);
+
     const monthSubDemands = allSubDemands
       .filter(x => {
+        // If child demands exist, the actual intervention sessions are the child demands
+        if (hasChildDemands && !x.parent_demande) {
+          return false;
+        }
         if (x.formulaire_data?.subscription_month && x.formulaire_data.subscription_month === subMonthIndex) {
           return true;
         }
@@ -541,6 +547,12 @@ export default function Dashboard() {
       const results = allResults.filter(d => {
         if (d.statut === 'en_attente') return false;
 
+        // Exclure les contrats mères d'abonnement : le tableau de bord opérationnel ne traite QUE des interventions réelles (One-shots ou séances d'abonnement filles)
+        const isRootSubscriptionContract = (d.frequency === 'abonnement' || (d as any).frequence === 'abonnement') && !d.parent_demande;
+        if (isRootSubscriptionContract) {
+          return false;
+        }
+
         // Exclure les prestations terminées du tableau de bord
         if (d.statut === 'pres_terminee' || d.statut === 'termine') {
           return false;
@@ -595,8 +607,18 @@ export default function Dashboard() {
       const enCoursEntreprise = enCours.filter(d => d.segment === 'entreprise').length;
       const enCoursNouveau = enCours.filter(d => d.cao !== true).length;
 
+      const parentIdsWithChildren = new Set(
+        allResults.filter(d => !!d.parent_demande).map(d => Number(d.parent_demande))
+      );
+
       const counts = allResults
         .filter(d => d.statut !== 'annule')
+        .filter(d => {
+          if (!d.parent_demande && d.frequency === 'abonnement' && parentIdsWithChildren.has(Number(d.id))) {
+            return false;
+          }
+          return true;
+        })
         .reduce<Record<string, number>>((acc, d) => {
           const key = getClientKey(d);
           acc[key] = (acc[key] || 0) + 1;
@@ -1510,6 +1532,12 @@ export default function Dashboard() {
 
   const filtered = useMemo(() => {
     return demandes.filter((d) => {
+      // Exclure les contrats mères d'abonnement
+      const isRootSubscriptionContract = (d.frequency === 'abonnement' || (d as any).frequence === 'abonnement') && !d.parent_demande;
+      if (isRootSubscriptionContract) {
+        return false;
+      }
+
       // Exclure les prestations terminées du tableau de bord
       if (d.statut === 'pres_terminee' || d.statut === 'termine') {
         return false;
