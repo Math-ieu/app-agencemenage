@@ -8,8 +8,10 @@ import type { CommandeAirbnb } from '../../types/airbnb';
 import { 
   X, UserCheck, 
   Camera, PackageSearch, Shirt,
-  CheckCircle2, Clock, Truck, ShieldCheck
+  CheckCircle2, Clock, Truck, ShieldCheck,
+  ZoomIn, ExternalLink, ImageIcon
 } from 'lucide-react';
+import { AirbnbPhotoUploader } from '../../components/airbnb/AirbnbPhotoUploader';
 import './DossierCommande.css';
 
 export default function DossierCommandeView() {
@@ -35,6 +37,10 @@ export default function DossierCommandeView() {
   const [isClotureOpen, setIsClotureOpen] = useState(false);
   const [photos, setPhotos] = useState<string[]>(['', '', '', '']);
   const [clotureLoading, setClotureLoading] = useState(false);
+
+  // Lightbox Preview State
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [lightboxTitle, setLightboxTitle] = useState<string>('');
 
   // Responsable Linge Arbitrage State (Page 09)
   const [damagedFeeApplied, setDamagedFeeApplied] = useState(true);
@@ -281,6 +287,73 @@ export default function DossierCommandeView() {
                   )}
                 </div>
               </div>
+
+              {/* Galerie des 4 Photos de Clôture Stockées */}
+              {Array.isArray(activeCmd?.photos_cloture) && activeCmd.photos_cloture.length > 0 && (
+                <div style={{ marginTop: '1.25rem', padding: '1rem 1.25rem', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Camera size={16} color="#15803d" />
+                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#15803d' }}>
+                        Photos de Fin d'Intervention ({activeCmd.photos_cloture.length}/4)
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '2px 8px', borderRadius: '4px', border: '1px solid #86efac' }}>
+                      ✓ Stockées & Validées
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                    {activeCmd.photos_cloture.map((photoUrl, idx) => {
+                      const labels = ['Salon / Séjour', 'Chambre(s) & Lits', 'Salle de bain', 'Cuisine & Évier'];
+                      return (
+                        <div
+                          key={idx}
+                          onClick={() => {
+                            setLightboxImage(photoUrl);
+                            setLightboxTitle(labels[idx] || `Photo ${idx + 1}`);
+                          }}
+                          style={{
+                            position: 'relative',
+                            height: '95px',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            border: '1.5px solid #86efac',
+                            cursor: 'pointer',
+                            background: '#0f172a'
+                          }}
+                          title="Cliquez pour agrandir"
+                        >
+                          <img
+                            src={photoUrl}
+                            alt={labels[idx] || `Photo ${idx + 1}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)',
+                              padding: '4px 6px',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              color: '#ffffff',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <span>{labels[idx] || `Photo ${idx + 1}`}</span>
+                            <ZoomIn size={12} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Actions Bar Footer */}
@@ -582,50 +655,144 @@ Action recommandée : informer le client Ghali Bensouda.`}
         </div>
       )}
 
-      {/* Modal Clôture Photos */}
+      {/* Modal Clôture Photos avec Téléversement Bucket Railway */}
       {isClotureOpen && (
         <div className="dc-modal-overlay">
-          <div className="dc-modal-box">
+          <div className="dc-modal-box" style={{ maxWidth: '680px' }}>
             <div className="dc-modal-header">
-              <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.1rem' }}>
+              <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.1rem', color: '#00473e', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Camera size={20} color="#00473e" />
                 Clôture avec 4 Photos Obligatoires
               </h3>
-              <button onClick={() => setIsClotureOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+              <button onClick={() => setIsClotureOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <X size={18} />
               </button>
             </div>
             <form onSubmit={handleCloture}>
               <div className="dc-modal-body">
-                <p style={{ fontSize: '0.825rem', color: '#64748b', marginBottom: '1rem' }}>
-                  Conformément au cahier des charges, 4 photos horodatées sont requises : Salon, Chambre(s), SDB, et Cuisine.
-                </p>
-                {['Photo 1 : Salon / Séjour', 'Photo 2 : Chambre principale & Lits', 'Photo 3 : Salle de bain & Serviettes', 'Photo 4 : Cuisine & Évier'].map((label, idx) => (
-                  <div key={idx} className="cb-form-group">
-                    <label className="cb-form-label">{label} <span className="req">*</span></label>
-                    <input
-                      type="url"
-                      placeholder="https://..."
+                <div style={{ padding: '8px 12px', background: '#ecfdf5', borderRadius: '8px', border: '1px solid #a7f3d0', color: '#065f46', fontSize: '0.8rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShieldCheck size={16} color="#059669" />
+                  <span>
+                    Les photos sont téléversées directement et stockées dans le bucket cloud. 4 photos conformes sont requises pour clôturer la commande.
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                  {['Photo 1 : Salon / Séjour', 'Photo 2 : Chambre principale & Lits', 'Photo 3 : Salle de bain & Serviettes', 'Photo 4 : Cuisine & Évier'].map((label, idx) => (
+                    <AirbnbPhotoUploader
+                      key={idx}
+                      label={label}
                       value={photos[idx] || ''}
-                      onChange={(e) => {
+                      onChange={(newUrl) => {
                         const newP = [...photos];
-                        newP[idx] = e.target.value;
+                        newP[idx] = newUrl;
                         setPhotos(newP);
                       }}
+                      category="cloture"
                       required
-                      className="cb-form-input"
+                      compact
+                      placeholder={`Téléverser ${label.split(':')[1]?.trim() || `Photo ${idx + 1}`}`}
                     />
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
               <div className="dc-modal-footer">
                 <button type="button" onClick={() => setIsClotureOpen(false)} className="cb-btn-secondary">
                   Annuler
                 </button>
-                <button type="submit" disabled={clotureLoading} className="cb-btn-primary">
-                  {clotureLoading ? 'Validation...' : 'Valider et Clôturer'}
+                <button type="submit" disabled={clotureLoading} className="cb-btn-primary" style={{ background: '#00473e', color: '#ffffff' }}>
+                  {clotureLoading ? 'Validation en cours...' : '✓ Valider et Clôturer la Commande'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Global Lightbox Modal */}
+      {lightboxImage && (
+        <div
+          onClick={() => setLightboxImage(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              background: '#0f172a',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            <div
+              style={{
+                padding: '12px 16px',
+                background: '#1e293b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                color: '#ffffff'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ImageIcon size={16} color="#00473e" />
+                <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+                  {lightboxTitle || 'Visualisation de la photo'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <a
+                  href={lightboxImage}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#94a3b8', display: 'flex' }}
+                  title="Ouvrir dans un nouvel onglet"
+                >
+                  <ExternalLink size={16} />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setLightboxImage(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    display: 'flex'
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
+              <img
+                src={lightboxImage}
+                alt={lightboxTitle}
+                style={{
+                  maxWidth: '85vw',
+                  maxHeight: '75vh',
+                  objectFit: 'contain',
+                  borderRadius: '6px'
+                }}
+              />
+            </div>
           </div>
         </div>
       )}

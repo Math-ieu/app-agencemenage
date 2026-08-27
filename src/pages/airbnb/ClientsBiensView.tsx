@@ -3,11 +3,12 @@ import {
   AlertTriangle, Key, Search, Plus, X,
   RotateCw, Building, User, BedDouble, ShieldAlert,
   MessageSquare, CheckCircle2, ArrowRight, ArrowLeft,
-  Calendar, Receipt, Info
+  Calendar, Receipt, Info, Camera, ImageIcon, ZoomIn, ExternalLink
 } from 'lucide-react';
 import { getBiens, createBien, syncBienIcal, getBienStats, extractResults, getCommandesAirbnb } from '../../api/airbnb';
 import { getClients, createClient } from '../../api/client';
 import type { Bien, AirbnbStats, CommandeAirbnb } from '../../types/airbnb';
+import { AirbnbPhotoUploader } from '../../components/airbnb/AirbnbPhotoUploader';
 import './ClientsBiens.css';
 
 export default function ClientsBiensView() {
@@ -32,6 +33,9 @@ export default function ClientsBiensView() {
   // Sync state
   const [syncingId, setSyncingId] = useState<string | null>(null);
 
+  // Lightbox Preview State
+  const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
+
   // Wizard 4 Steps State
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [wizClientId, setWizClientId] = useState<number | ''>('');
@@ -43,6 +47,8 @@ export default function ClientsBiensView() {
   const [wizTypologie, setWizTypologie] = useState<'studio' | '2ch' | '3ch' | '4ch' | '5ch' | 'villa_riad'>('studio');
   const [wizAccesType, setWizAccesType] = useState('boite_cle');
   const [wizConsignesSecurite, setWizConsignesSecurite] = useState('');
+  const [wizPhotoPrincipale, setWizPhotoPrincipale] = useState('');
+  const [wizPhotoAcces, setWizPhotoAcces] = useState('');
   const [wizSetsRechange, setWizSetsRechange] = useState<number>(3);
   const [wizZoneEloignee, setWizZoneEloignee] = useState(false);
   const [wizIcalUrl, setWizIcalUrl] = useState('');
@@ -152,6 +158,8 @@ export default function ClientsBiensView() {
         acces_detail: wizConsignesSecurite,
         consignes: wizConsignesSecurite ? [wizConsignesSecurite] : [],
         zone_eloignee: wizZoneEloignee,
+        photo_principale: wizPhotoPrincipale || undefined,
+        photo_acces: wizPhotoAcces || undefined,
         ical_url: wizIcalUrl || undefined,
         sets_rechange_client: wizSetsRechange || 3,
         chambres: wizTypologie === 'studio' ? 1 : (parseInt(wizTypologie) || 1),
@@ -165,6 +173,8 @@ export default function ClientsBiensView() {
       setWizAdresse('');
       setWizQuartier('');
       setWizConsignesSecurite('');
+      setWizPhotoPrincipale('');
+      setWizPhotoAcces('');
       setWizIcalUrl('');
       setWizardStep(1);
       setActiveSubtab('listing');
@@ -811,6 +821,99 @@ export default function ClientsBiensView() {
               </div>
             </div>
 
+            {/* Photos Référencées du Logement (Stockage Cloud) */}
+            {(currentBien.photo_principale || currentBien.photo_acces) && (
+              <div className="cb-section-box">
+                <div className="cb-section-box-title">
+                  <Camera size={16} />
+                  <span>Photos Référencées du Logement & Accès</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                  {currentBien.photo_principale && (
+                    <div
+                      onClick={() => setActiveLightboxImg(currentBien.photo_principale || null)}
+                      style={{
+                        position: 'relative',
+                        height: '140px',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        border: '1.5px solid #cbd5e1',
+                        cursor: 'pointer',
+                        background: '#0f172a'
+                      }}
+                      title="Photo Principale (Agrandir)"
+                    >
+                      <img
+                        src={currentBien.photo_principale}
+                        alt="Photo Principale"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)',
+                          padding: '6px 10px',
+                          color: '#ffffff',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <span>Photo Principale du Logement</span>
+                        <ZoomIn size={14} />
+                      </div>
+                    </div>
+                  )}
+
+                  {currentBien.photo_acces && (
+                    <div
+                      onClick={() => setActiveLightboxImg(currentBien.photo_acces || null)}
+                      style={{
+                        position: 'relative',
+                        height: '140px',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        border: '1.5px solid #cbd5e1',
+                        cursor: 'pointer',
+                        background: '#0f172a'
+                      }}
+                      title="Photo Boîte à clés / Accès (Agrandir)"
+                    >
+                      <img
+                        src={currentBien.photo_acces}
+                        alt="Photo Accès"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)',
+                          padding: '6px 10px',
+                          color: '#ffffff',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <span>Photo Boîte à Clés / Accès</span>
+                        <ZoomIn size={14} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Composition du set standard 8 pièces */}
             <div className="cb-section-box">
               <div className="cb-section-box-title">
@@ -1128,6 +1231,27 @@ export default function ClientsBiensView() {
                     />
                   </div>
 
+                  {/* Photos du Logement & Accès */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+                    <AirbnbPhotoUploader
+                      label="Photo Principale du Logement"
+                      value={wizPhotoPrincipale}
+                      onChange={setWizPhotoPrincipale}
+                      category="bien"
+                      placeholder="Téléverser photo du logement..."
+                      helpText="Visuel principal affiché sur les fiches de mission"
+                    />
+
+                    <AirbnbPhotoUploader
+                      label="Photo Boîte à Clés / Accès"
+                      value={wizPhotoAcces}
+                      onChange={setWizPhotoAcces}
+                      category="bien"
+                      placeholder="Téléverser photo boîte à clés / digicode..."
+                      helpText="Transmis aux intervenantes et runners pour faciliter l'accès"
+                    />
+                  </div>
+
                   <div className="cb-form-group">
                     <label className="cb-form-label">URL du flux iCal Airbnb (Optionnel)</label>
                     <input
@@ -1340,6 +1464,92 @@ export default function ClientsBiensView() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Standalone Lightbox Modal */}
+      {activeLightboxImg && (
+        <div
+          onClick={() => setActiveLightboxImg(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              background: '#0f172a',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            <div
+              style={{
+                padding: '12px 16px',
+                background: '#1e293b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                color: '#ffffff'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ImageIcon size={16} color="#00473e" />
+                <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Visualisation du visuel logement</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <a
+                  href={activeLightboxImg}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#94a3b8', display: 'flex' }}
+                  title="Ouvrir dans un nouvel onglet"
+                >
+                  <ExternalLink size={16} />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setActiveLightboxImg(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    display: 'flex'
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
+              <img
+                src={activeLightboxImg}
+                alt="Visuel Agrandissement"
+                style={{
+                  maxWidth: '85vw',
+                  maxHeight: '75vh',
+                  objectFit: 'contain',
+                  borderRadius: '6px'
+                }}
+              />
+            </div>
           </div>
         </div>
       )}

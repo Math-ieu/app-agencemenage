@@ -68,6 +68,8 @@ export interface Bien {
   consignes: string[];
   set_composition?: Record<string, number>;
   sets_rechange_client: number;
+  photo_principale?: string;
+  photo_acces?: string;
   ical_url?: string;
   ical_derniere_lecture?: string;
   commandes_actives_count?: number;

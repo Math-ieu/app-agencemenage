@@ -138,6 +138,26 @@ export const updateObjetTrouve = (id: string, data: Partial<ObjetTrouve>) =>
 export const restituerObjetTrouve = (id: string, data: { remis_a: string }) => 
   apiClient.post<{ success: boolean; message: string }>(`/api/airbnb/objets-trouves/${id}/restituer/`, data);
 
+// ─── Upload & Stockage Photos (Bucket Railway / S3) ──────────────────────────
+export const uploadAirbnbPhoto = (file: File, category: string = 'general') => {
+  const formData = new FormData();
+  formData.append('photo', file);
+  formData.append('category', category);
+  return apiClient.post<{
+    success: boolean;
+    url: string;
+    filename: string;
+    path: string;
+    size: number;
+    content_type: string;
+    category: string;
+  }>('/api/airbnb/upload-photo/', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+};
+
 // ─── Utilitaire d'extraction paginée sécurisée ───────────────────────────────
 export function extractResults<T>(data: any): T[] {
   if (!data) return [];
