@@ -4,7 +4,7 @@
  *   - Profils.tsx   (create mode, no initialAgent)
  *   - ProfilDetails.tsx (edit mode, initialAgent pre-fills all fields)
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createAgent, updateAgent } from '../api/client';
 import { Search, Plus, RotateCw, Calendar, User, Save, XCircle, FileText } from 'lucide-react';
 import { useToastStore } from '../store/toast';
@@ -41,122 +41,252 @@ const normalizeCorpulence = (value: string): string => {
   return value.toUpperCase();
 };
 
+const DRAFT_PROFILE_KEY = 'draft_new_profile_form';
+
+const DEFAULT_FORM_DATA = {
+  last_name: '',
+  first_name: '',
+  neighborhood: '',
+  city: 'Casablanca',
+  cin: '',
+  birth_date: '',
+  gender: '',
+  phone: '',
+  whatsapp: '',
+  situation: '',
+  has_children: false,
+  nationality: 'Marocaine',
+  languages: [] as string[],
+  education_level: '',
+  experience_years: 0,
+  experience_months: 0,
+  statut: 'nouveau',
+  disponibilite_intervention: 'disponible',
+  type_profil: '',
+  can_read_write: false,
+  health_issues: 'Non',
+  physical_appearance: '',
+  corpulence: '',
+  allergy_animals: false,
+  shoe_size: '36',
+  is_smoking: false,
+  availability_calendar: {
+    lundi: { active: true, start: '08:00', end: '18:00' },
+    mardi: { active: true, start: '08:00', end: '18:00' },
+    mercredi: { active: true, start: '08:00', end: '18:00' },
+    jeudi: { active: true, start: '08:00', end: '18:00' },
+    vendredi: { active: true, start: '08:00', end: '18:00' },
+    samedi: { active: true, start: '08:00', end: '18:00' },
+    dimanche: { active: false, start: '08:00', end: '18:00' }
+  },
+  avail_emergencies: false,
+  avail_7_7: false,
+  avail_day: false,
+  avail_holidays: false,
+  avail_evening: false,
+  recruiter_notes: '',
+  registration_date: new Date().toISOString().split('T')[0],
+  standby_days: 0,
+  standby_until: '',
+  leave_start: '',
+  leave_end: '',
+};
+
 export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Props) {
   const isEditing = Boolean(initialAgent);
-  const [formData, setFormData] = useState({
-    last_name: initialAgent?.last_name || '',
-    first_name: initialAgent?.first_name || '',
-    neighborhood: initialAgent?.neighborhood || '',
-    city: initialAgent?.city || 'Casablanca',
-    cin: initialAgent?.cin || '',
-    birth_date: initialAgent?.birth_date || '',
-    gender: initialAgent?.gender || '',
-    phone: initialAgent?.phone || '',
-    whatsapp: initialAgent?.whatsapp || '',
-    situation: initialAgent?.situation || '',
-    has_children: initialAgent?.has_children ?? false,
-    nationality: initialAgent?.nationality || 'Marocaine',
-    languages: initialAgent?.languages || [] as string[],
-    education_level: initialAgent?.education_level || '',
-    experience_years: initialAgent?.experience_years ?? 0,
-    experience_months: initialAgent?.experience_months ?? 0,
-    statut: initialAgent?.statut || 'nouveau',
-    disponibilite_intervention: initialAgent?.disponibilite_intervention || 'disponible',
-    type_profil: initialAgent?.type_profil || '',
-    can_read_write: initialAgent?.can_read_write ?? false,
-    health_issues: initialAgent?.health_issues || 'Non',
-    physical_appearance: normalizePhysicalAppearance(initialAgent?.physical_appearance || ''),
-    corpulence: normalizeCorpulence(initialAgent?.corpulence || ''),
-    allergy_animals: initialAgent?.allergy_animals ?? false,
-    shoe_size: initialAgent?.shoe_size || '36',
-    is_smoking: initialAgent?.is_smoking ?? false,
-    availability_calendar: initialAgent?.availability_calendar || {
-      lundi: { active: true, start: '08:00', end: '18:00' },
-      mardi: { active: true, start: '08:00', end: '18:00' },
-      mercredi: { active: true, start: '08:00', end: '18:00' },
-      jeudi: { active: true, start: '08:00', end: '18:00' },
-      vendredi: { active: true, start: '08:00', end: '18:00' },
-      samedi: { active: true, start: '08:00', end: '18:00' },
-      dimanche: { active: false, start: '08:00', end: '18:00' }
-    },
-    avail_emergencies: initialAgent?.avail_emergencies ?? false,
-    avail_7_7: initialAgent?.avail_7_7 ?? false,
-    avail_day: initialAgent?.avail_day ?? false,
-    avail_holidays: initialAgent?.avail_holidays ?? false,
-    avail_evening: initialAgent?.avail_evening ?? false,
-    recruiter_notes: initialAgent?.recruiter_notes || '',
-    registration_date: initialAgent?.registration_date || new Date().toISOString().split('T')[0],
-    standby_days: initialAgent?.standby_days || 0,
-    standby_until: initialAgent?.standby_until || '',
-    leave_start: initialAgent?.leave_start || '',
-    leave_end: initialAgent?.leave_end || '',
-  });
 
-  const [sameAsPhone, setSameAsPhone] = useState(() =>
-    Boolean(initialAgent?.phone && initialAgent?.whatsapp && initialAgent.phone === initialAgent.whatsapp)
-  );
-
-  const handlePhoneChange = (val: string) => {
-    setFormData(prev => ({
-      ...prev,
-      phone: val,
-      ...(sameAsPhone ? { whatsapp: val } : {}),
-    }));
-    if (errors.phone) setErrors(prev => ({ ...prev, phone: false }));
-    if (sameAsPhone && errors.whatsapp) setErrors(prev => ({ ...prev, whatsapp: false }));
-  };
-
-  const handleWhatsappChange = (val: string) => {
-    setFormData(prev => ({ ...prev, whatsapp: val }));
-    if (sameAsPhone && val !== formData.phone) {
-      setSameAsPhone(false);
+  const getInitialValues = () => {
+    if (initialAgent) {
+      return {
+        formData: {
+          last_name: initialAgent.last_name || '',
+          first_name: initialAgent.first_name || '',
+          neighborhood: initialAgent.neighborhood || '',
+          city: initialAgent.city || 'Casablanca',
+          cin: initialAgent.cin || '',
+          birth_date: initialAgent.birth_date || '',
+          gender: initialAgent.gender || '',
+          phone: initialAgent.phone || '',
+          whatsapp: initialAgent.whatsapp || '',
+          situation: initialAgent.situation || '',
+          has_children: initialAgent.has_children ?? false,
+          nationality: initialAgent.nationality || 'Marocaine',
+          languages: initialAgent.languages || [] as string[],
+          education_level: initialAgent.education_level || '',
+          experience_years: initialAgent.experience_years ?? 0,
+          experience_months: initialAgent.experience_months ?? 0,
+          statut: initialAgent.statut || 'nouveau',
+          disponibilite_intervention: initialAgent.disponibilite_intervention || 'disponible',
+          type_profil: initialAgent.type_profil || '',
+          can_read_write: initialAgent.can_read_write ?? false,
+          health_issues: initialAgent.health_issues || 'Non',
+          physical_appearance: normalizePhysicalAppearance(initialAgent.physical_appearance || ''),
+          corpulence: normalizeCorpulence(initialAgent.corpulence || ''),
+          allergy_animals: initialAgent.allergy_animals ?? false,
+          shoe_size: initialAgent.shoe_size || '36',
+          is_smoking: initialAgent.is_smoking ?? false,
+          availability_calendar: initialAgent.availability_calendar || DEFAULT_FORM_DATA.availability_calendar,
+          avail_emergencies: initialAgent.avail_emergencies ?? false,
+          avail_7_7: initialAgent.avail_7_7 ?? false,
+          avail_day: initialAgent.avail_day ?? false,
+          avail_holidays: initialAgent.avail_holidays ?? false,
+          avail_evening: initialAgent.avail_evening ?? false,
+          recruiter_notes: initialAgent.recruiter_notes || '',
+          registration_date: initialAgent.registration_date || new Date().toISOString().split('T')[0],
+          standby_days: initialAgent.standby_days || 0,
+          standby_until: initialAgent.standby_until || '',
+          leave_start: initialAgent.leave_start || '',
+          leave_end: initialAgent.leave_end || '',
+        },
+        sameAsPhone: Boolean(initialAgent.phone && initialAgent.whatsapp && initialAgent.phone === initialAgent.whatsapp),
+        experiences: Array.isArray((initialAgent as any).experiences) ? (initialAgent as any).experiences : [],
+        activePhoto: initialAgent.active_photo || 'photo',
+        isDraft: false,
+      };
     }
-    if (errors.whatsapp) setErrors(prev => ({ ...prev, whatsapp: false }));
-  };
 
-  const handleSameAsPhoneToggle = (checked: boolean) => {
-    setSameAsPhone(checked);
-    if (checked) {
-      setFormData(prev => ({ ...prev, whatsapp: prev.phone }));
-      if (errors.whatsapp) setErrors(prev => ({ ...prev, whatsapp: false }));
+    try {
+      const saved = localStorage.getItem(DRAFT_PROFILE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && parsed.formData) {
+          return {
+            formData: { ...DEFAULT_FORM_DATA, ...parsed.formData },
+            sameAsPhone: Boolean(parsed.sameAsPhone),
+            experiences: Array.isArray(parsed.experiences) ? parsed.experiences : [],
+            activePhoto: parsed.activePhoto || 'photo',
+            isDraft: true,
+          };
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load profile draft from localStorage', e);
     }
+
+    return {
+      formData: { ...DEFAULT_FORM_DATA },
+      sameAsPhone: false,
+      experiences: [],
+      activePhoto: 'photo',
+      isDraft: false,
+    };
   };
 
+  const initialValues = useMemo(() => getInitialValues(), []);
+
+  const [formData, setFormData] = useState<typeof DEFAULT_FORM_DATA>(initialValues.formData);
+  const [sameAsPhone, setSameAsPhone] = useState<boolean>(initialValues.sameAsPhone);
+  const [experiences, setExperiences] = useState<any[]>(initialValues.experiences);
+  const [activePhoto, setActivePhoto] = useState<string>(initialValues.activePhoto);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const { addToast } = useToastStore();
-  const [experiences, setExperiences] = useState<any[]>([]);
   const [showExpForm, setShowExpForm] = useState(false);
-  const [currentExp, setCurrentExp] = useState({
+  const [currentExp, setCurrentExp] = useState<{
+    position: string;
+    duration_text: string;
+    work_locations: string[];
+    tasks: string[];
+    has_allergies: boolean;
+  }>({
     position: '',
     duration_text: '',
     work_locations: [] as string[],
     tasks: [] as string[],
     has_allergies: false,
   });
-  const [files, setFiles] = useState<{ photo: File | null; photo2: File | null; cin_file: File | null; cin_verso_file: File | null; attestation_file: File | null; fiche_antropometrique: File | null }>({
-    photo: null, photo2: null, cin_file: null, cin_verso_file: null, attestation_file: null, fiche_antropometrique: null,
+  const [files, setFiles] = useState<{
+    photo: File | null;
+    photo2: File | null;
+    cin_file: File | null;
+    cin_verso_file: File | null;
+    attestation_file: File | null;
+    fiche_antropometrique: File | null;
+  }>({
+    photo: null,
+    photo2: null,
+    cin_file: null,
+    cin_verso_file: null,
+    attestation_file: null,
+    fiche_antropometrique: null,
   });
   const [clearedFiles, setClearedFiles] = useState<Record<string, boolean>>({});
-  const [activePhoto, setActivePhoto] = useState<string>(initialAgent?.active_photo || 'photo');
 
-  const photoInputRef = React.useRef<HTMLInputElement>(null);
-  const photo2InputRef = React.useRef<HTMLInputElement>(null);
-  const cinVersoInputRef = React.useRef<HTMLInputElement>(null);
-  const cinInputRef = React.useRef<HTMLInputElement>(null);
-  const attestationInputRef = React.useRef<HTMLInputElement>(null);
-  const antropometriqueInputRef = React.useRef<HTMLInputElement>(null);
+  // Auto-save draft in localStorage for new profile creation
+  useEffect(() => {
+    if (!isEditing) {
+      try {
+        localStorage.setItem(DRAFT_PROFILE_KEY, JSON.stringify({
+          formData,
+          sameAsPhone,
+          experiences,
+          activePhoto,
+        }));
+      } catch (e) {
+        console.error('Failed to save profile draft to localStorage', e);
+      }
+    }
+  }, [formData, sameAsPhone, experiences, activePhoto, isEditing]);
+
+  const handlePhoneChange = (val: string) => {
+    setFormData((prev: typeof DEFAULT_FORM_DATA) => ({
+      ...prev,
+      phone: val,
+      ...(sameAsPhone ? { whatsapp: val } : {}),
+    }));
+    if (errors.phone) setErrors((prev: Record<string, boolean>) => ({ ...prev, phone: false }));
+    if (sameAsPhone && errors.whatsapp) setErrors((prev: Record<string, boolean>) => ({ ...prev, whatsapp: false }));
+  };
+
+  const handleWhatsappChange = (val: string) => {
+    setFormData((prev: typeof DEFAULT_FORM_DATA) => ({ ...prev, whatsapp: val }));
+    if (sameAsPhone && val !== formData.phone) {
+      setSameAsPhone(false);
+    }
+    if (errors.whatsapp) setErrors((prev: Record<string, boolean>) => ({ ...prev, whatsapp: false }));
+  };
+
+  const handleSameAsPhoneToggle = (checked: boolean) => {
+    setSameAsPhone(checked);
+    if (checked) {
+      setFormData((prev: typeof DEFAULT_FORM_DATA) => ({ ...prev, whatsapp: prev.phone }));
+      if (errors.whatsapp) setErrors((prev: Record<string, boolean>) => ({ ...prev, whatsapp: false }));
+    }
+  };
+
+  const handleClearDraft = () => {
+    if (window.confirm('Voulez-vous vraiment effacer la saisie et recommencer ?')) {
+      localStorage.removeItem(DRAFT_PROFILE_KEY);
+      setFormData({
+        ...DEFAULT_FORM_DATA,
+        registration_date: new Date().toISOString().split('T')[0],
+      });
+      setSameAsPhone(false);
+      setExperiences([]);
+      setActivePhoto('photo');
+      setFiles({ photo: null, photo2: null, cin_file: null, cin_verso_file: null, attestation_file: null, fiche_antropometrique: null });
+      setErrors({});
+      addToast('Saisie réinitialisée.', 'info');
+    }
+  };
+
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const photo2InputRef = useRef<HTMLInputElement>(null);
+  const cinVersoInputRef = useRef<HTMLInputElement>(null);
+  const cinInputRef = useRef<HTMLInputElement>(null);
+  const attestationInputRef = useRef<HTMLInputElement>(null);
+  const antropometriqueInputRef = useRef<HTMLInputElement>(null);
 
   const toggleLanguage = (lang: string) => {
-    setFormData(prev => ({
+    setFormData((prev: typeof DEFAULT_FORM_DATA) => ({
       ...prev,
       languages: prev.languages.includes(lang)
-        ? prev.languages.filter(l => l !== lang)
+        ? prev.languages.filter((l: string) => l !== lang)
         : [...prev.languages, lang],
     }));
   };
 
   const handleFileChange = (field: keyof typeof files, e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) setFiles(prev => ({ ...prev, [field]: e.target.files![0] }));
+    if (e.target.files?.[0]) setFiles((prev: any) => ({ ...prev, [field]: e.target.files![0] }));
   };
 
   const handleSave = async () => {
@@ -185,7 +315,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
 
     if (formData.languages.length === 0) { newErrors.languages = true; hasError = true; }
 
-    const hasActiveDay = Object.values(formData.availability_calendar).some(day => day.active);
+    const hasActiveDay = Object.values(formData.availability_calendar).some((day: any) => day?.active);
     if (!hasActiveDay) {
       newErrors.availability_calendar = true;
       hasError = true;
@@ -228,6 +358,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
         addToast('Profil mis à jour avec succès !', 'success');
       } else {
         await createAgent(data as any);
+        localStorage.removeItem(DRAFT_PROFILE_KEY);
         addToast('Profil ajouté avec succès !', 'success');
       }
       onSuccess();
@@ -240,8 +371,16 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
   return (
     <div className="modal-overlay">
       <div className="modal-content modal-large profile-form-modal">
-        <div className="modal-header">
-          <h2 className="text-xl font-bold text-slate-800">{isEditing ? 'Modifier le profil' : 'Ajouter un profil'}</h2>
+        <div className="modal-header flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-slate-800">{isEditing ? 'Modifier le profil' : 'Ajouter un profil'}</h2>
+            {!isEditing && (
+              <span style={{ fontSize: '11px', color: '#0d9488', backgroundColor: '#f0fdfa', padding: '2px 8px', borderRadius: '6px', border: '1px solid #ccfbf1', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#0d9488' }}></span>
+                Brouillon sauvegardé automatiquement
+              </span>
+            )}
+          </div>
           <button className="modal-close" onClick={onClose}>&times;</button>
         </div>
 
@@ -813,14 +952,40 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
         </div>
 
         {/* Footer */}
-        <div className="modal-footer flex justify-end gap-3">
-          <button className="btn-premium btn-premium-outline" onClick={onClose}>
-            <XCircle size={16} /> Annuler
-          </button>
-          <button className="btn-premium btn-premium-teal" onClick={handleSave}>
-            <Save size={18} />
-            {isEditing ? 'Mettre à jour' : 'Enregistrer'}
-          </button>
+        <div className="modal-footer flex justify-between items-center">
+          <div>
+            {!isEditing && (
+              <button
+                type="button"
+                className="btn-premium btn-premium-sm"
+                onClick={handleClearDraft}
+                style={{
+                  color: '#dc2626',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <RotateCw size={13} /> Réinitialiser la saisie
+              </button>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button className="btn-premium btn-premium-outline" onClick={onClose}>
+              <XCircle size={16} /> Annuler
+            </button>
+            <button className="btn-premium btn-premium-teal" onClick={handleSave}>
+              <Save size={18} />
+              {isEditing ? 'Mettre à jour' : 'Enregistrer'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
