@@ -1,7 +1,7 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAgents, deleteAgent, getDemandes, updateAgent, sendProfilToDemande, removeProfilFromDemande } from '../api/client';
-import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2, UserPlus, UserMinus, Send, Ban, Pause } from 'lucide-react';
+import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2, UserPlus, UserMinus, Send, Ban, Pause, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Agent } from '../types';
 import { encodeId } from '../utils/obfuscation';
 import AddProfileModal from './ProfilEditModal';
@@ -104,6 +104,11 @@ export default function Profils() {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Nouvelles variables d'état pour les filtres
   const [filterStatut, setFilterStatut] = useState('');
@@ -349,12 +354,19 @@ export default function Profils() {
     setFilterTypeProfil('');
     setFilterSegment('');
     setFilterJourDispo('');
+    setPage(1);
   };
 
-  const fetchData = async () => {
+  const isFirstMount = useRef(true);
+
+  const fetchData = async (overridePage?: number) => {
     setLoading(true);
+    const targetPage = overridePage !== undefined ? overridePage : page;
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string | number> = {
+        page: targetPage,
+        page_size: pageSize,
+      };
       if (search) params.search = search;
       if (dateDebut) params.date_debut = dateDebut;
       if (dateFin) params.date_fin = dateFin;
@@ -366,9 +378,12 @@ export default function Profils() {
       if (filterJourDispo) params.jour_dispo = filterJourDispo;
 
       const agentsRes = await getAgents(params);
-      const agentsList = agentsRes.data.results || agentsRes.data || [];
+      const data = agentsRes.data;
+      const agentsList = data?.results || (Array.isArray(data) ? data : []);
+      const count = typeof data?.count === 'number' ? data.count : agentsList.length;
 
       setAgents(agentsList);
+      setTotalCount(count);
     } catch (err) {
       console.error('Error fetching agents:', err);
     } finally {
@@ -376,9 +391,19 @@ export default function Profils() {
     }
   };
 
+  // Reset page to 1 when filters or pageSize change
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    setPage(1);
+  }, [search, dateDebut, dateFin, filterStatut, filterDispoType, filterFume, filterTypeProfil, filterSegment, filterJourDispo, pageSize]);
+
+  // Fetch when page, pageSize or any filter changes
   useEffect(() => { 
     fetchData(); 
-  }, [search, dateDebut, dateFin, filterStatut, filterDispoType, filterFume, filterTypeProfil, filterSegment, filterJourDispo]);
+  }, [page, pageSize, search, dateDebut, dateFin, filterStatut, filterDispoType, filterFume, filterTypeProfil, filterSegment, filterJourDispo]);
 
   const handleDeleteAgent = async (agent: Agent) => {
     const perm = checkPermission(user, 'delete_profile');
@@ -416,13 +441,30 @@ export default function Profils() {
     boxSizing: 'border-box',
   };
 
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const startItem = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endItem = Math.min(page * pageSize, totalCount);
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (page <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    if (page >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, '...', page - 1, page, page + 1, '...', totalPages];
+  };
+
   return (
     <div className="page" style={{ backgroundColor: 'white' }}>
       {/* Header */}
       <div className="page-header flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Liste des femmes de ménage</h1>
         <div className="flex gap-3">
-          <button className="btn btn-secondary" onClick={fetchData}>
+          <button className="btn btn-secondary" onClick={() => fetchData()}>
             <RotateCw size={18} />
             Actualiser
           </button>
@@ -596,303 +638,499 @@ export default function Profils() {
       {loading ? (
         <div className="loading-state"><div className="spinner" /></div>
       ) : (
-        <div className="table-wrapper profils-table-wrap" style={{ minHeight: '380px', paddingBottom: '120px' }}>
-          <table className="data-table profils-table">
-            <thead>
-              <tr>
-                <th>Photo</th>
-                <th>Nom</th>
-                <th>Prénom</th>
-                <th>Téléphone</th>
-                <th>WhatsApp</th>
-                <th>Situation</th>
-                <th>Nationalité</th>
-                <th>CIN</th>
-                <th>Quartier /<br />Ville</th>
-                <th>Statut profil</th>
-                <th>Disponibilité<br />d'intervention</th>
-                <th>Fume</th>
-                <th>Langue</th>
-                <th style={{ textAlign: 'right' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agents.map((agent) => (
-                <tr
-                  key={agent.id}
-                  style={{
-                    opacity: agent.is_blacklisted ? 0.5 : 1,
-                    transition: 'opacity 0.2s ease',
-                  }}
-                >
-                  <td>
-                    {agent.photo ? (
-                      <img src={agent.photo} alt="" className="table-avatar-img" />
-                    ) : (
-                      <div className="table-avatar-placeholder">{getInitials(agent)}</div>
-                    )}
-                  </td>
-                  <td className="font-bold text-slate-700">{agent.last_name || '—'}</td>
-                  <td className="font-bold text-slate-700">{agent.first_name || '—'}</td>
-                  <td className="text-slate-600 font-medium">{agent.phone || '—'}</td>
-                  <td className="text-slate-600 font-medium">{agent.whatsapp || '—'}</td>
-                  <td className="text-slate-600">{agent.situation || '—'}</td>
-                  <td className="text-slate-600">{agent.nationality || '—'}</td>
-                  <td className="text-xs font-mono text-slate-500 uppercase">{agent.cin || '—'}</td>
-                  <td>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-teal-800 text-sm">{agent.neighborhood || ''}</span>
-                      <span className="text-xs text-slate-500 uppercase">{agent.city || ''}</span>
-                    </div>
-                  </td>
-                       {/* Statut profil */}
-                  <td>
-                    <span className={`badge ${
-                      agent.statut === 'nouveau' ? 'badge-blue' :
-                      agent.statut === 'active' ? 'badge-lime' :
-                      agent.statut === 'blacklist' ? 'badge-red' :
-                      agent.statut === 'stand_by' ? 'badge-orange' :
-                      agent.statut === 'en_conge' ? 'badge-purple' :
-                      agent.statut === 'malade' ? 'badge-red' :
-                      'badge-gray'
-                    }`} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px' }}>
-                      {agent.statut === 'nouveau' ? 'Nouveau' :
-                       agent.statut === 'active' ? 'Active (Binômage)' :
-                       agent.statut === 'blacklist' ? 'Blacklisté' :
-                       agent.statut === 'stand_by' ? 'Stand by' :
-                       agent.statut === 'en_conge' ? 'En congé' :
-                       agent.statut === 'malade' ? 'Malade' :
-                       agent.statut || 'Nouveau'}
-                    </span>
-                  </td>
-                  {/* Disponibilité d'intervention */}
-                  <td>
-                    <span className={`badge ${
-                      agent.disponibilite_intervention === 'disponible' ? 'badge-lime' :
-                      agent.disponibilite_intervention === 'occupee' ? 'badge-orange' :
-                      'badge-red'
-                    }`} style={{
-                      fontSize: '11px',
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      backgroundColor: agent.disponibilite_intervention === 'occupee' ? '#f59e0b' : undefined,
-                      color: agent.disponibilite_intervention === 'occupee' ? 'white' : undefined,
-                    }}>
-                      {agent.disponibilite_intervention === 'disponible' ? 'Disponible' :
-                       agent.disponibilite_intervention === 'occupee' ? 'Occupé (Mission)' :
-                       'Non disponible'}
-                    </span>
-                  </td>
-                  {/* Fume */}
-                  <td>
-                    <span className={`badge ${agent.is_smoking ? 'badge-red' : 'badge-lime'}`} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px' }}>
-                      {agent.is_smoking ? 'Oui' : 'Non'}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="badge badge-status-attente">
-                      {agent.languages?.[0] || 'Français'}
-                    </span>
-                  </td>
-                  {/* Action */}
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'nowrap' }}>
-                      <button
-                        onClick={() => navigate(`/profils/${encodeId(agent.id)}`)}
-                        title="Compte Profil"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '8px',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: '8px',
-                          background: 'white',
-                          color: '#334155',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <User size={16} />
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setSelectedAgentForPostuler(agent);
-                          setShowPostulerModal(true);
-                        }}
-                        title="Affectation"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '8px',
-                          backgroundColor: '#0d9488',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <UserPlus size={16} />
-                      </button>
-
-                      {(() => {
-                        const assignedList = assignedDemandesForAgent[agent.id] || [];
-                        const isAssigned = assignedList.length > 0;
-                        return (
-                          <button
-                            onClick={() => {
-                              if (!isAssigned) return;
-                              setSelectedAgentForRetirer(agent);
-                              setShowRetirerModal(true);
-                            }}
-                            disabled={!isAssigned}
-                            title={isAssigned ? `Retirer de la demande (${assignedList.length} affectation${assignedList.length > 1 ? 's' : ''})` : "Aucune demande affectée"}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              padding: '8px',
-                              backgroundColor: isAssigned ? '#fee2e2' : '#f8fafc',
-                              color: isAssigned ? '#ef4444' : '#cbd5e1',
-                              border: isAssigned ? '1px solid #fca5a5' : '1px solid #e2e8f0',
-                              borderRadius: '8px',
-                              cursor: isAssigned ? 'pointer' : 'not-allowed',
-                              opacity: isAssigned ? 1 : 0.45,
-                              transition: 'all 0.15s ease',
-                            }}
-                          >
-                            <UserMinus size={16} />
-                          </button>
-                        );
-                      })()}
-
-                      {(hasPermission(user, 'blacklister_agents') || hasPermission(user, 'mettre_standby_profil')) && (
-                        <div className="pause-dropdown-container relative" style={{ display: 'inline-block' }}>
-                          <button
-                            onClick={() => setActivePauseDropdown(activePauseDropdown === agent.id ? null : agent.id)}
-                            title="Mise en pause"
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              padding: '8px',
-                              border: '1px solid #cbd5e1',
-                              borderRadius: '8px',
-                              background: 'white',
-                              color: '#334155',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <Pause size={16} />
-                          </button>
-
-                          {activePauseDropdown === agent.id && (
-                            <div
-                              style={{
-                                position: 'absolute',
-                                top: '100%',
-                                right: 0,
-                                marginTop: '6px',
-                                width: '140px',
-                                backgroundColor: 'white',
-                                border: '1px solid #cbd5e1',
-                                borderRadius: '8px',
-                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                                zIndex: 9999,
-                                overflow: 'hidden',
-                              }}
-                            >
-                              {hasPermission(user, 'blacklister_agents') && (
-                                <button
-                                  onClick={() => {
-                                    setActivePauseDropdown(null);
-                                    handleToggleBlacklist(agent);
-                                  }}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    width: '100%',
-                                    padding: '10px 12px',
-                                    border: 'none',
-                                    background: 'none',
-                                    textAlign: 'left',
-                                    fontSize: '13px',
-                                    color: '#334155',
-                                    cursor: 'pointer',
-                                    transition: 'background-color 0.15s',
-                                  }}
-                                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                  <Ban size={14} className="text-red-500" />
-                                  <span>{agent.statut === 'blacklist' || agent.is_blacklisted ? 'Déblacklister' : 'Blacklisté'}</span>
-                                </button>
-                              )}
-                              {hasPermission(user, 'mettre_standby_profil') && (
-                                <button
-                                  onClick={() => {
-                                    setActivePauseDropdown(null);
-                                    handleTogglePause(agent);
-                                  }}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    width: '100%',
-                                    padding: '10px 12px',
-                                    border: 'none',
-                                    background: 'none',
-                                    textAlign: 'left',
-                                    fontSize: '13px',
-                                    color: '#334155',
-                                    cursor: 'pointer',
-                                    transition: 'background-color 0.15s',
-                                  }}
-                                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-                                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                >
-                                  <Pause size={14} className="text-amber-500" />
-                                  <span>{agent.statut === 'stand_by' ? 'Reprendre' : 'Stand-by'}</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
+        <>
+          <div className="table-wrapper profils-table-wrap" style={{ minHeight: '280px', marginBottom: '8px' }}>
+            <table className="data-table profils-table">
+              <thead>
+                <tr>
+                  <th>Photo</th>
+                  <th>Nom</th>
+                  <th>Prénom</th>
+                  <th>Téléphone</th>
+                  <th>WhatsApp</th>
+                  <th>Situation</th>
+                  <th>Nationalité</th>
+                  <th>CIN</th>
+                  <th>Quartier /<br />Ville</th>
+                  <th>Statut profil</th>
+                  <th>Disponibilité<br />d'intervention</th>
+                  <th>Fume</th>
+                  <th>Langue</th>
+                  <th style={{ textAlign: 'right' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agents.map((agent, index) => (
+                  <tr
+                    key={agent.id}
+                    style={{
+                      opacity: agent.is_blacklisted ? 0.5 : 1,
+                      transition: 'opacity 0.2s ease',
+                    }}
+                  >
+                    <td>
+                      {agent.photo ? (
+                        <img src={agent.photo} alt="" className="table-avatar-img" />
+                      ) : (
+                        <div className="table-avatar-placeholder">{getInitials(agent)}</div>
                       )}
-
-                      {!agent.is_blacklisted && hasPermission(user, 'supprimer_profil') && (
+                    </td>
+                    <td className="font-bold text-slate-700">{agent.last_name || '—'}</td>
+                    <td className="font-bold text-slate-700">{agent.first_name || '—'}</td>
+                    <td className="text-slate-600 font-medium">{agent.phone || '—'}</td>
+                    <td className="text-slate-600 font-medium">{agent.whatsapp || '—'}</td>
+                    <td className="text-slate-600">{agent.situation || '—'}</td>
+                    <td className="text-slate-600">{agent.nationality || '—'}</td>
+                    <td className="text-xs font-mono text-slate-500 uppercase">{agent.cin || '—'}</td>
+                    <td>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-teal-800 text-sm">{agent.neighborhood || ''}</span>
+                        <span className="text-xs text-slate-500 uppercase">{agent.city || ''}</span>
+                      </div>
+                    </td>
+                    {/* Statut profil */}
+                    <td>
+                      <span className={`badge ${
+                        agent.statut === 'nouveau' ? 'badge-blue' :
+                        agent.statut === 'active' ? 'badge-lime' :
+                        agent.statut === 'blacklist' ? 'badge-red' :
+                        agent.statut === 'stand_by' ? 'badge-orange' :
+                        agent.statut === 'en_conge' ? 'badge-purple' :
+                        agent.statut === 'malade' ? 'badge-red' :
+                        'badge-gray'
+                      }`} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px' }}>
+                        {agent.statut === 'nouveau' ? 'Nouveau' :
+                         agent.statut === 'active' ? 'Active (Binômage)' :
+                         agent.statut === 'blacklist' ? 'Blacklisté' :
+                         agent.statut === 'stand_by' ? 'Stand by' :
+                         agent.statut === 'en_conge' ? 'En congé' :
+                         agent.statut === 'malade' ? 'Malade' :
+                         agent.statut || 'Nouveau'}
+                      </span>
+                    </td>
+                    {/* Disponibilité d'intervention */}
+                    <td>
+                      <span className={`badge ${
+                        agent.disponibilite_intervention === 'disponible' ? 'badge-lime' :
+                        agent.disponibilite_intervention === 'occupee' ? 'badge-orange' :
+                        'badge-red'
+                      }`} style={{
+                        fontSize: '11px',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        backgroundColor: agent.disponibilite_intervention === 'occupee' ? '#f59e0b' : undefined,
+                        color: agent.disponibilite_intervention === 'occupee' ? 'white' : undefined,
+                      }}>
+                        {agent.disponibilite_intervention === 'disponible' ? 'Disponible' :
+                         agent.disponibilite_intervention === 'occupee' ? 'Occupé (Mission)' :
+                         'Non disponible'}
+                      </span>
+                    </td>
+                    {/* Fume */}
+                    <td>
+                      <span className={`badge ${agent.is_smoking ? 'badge-red' : 'badge-lime'}`} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px' }}>
+                        {agent.is_smoking ? 'Oui' : 'Non'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="badge badge-status-attente">
+                        {agent.languages?.[0] || 'Français'}
+                      </span>
+                    </td>
+                    {/* Action */}
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'nowrap' }}>
                         <button
-                          onClick={() => handleDeleteAgent(agent)}
+                          onClick={() => navigate(`/profils/${encodeId(agent.id)}`)}
+                          title="Compte Profil"
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             padding: '8px',
-                            border: '1px solid #fecaca',
+                            border: '1px solid #cbd5e1',
                             borderRadius: '8px',
                             background: 'white',
-                            color: '#dc2626',
+                            color: '#334155',
                             cursor: 'pointer',
                           }}
-                          title="Supprimer"
                         >
-                          <Trash2 size={16} />
+                          <User size={16} />
                         </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {agents.length === 0 && (
-                <tr>
-                  <td colSpan={14} className="empty-row text-center py-12 text-slate-400">Aucun profil trouvé.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+
+                        <button
+                          onClick={() => {
+                            setSelectedAgentForPostuler(agent);
+                            setShowPostulerModal(true);
+                          }}
+                          title="Affectation"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '8px',
+                            backgroundColor: '#0d9488',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <UserPlus size={16} />
+                        </button>
+
+                        {(() => {
+                          const assignedList = assignedDemandesForAgent[agent.id] || [];
+                          const isAssigned = assignedList.length > 0;
+                          return (
+                            <button
+                              onClick={() => {
+                                if (!isAssigned) return;
+                                setSelectedAgentForRetirer(agent);
+                                setShowRetirerModal(true);
+                              }}
+                              disabled={!isAssigned}
+                              title={isAssigned ? `Retirer de la demande (${assignedList.length} affectation${assignedList.length > 1 ? 's' : ''})` : "Aucune demande affectée"}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '8px',
+                                backgroundColor: isAssigned ? '#fee2e2' : '#f8fafc',
+                                color: isAssigned ? '#ef4444' : '#cbd5e1',
+                                border: isAssigned ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                                borderRadius: '8px',
+                                cursor: isAssigned ? 'pointer' : 'not-allowed',
+                                opacity: isAssigned ? 1 : 0.45,
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <UserMinus size={16} />
+                            </button>
+                          );
+                        })()}
+
+                        {(hasPermission(user, 'blacklister_agents') || hasPermission(user, 'mettre_standby_profil')) && (
+                          <div className="pause-dropdown-container relative" style={{ display: 'inline-block' }}>
+                            <button
+                              onClick={() => setActivePauseDropdown(activePauseDropdown === agent.id ? null : agent.id)}
+                              title="Mise en pause"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '8px',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '8px',
+                                background: 'white',
+                                color: '#334155',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <Pause size={16} />
+                            </button>
+
+                            {activePauseDropdown === agent.id && (() => {
+                              const isNearBottom = index >= agents.length - 2 && agents.length > 2;
+                              return (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    ...(isNearBottom ? { bottom: '100%', marginBottom: '6px' } : { top: '100%', marginTop: '6px' }),
+                                    right: 0,
+                                    width: '140px',
+                                    backgroundColor: 'white',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                                    zIndex: 9999,
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  {hasPermission(user, 'blacklister_agents') && (
+                                    <button
+                                      onClick={() => {
+                                        setActivePauseDropdown(null);
+                                        handleToggleBlacklist(agent);
+                                      }}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        border: 'none',
+                                        background: 'none',
+                                        textAlign: 'left',
+                                        fontSize: '13px',
+                                        color: '#334155',
+                                        cursor: 'pointer',
+                                        transition: 'background-color 0.15s',
+                                      }}
+                                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                      <Ban size={14} className="text-red-500" />
+                                      <span>{agent.statut === 'blacklist' || agent.is_blacklisted ? 'Déblacklister' : 'Blacklisté'}</span>
+                                    </button>
+                                  )}
+                                  {hasPermission(user, 'mettre_standby_profil') && (
+                                    <button
+                                      onClick={() => {
+                                        setActivePauseDropdown(null);
+                                        handleTogglePause(agent);
+                                      }}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        border: 'none',
+                                        background: 'none',
+                                        textAlign: 'left',
+                                        fontSize: '13px',
+                                        color: '#334155',
+                                        cursor: 'pointer',
+                                        transition: 'background-color 0.15s',
+                                      }}
+                                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                      <Pause size={14} className="text-amber-500" />
+                                      <span>{agent.statut === 'stand_by' ? 'Reprendre' : 'Stand-by'}</span>
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+
+                        {!agent.is_blacklisted && hasPermission(user, 'supprimer_profil') && (
+                          <button
+                            onClick={() => handleDeleteAgent(agent)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '8px',
+                              border: '1px solid #fecaca',
+                              borderRadius: '8px',
+                              background: 'white',
+                              color: '#dc2626',
+                              cursor: 'pointer',
+                            }}
+                            title="Supprimer"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {agents.length === 0 && (
+                  <tr>
+                    <td colSpan={14} className="empty-row text-center py-12 text-slate-400">Aucun profil trouvé.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── Pagination Toolbar ── */}
+          <div
+            className="profils-pagination-bar"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '14px',
+              padding: '12px 18px',
+              marginTop: '4px',
+              backgroundColor: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            }}
+          >
+            {/* Info and PageSize */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '13px', color: '#64748b' }}>
+                Affichage de <strong style={{ color: '#0f172a', fontWeight: 700 }}>{startItem}</strong> à <strong style={{ color: '#0f172a', fontWeight: 700 }}>{endItem}</strong> sur <strong style={{ color: '#0d9488', fontWeight: 700 }}>{totalCount}</strong> profils
+              </span>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label htmlFor="pageSizeSelect" style={{ fontSize: '13px', color: '#64748b' }}>
+                  Afficher :
+                </label>
+                <select
+                  id="pageSizeSelect"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#334155',
+                    backgroundColor: '#f8fafc',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <option value={5}>5 par page</option>
+                  <option value={10}>10 par page</option>
+                  <option value={15}>15 par page</option>
+                  <option value={20}>20 par page</option>
+                  <option value={50}>50 par page</option>
+                  <option value={100}>100 par page</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Navigation */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <button
+                onClick={() => setPage(1)}
+                disabled={page <= 1}
+                title="Première page"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                  backgroundColor: page <= 1 ? '#f8fafc' : '#ffffff',
+                  color: page <= 1 ? '#cbd5e1' : '#475569',
+                  cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <ChevronsLeft size={16} />
+              </button>
+
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                title="Page précédente"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                  backgroundColor: page <= 1 ? '#f8fafc' : '#ffffff',
+                  color: page <= 1 ? '#cbd5e1' : '#475569',
+                  cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              {getPageNumbers().map((num, idx) => {
+                if (num === '...') {
+                  return (
+                    <span
+                      key={`ellipsis-${idx}`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '32px',
+                        height: '32px',
+                        fontSize: '13px',
+                        color: '#94a3b8',
+                      }}
+                    >
+                      …
+                    </span>
+                  );
+                }
+                const isSelected = num === page;
+                return (
+                  <button
+                    key={`page-${num}`}
+                    onClick={() => setPage(Number(num))}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minWidth: '32px',
+                      height: '32px',
+                      padding: '0 6px',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: isSelected ? 700 : 500,
+                      border: isSelected ? '1px solid #0d9488' : '1px solid #e2e8f0',
+                      backgroundColor: isSelected ? '#0d9488' : '#ffffff',
+                      color: isSelected ? '#ffffff' : '#475569',
+                      cursor: 'pointer',
+                      boxShadow: isSelected ? '0 1px 2px rgba(13, 148, 136, 0.3)' : 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {num}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                title="Page suivante"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                  backgroundColor: page >= totalPages ? '#f8fafc' : '#ffffff',
+                  color: page >= totalPages ? '#cbd5e1' : '#475569',
+                  cursor: page >= totalPages ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <ChevronRight size={16} />
+              </button>
+
+              <button
+                onClick={() => setPage(totalPages)}
+                disabled={page >= totalPages}
+                title="Dernière page"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                  backgroundColor: page >= totalPages ? '#f8fafc' : '#ffffff',
+                  color: page >= totalPages ? '#cbd5e1' : '#475569',
+                  cursor: page >= totalPages ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <ChevronsRight size={16} />
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ── Postuler/Affectation Modal ── */}

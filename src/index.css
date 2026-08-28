@@ -5722,6 +5722,9 @@ input:checked+.slider:before {
 /* ── Profils Listing Table — Large and spacious ──────────────── */
 .profils-table-wrap {
   overflow-x: auto !important;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: white;
 }
 
 .profils-table {
@@ -5739,6 +5742,10 @@ input:checked+.slider:before {
 
 .profils-table th {
   font-size: 0.75rem;
+  background-color: #f8fafc;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 /* Let the action column fit its content naturally */

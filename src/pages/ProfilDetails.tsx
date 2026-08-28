@@ -960,14 +960,32 @@ export default function ProfilDetails() {
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{
-                width: 48, height: 48, borderRadius: 14,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'white', fontSize: 20, fontWeight: 700,
-                backgroundColor: C.teal,
-              }}>
-                {(agent.last_name || 'P')[0].toUpperCase()}
-              </div>
+              {agent.photo ? (
+                <img
+                  src={agent.photo}
+                  alt={`${agent.first_name || ''} ${agent.last_name || ''}`}
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 14,
+                    objectFit: 'cover',
+                    border: '2px solid #e2e8f0',
+                    flexShrink: 0,
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: 52, height: 52, borderRadius: 14,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'white', fontSize: 18, fontWeight: 700,
+                  backgroundColor: C.teal,
+                  flexShrink: 0,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
+                }}>
+                  {`${agent.first_name?.[0] || ''}${agent.last_name?.[0] || ''}`.toUpperCase() || (agent.last_name || 'P')[0].toUpperCase()}
+                </div>
+              )}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a202c', margin: 0 }}>
@@ -1640,9 +1658,24 @@ export default function ProfilDetails() {
                 {/* Agent preview */}
                 <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Profil à envoyer</p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-                  <div style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: C.teal, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 20, flexShrink: 0 }}>
-                    {`${agent.last_name?.[0] || ''}${agent.first_name?.[0] || ''}`.toUpperCase()}
-                  </div>
+                  {agent.photo ? (
+                    <img
+                      src={agent.photo}
+                      alt=""
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 12,
+                        objectFit: 'cover',
+                        border: '1px solid #e2e8f0',
+                        flexShrink: 0,
+                      }}
+                    />
+                  ) : (
+                    <div style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: C.teal, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 20, flexShrink: 0 }}>
+                      {`${agent.first_name?.[0] || ''}${agent.last_name?.[0] || ''}`.toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <p style={{ fontWeight: 700, fontSize: 17, color: '#1e293b', margin: 0 }}>{agent.last_name} {agent.first_name}</p>
                     <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>{agent.type_profil}</p>
