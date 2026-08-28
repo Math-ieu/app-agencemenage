@@ -107,7 +107,7 @@ export default function Profils() {
 
   // Pagination states
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(3);
   const [totalCount, setTotalCount] = useState(0);
 
   // Nouvelles variables d'état pour les filtres
@@ -986,6 +986,7 @@ export default function Profils() {
                     outline: 'none',
                   }}
                 >
+                  <option value={3}>3 par page</option>
                   <option value={5}>5 par page</option>
                   <option value={10}>10 par page</option>
                   <option value={15}>15 par page</option>
