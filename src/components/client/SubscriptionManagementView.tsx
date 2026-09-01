@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, XCircle, PlayCircle } from 'lucide-react';
 import { Client, Demande } from '../../types';
 import {
   updateDemande, deleteDemande, createPlanningIntervention,
@@ -104,9 +104,33 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     return () => clearTimeout(timer);
   }, [planningNotes, latest?.id]);
 
-  const [monthTabs, setMonthTabs] = useState([{ id: 'mois1', label: 'Mois 1' }]);
-  const [activeMonthTab, setActiveMonthTab] = useState<string>('mois1');
+  const [monthTabs, setMonthTabs] = useState(() => {
+    const count = Math.max(1, Math.min(24, Number(latest?.formulaire_data?.active_months_count || 1)));
+    const tabs = [];
+    for (let i = 1; i <= count; i++) {
+      tabs.push({ id: `mois${i}`, label: `Mois ${i}` });
+    }
+    return tabs;
+  });
+
+  React.useEffect(() => {
+    const count = Math.max(1, Math.min(24, Number(latest?.formulaire_data?.active_months_count || 1)));
+    if (count !== monthTabs.length) {
+      const tabs = [];
+      for (let i = 1; i <= count; i++) {
+        tabs.push({ id: `mois${i}`, label: `Mois ${i}` });
+      }
+      setMonthTabs(tabs);
+      setActiveMonthTab(`mois${count}`);
+    }
+  }, [latest?.formulaire_data?.active_months_count]);
+
+  const [activeMonthTab, setActiveMonthTab] = useState<string>(() => {
+    const count = Math.max(1, Number(latest?.formulaire_data?.active_months_count || 1));
+    return `mois${count}`;
+  });
   const [showInvoiceFormModal, setShowInvoiceFormModal] = useState(false);
+  const [isActivatingMonth, setIsActivatingMonth] = useState(false);
 
   const activeTabIndex = useMemo(() => {
     const idx = monthTabs.findIndex(t => t.id === activeMonthTab);
@@ -286,12 +310,13 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     }
   }, [latest?.id]);
 
-  const [statutMoisEnCours] = useState<string>(() => {
+  const [statutMoisEnCours, setStatutMoisEnCours] = useState<string>(() => {
     if (latest?.formulaire_data?.statut_mois_en_cours) {
       return latest.formulaire_data.statut_mois_en_cours;
     }
     const dbStatut = (latest?.statut || '').toLowerCase();
-    return ['termine', 'terminee', 'resilie'].includes(dbStatut) ? 'Terminé' : 'Actif';
+    if (dbStatut === 'resilie') return 'Résilié';
+    return ['termine', 'terminee'].includes(dbStatut) ? 'Terminé' : 'Actif';
   });
 
   const [statutFacturation, setStatutFacturation] = useState<string>(() => {
@@ -310,15 +335,18 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     return getStatutMoisProchainCalculated(new Date().getDate(), statutFacturation, rawOverride);
   });
 
-  // Keep statutFacturation and statutMoisProchain in sync with latest props
+  // Keep statutMoisEnCours, statutFacturation and statutMoisProchain in sync with latest props
   React.useEffect(() => {
     if (!latest) return;
+    const curStatut = latest?.formulaire_data?.statut_mois_en_cours || ((latest?.statut || '').toLowerCase() === 'resilie' ? 'Résilié' : (['termine', 'terminee'].includes((latest?.statut || '').toLowerCase()) ? 'Terminé' : 'Actif'));
+    setStatutMoisEnCours(curStatut);
+
     const fact = latest?.formulaire_data?.statut_facturation || (['integral', 'paye', 'payee'].includes((latest?.statut_paiement || '').toLowerCase()) ? 'Payé' : 'Non défini');
     const rawOverride = latest?.formulaire_data?.statut_mois_prochain;
     const calcProchain = getStatutMoisProchainCalculated(new Date().getDate(), fact, rawOverride);
     setStatutFacturation(fact);
     setStatutMoisProchain(calcProchain);
-  }, [latest?.id, latest?.formulaire_data?.statut_facturation, latest?.formulaire_data?.statut_mois_prochain, latest?.statut_paiement]);
+  }, [latest?.id, latest?.statut, latest?.formulaire_data?.statut_mois_en_cours, latest?.formulaire_data?.statut_facturation, latest?.formulaire_data?.statut_mois_prochain, latest?.statut_paiement]);
 
   const handleMoisProchainChange = async (newVal: string) => {
     const perm = checkPermission(user, 'pause_standby_abonnement');
@@ -677,28 +705,89 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     return { fifthWeekDay: null, fifthWeekDateStr: null, fifthWeekIso: null };
   }, [year, month, daysInMonth, selectedDays]);
 
-  const handleAddNextMonthTab = () => {
+  const handleAddNextMonthTab = async () => {
+    if (isActivatingMonth) return;
     const perm = checkPermission(user, 'creer_abonnement');
     if (!perm.allowed) {
       addToast(perm.message || "Action non autorisée par votre rôle.", "error");
       return;
     }
-    if (statutFacturation !== 'Payé') {
-      addToast("Le statut de facturation du mois doit être 'Payé' pour pouvoir activer le mois prochain.", "error");
+
+    setIsActivatingMonth(true);
+    try {
+      const nextTabNum = monthTabs.length + 1;
+
+      const startStr = dateDebut || getDemandeStartDate(latest);
+      let newDateFin = '';
+      if (startStr) {
+        const startDate = parseDateRobust(startStr);
+        if (startDate) {
+          const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + nextTabNum, 0);
+          newDateFin = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+        }
+      }
+
+      if (latest?.id) {
+        await updateDemande(latest.id, {
+          formulaire_data: {
+            ...(latest.formulaire_data || {}),
+            active_months_count: nextTabNum,
+            statut_mois_prochain: 'Actif',
+            statut_mois_en_cours: 'Actif',
+            ...(newDateFin ? { date_fin: newDateFin } : {})
+          },
+          planning: {
+            ...(latest.planning || {}),
+            ...(newDateFin ? { date_fin: newDateFin } : {})
+          }
+        } as any);
+
+        if (fetchData) await fetchData();
+        addToast(`Mois ${nextTabNum} activé avec succès !`, "success");
+      }
+    } catch (err) {
+      console.error("Erreur lors de l'activation du nouveau mois:", err);
+      addToast("Erreur lors de l'enregistrement du nouveau mois.", "error");
+    } finally {
+      setIsActivatingMonth(false);
+    }
+  };
+
+  const isResilie = useMemo(() => {
+    const dbStatut = (latest?.statut || '').toLowerCase().trim();
+    const stEnCours = ((latest?.formulaire_data as any)?.statut_mois_en_cours || '').toLowerCase().trim();
+    return dbStatut === 'resilie' || stEnCours === 'résilié' || stEnCours === 'resilie';
+  }, [latest?.statut, latest?.formulaire_data]);
+
+  const handleDirectReactiverAbonnement = async () => {
+    if (!latest?.id) return;
+    const perm = checkPermission(user, 'modifier_abonnement');
+    if (!perm.allowed) {
+      addToast(perm.message || "Action non autorisée par votre rôle.", "error");
       return;
     }
-    const nextTabNum = monthTabs.length + 1;
-    const newTabId = `mois${nextTabNum}`;
-    const newTabLabel = `Mois ${nextTabNum}`;
-    setMonthTabs(prev => [...prev, { id: newTabId, label: newTabLabel }]);
-    setActiveMonthTab(newTabId);
-    addToast(`Mois ${nextTabNum} activé avec succès.`, "success");
+    try {
+      await updateDemande(latest.id, {
+        statut: 'en_cours',
+        formulaire_data: {
+          ...(latest.formulaire_data || {}),
+          statut_mois_en_cours: 'Actif',
+          statut_mois_prochain: 'Non défini',
+          date_resiliation: null
+        }
+      } as any);
+      addToast("Abonnement réactivé avec succès ! Il réapparaît désormais sur la gestion des abonnements et le planning.", "success");
+      if (fetchData) await fetchData();
+    } catch (err) {
+      console.error("Erreur lors de la réactivation:", err);
+      addToast("Erreur lors de la réactivation de l'abonnement.", "error");
+    }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 20 }}>
-      {/* 0. Navigation back to Gestion Abonnement */}
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      {/* 0. Navigation back to Gestion Abonnement & Resiliation Alert */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <button
           type="button"
           onClick={handleGoToGestionAbonnement}
@@ -733,7 +822,75 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
           />
           <span>Retour à Gestion Abonnement</span>
         </button>
+
+        {isResilie && (
+          <button
+            type="button"
+            onClick={handleDirectReactiverAbonnement}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '9px 18px',
+              backgroundColor: '#16a34a',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 8,
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(22, 163, 74, 0.3)',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <PlayCircle size={16} />
+            <span>Réactiver / Relancer cet abonnement</span>
+          </button>
+        )}
       </div>
+
+      {/* Resiliation Alert Banner */}
+      {isResilie && (
+        <div
+          style={{
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: 12,
+            padding: '14px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                backgroundColor: '#fee2e2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#dc2626',
+                flexShrink: 0
+              }}
+            >
+              <XCircle size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#991b1b' }}>
+                Cet abonnement est actuellement résilié
+              </div>
+              <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 2 }}>
+                Il n'apparaît plus sur la page de gestion des abonnements ni sur le planning. Le compte client reste intact et vous pouvez réactiver l'abonnement à tout moment.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 1. Month Tabs Navigation Header */}
       <SubscriptionMonthTabs
@@ -855,6 +1012,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
             childDemandes={childDemandes}
             onOpenInvoiceModal={() => setShowInvoiceFormModal(true)}
             addToast={addToast}
+            fetchData={fetchData}
           />
         </div>
       </div>

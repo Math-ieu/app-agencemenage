@@ -58,6 +58,7 @@ export const SubscriptionStatusBar: React.FC<SubscriptionStatusBarProps> = ({
             <option value="Actif">Actif</option>
             <option value="Terminé">Terminé</option>
             <option value="Suspendu">Suspendu</option>
+            <option value="Résilié">Résilié</option>
           </select>
         </div>
 

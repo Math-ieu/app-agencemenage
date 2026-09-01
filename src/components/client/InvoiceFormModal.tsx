@@ -168,7 +168,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       // ═══════════════════════════════════════════════════════════
       // DEVIS comme source unique de vérité & décomposition réduction
       // ═══════════════════════════════════════════════════════════
-      const discountInfo = getDevisDiscountDetails(latest);
+      const discountInfo = getDevisDiscountDetails(latest, activeTabIndex);
       setDevisTotal(discountInfo.devisTotal);
       setPassagesBase(discountInfo.passagesBase);
       setDevisReductionPct(discountInfo.reductionPct);
@@ -202,7 +202,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const initialProduits = Boolean(latest?.avec_produit || latest?.formulaire_data?.produits_inclus || latest?.formulaire_data?.produits);
   useEffect(() => {
     if (!latest || !show) return;
-    const discountInfo = getDevisDiscountDetails(latest);
+    const discountInfo = getDevisDiscountDetails(latest, activeTabIndex);
     const passBase = discountInfo.passagesBase;
     const produitsDiff = (invProduitsInclus ? 90 : 0) - (initialProduits ? 90 : 0);
     const adjustedDevisTotal = Math.max(0, discountInfo.devisTotal + produitsDiff);
@@ -213,7 +213,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         : adjustedDevisTotal;
       setInvPrixUnitaire(String(Math.round((brutBase / passBase) * 100) / 100));
     }
-  }, [invProduitsInclus, latest, show]);
+  }, [invProduitsInclus, latest, show, activeTabIndex]);
 
   // Recalculate passages when days, start date, or frequency change
   useEffect(() => {
@@ -245,12 +245,12 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     const newPassages = getDynamicMonthPassagesCount(syntheticDemande);
     if (newPassages > 0) {
       setInvNbPassages(String(newPassages));
-      const discountInfo = getDevisDiscountDetails(latest);
+      const discountInfo = getDevisDiscountDetails(latest, activeTabIndex);
       if (discountInfo.passagesBase > 0) {
         setInvPrixUnitaire(String(discountInfo.prixUnitaireBrut));
       }
     }
-  }, [invJoursPassage, invDateStart, invFrequence, show]);
+  }, [invJoursPassage, invDateStart, invFrequence, show, activeTabIndex]);
 
   if (!show) return null;
 

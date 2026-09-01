@@ -39,6 +39,8 @@ interface SubscriptionRow {
   dateDebut: string;
   dateFin?: string;
   tarifMensuel: number;
+  activeMonthsCount: number;
+  tarifTotal: number;
   isMidMonthStart: boolean;
   codePromoUsed?: boolean;
 }
@@ -363,19 +365,44 @@ export default function GestionAbonnements() {
     return tom.toISOString().slice(0, 10);
   }, []);
 
-  // Map Demande items to SubscriptionRow objects (REAL DB DATA)
+  // Target month for the table calculations (defaults to current month or dateDu if filtered)
+  const targetMonthDate = useMemo(() => {
+    if (dateDu) {
+      const parsed = new Date(dateDu.includes('T') ? dateDu : `${dateDu}T00:00:00`);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date();
+  }, [dateDu]);
+
+  const targetMonthPrefix = useMemo(() => {
+    return `${targetMonthDate.getFullYear()}-${String(targetMonthDate.getMonth() + 1).padStart(2, '0')}`;
+  }, [targetMonthDate]);
+
+  // Map Demande items to SubscriptionRow objects (REAL DB DATA FOR CURRENT MONTH)
   const subscriptionRows: SubscriptionRow[] = useMemo(() => {
-    // Filter ONLY parent subscription contracts (exclude child interventions with parent_demande)
-    const subDemandes = demandes.filter(d =>
-      !d.parent_demande && (
+    // Filter ONLY parent subscription contracts (exclude child interventions with parent_demande and exclude cancelled/resilié subscriptions)
+    const subDemandes = demandes.filter(d => {
+      if (d.parent_demande) return false;
+      const isSub = (
         d.frequency === 'abonnement' ||
         (d as any).frequence === 'abonnement' ||
         (d as any).frequency_label?.includes('/sem') ||
         (d.formulaire_data as any)?.frequence?.includes('/sem') ||
         (d.formulaire_data as any)?.subFrequency ||
         demandes.some(child => Number(child.parent_demande) === Number(d.id))
-      )
-    );
+      );
+      if (!isSub) return false;
+
+      const dbStatut = (d.statut || '').toLowerCase().trim();
+      const stMoisEnCours = ((d.formulaire_data as any)?.statut_mois_en_cours || '').toLowerCase().trim();
+      const isResilie = dbStatut === 'resilie' || stMoisEnCours === 'résilié' || stMoisEnCours === 'resilie';
+
+      // Hide résilié subscriptions from the subscriptions table unless the user explicitly filters by 'Résilié'
+      if (isResilie && statutEnCoursFilter !== 'Résilié' && statutEnCoursFilter !== 'résilié') {
+        return false;
+      }
+      return true;
+    });
 
     return subDemandes.map(d => {
       const dAny = d as any;
@@ -415,35 +442,71 @@ export default function GestionAbonnements() {
       const dateDebut = getDemandeStartDate(d) || todayStr;
       const dateFin = d.planning?.date_fin || dAny.date_fin || undefined;
 
-      // Determine if starting mid-month (e.g. day > 1)
-      const dayOfMonth = new Date(dateDebut.includes('T') ? dateDebut : `${dateDebut}T00:00:00`).getDate();
-      const isMidMonth = dayOfMonth > 1;
+      // Determine if starting mid-month (e.g. day > 1) in the target month
+      const parsedStart = new Date(dateDebut.includes('T') ? dateDebut : `${dateDebut}T00:00:00`);
+      const isStartInTargetMonth = !isNaN(parsedStart.getTime()) && 
+        parsedStart.getFullYear() === targetMonthDate.getFullYear() && 
+        parsedStart.getMonth() === targetMonthDate.getMonth();
+      const isMidMonth = isStartInTargetMonth && parsedStart.getDate() > 1;
 
       const rawClient = d.client ?? dAny.client_id;
       const clientId = typeof rawClient === 'number' ? rawClient : (clientObj ? Number((clientObj as any).id) : undefined);
 
-      // Child interventions for this subscription
+      // Child interventions for this subscription in the target/current month
       const children = demandes.filter(c => Number(c.parent_demande) === Number(d.id));
+      const monthChildren = children.filter(c => {
+        if (!c.date_intervention) return false;
+        const dIso = c.date_intervention.includes('T') ? c.date_intervention.split('T')[0] : c.date_intervention.slice(0, 10);
+        return dIso.startsWith(targetMonthPrefix);
+      });
 
-      const hasChildren = children.length > 0;
+      const dateOverrides = (d.formulaire_data as any)?.date_overrides || {};
+
+      // 1. Completed interventions in the target/current month
+      let interventionsCompleted = monthChildren.filter(c => {
+        const st = (c.statut || '').toLowerCase().trim();
+        return ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st);
+      }).length;
+
+      Object.entries(dateOverrides).forEach(([k, ov]: [string, any]) => {
+        if (k.startsWith(targetMonthPrefix)) {
+          const st = (ov?.statut || '').toLowerCase().trim();
+          const inChild = monthChildren.some(c => (c.date_intervention || '').startsWith(k));
+          if (!inChild && ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st)) {
+            interventionsCompleted++;
+          }
+        }
+      });
+
+      const parentStartDate = getDemandeStartDate(d);
+      const isParentInCurrentMonth = parentStartDate?.startsWith(targetMonthPrefix);
       const isParentCompleted = ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes((d.statut || '').toLowerCase().trim());
+      if (children.length === 0 && isParentInCurrentMonth && isParentCompleted) {
+        interventionsCompleted = 1;
+      }
+
+      // 2. Cancelled interventions in the target/current month
+      let interventionsCancelled = monthChildren.filter(c => {
+        const st = (c.statut || '').toLowerCase().trim();
+        return ['annule', 'annulee', 'annulée'].includes(st);
+      }).length;
+
+      Object.entries(dateOverrides).forEach(([k, ov]: [string, any]) => {
+        if (k.startsWith(targetMonthPrefix)) {
+          const st = (ov?.statut || '').toLowerCase().trim();
+          const inChild = monthChildren.some(c => (c.date_intervention || '').startsWith(k));
+          if (!inChild && (ov?.excluded || ['annule', 'annulee', 'annulée'].includes(st))) {
+            interventionsCancelled++;
+          }
+        }
+      });
+
       const isParentCancelled = ['annule', 'annulee', 'annulée'].includes((d.statut || '').toLowerCase().trim());
+      if (children.length === 0 && isParentInCurrentMonth && isParentCancelled) {
+        interventionsCancelled = 1;
+      }
 
-      const interventionsCompleted = hasChildren
-        ? children.filter(c => {
-            const st = (c.statut || '').toLowerCase().trim();
-            return ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st);
-          }).length
-        : (isParentCompleted ? 1 : 0);
-
-      const interventionsCancelled = hasChildren
-        ? children.filter(c => {
-            const st = (c.statut || '').toLowerCase().trim();
-            return ['annule', 'annulee', 'annulée'].includes(st);
-          }).length
-        : (isParentCancelled ? 1 : 0);
-
-      const interventionsTotal = getDynamicMonthPassagesCount(d, demandes);
+      const interventionsTotal = getDynamicMonthPassagesCount(d, demandes, targetMonthDate);
 
       const realTarifMensuel = getInvoiceMonthlyAmount(d, interventionsTotal);
 
@@ -461,6 +524,15 @@ export default function GestionAbonnements() {
       const isConfirmedPaid = confirmedPaymentIds.includes(d.id);
       const statutFacturation = isConfirmedPaid ? 'Payé' : ((d.formulaire_data as any)?.statut_facturation || (['integral', 'paye', 'payee'].includes((d.statut_paiement || '').toLowerCase()) ? 'Payé' : 'Non défini'));
       const statutMoisProchain = getStatutMoisProchainCalculated(new Date().getDate(), statutFacturation, rawOverride);
+
+      const activeMonthsCount = Math.max(1, Number(
+        (d.formulaire_data as any)?.active_months_count || 1
+      ));
+
+      const explicitTotal = Number(d.prix || (d.formulaire_data as any)?.prix_total || (d.formulaire_data as any)?.tarif_total || 0);
+      const tarifTotal = (explicitTotal > realTarifMensuel && explicitTotal >= realTarifMensuel * 1.5)
+        ? explicitTotal
+        : realTarifMensuel * activeMonthsCount;
 
       return {
         id: d.id,
@@ -486,11 +558,13 @@ export default function GestionAbonnements() {
         dateDebut,
         dateFin,
         tarifMensuel: realTarifMensuel,
+        activeMonthsCount,
+        tarifTotal,
         isMidMonthStart: isMidMonth,
         codePromoUsed: !!(d.promo_code || d.promo_code_name || dAny.code_promo)
       };
     });
-  }, [demandes, todayStr]);
+  }, [demandes, todayStr, targetMonthDate, targetMonthPrefix, confirmedPaymentIds]);
 
   // Dynamic filter lists for Services, Commercials, Villes
   const ALL_SERVICE_OPTIONS = useMemo(() => {
@@ -520,6 +594,45 @@ export default function GestionAbonnements() {
     const dynamicVilles = subscriptionRows.map(r => r.clientVille).filter(Boolean);
     return Array.from(new Set([...baseVilles, ...dynamicVilles])).sort();
   }, [subscriptionRows]);
+
+  // 1. Base filtered subscriptions (respects top search and all filter controls)
+  const baseFilteredSubscriptions = useMemo(() => {
+    return subscriptionRows.filter(row => {
+      // Search client name or city
+      if (searchClient && !row.clientName.toLowerCase().includes(searchClient.toLowerCase()) && !row.clientVille.toLowerCase().includes(searchClient.toLowerCase())) {
+        return false;
+      }
+      // Date filters (dateDu / dateAu)
+      if (dateDu && row.dateFin && row.dateFin < dateDu) {
+        return false;
+      }
+      if (dateAu && row.dateDebut && row.dateDebut > dateAu) {
+        return false;
+      }
+      // Service filter
+      if (serviceFilter !== 'tous' && row.serviceType.toLowerCase() !== serviceFilter.toLowerCase()) {
+        return false;
+      }
+      // Commercial filter
+      if (commercialFilter !== 'tous' && row.commercial.toLowerCase() !== commercialFilter.toLowerCase()) {
+        return false;
+      }
+      // Ville filter
+      if (villeFilter !== 'tous' && !row.clientVille.toLowerCase().includes(villeFilter.toLowerCase())) {
+        return false;
+      }
+      // Statut mois en cours
+      if (statutEnCoursFilter !== 'tous' && row.statutMoisEnCours.toLowerCase() !== statutEnCoursFilter.toLowerCase()) {
+        return false;
+      }
+      // Statut mois prochain
+      if (statutProchainFilter !== 'tous' && row.statutMoisProchain.toLowerCase() !== statutProchainFilter.toLowerCase()) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [subscriptionRows, searchClient, dateDu, dateAu, serviceFilter, commercialFilter, villeFilter, statutEnCoursFilter, statutProchainFilter]);
 
   // Dynamic Holiday Banner Calculation based on parameters from Paramètres > Jours fériés
   const activeHolidayBanner = useMemo(() => {
@@ -572,7 +685,7 @@ export default function GestionAbonnements() {
     let reportsCount = 0;
 
     // 1. Scan active subscriptions for recurring scheduled days in [debutSuspension, finSuspension]
-    subscriptionRows.forEach(sub => {
+    baseFilteredSubscriptions.forEach(sub => {
       const subStartDate = new Date(sub.dateDebut);
       const parentDemande = demandes.find(d => d.id === sub.demandeId);
       const endStr = sub.dateFin || parentDemande?.formulaire_data?.date_fin || parentDemande?.planning?.date_fin;
@@ -639,7 +752,7 @@ export default function GestionAbonnements() {
       confirmedReports,
       enAttente
     };
-  }, [fetes, demandes, subscriptionRows]);
+  }, [fetes, demandes, baseFilteredSubscriptions]);
 
   // Real database planning stats calculated per month and day across ALL subscriptions
   const planningMonthData = useMemo(() => {
@@ -667,7 +780,7 @@ export default function GestionAbonnements() {
       return true;
     };
 
-    // 1. Process all Demande items in DB that have a date_intervention in this month (excluding parent subscription contracts)
+    // 1. Process all Demande items in DB that have a date_intervention in this month (excluding parent subscription contracts and résilié subscriptions)
     const childOrSingleDemandesInMonth = demandes.filter(d => {
       if (!d.date_intervention) return false;
 
@@ -681,6 +794,21 @@ export default function GestionAbonnements() {
         demandes.some(child => Number(child.parent_demande) === Number(d.id))
       );
       if (isParentSub) return false;
+
+      // If this is a child intervention, check if the parent subscription is résilié!
+      if (d.parent_demande) {
+        const parent = demandes.find(p => p.id === Number(d.parent_demande));
+        if (parent) {
+          const pStatut = (parent.statut || '').toLowerCase().trim();
+          const pStEnCours = ((parent.formulaire_data as any)?.statut_mois_en_cours || '').toLowerCase().trim();
+          if (pStatut === 'resilie' || pStEnCours === 'résilié' || pStEnCours === 'resilie') {
+            return false;
+          }
+        }
+      }
+
+      const dStatut = (d.statut || '').toLowerCase().trim();
+      if (dStatut === 'resilie') return false;
 
       const dService = d.service_label || d.service || 'Ménage standard';
       const dCommercial = (d as any).assigned_to_user_name || d.assigned_to_name || d.commercial_name || 'Non assigné';
@@ -789,14 +917,14 @@ export default function GestionAbonnements() {
     return { statsMap, totalMonthInterventions };
   }, [demandes, subscriptionRows, planningDate, serviceFilter, commercialFilter, villeFilter]);
 
-  // Compute KPI metrics dynamically from real database records
+  // 2. Compute KPI metrics dynamically from baseFilteredSubscriptions (fully responsive to all filters)
   const kpiData = useMemo(() => {
-    const totalCA = subscriptionRows.reduce((acc, row) => acc + row.tarifMensuel, 0);
-    const activeCount = subscriptionRows.filter(r => r.statutMoisEnCours === 'Actif').length;
-    const nouveauxCeMois = subscriptionRows.length;
-    const avecCodePromo = subscriptionRows.filter(r => r.codePromoUsed).length;
+    const totalCA = baseFilteredSubscriptions.reduce((acc, row) => acc + (row.tarifTotal || row.tarifMensuel), 0);
+    const activeCount = baseFilteredSubscriptions.filter(r => r.statutMoisEnCours === 'Actif').length;
+    const nouveauxCeMois = baseFilteredSubscriptions.length;
+    const avecCodePromo = baseFilteredSubscriptions.filter(r => r.codePromoUsed).length;
 
-    // Calculate interventions specifically for the current week (Monday to Sunday)
+    // Calculate interventions specifically for the current week (Monday to Sunday) for filtered subscriptions
     const now = new Date();
     const day = now.getDay();
     const diffToMonday = day === 0 ? -6 : 1 - day;
@@ -815,9 +943,10 @@ export default function GestionAbonnements() {
     let interventionsSemaineCount = 0;
     let interventions5emeSemaineCount = 0;
 
-    const parentDemandes = demandes.filter(d => !d.parent_demande && (d.frequency === 'abonnement' || (d as any).frequence === 'abonnement' || demandes.some(c => Number(c.parent_demande) === Number(d.id))));
+    const filteredSubDemandeIds = new Set(baseFilteredSubscriptions.map(s => s.demandeId));
+    const filteredParentDemandes = demandes.filter(d => filteredSubDemandeIds.has(d.id));
 
-    parentDemandes.forEach(d => {
+    filteredParentDemandes.forEach(d => {
       const dbStatut = (d.statut || '').toLowerCase();
       if (['resilie', 'suspendu'].includes(dbStatut)) return;
 
@@ -913,7 +1042,7 @@ export default function GestionAbonnements() {
     });
 
     demandes.forEach(c => {
-      if (c.parent_demande && c.date_intervention) {
+      if (c.parent_demande && filteredSubDemandeIds.has(Number(c.parent_demande)) && c.date_intervention) {
         const dIso = c.date_intervention.includes('T') ? c.date_intervention.slice(0, 10) : c.date_intervention;
         if (dIso >= mondayIso && dIso <= sundayIso) {
           const st = (c.statut || '').toLowerCase();
@@ -928,14 +1057,12 @@ export default function GestionAbonnements() {
       }
     });
 
-    // Compute previous month CA from DB records created before current month
-    const prevCAMontant = demandes
-      .filter(d => (d.frequency === 'abonnement' || (d as any).frequence === 'abonnement') && !d.parent_demande)
-      .reduce((acc, d) => acc + (Number(d.prix) || Number((d as any).tarif_total) || 0), 0) * 0.9;
+    // Compute previous month CA baseline for comparison
+    const prevCAMontant = totalCA * 0.9;
 
     let evolutionPct = '0%';
     let isPositive = true;
-    if (prevCAMontant > 0) {
+    if (prevCAMontant > 0 && totalCA > 0) {
       const diff = ((totalCA - prevCAMontant) / prevCAMontant) * 100;
       isPositive = diff >= 0;
       evolutionPct = `${isPositive ? '+' : ''}${diff.toFixed(1).replace('.', ',')}%`;
@@ -944,8 +1071,8 @@ export default function GestionAbonnements() {
       isPositive = true;
     }
 
-    const todayCount = subscriptionRows.filter(r => r.nextInterventionDate === todayStr).length;
-    const tomorrowCount = subscriptionRows.filter(r => r.nextInterventionDate === tomorrowStr).length;
+    const todayCount = baseFilteredSubscriptions.filter(r => r.nextInterventionDate === todayStr).length;
+    const tomorrowCount = baseFilteredSubscriptions.filter(r => r.nextInterventionDate === tomorrowStr).length;
 
     return {
       caAbonnement: totalCA,
@@ -962,35 +1089,11 @@ export default function GestionAbonnements() {
         demain: tomorrowCount
       }
     };
-  }, [subscriptionRows, demandes, todayStr, tomorrowStr]);
+  }, [baseFilteredSubscriptions, demandes, todayStr, tomorrowStr]);
 
-  // Filtered subscriptions based on search, filters bar, and quick recap filter
+  // 3. Final filtered subscriptions for table display (applies quickRecapFilter on top of base filters)
   const filteredSubscriptions = useMemo(() => {
-    return subscriptionRows.filter(row => {
-      // Search
-      if (searchClient && !row.clientName.toLowerCase().includes(searchClient.toLowerCase())) {
-        return false;
-      }
-      // Service filter
-      if (serviceFilter !== 'tous' && row.serviceType.toLowerCase() !== serviceFilter.toLowerCase()) {
-        return false;
-      }
-      // Commercial filter
-      if (commercialFilter !== 'tous' && row.commercial.toLowerCase() !== commercialFilter.toLowerCase()) {
-        return false;
-      }
-      // Ville filter
-      if (villeFilter !== 'tous' && !row.clientVille.toLowerCase().includes(villeFilter.toLowerCase())) {
-        return false;
-      }
-      // Statut mois en cours
-      if (statutEnCoursFilter !== 'tous' && row.statutMoisEnCours !== statutEnCoursFilter) {
-        return false;
-      }
-      // Statut mois prochain
-      if (statutProchainFilter !== 'tous' && row.statutMoisProchain !== statutProchainFilter) {
-        return false;
-      }
+    return baseFilteredSubscriptions.filter(row => {
       // Quick Recap Pill filters
       if (quickRecapFilter === 'actifs' && row.statutMoisEnCours !== 'Actif') {
         return false;
@@ -1004,7 +1107,7 @@ export default function GestionAbonnements() {
 
       return true;
     });
-  }, [subscriptionRows, searchClient, serviceFilter, commercialFilter, villeFilter, statutEnCoursFilter, statutProchainFilter, quickRecapFilter, todayStr, tomorrowStr]);
+  }, [baseFilteredSubscriptions, quickRecapFilter, todayStr, tomorrowStr]);
 
   // Timeline gauge calculation
   const todayDate = new Date();

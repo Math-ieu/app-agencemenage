@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Slash, Clock, MessageSquare, XCircle, Plus, Trash2 } from 'lucide-react';
+import { Slash, Clock, MessageSquare, XCircle, Plus, Trash2, PlayCircle, AlertTriangle } from 'lucide-react';
 import { Client, Demande } from '../../types';
 import { updateDemande } from '../../api/client';
 import { getNextIntervention } from '../../utils/pricing';
+import { useAuthStore } from '../../store/auth';
+import { checkPermission } from '../../utils/permissions';
 
 const INVALID_INTERVENANT_NAMES = [
   'mathdev', 'mathieu dev', 'admin', 'administrator', 'system', 'chargée opérationnelle', 'à attribuer', 'aucun', 'undefined', 'null'
@@ -21,6 +23,7 @@ export interface SubscriptionSidebarProps {
   childDemandes: Demande[];
   onOpenInvoiceModal: () => void;
   addToast: (msg: string, type: 'success' | 'error' | 'info') => void;
+  fetchData?: () => Promise<void>;
 }
 
 export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
@@ -28,8 +31,18 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
   client,
   childDemandes,
   onOpenInvoiceModal,
-  addToast
+  addToast,
+  fetchData
 }) => {
+  const { user } = useAuthStore();
+  const [showResilierModal, setShowResilierModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const isResilie = React.useMemo(() => {
+    const dbStatut = (latest?.statut || '').toLowerCase().trim();
+    const stEnCours = ((latest?.formulaire_data as any)?.statut_mois_en_cours || '').toLowerCase().trim();
+    return dbStatut === 'resilie' || stEnCours === 'résilié' || stEnCours === 'resilie';
+  }, [latest?.statut, latest?.formulaire_data]);
   const [customTerrainLines, setCustomTerrainLines] = useState<string[]>(() => {
     return latest?.formulaire_data?.infos_terrain_custom || [];
   });
@@ -115,6 +128,78 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
     }
     return 'À assigner par la chargée opérationnelle';
   }, [nextInterventionResult]);
+
+  const handleConfirmResiliation = async () => {
+    if (!latest?.id) return;
+    const perm = checkPermission(user, 'resilier_abonnement');
+    if (!perm.allowed) {
+      addToast(perm.message || "Action non autorisée par votre rôle.", "error");
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      const todayIso = new Date().toISOString().slice(0, 10);
+      await updateDemande(latest.id, {
+        statut: 'resilie',
+        formulaire_data: {
+          ...(latest.formulaire_data || {}),
+          statut_mois_en_cours: 'Résilié',
+          statut_mois_prochain: 'Résilié',
+          date_resiliation: todayIso
+        }
+      } as any);
+
+      // Cancel unexecuted child interventions for this subscription
+      if (Array.isArray(childDemandes) && childDemandes.length > 0) {
+        const unexecutedChildren = childDemandes.filter(c => 
+          !['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes((c.statut || '').toLowerCase().trim())
+        );
+        for (const child of unexecutedChildren) {
+          await updateDemande(child.id, { statut: 'annule' }).catch(() => {});
+        }
+      }
+
+      addToast("L'abonnement a été résilié. Le client reste conservé dans la base de données.", "info");
+      setShowResilierModal(false);
+      if (fetchData) await fetchData();
+    } catch (err) {
+      console.error("Erreur lors de la résiliation:", err);
+      addToast("Erreur lors de la résiliation de l'abonnement.", "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReactiverAbonnement = async () => {
+    if (!latest?.id) return;
+    const perm = checkPermission(user, 'modifier_abonnement');
+    if (!perm.allowed) {
+      addToast(perm.message || "Action non autorisée par votre rôle.", "error");
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      await updateDemande(latest.id, {
+        statut: 'en_cours',
+        formulaire_data: {
+          ...(latest.formulaire_data || {}),
+          statut_mois_en_cours: 'Actif',
+          statut_mois_prochain: 'Non défini',
+          date_resiliation: null
+        }
+      } as any);
+
+      addToast("Abonnement réactivé avec succès ! Il réapparaît désormais sur la gestion des abonnements et le planning.", "success");
+      if (fetchData) await fetchData();
+    } catch (err) {
+      console.error("Erreur lors de la réactivation:", err);
+      addToast("Erreur lors de la réactivation de l'abonnement.", "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const clientDisplayName = client?.display_name || `${(client as any)?.first_name || ''} ${(client as any)?.last_name || ''}`.trim() || latest?.client_name || 'ce client';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -316,8 +401,8 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
         <div style={{ fontWeight: 800, fontSize: 13, color: '#0f172a', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
           📜 Journal de l'abonnement
         </div>
-        <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>
-          Aucun évènement
+        <div style={{ fontSize: 12, color: isResilie ? '#dc2626' : '#94a3b8', fontStyle: 'italic', fontWeight: isResilie ? 700 : 400 }}>
+          {isResilie ? "⚠️ Abonnement résilié" : "Aucun évènement"}
         </div>
       </div>
 
@@ -349,11 +434,172 @@ export const SubscriptionSidebar: React.FC<SubscriptionSidebarProps> = ({
           >
             <MessageSquare size={14} color="#037265" /> Contacter le client (WhatsApp)
           </button>
-          <button type="button" style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: '1px solid #fee2e2', borderRadius: 8, background: '#fef2f2', fontSize: 12, fontWeight: 700, color: '#ef4444', cursor: 'pointer' }}>
-            <XCircle size={14} color="#ef4444" /> Résilier l'abonnement
-          </button>
+
+          {/* Résilier ou Réactiver button */}
+          {isResilie ? (
+            <button
+              type="button"
+              onClick={handleReactiverAbonnement}
+              disabled={isProcessing}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '9px 12px',
+                border: '1px solid #bbf7d0',
+                borderRadius: 8,
+                background: '#f0fdf4',
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#15803d',
+                cursor: isProcessing ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: '0 1px 3px rgba(22, 163, 74, 0.15)'
+              }}
+            >
+              <PlayCircle size={15} color="#15803d" />
+              {isProcessing ? "Réactivation..." : "Réactiver l'abonnement"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowResilierModal(true)}
+              disabled={isProcessing}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #fee2e2',
+                borderRadius: 8,
+                background: '#fef2f2',
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#ef4444',
+                cursor: isProcessing ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <XCircle size={14} color="#ef4444" />
+              Résilier l'abonnement
+            </button>
+          )}
         </div>
       </div>
+
+      {/* ── Modal Confirmation Résiliation ── */}
+      {showResilierModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            backdropFilter: 'blur(3px)',
+            padding: 16
+          }}
+          onClick={() => { if (!isProcessing) setShowResilierModal(false); }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: 14,
+              padding: '24px',
+              maxWidth: 440,
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              border: '1px solid #e2e8f0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  backgroundColor: '#fee2e2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#dc2626',
+                  flexShrink: 0
+                }}
+              >
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                  Résilier l'abonnement ?
+                </h3>
+                <span style={{ fontSize: 12, color: '#64748b' }}>
+                  Action réversible à tout moment
+                </span>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.5, background: '#f8fafc', padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <p style={{ margin: 0, marginBottom: 8 }}>
+                L'abonnement de <strong>{clientDisplayName}</strong> sera résilié et ses interventions ne figureront plus sur la page de gestion des abonnements ni sur le planning.
+              </p>
+              <p style={{ margin: 0, fontSize: 12, color: '#047857', fontWeight: 600 }}>
+                ✓ Le compte client reste bien conservé dans votre base de données.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+              <button
+                type="button"
+                onClick={() => setShowResilierModal(false)}
+                disabled={isProcessing}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#475569',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: isProcessing ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResiliation}
+                disabled={isProcessing}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: isProcessing ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 6px rgba(220, 38, 38, 0.3)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <XCircle size={15} />
+                {isProcessing ? "Résiliation..." : "Confirmer la résiliation"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

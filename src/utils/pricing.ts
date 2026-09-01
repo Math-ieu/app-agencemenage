@@ -508,7 +508,7 @@ export interface DevisDiscountInfo {
     passagesBase: number;
 }
 
-export const getDevisDiscountDetails = (demande: any): DevisDiscountInfo => {
+export const getDevisDiscountDetails = (demande: any, monthIndex?: number): DevisDiscountInfo => {
     if (!demande) {
         return {
             montantBrutBase: 0,
@@ -523,7 +523,9 @@ export const getDevisDiscountDetails = (demande: any): DevisDiscountInfo => {
     }
 
     const formData = demande.formulaire_data || {};
-    const passagesBase = getContractBaselinePassages(demande) || 4;
+    const devisStartDate = getDemandeStartDate(demande);
+    const devisMonthPassages = getDynamicMonthPassagesCount(demande, [], devisStartDate);
+    const passagesBase = devisMonthPassages > 0 ? devisMonthPassages : (getContractBaselinePassages(demande) || 4);
     const devisTotal = getDevisAmount(demande);
 
     const freqStr = String(
@@ -574,11 +576,19 @@ export const getDevisDiscountDetails = (demande: any): DevisDiscountInfo => {
         reductionPct = Math.round((reductionAmountBase / montantBrutBase) * 100);
         reductionLabel = reductionPct > 0 ? `${reductionPct}%` : `${reductionAmountBase} DH`;
     } else if (isSubscription && devisTotal > 0) {
-        // Standard Agence Ménage subscription discount: 10% on service
-        reductionPct = 10;
+        // Le montant brut de base est calculé AVANT réduction 10% (ex: 1080 / 0.9 = 1200 DH)
         montantBrutBase = Math.round((devisTotal / 0.9) * 100) / 100;
-        reductionAmountBase = Math.round((montantBrutBase - devisTotal) * 100) / 100;
-        reductionLabel = '10%';
+        if (monthIndex === undefined || monthIndex === 0) {
+            // Remise 10% automatique UNIQUEMENT pour le premier mois (Mois 1)
+            reductionPct = 10;
+            reductionAmountBase = Math.round((montantBrutBase - devisTotal) * 100) / 100;
+            reductionLabel = '10%';
+        } else {
+            // À partir du Mois 2 : pas de remise automatique forcée
+            reductionPct = 0;
+            reductionAmountBase = 0;
+            reductionLabel = '';
+        }
     } else {
         montantBrutBase = devisTotal;
         reductionAmountBase = 0;
@@ -586,7 +596,8 @@ export const getDevisDiscountDetails = (demande: any): DevisDiscountInfo => {
         reductionLabel = '';
     }
 
-    const prixUnitaireBrut = passagesBase > 0 ? Math.round((montantBrutBase / passagesBase) * 100) / 100 : montantBrutBase;
+    const singlePassageCalculated = calculateSinglePassagePrice(demande);
+    const prixUnitaireBrut = passagesBase > 0 ? Math.round((montantBrutBase / passagesBase) * 100) / 100 : singlePassageCalculated;
     const prixUnitaireNet = passagesBase > 0 ? Math.round((devisTotal / passagesBase) * 100) / 100 : devisTotal;
 
     return {
@@ -661,10 +672,6 @@ export const getContractBaselinePassages = (demande: any): number => {
     if (Number(formData.nb_passages_devis) > 0) return Number(formData.nb_passages_devis);
     if (Number(formData.passages_base) > 0) return Number(formData.passages_base);
     if (Number(formData.passages_devis) > 0) return Number(formData.passages_devis);
-
-    // 2. Dynamic month passages calculated for the subscription month prorata
-    const dynamicPassages = getDynamicMonthPassagesCount(demande);
-    if (dynamicPassages > 0) return dynamicPassages;
 
     // 2. Derive from active days selected in the planning / form (extractJoursPassage)
     let days: string[] = [];
@@ -762,56 +769,53 @@ export const calculateInvoiceFromDevis = (
     monthPassages?: number,
     interventionsRecup?: number,
     remiseDhOverride?: number,
-    tvaPctOverride?: number
+    tvaPctOverride?: number,
+    monthIndex?: number
 ): DevisInvoiceResult => {
     if (!demande) {
         return { devisTotal: 0, passagesBase: 0, prixUnitaireDevis: 0, passagesFacturables: 0, montantBrut: 0, remiseDh: 0, montantHT: 0, tvaPct: 0, tvaAmount: 0, totalTTC: 0 };
     }
 
     const formData = demande.formulaire_data || {};
+    const discountInfo = getDevisDiscountDetails(demande, monthIndex);
 
-    // ── 1. Devis total (source de vérité pour le contrat de base — APRÈS remise abonnement ET AVEC options) ──
-    const devisTotal = getDevisAmount(demande);
+    // ── 1. Montant de base unitaire BRUT (sans taxe et sans réduction) ──
+    const prixUnitaireBrut = discountInfo.prixUnitaireBrut > 0
+        ? discountInfo.prixUnitaireBrut
+        : calculateSinglePassagePrice(demande);
 
-    // ── 2. Nombre de passages de base du devis / contrat (FIXE) ──
-    const passagesBase = getContractBaselinePassages(demande);
-
-    // ── 3. Prix unitaire fixe par passage (derived from devisTotal so options are included) ──
-    let prixUnitaireDevis = 0;
-    if (devisTotal > 0 && passagesBase > 0) {
-        prixUnitaireDevis = Math.round((devisTotal / passagesBase) * 100) / 100;
-    } else if (formData.prix_unitaire && Number(formData.prix_unitaire) > 0) {
-        prixUnitaireDevis = Number(formData.prix_unitaire);
-    } else {
-        prixUnitaireDevis = calculateSinglePassagePrice(demande);
-    }
-
-    // ── 4. Passages facturables ce mois (VARIABLE) ──
+    // ── 2. Passages de base et passages facturables ce mois ──
+    const passagesBase = discountInfo.passagesBase > 0 ? discountInfo.passagesBase : getContractBaselinePassages(demande);
     const passagesMois = monthPassages ?? passagesBase;
     const recup = Math.max(0, interventionsRecup ?? 0);
     const passagesFacturables = Math.max(0, passagesMois - recup);
 
-    // ── 5. Montant brut HT ce mois (prorata = PU fixe × passages du mois) ──
-    const montantBrut = Math.round(prixUnitaireDevis * passagesFacturables);
+    // ── 3. Montant brut HT ce mois (PU Brut sans taxe ni réduction × passages facturables) ──
+    const montantBrut = Math.round(prixUnitaireBrut * passagesFacturables);
 
-    // ── 6. Remise additionnelle ──
-    const remiseDh = Math.max(0, remiseDhOverride ?? 0);
+    // ── 4. Remise — 10% automatique pour Mois 1 (monthIndex === 0 ou undefined), manuelle / optionnelle sinon ──
+    let remiseCalculated = 0;
+    if (remiseDhOverride !== undefined && remiseDhOverride > 0) {
+        remiseCalculated = remiseDhOverride;
+    } else if (discountInfo.reductionPct > 0) {
+        remiseCalculated = Math.round((montantBrut * discountInfo.reductionPct) / 100);
+    }
 
-    // ── 7. Total HT ──
-    const montantHT = Math.max(0, montantBrut - remiseDh);
+    // ── 5. Total HT ──
+    const montantHT = Math.max(0, montantBrut - remiseCalculated);
 
-    // ── 8. TVA ──
+    // ── 6. TVA ──
     const tvaPct = tvaPctOverride ?? (Number(formData.tva) || 0);
     const tvaAmount = Math.round((montantHT * tvaPct) / 100);
     const totalTTC = montantHT + tvaAmount;
 
     return {
-        devisTotal,
+        devisTotal: discountInfo.devisTotal,
         passagesBase,
-        prixUnitaireDevis,
+        prixUnitaireDevis: prixUnitaireBrut,
         passagesFacturables,
         montantBrut,
-        remiseDh,
+        remiseDh: remiseCalculated,
         montantHT,
         tvaPct,
         tvaAmount,
@@ -836,13 +840,17 @@ export const getDevisBasedMonthlyAmount = (demande: any): number => {
  * Retourne le montant de la FACTURE (calculé au prorata des passages du mois).
  * Utilisé pour la facturation, les widgets financiers et l'affichage des factures.
  */
-export const getInvoiceMonthlyAmount = (demande: any, monthPassages?: number): number => {
+export const getInvoiceMonthlyAmount = (demande: any, monthPassages?: number, monthIndex?: number): number => {
     if (!demande) return 0;
+    if (monthPassages !== undefined) {
+        const result = calculateInvoiceFromDevis(demande, monthPassages, 0, undefined, undefined, monthIndex);
+        return result.totalTTC;
+    }
     const formData = demande.formulaire_data || {};
-    const validatedInvoice = Number(demande.montant_facture) || Number(formData.montant_facture) || Number(formData.total_ttc) || Number(formData.montant_ttc) || Number(formData.montant_final);
+    const validatedInvoice = Number(demande.montant_facture) || Number(formData.montant_facture);
     if (validatedInvoice > 0) return validatedInvoice;
 
-    const result = calculateInvoiceFromDevis(demande, monthPassages);
+    const result = calculateInvoiceFromDevis(demande, undefined, 0, undefined, undefined, monthIndex);
     return result.totalTTC;
 };
 
@@ -924,8 +932,6 @@ export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = 
     const parsedTarget = parseDateRobust(targetMonthDate);
     if (parsedTarget) {
         targetDateObj = parsedTarget;
-    } else if (parsedStart) {
-        targetDateObj = parsedStart;
     } else {
         targetDateObj = new Date();
     }

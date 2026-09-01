@@ -38,16 +38,22 @@ export const SubscriptionHeaderCard: React.FC<SubscriptionHeaderCardProps> = ({
     return 0;
   }, [latest]);
 
+  const isResilie = useMemo(() => {
+    const dbStatut = (latest?.statut || '').toLowerCase().trim();
+    const stEnCours = ((latest?.formulaire_data as any)?.statut_mois_en_cours || '').toLowerCase().trim();
+    return dbStatut === 'resilie' || stEnCours === 'résilié' || stEnCours === 'resilie';
+  }, [latest?.statut, latest?.formulaire_data]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* ── Dark Teal KPI Banner ── */}
-      <div className="sub-header-banner" style={{ background: '#034a3e', borderRadius: 12, padding: '1.25rem 1.5rem', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+      {/* ── Dark Teal or Burgundy Resilie KPI Banner ── */}
+      <div className="sub-header-banner" style={{ background: isResilie ? '#7f1d1d' : '#034a3e', borderRadius: 12, padding: '1.25rem 1.5rem', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', opacity: 0.8, letterSpacing: '0.05em' }}>
             STATUT ABONNEMENT ({capitalizedMonthTitle.toUpperCase()})
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span>Actif ({latest.service || latest.type_prestation || 'Grand ménage'})</span>
+            <span>{isResilie ? 'Résilié' : 'Actif'} ({latest.service || latest.type_prestation || 'Grand ménage'})</span>
             <span style={{ fontSize: 12, background: 'rgba(255,255,255,0.2)', padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>
               {selectedDays.length} jours / sem
             </span>
