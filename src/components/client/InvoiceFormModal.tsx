@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, X, AlertCircle, FileText } from 'lucide-react';
 import { Demande, Client } from '../../types';
 import { updateDemande, generateDocument, getUsers, affecterDemande } from '../../api/client';
-import { getDevisDiscountDetails, extractJoursPassage, getDynamicMonthPassagesCount, getDemandeStartDate } from '../../utils/pricing';
+import { getDevisDiscountDetails, extractJoursPassage, getDynamicMonthPassagesCount, getDemandeStartDate, parseDateRobust } from '../../utils/pricing';
 
 export interface InvoiceFormModalProps {
   show: boolean;
@@ -96,9 +96,8 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   // ═══════════════════════════════════════════════════════════════
   const [invNbPassages, setInvNbPassages] = useState('4');
   const [invPrixUnitaire, setInvPrixUnitaire] = useState('0');
-  const [devisReductionPct, setDevisReductionPct] = useState(0);
-  const [devisReductionDh, setDevisReductionDh] = useState(0);
-  const [devisReductionLabel, setDevisReductionLabel] = useState('');
+  const [invApplyReduction, setInvApplyReduction] = useState<boolean>(() => activeTabIndex === 0);
+  const [invReductionPercent, setInvReductionPercent] = useState<string>('10');
   const [invApplyTva, setInvApplyTva] = useState<boolean>(() => {
     const formData = latest?.formulaire_data || {};
     if (formData.tva_active !== undefined) return Boolean(formData.tva_active);
@@ -130,7 +129,18 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       const rawFreq = latest.frequency_label || formData.frequence || frequencyLabel;
       setInvFrequence(formatFrequenceOption(rawFreq, selectedDays?.length));
 
-      const realStartDate = dateDebut || getDemandeStartDate(latest);
+      const startDate = parseDateRobust(dateDebut || getDemandeStartDate(latest));
+      const targetMonthDate = startDate
+        ? new Date(startDate.getFullYear(), startDate.getMonth() + activeTabIndex, 1)
+        : new Date(new Date().getFullYear(), new Date().getMonth() + activeTabIndex, 1);
+      const targetMonthStartStr = `${targetMonthDate.getFullYear()}-${String(targetMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+
+      const activeMonthKey = `mois${activeTabIndex + 1}`;
+      const storedMonthFacturation = formData.mois_data?.[activeMonthKey]?.facturation;
+
+      const realStartDate = activeTabIndex === 0
+        ? (dateDebut || getDemandeStartDate(latest))
+        : (storedMonthFacturation?.date_debut || targetMonthStartStr);
       setInvDateStart(realStartDate);
 
       const realNbPersonnes = latest.nb_intervenants || formData.nb_personnes || formData.nb_intervenants || formData.nb_intervenantes || 1;
@@ -171,32 +181,34 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       const discountInfo = getDevisDiscountDetails(latest, activeTabIndex);
       setDevisTotal(discountInfo.devisTotal);
       setPassagesBase(discountInfo.passagesBase);
-      setDevisReductionPct(discountInfo.reductionPct);
-      setDevisReductionDh(discountInfo.reductionAmountBase);
-      setDevisReductionLabel(discountInfo.reductionLabel);
+
+      const hasStoredRemise = storedMonthFacturation?.remise !== undefined
+        ? Number(storedMonthFacturation.remise) > 0 || Number(storedMonthFacturation.remise_pct) > 0
+        : (activeTabIndex === 0);
+      setInvApplyReduction(hasStoredRemise);
+      setInvReductionPercent(String(storedMonthFacturation?.remise_pct ?? 10));
 
       // Prix unitaire brut (avant réduction) par défaut du devis
-      const derivedPU = Number(formData.prix_unitaire) > 0
-        ? Number(formData.prix_unitaire)
-        : discountInfo.prixUnitaireBrut;
+      const derivedPU = storedMonthFacturation?.prix_unitaire
+        ? Number(storedMonthFacturation.prix_unitaire)
+        : (Number(formData.prix_unitaire) > 0 ? Number(formData.prix_unitaire) : discountInfo.prixUnitaireBrut);
       setInvPrixUnitaire(String(derivedPU));
 
       // Passages ce mois-ci (ex: 10 si mois à 5 semaines ou 5 si démarrage en cours de mois)
-      const realMonthPassages = monthPassagesPlanifies !== undefined && monthPassagesPlanifies > 0
-        ? monthPassagesPlanifies
-        : discountInfo.passagesBase;
+      const realMonthPassages = storedMonthFacturation?.nombre_passages
+        ? Number(storedMonthFacturation.nombre_passages)
+        : (monthPassagesPlanifies !== undefined && monthPassagesPlanifies > 0 ? monthPassagesPlanifies : discountInfo.passagesBase);
       setInvNbPassages(String(realMonthPassages));
 
       // TVA — Non par défaut pour les particuliers
       const isClientEntreprise = (client?.segment || latest.segment || formData.segment) === 'entreprise';
-      const formDataTvaActive = formData.tva_active ?? formData.apply_tva;
-      const initialTvaActive = formDataTvaActive !== undefined
-        ? Boolean(formDataTvaActive)
-        : (formData.tva !== undefined && formData.tva !== null ? Number(formData.tva) > 0 : isClientEntreprise);
+      const initialTvaActive = storedMonthFacturation?.tva_active !== undefined
+        ? Boolean(storedMonthFacturation.tva_active)
+        : (formData.tva_active ?? formData.apply_tva ?? (formData.tva !== undefined && formData.tva !== null ? Number(formData.tva) > 0 : isClientEntreprise));
       setInvApplyTva(initialTvaActive);
-      setInvTvaPercent(String(Number(formData.tva) || 20));
+      setInvTvaPercent(String(storedMonthFacturation?.tva ?? (Number(formData.tva) || 20)));
     }
-  }, [show, latest, monthDemandes, selectedDays, dateDebut, frequencyLabel, monthPassagesPlanifies, client?.segment]);
+  }, [show, latest, monthDemandes, selectedDays, dateDebut, frequencyLabel, monthPassagesPlanifies, client?.segment, activeTabIndex]);
 
   // Synchronisation dynamique si le bouton "Produits ménagers inclus" est coché / décoché dans le modal
   const initialProduits = Boolean(latest?.avec_produit || latest?.formulaire_data?.produits_inclus || latest?.formulaire_data?.produits);
@@ -221,6 +233,12 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     const parsedDays = extractJoursPassage(invJoursPassage);
     if (parsedDays.length === 0) return;
 
+    // Target month date based on subscription start date and active tab index
+    const startDate = parseDateRobust(dateDebut || getDemandeStartDate(latest));
+    const targetMonthDate = startDate
+      ? new Date(startDate.getFullYear(), startDate.getMonth() + activeTabIndex, 1)
+      : new Date(new Date().getFullYear(), new Date().getMonth() + activeTabIndex, 1);
+
     // Build a synthetic demande with updated values to compute dynamic passages
     const freqMatch = invFrequence.match(/(\d+)/);
     const freqLabel = freqMatch ? `${freqMatch[1]}/sem` : (latest.frequency_label || latest.formulaire_data?.frequence || '2/sem');
@@ -242,7 +260,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       }
     };
 
-    const newPassages = getDynamicMonthPassagesCount(syntheticDemande);
+    const newPassages = getDynamicMonthPassagesCount(syntheticDemande, [], targetMonthDate);
     if (newPassages > 0) {
       setInvNbPassages(String(newPassages));
       const discountInfo = getDevisDiscountDetails(latest, activeTabIndex);
@@ -250,7 +268,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         setInvPrixUnitaire(String(discountInfo.prixUnitaireBrut));
       }
     }
-  }, [invJoursPassage, invDateStart, invFrequence, show, activeTabIndex]);
+  }, [invJoursPassage, invDateStart, invFrequence, show, activeTabIndex, dateDebut]);
 
   if (!show) return null;
 
@@ -266,14 +284,10 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   // Montant brut du service = PU brut × passages facturables
   const montantBrut = Math.round(pu * numNouvelles * 100) / 100;
 
-  // Réduction automatique issue du devis
-  let remiseEffective = 0;
-  if (devisReductionPct > 0) {
-    remiseEffective = Math.round((montantBrut * devisReductionPct) / 100 * 100) / 100;
-  } else if (devisReductionDh > 0 && passagesBase > 0) {
-    remiseEffective = Math.round((devisReductionDh / passagesBase * numNouvelles) * 100) / 100;
-  }
-  const reductionLabel = devisReductionLabel || (devisReductionPct > 0 ? `${devisReductionPct}%` : '');
+  // Réduction
+  const activeRemisePct = invApplyReduction ? Math.max(0, Number(invReductionPercent) || 0) : 0;
+  const remiseEffective = activeRemisePct > 0 ? Math.round((montantBrut * activeRemisePct) / 100 * 100) / 100 : 0;
+  const reductionLabel = activeRemisePct > 0 ? `${activeRemisePct}%` : '';
 
   // Total HT
   const totalHT = Math.max(0, Math.round((montantBrut - remiseEffective) * 100) / 100);
@@ -285,7 +299,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const netAPayer = Math.round((totalHT + tvaAmount) * 100) / 100;
 
   // Montant mensuel de base (full month, pour référence)
-  const mensuelBase = devisTotal || (pu * passagesBase) || 0;
+  const mensuelBase = (pu * passagesBase) || devisTotal || 0;
 
   // BDD derived counts
   const dateOverrides = latest?.formulaire_data?.date_overrides || {};
@@ -458,15 +472,15 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             </div>
           </div>
 
-          {/* 4. Tarification & TVA — dérivée du devis */}
+          {/* 4. Tarification, Réduction & TVA — dérivée du devis */}
           <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16 }}>
             <div style={{ fontWeight: 800, fontSize: 14, color: '#037265', marginBottom: 14 }}>
-              Tarification & TVA
+              Tarification, Réduction & TVA
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>
-                  Prix unitaire (DH) — du devis
+                  Prix unitaire brut (DH)
                 </label>
                 <input
                   type="number"
@@ -475,9 +489,67 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   onChange={e => setInvPrixUnitaire(e.target.value)}
                   style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }}
                 />
-                {devisReductionPct > 0 && (
-                  <div style={{ marginTop: 4, fontSize: 11, color: '#037265', fontWeight: 600 }}>
-                    💡 Réduction du devis ({devisReductionPct}%) appliquée automatiquement
+                <div style={{ marginTop: 4, fontSize: 11, color: '#64748b' }}>
+                  Tarif brut HT sans remise
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>
+                  Réduction abonnement {activeTabIndex === 0 ? '(10% auto Mois 1)' : '(Optionnelle)'}
+                </label>
+                <div style={{ display: 'flex', gap: 6, height: 34 }}>
+                  <button
+                    type="button"
+                    onClick={() => setInvApplyReduction(false)}
+                    style={{
+                      flex: 1,
+                      borderRadius: 8,
+                      border: '1px solid',
+                      borderColor: !invApplyReduction ? '#037265' : '#cbd5e1',
+                      background: !invApplyReduction ? '#f0fdfa' : '#f8fafc',
+                      color: !invApplyReduction ? '#037265' : '#64748b',
+                      fontWeight: !invApplyReduction ? 800 : 600,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    Non (0%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInvApplyReduction(true)}
+                    style={{
+                      flex: 1,
+                      borderRadius: 8,
+                      border: '1px solid',
+                      borderColor: invApplyReduction ? '#037265' : '#cbd5e1',
+                      background: invApplyReduction ? '#f0fdfa' : '#f8fafc',
+                      color: invApplyReduction ? '#037265' : '#64748b',
+                      fontWeight: invApplyReduction ? 800 : 600,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    Oui ({invReductionPercent}%)
+                  </button>
+                </div>
+                {invApplyReduction && (
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Taux :</span>
+                    <input
+                      type="number"
+                      value={invReductionPercent}
+                      onChange={e => setInvReductionPercent(e.target.value)}
+                      style={{ width: 55, padding: '2px 6px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, textAlign: 'center' }}
+                    />
+                    <span style={{ fontSize: 11, color: '#64748b' }}>%</span>
                   </div>
                 )}
               </div>
@@ -652,7 +724,7 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   nombre_passages: Number(invNbPassages) || 0,
                   remise: remiseEffective,
                   remise_dh: remiseEffective,
-                  remise_pct: devisReductionPct,
+                  remise_pct: activeRemisePct,
                   reduction_label: reductionLabel,
                   tva_active: invApplyTva,
                   tva: tvaPercentNum,
@@ -669,15 +741,44 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   return cName.toLowerCase() === invCommission.trim().toLowerCase();
                 });
 
+                const tabKey = `mois${monthNum}`;
+                const existingMoisData = latest.formulaire_data?.mois_data || {};
+                const updatedMoisData = {
+                  ...existingMoisData,
+                  [tabKey]: {
+                    ...(existingMoisData[tabKey] || {}),
+                    statut_facturation: 'Facture générée',
+                    taux_reduction: activeRemisePct,
+                    facturation: {
+                      date_debut: invDateStart,
+                      montant_facture: finalMontantFacture,
+                      montant_service: montantBrut,
+                      montant_ht: totalHTNum,
+                      montant_ttc: totalTTCNum,
+                      prix_unitaire: Number(invPrixUnitaire) || 0,
+                      nombre_passages: Number(invNbPassages) || 0,
+                      remise: remiseEffective,
+                      remise_pct: activeRemisePct,
+                      reduction_label: reductionLabel,
+                      tva_active: invApplyTva,
+                      tva: tvaPercentNum,
+                      tva_amount: tvaAmountNum
+                    }
+                  }
+                };
+
                 // Sync ALL changes bidirectionally back to formulaire_data
                 const updatedFormData = {
                   ...(latest.formulaire_data || {}),
+                  mois_data: updatedMoisData,
                   type_prestation: invService,
                   frequence: invFrequence,
-                  date_demarrage: invDateStart,
-                  date_debut: invDateStart,
-                  date: invDateStart,
-                  schedulingDate: invDateStart,
+                  ...(activeTabIndex === 0 ? {
+                    date_demarrage: invDateStart,
+                    date_debut: invDateStart,
+                    date: invDateStart,
+                    schedulingDate: invDateStart,
+                  } : {}),
                   nb_personnes: invNbPersonnes,
                   nb_intervenants: invNbPersonnes,
                   duree: invDuree,
@@ -694,38 +795,41 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   interventions_recuperees: invInterventionsRecup,
 
                   // Standard devis & invoice properties
-                  montant_devis: devisTotal,
-                  montant_service: montantBrut,
-                  montant_facture: finalMontantFacture,
-                  factures_validees: filteredFactures,
-
-                  // Tarification, Remise & TVA
-                  prix_unitaire: invPrixUnitaire,
-                  remise_dh: remiseEffective,
-                  remise: remiseEffective,
-                  remise_pct: devisReductionPct,
-                  reduction_label: reductionLabel,
-                  tva_active: invApplyTva,
-                  apply_tva: invApplyTva,
-                  tva: tvaPercentNum,
-                  tva_amount: tvaAmountNum,
-                  montant_ht: totalHTNum,
-                  montant_ttc: totalTTCNum
+                  ...(activeTabIndex === 0 ? {
+                    montant_devis: devisTotal,
+                    montant_service: montantBrut,
+                    montant_facture: finalMontantFacture,
+                    prix_unitaire: invPrixUnitaire,
+                    remise_dh: remiseEffective,
+                    remise: remiseEffective,
+                    remise_pct: activeRemisePct,
+                    reduction_label: reductionLabel,
+                    tva_active: invApplyTva,
+                    apply_tva: invApplyTva,
+                    tva: tvaPercentNum,
+                    tva_amount: tvaAmountNum,
+                    montant_ht: totalHTNum,
+                    montant_ttc: totalTTCNum
+                  } : {}),
+                  factures_validees: filteredFactures
                 };
 
                 const updatePayload: any = {
-                  date_intervention: invDateStart || latest.date_intervention,
-                  prix: Math.round(devisTotal) || latest.prix,
-                  montant_devis: devisTotal || latest.montant_devis || latest.prix,
-                  montant_facture: finalMontantFacture,
-                  service: invService,
                   planning: {
                     ...(latest.planning || {}),
-                    date_debut: invDateStart || latest.planning?.date_debut,
-                    jours_intervention: parsedDays.length > 0 ? parsedDays : latest.planning?.jours_intervention
+                    ...(parsedDays.length > 0 ? { jours_intervention: parsedDays } : {})
                   },
                   formulaire_data: updatedFormData
                 };
+
+                // Only update root contract properties when modifying Month 1 (initial contract baseline)
+                if (activeTabIndex === 0) {
+                  updatePayload.date_intervention = invDateStart || latest.date_intervention;
+                  updatePayload.prix = Math.round(devisTotal) || latest.prix;
+                  updatePayload.montant_devis = devisTotal || latest.montant_devis || latest.prix;
+                  updatePayload.montant_facture = finalMontantFacture;
+                  updatePayload.service = invService;
+                }
 
                 if (matchingComm?.id) {
                   updatePayload.assigned_to = matchingComm.id;

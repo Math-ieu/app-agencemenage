@@ -52,12 +52,18 @@ export const FacturesReglementsCard: React.FC<FacturesReglementsCardProps> = ({
           ? dDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
           : '—');
 
-        const isItemPaid = isPaid || fv.statut === 'payee' || fv.statut_label === 'Payée';
+        const mIndex = fv.month_index || idx + 1;
+        const monthKey = `mois${mIndex}`;
+        const monthStatutFacturation = formData.mois_data?.[monthKey]?.statut_facturation;
+        const isItemPaid = monthStatutFacturation === 'Payé'
+          || fv.statut === 'payee'
+          || fv.statut_label === 'Payée'
+          || (mIndex === 1 && isPaid);
 
         items.push({
-          id: fv.id || `M${fv.month_index || idx + 1}`,
-          reference: fv.reference || `AM/F${String(latest.id).padStart(3, '0')}-M${fv.month_index || idx + 1}/2026`,
-          periode: fv.periode || `Mois ${fv.month_index || idx + 1}`,
+          id: fv.id || `M${mIndex}`,
+          reference: fv.reference || `AM/F${String(latest.id).padStart(3, '0')}-M${mIndex}/2026`,
+          periode: fv.periode || `Mois ${mIndex}`,
           montant: mVal,
           envoyeeLe: dateStr,
           statut: isItemPaid

@@ -12,7 +12,7 @@ import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
-import { getDynamicMonthPassagesCount, getDemandeStartDate } from '../utils/pricing';
+import { getDynamicMonthPassagesCount, getDemandeStartDate, getDemandeStartTime } from '../utils/pricing';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -1960,7 +1960,24 @@ export default function Dashboard() {
                       </td>
                       <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
                       <td>{abbreviateName(d.assigned_to_operations_name)}</td>
-                      <td>{(() => { const sd = getDemandeStartDate(d); return sd ? new Date(sd).toLocaleDateString('fr-FR') : '—'; })()}</td>
+                      <td>
+                        {(() => {
+                          const sd = getDemandeStartDate(d);
+                          const dateStr = sd ? new Date(sd).toLocaleDateString('fr-FR') : '—';
+                          const timeStr = getDemandeStartTime(d);
+                          if (!sd) return '—';
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', lineHeight: 1.25, whiteSpace: 'nowrap' }}>
+                              <span style={{ fontWeight: 500 }}>{dateStr}</span>
+                              {timeStr && (
+                                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                                  {timeStr}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td>
                         {renderStatusBadge(d.statut, d.cao)}
                       </td>
@@ -2375,7 +2392,13 @@ export default function Dashboard() {
                     <div>
                       <span className="text-muted" style={{ marginRight: '4px' }}>Date :</span>
                       <span style={{ fontWeight: '500' }}>
-                        {(() => { const sd = getDemandeStartDate(d); return sd ? new Date(sd).toLocaleDateString('fr-FR') : '—'; })()}
+                        {(() => {
+                          const sd = getDemandeStartDate(d);
+                          const dateStr = sd ? new Date(sd).toLocaleDateString('fr-FR') : '—';
+                          const timeStr = getDemandeStartTime(d);
+                          if (!sd) return '—';
+                          return timeStr ? `${dateStr} (${timeStr})` : dateStr;
+                        })()}
                       </span>
                     </div>
                     <div>
@@ -4472,43 +4495,50 @@ export default function Dashboard() {
                                 <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>{pName}</p>
                                 <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>Tel : {p.phone || '—'}</p>
                               </div>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    await removeProfilFromDemande(showCAOModal.id, p.id);
-                                    addToast(`Femme de ménage (${pName}) retirée de la demande`, 'success');
-                                    setShowCAOModal(prev => {
-                                      if (!prev) return null;
-                                      return {
-                                        ...prev,
-                                        profils_envoyes: (prev.profils_envoyes || []).filter((item: any) => item.id !== p.id)
-                                      };
-                                    });
-                                    await fetchData();
-                                  } catch (err) {
-                                    console.error("Erreur retrait profil CAO:", err);
-                                    addToast("Erreur lors du retrait du profil", "error");
-                                  }
-                                }}
-                                title="Retirer ce profil de la demande"
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  padding: '5px 10px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  color: '#ef4444',
-                                  background: '#fef2f2',
-                                  border: '1px solid #fca5a5',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.15s ease'
-                                }}
-                              >
-                                <UserMinus size={14} /> Retirer
-                              </button>
+                              {hasPermission(user, 'retirer_profil_demande') && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const perm = checkPermission(user, 'retirer_profil_demande');
+                                    if (!perm.allowed) {
+                                      addToast(perm.message || 'Action non autorisée', 'error');
+                                      return;
+                                    }
+                                    try {
+                                      await removeProfilFromDemande(showCAOModal.id, p.id);
+                                      addToast(`Femme de ménage (${pName}) retirée de la demande`, 'success');
+                                      setShowCAOModal(prev => {
+                                        if (!prev) return null;
+                                        return {
+                                          ...prev,
+                                          profils_envoyes: (prev.profils_envoyes || []).filter((item: any) => item.id !== p.id)
+                                        };
+                                      });
+                                      await fetchData();
+                                    } catch (err) {
+                                      console.error("Erreur retrait profil CAO:", err);
+                                      addToast("Erreur lors du retrait du profil", "error");
+                                    }
+                                  }}
+                                  title="Retirer ce profil de la demande"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    padding: '5px 10px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    color: '#ef4444',
+                                    background: '#fef2f2',
+                                    border: '1px solid #fca5a5',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                >
+                                  <UserMinus size={14} /> Retirer
+                                </button>
+                              )}
                             </div>
                           );
                         })}

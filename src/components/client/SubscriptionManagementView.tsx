@@ -310,43 +310,61 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     }
   }, [latest?.id]);
 
-  const [statutMoisEnCours, setStatutMoisEnCours] = useState<string>(() => {
-    if (latest?.formulaire_data?.statut_mois_en_cours) {
-      return latest.formulaire_data.statut_mois_en_cours;
-    }
-    const dbStatut = (latest?.statut || '').toLowerCase();
-    if (dbStatut === 'resilie') return 'Résilié';
-    return ['termine', 'terminee'].includes(dbStatut) ? 'Terminé' : 'Actif';
-  });
+  const getMonthSpecificData = useCallback((tabKey: string) => {
+    const formData = latest?.formulaire_data || {};
+    const moisDataMap = formData.mois_data || {};
+    const storedMonth = moisDataMap[tabKey];
 
-  const [statutFacturation, setStatutFacturation] = useState<string>(() => {
-    if (latest?.formulaire_data?.statut_facturation) {
-      return latest.formulaire_data.statut_facturation;
+    if (storedMonth) {
+      return {
+        statut_mois_en_cours: storedMonth.statut_mois_en_cours || 'Actif',
+        statut_facturation: storedMonth.statut_facturation || 'Non défini',
+        statut_mois_prochain: storedMonth.statut_mois_prochain || 'Non défini',
+        date_overrides: storedMonth.date_overrides || {},
+        facturation: storedMonth.facturation || {},
+        taux_reduction: storedMonth.taux_reduction
+      };
     }
-    const dbPaiement = (latest?.statut_paiement || '').toLowerCase();
-    if (['integral', 'paye', 'payee'].includes(dbPaiement)) {
-      return 'Payé';
+
+    if (tabKey === 'mois1') {
+      const dbStatut = (latest?.statut || '').toLowerCase();
+      const curStatut = formData.statut_mois_en_cours || (dbStatut === 'resilie' ? 'Résilié' : (['termine', 'terminee'].includes(dbStatut) ? 'Terminé' : 'Actif'));
+      const fact = formData.statut_facturation || (['integral', 'paye', 'payee'].includes((latest?.statut_paiement || '').toLowerCase()) ? 'Payé' : 'Non défini');
+      const rawOverride = formData.statut_mois_prochain;
+      const calcProchain = getStatutMoisProchainCalculated(new Date().getDate(), fact, rawOverride);
+      return {
+        statut_mois_en_cours: curStatut,
+        statut_facturation: fact,
+        statut_mois_prochain: calcProchain,
+        date_overrides: formData.date_overrides || {},
+        facturation: formData.facturation || {},
+        taux_reduction: formData.taux_reduction ?? 10
+      };
     }
-    return 'Non défini';
-  });
 
-  const [statutMoisProchain, setStatutMoisProchain] = useState<string>(() => {
-    const rawOverride = latest?.formulaire_data?.statut_mois_prochain;
-    return getStatutMoisProchainCalculated(new Date().getDate(), statutFacturation, rawOverride);
-  });
+    return {
+      statut_mois_en_cours: 'Actif',
+      statut_facturation: 'Non défini',
+      statut_mois_prochain: 'Non défini',
+      date_overrides: {},
+      facturation: {},
+      taux_reduction: 0
+    };
+  }, [latest]);
 
-  // Keep statutMoisEnCours, statutFacturation and statutMoisProchain in sync with latest props
+  const initialMonthData = getMonthSpecificData(activeMonthTab);
+  const [statutMoisEnCours, setStatutMoisEnCours] = useState<string>(initialMonthData.statut_mois_en_cours);
+  const [statutFacturation, setStatutFacturation] = useState<string>(initialMonthData.statut_facturation);
+  const [statutMoisProchain, setStatutMoisProchain] = useState<string>(initialMonthData.statut_mois_prochain);
+
+  // Keep statutMoisEnCours, statutFacturation and statutMoisProchain in sync with active tab and latest props
   React.useEffect(() => {
     if (!latest) return;
-    const curStatut = latest?.formulaire_data?.statut_mois_en_cours || ((latest?.statut || '').toLowerCase() === 'resilie' ? 'Résilié' : (['termine', 'terminee'].includes((latest?.statut || '').toLowerCase()) ? 'Terminé' : 'Actif'));
-    setStatutMoisEnCours(curStatut);
-
-    const fact = latest?.formulaire_data?.statut_facturation || (['integral', 'paye', 'payee'].includes((latest?.statut_paiement || '').toLowerCase()) ? 'Payé' : 'Non défini');
-    const rawOverride = latest?.formulaire_data?.statut_mois_prochain;
-    const calcProchain = getStatutMoisProchainCalculated(new Date().getDate(), fact, rawOverride);
-    setStatutFacturation(fact);
-    setStatutMoisProchain(calcProchain);
-  }, [latest?.id, latest?.statut, latest?.formulaire_data?.statut_mois_en_cours, latest?.formulaire_data?.statut_facturation, latest?.formulaire_data?.statut_mois_prochain, latest?.statut_paiement]);
+    const mData = getMonthSpecificData(activeMonthTab);
+    setStatutMoisEnCours(mData.statut_mois_en_cours);
+    setStatutFacturation(mData.statut_facturation);
+    setStatutMoisProchain(mData.statut_mois_prochain);
+  }, [activeMonthTab, latest?.id, latest?.statut, latest?.statut_paiement, latest?.formulaire_data?.mois_data, latest?.formulaire_data?.statut_facturation, latest?.formulaire_data?.statut_mois_prochain, latest?.formulaire_data?.statut_mois_en_cours, getMonthSpecificData]);
 
   const handleMoisProchainChange = async (newVal: string) => {
     const perm = checkPermission(user, 'pause_standby_abonnement');
@@ -354,29 +372,47 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
       addToast(perm.message || "Action non autorisée par votre rôle.", "error");
       return;
     }
-    setStatutMoisProchain(newVal);
 
-    let nextFacturation = statutFacturation;
     if (newVal === 'Actif' && statutFacturation !== 'Payé') {
-      nextFacturation = 'Payé';
-      setStatutFacturation('Payé');
-    } else if (newVal !== 'Actif' && statutFacturation === 'Payé') {
-      nextFacturation = 'Non défini';
-      setStatutFacturation('Non défini');
+      addToast(
+        "Le mois prochain ne peut pas être marqué comme « Actif » tant que le statut de facturation n'est pas « Payé ».",
+        "error"
+      );
+      return;
     }
+
+    setStatutMoisProchain(newVal);
 
     if (!latest?.id) return;
     try {
-      // Send only the changed keys — the backend merge handles the rest
+      const existingMoisData = latest.formulaire_data?.mois_data || {};
+      const updatedCurrentMonth = {
+        ...(existingMoisData[activeMonthTab] || getMonthSpecificData(activeMonthTab)),
+        statut_mois_prochain: newVal
+      };
+
+      const updatedMoisData = {
+        ...existingMoisData,
+        [activeMonthTab]: updatedCurrentMonth
+      };
+
+      const isLatestMonth = activeTabIndex === monthTabs.length - 1;
+
       await updateDemande(latest.id, {
-        statut_paiement: nextFacturation === 'Payé' ? 'integral' : 'non_paye',
         formulaire_data: {
-          statut_mois_prochain: newVal,
-          statut_facturation: nextFacturation
+          ...(latest.formulaire_data || {}),
+          mois_data: updatedMoisData,
+          ...(isLatestMonth ? {
+            statut_mois_prochain: newVal
+          } : {})
         }
       } as any);
-      await toggleAbonnementSuspend(latest.id, { statut_mois_prochain: newVal });
-      addToast(`Statut mois prochain mis à jour : ${newVal}`, "success");
+
+      if (isLatestMonth) {
+        await toggleAbonnementSuspend(latest.id, { statut_mois_prochain: newVal }).catch(() => {});
+      }
+
+      addToast(`Statut mois prochain mis à jour pour ${monthTabs[activeTabIndex]?.label || activeMonthTab} : ${newVal}`, "success");
       if (fetchData) await fetchData();
     } catch (err) {
       console.error("Erreur lors de la mise à jour du statut mois prochain:", err);
@@ -401,13 +437,29 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
     if (!latest?.id) return;
     try {
-      // Send only the changed keys — the backend merge handles the rest
-      const partialFormData: any = {
+      const existingMoisData = latest.formulaire_data?.mois_data || {};
+      const updatedCurrentMonth = {
+        ...(existingMoisData[activeMonthTab] || getMonthSpecificData(activeMonthTab)),
         statut_facturation: newVal,
         statut_mois_prochain: updatedStatutProchain
       };
 
-      if (latest.formulaire_data?.facturation) {
+      const updatedMoisData = {
+        ...existingMoisData,
+        [activeMonthTab]: updatedCurrentMonth
+      };
+
+      const isLatestMonth = activeTabIndex === monthTabs.length - 1;
+
+      const partialFormData: any = {
+        mois_data: updatedMoisData,
+        ...(isLatestMonth ? {
+          statut_facturation: newVal,
+          statut_mois_prochain: updatedStatutProchain
+        } : {})
+      };
+
+      if (isLatestMonth && latest.formulaire_data?.facturation) {
         partialFormData.facturation = {
           ...latest.formulaire_data.facturation,
           statut_facturation: newVal,
@@ -416,18 +468,26 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
       }
 
       if (newVal === 'Payé') {
-        await confirmAbonnementPaiement(latest.id);
+        if (isLatestMonth) {
+          await confirmAbonnementPaiement(latest.id).catch(() => {});
+        }
         await updateDemande(latest.id, {
-          statut_paiement: 'integral',
-          formulaire_data: partialFormData
+          ...(isLatestMonth ? { statut_paiement: 'integral' } : {}),
+          formulaire_data: {
+            ...(latest.formulaire_data || {}),
+            ...partialFormData
+          }
         } as any);
-        addToast("Paiement confirmé. Statut de facturation mis à jour sur Payé.", "success");
+        addToast(`Paiement confirmé pour ${monthTabs[activeTabIndex]?.label || activeMonthTab}. Statut mis à jour sur Payé.`, "success");
       } else {
         await updateDemande(latest.id, {
-          statut_paiement: 'non_paye',
-          formulaire_data: partialFormData
+          ...(isLatestMonth ? { statut_paiement: 'non_paye' } : {}),
+          formulaire_data: {
+            ...(latest.formulaire_data || {}),
+            ...partialFormData
+          }
         } as any);
-        addToast(`Statut de facturation mis à jour : ${newVal}`, "info");
+        addToast(`Statut de facturation mis à jour pour ${monthTabs[activeTabIndex]?.label || activeMonthTab} : ${newVal}`, "info");
       }
       if (fetchData) await fetchData();
     } catch (err) {
@@ -705,8 +765,29 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     return { fifthWeekDay: null, fifthWeekDateStr: null, fifthWeekIso: null };
   }, [year, month, daysInMonth, selectedDays]);
 
+  // ── Validation règle métier : activation du mois prochain ──
+  const lastActiveTabKey = monthTabs[monthTabs.length - 1]?.id || activeMonthTab;
+  const lastActiveMonthData = getMonthSpecificData(lastActiveTabKey);
+  const lastMonthFacturationStatus = lastActiveMonthData?.statut_facturation || (activeTabIndex === monthTabs.length - 1 ? statutFacturation : 'Non défini');
+  const isLastMonthPaid = (lastMonthFacturationStatus || '').toLowerCase() === 'payé' || (lastMonthFacturationStatus || '').toLowerCase() === 'paye';
+
+  const canActivateNextMonth = isLastMonthPaid;
+  const cannotActivateReason = !isLastMonthPaid
+    ? `Le statut de facturation de ${monthTabs[monthTabs.length - 1]?.label || 'ce mois'} doit être « Payé » pour pouvoir activer le mois prochain (actuellement : « ${lastMonthFacturationStatus || 'Non défini'} »).`
+    : undefined;
+
   const handleAddNextMonthTab = async () => {
     if (isActivatingMonth) return;
+
+    // Règle stricte : la facturation du dernier mois actif doit impérativement être "Payé"
+    if (!isLastMonthPaid) {
+      addToast(
+        `Impossible d'activer le mois prochain : le statut de facturation de ${monthTabs[monthTabs.length - 1]?.label || 'ce mois'} doit impérativement être « Payé » (actuellement : « ${lastMonthFacturationStatus || 'Non défini'} »).`,
+        "error"
+      );
+      return;
+    }
+
     const perm = checkPermission(user, 'creer_abonnement');
     if (!perm.allowed) {
       addToast(perm.message || "Action non autorisée par votre rôle.", "error");
@@ -898,6 +979,8 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
         activeMonthTab={activeMonthTab}
         onSelectTab={setActiveMonthTab}
         onAddNextMonthTab={handleAddNextMonthTab}
+        canActivateNextMonth={canActivateNextMonth}
+        disabledReason={cannotActivateReason}
       />
 
       {/* 2. Status & Action Bar */}

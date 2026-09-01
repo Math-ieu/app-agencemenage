@@ -89,6 +89,53 @@ export const getDemandeStartDate = (demande?: any): string => {
     return str.slice(0, 10);
 };
 
+/**
+ * Extrait et formate l'heure d'intervention (ex: "14h00", "09h30").
+ */
+export const formatInterventionTime = (timeStr?: string | null): string | null => {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    const trimmed = timeStr.trim();
+    if (!trimmed || trimmed === '—' || trimmed === '-' || trimmed === 'null' || trimmed === 'undefined') return null;
+
+    const match = trimmed.match(/^(\d{1,2})(?:[:hH](\d{2}))?(?::\d{2})?/);
+    if (match) {
+        const hours = match[1].padStart(2, '0');
+        const minutes = match[2] || '00';
+        return `${hours}h${minutes}`;
+    }
+
+    return trimmed;
+};
+
+export const getDemandeStartTime = (demande?: any): string | null => {
+    if (!demande) return null;
+    const fd = (demande.formulaire_data as any) || {};
+    const planning = (demande as any).planning || {};
+
+    const rawTime =
+        demande.heure_intervention ||
+        fd.heure ||
+        fd.heure_intervention ||
+        fd.schedulingTime ||
+        planning.heure_debut ||
+        null;
+
+    if (rawTime) {
+        const formatted = formatInterventionTime(String(rawTime));
+        if (formatted) return formatted;
+    }
+
+    const rawDate = demande.date_intervention || fd.date;
+    if (rawDate && typeof rawDate === 'string' && rawDate.includes('T')) {
+        const timePart = rawDate.split('T')[1];
+        if (timePart && !timePart.startsWith('00:00:00') && !timePart.startsWith('00:00')) {
+            return formatInterventionTime(timePart.slice(0, 5));
+        }
+    }
+
+    return null;
+};
+
 export interface PricingInput {
     service: string;
     duree: number;

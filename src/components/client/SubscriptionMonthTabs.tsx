@@ -6,13 +6,17 @@ export interface SubscriptionMonthTabsProps {
   activeMonthTab: string;
   onSelectTab: (tabId: string) => void;
   onAddNextMonthTab: () => void;
+  canActivateNextMonth?: boolean;
+  disabledReason?: string;
 }
 
 export const SubscriptionMonthTabs: React.FC<SubscriptionMonthTabsProps> = ({
   monthTabs,
   activeMonthTab,
   onSelectTab,
-  onAddNextMonthTab
+  onAddNextMonthTab,
+  canActivateNextMonth = true,
+  disabledReason
 }) => {
   return (
     <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
@@ -44,9 +48,24 @@ export const SubscriptionMonthTabs: React.FC<SubscriptionMonthTabsProps> = ({
         <button
           type="button"
           onClick={onAddNextMonthTab}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'white', border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 700, color: '#037265', cursor: 'pointer' }}
+          title={!canActivateNextMonth ? (disabledReason || "Le statut de facturation doit être « Payé » pour activer le mois prochain.") : "Activer le mois prochain"}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: canActivateNextMonth ? 'white' : '#f1f5f9',
+            border: canActivateNextMonth ? '1px solid #cbd5e1' : '1px solid #e2e8f0',
+            borderRadius: 8,
+            padding: '6px 14px',
+            fontSize: 13,
+            fontWeight: 700,
+            color: canActivateNextMonth ? '#037265' : '#94a3b8',
+            cursor: canActivateNextMonth ? 'pointer' : 'not-allowed',
+            opacity: canActivateNextMonth ? 1 : 0.75,
+            transition: 'all 0.15s ease'
+          }}
         >
-          <RefreshCw size={14} /> Activer le mois prochain
+          <RefreshCw size={14} color={canActivateNextMonth ? '#037265' : '#94a3b8'} /> Activer le mois prochain
         </button>
       </div>
     </div>

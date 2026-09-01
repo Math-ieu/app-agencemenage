@@ -184,6 +184,11 @@ export default function Profils() {
   }, [allDemandes, agents]);
 
   const handleRetirerProfil = async (demandeId: number, agentId: number) => {
+    const perm = checkPermission(user, 'retirer_profil_demande');
+    if (!perm.allowed) {
+      addToast(perm.message || 'Action non autorisée', 'error');
+      return;
+    }
     setRemovingId(demandeId);
     try {
       await removeProfilFromDemande(demandeId, agentId);
@@ -823,28 +828,30 @@ export default function Profils() {
                           <User size={16} />
                         </button>
 
-                        <button
-                          onClick={() => {
-                            setSelectedAgentForPostuler(agent);
-                            setShowPostulerModal(true);
-                          }}
-                          title="Affectation"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '8px',
-                            backgroundColor: '#0d9488',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <UserPlus size={16} />
-                        </button>
+                        {hasPermission(user, 'postuler_demande') && (
+                          <button
+                            onClick={() => {
+                              setSelectedAgentForPostuler(agent);
+                              setShowPostulerModal(true);
+                            }}
+                            title="Affectation"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '8px',
+                              backgroundColor: '#0d9488',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <UserPlus size={16} />
+                          </button>
+                        )}
 
-                        {(() => {
+                        {hasPermission(user, 'retirer_profil_demande') && (() => {
                           const assignedList = assignedDemandesForAgent[agent.id] || [];
                           const isAssigned = assignedList.length > 0;
                           return (

@@ -927,25 +927,32 @@ export default function ClientDetails() {
     try {
       addToast("Chargement de la facture...", "info");
 
-      // 1. Chercher si un document "facture" spécifique existe déjà dans les documents de la demande
-      let invoiceDoc = targetRef
-        ? (latest?.documents || []).find(
-            (doc: any) =>
-              (doc.type_document === 'facture' || doc.nom?.toLowerCase().includes('facture')) &&
-              (doc.nom?.toLowerCase().includes(targetRef.toLowerCase()) || doc.nom?.replace(/\.pdf$/i, '').toLowerCase() === targetRef.toLowerCase())
-          )
+      const monthMatch = targetRef?.match(/[-_]M(\d+)/i);
+      const targetMonthIndex = monthMatch ? parseInt(monthMatch[1], 10) : undefined;
+
+      const allDocs = (latest?.documents || []).filter(
+        (doc: any) => doc.type_document === 'facture' || doc.nom?.toLowerCase().includes('facture')
+      );
+
+      let matchingDocs = targetRef
+        ? allDocs.filter((doc: any) => {
+            const docName = (doc.nom || '').toLowerCase();
+            const tRef = targetRef.toLowerCase();
+            if (docName.includes(tRef) || docName.replace(/\.pdf$/i, '') === tRef) return true;
+            if (targetMonthIndex && docName.includes(`_m${targetMonthIndex}`)) return true;
+            return false;
+          })
+        : allDocs;
+
+      // 1. Prendre le document le plus récent correspondant
+      let invoiceDoc = matchingDocs.length > 0
+        ? matchingDocs.reduce((prev: any, curr: any) => (curr.id > prev.id ? curr : prev), matchingDocs[0])
         : null;
 
-      if (!invoiceDoc) {
-        invoiceDoc = (latest?.documents || []).find(
-          (doc: any) => doc.type_document === 'facture' || doc.nom?.toLowerCase().includes('facture')
-        );
-      }
-
-      // 2. Si aucun document facture n'existe, demander au backend de générer la facture officielle
+      // 2. Si aucun document facture n'existe pour ce mois, demander au backend de le générer
       if (!invoiceDoc && latest?.id) {
         try {
-          const genRes = await generateDocument(latest.id, 'facture');
+          const genRes = await generateDocument(latest.id, 'facture', targetMonthIndex);
           if (genRes.data) {
             invoiceDoc = genRes.data;
           }
@@ -973,7 +980,7 @@ export default function ClientDetails() {
         } catch (fetchErr) {
           console.error("Échec de récupération du blob backend, régénération en cours:", fetchErr);
           try {
-            const genRes = await generateDocument(latest?.id || demandeId, 'facture');
+            const genRes = await generateDocument(latest?.id || demandeId, 'facture', targetMonthIndex);
             if (genRes.data) {
               const retryUrl = genRes.data.download_url || `/api/demandes/${demandeId}/download/${genRes.data.id}/`;
               const { blobUrl } = await fetchSecureDocBlob(retryUrl);

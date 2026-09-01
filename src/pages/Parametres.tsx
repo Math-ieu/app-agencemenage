@@ -293,6 +293,7 @@ const PERMISSIONS = [
   { key: "creer_agents", label: "Agents : Créer & éditer" },
   { key: "documents_agents", label: "Agents : Télécharger les pièces jointes (CIN, etc.)" },
   { key: "postuler_demande", label: "Agents : Postuler un profil à une demande" },
+  { key: "retirer_profil_demande", label: "Agents : Retirer un profil d'une intervention" },
   { key: "assigner_charge_profil", label: "Agents : Assigner un chargé d'opérations" },
   { key: "rediger_blog", label: "SEO & Blog : Rédiger & modifier les articles" },
   { key: "parametres_globaux", label: "Configuration : Gérer la sécurité & les accès" },
@@ -309,11 +310,11 @@ const ROLES = [
 
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   "Admin": PERMISSIONS.map(p => p.key),
-  "Moderateur": ["consulter_clients", "creer_clients", "consulter_demandes", "consulter_agents", "rediger_blog", "postuler_demande", "assigner_charge_profil"],
-  "Responsable commercial": ["consulter_clients", "creer_clients", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande", "consulter_agents", "postuler_demande"],
-  "commercial": ["consulter_clients", "creer_clients", "consulter_demandes", "postuler_demande"],
-  "Responsable des Opérations": ["consulter_clients", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande", "voir_la_caisse", "consulter_agents", "creer_agents", "documents_agents", "postuler_demande", "assigner_charge_profil"],
-  "Chargée des Opérations": ["consulter_clients", "consulter_demandes", "consulter_agents", "postuler_demande"],
+  "Moderateur": ["consulter_clients", "creer_clients", "consulter_demandes", "consulter_agents", "rediger_blog", "postuler_demande", "retirer_profil_demande", "assigner_charge_profil"],
+  "Responsable commercial": ["consulter_clients", "creer_clients", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande", "consulter_agents", "postuler_demande", "retirer_profil_demande"],
+  "commercial": ["consulter_clients", "creer_clients", "consulter_demandes", "postuler_demande", "retirer_profil_demande"],
+  "Responsable des Opérations": ["consulter_clients", "consulter_demandes", "traiter_demandes_affectees", "creer_valider_demande", "voir_la_caisse", "consulter_agents", "creer_agents", "documents_agents", "postuler_demande", "retirer_profil_demande", "assigner_charge_profil"],
+  "Chargée des Opérations": ["consulter_clients", "consulter_demandes", "consulter_agents", "postuler_demande", "retirer_profil_demande"],
 };
 
 const INITIAL_USERS: User[] = [
