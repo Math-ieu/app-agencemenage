@@ -5403,6 +5403,41 @@ input:checked+.slider:before {
   min-width: 900px;
 }
 
+.profils-table-wrap .data-table,
+.profils-table {
+  min-width: 1350px;
+}
+
+/* Hide bottom scrollbar on profils table wrapper */
+.profils-table-wrap {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.profils-table-wrap::-webkit-scrollbar {
+  display: none !important;
+  height: 0px !important;
+}
+
+/* Profils Bottom Sticky Scrollbar Styling */
+.profils-bottom-scrollbar-track::-webkit-scrollbar,
+.profils-top-scrollbar-track::-webkit-scrollbar {
+  height: 8px;
+}
+.profils-bottom-scrollbar-track::-webkit-scrollbar-track,
+.profils-top-scrollbar-track::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+.profils-bottom-scrollbar-track::-webkit-scrollbar-thumb,
+.profils-top-scrollbar-track::-webkit-scrollbar-thumb {
+  background: #0d9488;
+  border-radius: 8px;
+}
+.profils-bottom-scrollbar-track::-webkit-scrollbar-thumb:hover,
+.profils-top-scrollbar-track::-webkit-scrollbar-thumb:hover {
+  background: #0f766e;
+}
+
 /* Responsive Table Scrollbar Styling (Teal theme) */
 .table-wrapper::-webkit-scrollbar {
   height: 6px;

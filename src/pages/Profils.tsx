@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAgents, deleteAgent, getDemandes, updateAgent, sendProfilToDemande, removeProfilFromDemande } from '../api/client';
-import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2, UserPlus, UserMinus, Send, Ban, Pause, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Search, Plus, RotateCw, Calendar, User, XCircle, Trash2, UserPlus, UserMinus, Send, Ban, Pause, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Agent } from '../types';
 import { encodeId } from '../utils/obfuscation';
 import AddProfileModal from './ProfilEditModal';
@@ -105,10 +105,15 @@ export default function Profils() {
   const [dateFin, setDateFin] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Pagination states
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(3);
-  const [totalCount, setTotalCount] = useState(0);
+  // Bottom sticky scrollbar refs & state
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
+  const tableWrapRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const isSyncingBottom = useRef(false);
+  const isSyncingTable = useRef(false);
+  const [tableScrollWidth, setTableScrollWidth] = useState(0);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   // Nouvelles variables d'état pour les filtres
   const [filterStatut, setFilterStatut] = useState('');
@@ -354,18 +359,57 @@ export default function Profils() {
     setFilterTypeProfil('');
     setFilterSegment('');
     setFilterJourDispo('');
-    setPage(1);
   };
 
-  const isFirstMount = useRef(true);
+  const updateScrollState = () => {
+    if (tableWrapRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = tableWrapRef.current;
+      setCanScrollLeft(scrollLeft > 4);
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
+    }
+  };
 
-  const fetchData = async (overridePage?: number) => {
+  const handleBottomScroll = () => {
+    if (isSyncingBottom.current) {
+      isSyncingBottom.current = false;
+      return;
+    }
+    if (tableWrapRef.current && bottomScrollRef.current) {
+      isSyncingTable.current = true;
+      tableWrapRef.current.scrollLeft = bottomScrollRef.current.scrollLeft;
+      updateScrollState();
+    }
+  };
+
+  const handleTableScroll = () => {
+    if (isSyncingTable.current) {
+      isSyncingTable.current = false;
+      return;
+    }
+    if (bottomScrollRef.current && tableWrapRef.current) {
+      isSyncingBottom.current = true;
+      bottomScrollRef.current.scrollLeft = tableWrapRef.current.scrollLeft;
+      updateScrollState();
+    }
+  };
+
+  const scrollLeftAction = () => {
+    if (tableWrapRef.current) {
+      tableWrapRef.current.scrollBy({ left: -250, behavior: 'smooth' });
+    }
+  };
+
+  const scrollRightAction = () => {
+    if (tableWrapRef.current) {
+      tableWrapRef.current.scrollBy({ left: 250, behavior: 'smooth' });
+    }
+  };
+
+  const fetchData = async () => {
     setLoading(true);
-    const targetPage = overridePage !== undefined ? overridePage : page;
     try {
       const params: Record<string, string | number> = {
-        page: targetPage,
-        page_size: pageSize,
+        no_page: 'true',
       };
       if (search) params.search = search;
       if (dateDebut) params.date_debut = dateDebut;
@@ -379,11 +423,9 @@ export default function Profils() {
 
       const agentsRes = await getAgents(params);
       const data = agentsRes.data;
-      const agentsList = data?.results || (Array.isArray(data) ? data : []);
-      const count = typeof data?.count === 'number' ? data.count : agentsList.length;
+      const agentsList = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
 
       setAgents(agentsList);
-      setTotalCount(count);
     } catch (err) {
       console.error('Error fetching agents:', err);
     } finally {
@@ -391,19 +433,39 @@ export default function Profils() {
     }
   };
 
-  // Reset page to 1 when filters or pageSize change
-  useEffect(() => {
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
-      return;
-    }
-    setPage(1);
-  }, [search, dateDebut, dateFin, filterStatut, filterDispoType, filterFume, filterTypeProfil, filterSegment, filterJourDispo, pageSize]);
-
-  // Fetch when page, pageSize or any filter changes
+  // Fetch when any filter changes
   useEffect(() => { 
     fetchData(); 
-  }, [page, pageSize, search, dateDebut, dateFin, filterStatut, filterDispoType, filterFume, filterTypeProfil, filterSegment, filterJourDispo]);
+  }, [search, dateDebut, dateFin, filterStatut, filterDispoType, filterFume, filterTypeProfil, filterSegment, filterJourDispo]);
+
+  // Synchronize top scrollbar width and scroll state
+  useEffect(() => {
+    const updateMetrics = () => {
+      if (tableWrapRef.current) {
+        setTableScrollWidth(tableWrapRef.current.scrollWidth);
+        updateScrollState();
+      }
+    };
+
+    updateMetrics();
+
+    let ro: ResizeObserver | null = null;
+    if (tableWrapRef.current && typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        updateMetrics();
+      });
+      ro.observe(tableWrapRef.current);
+      if (tableRef.current) {
+        ro.observe(tableRef.current);
+      }
+    }
+
+    window.addEventListener('resize', updateMetrics);
+    return () => {
+      window.removeEventListener('resize', updateMetrics);
+      if (ro) ro.disconnect();
+    };
+  }, [agents, loading]);
 
   const handleDeleteAgent = async (agent: Agent) => {
     const perm = checkPermission(user, 'delete_profile');
@@ -441,28 +503,26 @@ export default function Profils() {
     boxSizing: 'border-box',
   };
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const startItem = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
-  const endItem = Math.min(page * pageSize, totalCount);
-
-  const getPageNumbers = () => {
-    if (totalPages <= 7) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    if (page <= 4) {
-      return [1, 2, 3, 4, 5, '...', totalPages];
-    }
-    if (page >= totalPages - 3) {
-      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-    }
-    return [1, '...', page - 1, page, page + 1, '...', totalPages];
-  };
-
   return (
     <div className="page" style={{ backgroundColor: 'white' }}>
       {/* Header */}
       <div className="page-header flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Liste des femmes de ménage</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-slate-800">Liste des femmes de ménage</h1>
+          {!loading && (
+            <span style={{
+              fontSize: '13px',
+              fontWeight: 600,
+              backgroundColor: '#f1f5f9',
+              color: '#475569',
+              padding: '3px 10px',
+              borderRadius: '20px',
+              border: '1px solid #e2e8f0',
+            }}>
+              {agents.length} profil{agents.length > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
         <div className="flex gap-3">
           <button className="btn btn-secondary" onClick={() => fetchData()}>
             <RotateCw size={18} />
@@ -639,8 +699,13 @@ export default function Profils() {
         <div className="loading-state"><div className="spinner" /></div>
       ) : (
         <>
-          <div className="table-wrapper profils-table-wrap" style={{ minHeight: '280px', marginBottom: '8px' }}>
-            <table className="data-table profils-table">
+          <div
+            ref={tableWrapRef}
+            onScroll={handleTableScroll}
+            className="table-wrapper profils-table-wrap"
+            style={{ minHeight: '280px', marginBottom: '8px' }}
+          >
+            <table ref={tableRef} className="data-table profils-table">
               <thead>
                 <tr>
                   <th>Photo</th>
@@ -939,197 +1004,90 @@ export default function Profils() {
             </table>
           </div>
 
-          {/* ── Pagination Toolbar ── */}
+          {/* ── Bottom Sticky Horizontal Scrollbar ── */}
           <div
-            className="profils-pagination-bar"
+            className="profils-bottom-scrollbar-bar"
             style={{
+              position: 'sticky',
+              bottom: '12px',
+              zIndex: 25,
+              backgroundColor: '#ffffff',
+              padding: '8px 14px',
+              marginTop: '8px',
+              borderRadius: '10px',
+              border: '1px solid #cbd5e1',
+              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '14px',
-              padding: '12px 18px',
-              marginTop: '4px',
-              backgroundColor: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '10px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              gap: '10px',
             }}
           >
-            {/* Info and PageSize */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '13px', color: '#64748b' }}>
-                Affichage de <strong style={{ color: '#0f172a', fontWeight: 700 }}>{startItem}</strong> à <strong style={{ color: '#0f172a', fontWeight: 700 }}>{endItem}</strong> sur <strong style={{ color: '#0d9488', fontWeight: 700 }}>{totalCount}</strong> profils
-              </span>
+            {/* Left Scroll Button */}
+            <button
+              type="button"
+              onClick={scrollLeftAction}
+              disabled={!canScrollLeft}
+              title="Défiler vers la gauche"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '28px',
+                height: '28px',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: canScrollLeft ? '#ffffff' : '#f8fafc',
+                color: canScrollLeft ? '#0d9488' : '#cbd5e1',
+                cursor: canScrollLeft ? 'pointer' : 'default',
+                transition: 'all 0.15s ease',
+                flexShrink: 0,
+                padding: 0,
+              }}
+            >
+              <ChevronLeft size={18} />
+            </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <label htmlFor="pageSizeSelect" style={{ fontSize: '13px', color: '#64748b' }}>
-                  Afficher :
-                </label>
-                <select
-                  id="pageSizeSelect"
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setPage(1);
-                  }}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '6px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: '#334155',
-                    backgroundColor: '#f8fafc',
-                    cursor: 'pointer',
-                    outline: 'none',
-                  }}
-                >
-                  <option value={3}>3 par page</option>
-                  <option value={5}>5 par page</option>
-                  <option value={10}>10 par page</option>
-                  <option value={15}>15 par page</option>
-                  <option value={20}>20 par page</option>
-                  <option value={50}>50 par page</option>
-                  <option value={100}>100 par page</option>
-                </select>
-              </div>
+            {/* Bottom Scrollbar Track */}
+            <div
+              ref={bottomScrollRef}
+              onScroll={handleBottomScroll}
+              className="profils-bottom-scrollbar-track"
+              style={{
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                flex: 1,
+                height: '14px',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#0d9488 #f1f5f9',
+              }}
+            >
+              <div style={{ width: `${tableScrollWidth}px`, height: '1px' }} />
             </div>
 
-            {/* Navigation */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <button
-                onClick={() => setPage(1)}
-                disabled={page <= 1}
-                title="Première page"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '6px',
-                  border: '1px solid #e2e8f0',
-                  backgroundColor: page <= 1 ? '#f8fafc' : '#ffffff',
-                  color: page <= 1 ? '#cbd5e1' : '#475569',
-                  cursor: page <= 1 ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <ChevronsLeft size={16} />
-              </button>
-
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                title="Page précédente"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '6px',
-                  border: '1px solid #e2e8f0',
-                  backgroundColor: page <= 1 ? '#f8fafc' : '#ffffff',
-                  color: page <= 1 ? '#cbd5e1' : '#475569',
-                  cursor: page <= 1 ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <ChevronLeft size={16} />
-              </button>
-
-              {getPageNumbers().map((num, idx) => {
-                if (num === '...') {
-                  return (
-                    <span
-                      key={`ellipsis-${idx}`}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '32px',
-                        height: '32px',
-                        fontSize: '13px',
-                        color: '#94a3b8',
-                      }}
-                    >
-                      …
-                    </span>
-                  );
-                }
-                const isSelected = num === page;
-                return (
-                  <button
-                    key={`page-${num}`}
-                    onClick={() => setPage(Number(num))}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: '32px',
-                      height: '32px',
-                      padding: '0 6px',
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      fontWeight: isSelected ? 700 : 500,
-                      border: isSelected ? '1px solid #0d9488' : '1px solid #e2e8f0',
-                      backgroundColor: isSelected ? '#0d9488' : '#ffffff',
-                      color: isSelected ? '#ffffff' : '#475569',
-                      cursor: 'pointer',
-                      boxShadow: isSelected ? '0 1px 2px rgba(13, 148, 136, 0.3)' : 'none',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    {num}
-                  </button>
-                );
-              })}
-
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                title="Page suivante"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '6px',
-                  border: '1px solid #e2e8f0',
-                  backgroundColor: page >= totalPages ? '#f8fafc' : '#ffffff',
-                  color: page >= totalPages ? '#cbd5e1' : '#475569',
-                  cursor: page >= totalPages ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <ChevronRight size={16} />
-              </button>
-
-              <button
-                onClick={() => setPage(totalPages)}
-                disabled={page >= totalPages}
-                title="Dernière page"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '6px',
-                  border: '1px solid #e2e8f0',
-                  backgroundColor: page >= totalPages ? '#f8fafc' : '#ffffff',
-                  color: page >= totalPages ? '#cbd5e1' : '#475569',
-                  cursor: page >= totalPages ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <ChevronsRight size={16} />
-              </button>
-            </div>
+            {/* Right Scroll Button */}
+            <button
+              type="button"
+              onClick={scrollRightAction}
+              disabled={!canScrollRight}
+              title="Défiler vers la droite"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '28px',
+                height: '28px',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: canScrollRight ? '#ffffff' : '#f8fafc',
+                color: canScrollRight ? '#0d9488' : '#cbd5e1',
+                cursor: canScrollRight ? 'pointer' : 'default',
+                transition: 'all 0.15s ease',
+                flexShrink: 0,
+                padding: 0,
+              }}
+            >
+              <ChevronRight size={18} />
+            </button>
           </div>
         </>
       )}
