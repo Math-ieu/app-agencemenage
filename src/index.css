@@ -4249,6 +4249,184 @@ input:checked+.slider:before {
   justify-content: flex-end;
 }
 
+/* ─── Clients Responsive Mobile View ─────────────────────────────────────────── */
+.client-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+}
+
+@media (max-width: 768px) {
+  .client-filter-bar {
+    gap: 10px;
+  }
+  .client-filter-bar > * {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 140px;
+  }
+  .client-filter-bar .search-wrap-full {
+    flex: 1 1 100% !important;
+    width: 100%;
+  }
+}
+
+.clients-desktop-table {
+  display: block;
+}
+
+.clients-mobile-cards {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .clients-desktop-table {
+    display: none;
+  }
+  .clients-mobile-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 12px;
+  }
+}
+
+.client-mobile-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.client-mobile-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06);
+}
+
+.client-mobile-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.client-mobile-card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.client-mobile-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  text-transform: capitalize;
+}
+
+.client-mobile-card-location {
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.client-mobile-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.client-mobile-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* ─── Qualité & Feedback Responsive Styles ─────────────────────────────────── */
+.qualite-page {
+  padding: 28px 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.qualite-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.qualite-kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.qualite-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.qualite-desktop-table {
+  display: block;
+}
+
+.qualite-mobile-cards {
+  display: none;
+}
+
+.qualite-mobile-card {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .qualite-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .qualite-page {
+    padding: 16px 12px;
+  }
+  .qualite-kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .qualite-desktop-table {
+    display: none;
+  }
+  .qualite-mobile-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+}
+
 .table-delete-icon-btn {
   display: inline-flex;
   align-items: center;

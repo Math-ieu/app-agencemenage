@@ -375,7 +375,7 @@ export default function JoursFeries() {
     customRows.filter((r) => r.date && r.actif).length;
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "2rem 1rem 4rem" }}>
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: "clamp(1.25rem, 3vw, 2rem) clamp(0.75rem, 3vw, 1.25rem) 4rem" }}>
       {/* Page Title & Year Selector Header */}
       <div
         style={{
@@ -768,7 +768,7 @@ export default function JoursFeries() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr)) auto",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
                       gap: "1.25rem",
                       alignItems: "end",
                     }}
@@ -1131,7 +1131,7 @@ export default function JoursFeries() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "1.5fr 1fr 0.8fr 0.8fr auto",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
                       gap: "1rem",
                       alignItems: "end",
                     }}

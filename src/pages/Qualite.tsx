@@ -187,10 +187,10 @@ export default function Qualite() {
   );
 
   return (
-    <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', padding: '28px 32px', fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div className="qualite-page" style={{ backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: "'Inter', system-ui, sans-serif" }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+      <div className="qualite-header">
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', margin: 0 }}>Qualité & Feedback</h1>
         </div>
@@ -217,7 +217,7 @@ export default function Qualite() {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+      <div className="qualite-kpi-grid">
         {/* Prestations effectuées */}
         <div style={{
           borderRadius: 18,
@@ -296,7 +296,7 @@ export default function Qualite() {
       </div>
 
       {/* Charts */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+      <div className="qualite-charts-grid">
         {/* Bar Chart */}
         <div style={{
           background: '#fff',
@@ -313,8 +313,8 @@ export default function Qualite() {
               Répartition des notes (Agence & Profil)
             </h3>
           </div>
-          <div style={{ height: 270 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ height: 270, width: '100%', minWidth: 0, minHeight: 270 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={stats?.charts?.distribution} barGap={6}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
@@ -339,8 +339,8 @@ export default function Qualite() {
           <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1e293b', margin: '0 0 20px' }}>
             Niveau de satisfaction client
           </h3>
-          <div style={{ height: 270 }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div style={{ height: 270, width: '100%', minWidth: 0, minHeight: 270 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie
                   data={stats?.charts?.satisfaction}
@@ -383,7 +383,7 @@ export default function Qualite() {
           alignItems: 'center',
           background: '#fafbfc',
         }}>
-          <div style={{ position: 'relative', flex: '1 1 260px' }}>
+          <div style={{ position: 'relative', flex: '1 1 240px' }}>
             <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} size={16} />
             <input
               type="text"
@@ -431,8 +431,8 @@ export default function Qualite() {
           </SelectFilter>
         </div>
 
-        {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
+        {/* Desktop / Tablet Table */}
+        <div className="qualite-desktop-table" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
@@ -518,37 +518,21 @@ export default function Qualite() {
                         <span style={{ color: '#64748b', fontSize: 13 }}>{f.agent_name}</span>
                       )}
                     </td>
-                    <td style={{ padding: '14px 16px', maxWidth: 220 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 5,
-                          background: sat.bg,
-                          color: sat.text,
-                          borderRadius: 6,
-                          padding: '3px 10px',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          letterSpacing: '0.03em',
-                        }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: sat.dot, display: 'inline-block' }} />
-                          {sat.label}
-                        </span>
-                      </div>
-                      <p style={{
+                    <td style={{ padding: '14px 16px' }}>
+                      <span style={{
+                        background: sat.bg,
+                        color: sat.text,
+                        borderRadius: 20,
+                        padding: '4px 10px',
                         fontSize: 12,
-                        color: '#94a3b8',
-                        fontStyle: 'italic',
-                        margin: 0,
-                        overflow: 'hidden',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        lineHeight: 1.4,
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
                       }}>
-                        "{f.commentaire || 'Pas de commentaire'}"
-                      </p>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: sat.dot }} />
+                        {sat.label}
+                      </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', justifyContent: 'center' }}>{renderStars(f.note_agence)}</div>
@@ -604,30 +588,130 @@ export default function Qualite() {
                   </tr>
                 );
               })}
-              {filteredFeedbacks.length === 0 && (
-                <tr>
-                  <td colSpan={10} style={{ padding: '48px 0', textAlign: 'center', color: '#94a3b8', fontSize: 14, fontStyle: 'italic' }}>
-                    Aucun retour client trouvé pour ces critères.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Cards View (< 768px) */}
+        <div className="qualite-mobile-cards">
+          {filteredFeedbacks.map((f) => {
+            const satKey = getSatisfactionLabel(f.note_agence);
+            const sat = SATISFACTION_CONFIG[satKey];
+            return (
+              <div key={f.id} className="qualite-mobile-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 15 }}>{f.client_name}</div>
+                    <div style={{ fontSize: 12, color: '#64748b' }}>{f.city}, {f.neighborhood} • {f.date_prestation ? new Date(f.date_prestation).toLocaleDateString('fr-FR') : '—'}</div>
+                  </div>
+                  <span style={{
+                    background: sat.bg,
+                    color: sat.text,
+                    borderRadius: 20,
+                    padding: '3px 8px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: sat.dot }} />
+                    {sat.label}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  <span style={{ background: '#f1f5f9', color: '#475569', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
+                    {f.service}
+                  </span>
+                  <span style={{
+                    borderRadius: 6,
+                    padding: '2px 8px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    ...(f.segment === 'particulier'
+                      ? { background: '#ede9fe', color: '#6d28d9' }
+                      : { background: '#d1fae5', color: '#065f46' }),
+                  }}>
+                    {f.segment === 'particulier' ? 'Particulier' : 'Entreprise'}
+                  </span>
+                  {f.agent_name && (
+                    <span style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>
+                      Profil: {f.agent_name}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 12px', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Note Agence</span>
+                    {renderStars(f.note_agence)}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>Note Profil</span>
+                    {renderStars(f.note_intervenant)}
+                  </div>
+                </div>
+
+                {f.commentaire && (
+                  <p style={{ margin: 0, fontSize: 13, color: '#475569', fontStyle: 'italic', background: '#ffffff', border: '1px solid #f1f5f9', padding: '8px 10px', borderRadius: 6 }}>
+                    "{f.commentaire}"
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+                  <button
+                    onClick={() => setSelectedFeedback(f)}
+                    style={{ background: '#eff6ff', border: '1px solid #dbeafe', color: '#1d4ed8', padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+                  >
+                    <Eye size={14} /> Détails
+                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {hasPermission(user, 'repondre_avis_clients') && (
+                      <button
+                        onClick={() => handleShare(f.demande)}
+                        style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', padding: '6px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+                        title="Partager WhatsApp"
+                      >
+                        <Share2 size={14} /> WhatsApp
+                      </button>
+                    )}
+                    {hasPermission(user, 'moderer_masquer_avis') && (
+                      <button
+                        onClick={() => handleDelete(f.id)}
+                        style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '6px 8px', borderRadius: 6, cursor: 'pointer' }}
+                        title="Supprimer"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {filteredFeedbacks.length === 0 && (
+            <div style={{ padding: '32px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+              Aucun retour client trouvé.
+            </div>
+          )}
+        </div>
       </div>
+
       {/* Feedback Detail Modal */}
       {selectedFeedback && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.5)', zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 16
         }} onClick={() => setSelectedFeedback(null)}>
           <div style={{
-            background: '#fff', borderRadius: 12, padding: 32, width: '100%', maxWidth: 500, position: 'relative',
+            background: '#fff', borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 500, maxHeight: '88vh', overflowY: 'auto', position: 'relative',
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
           }} onClick={e => e.stopPropagation()}>
             <button onClick={() => setSelectedFeedback(null)} style={{
-              position: 'absolute', top: 20, right: 20,
+              position: 'absolute', top: 16, right: 16,
               background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
               width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', color: '#64748b', transition: 'all 0.15s'
@@ -635,11 +719,11 @@ export default function Qualite() {
               <X size={18} />
             </button>
             
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 24px 0', paddingRight: 40 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0f172a', margin: '0 0 20px 0', paddingRight: 40 }}>
               Détail feedback — {selectedFeedback.client_name}
             </h2>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px', marginBottom: 24, fontSize: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px 20px', marginBottom: 20, fontSize: 13 }}>
               <div><span style={{ color: '#64748b' }}>Satisfaction :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{getSatisfactionLabel(selectedFeedback.note_agence)}</span></div>
               <div><span style={{ color: '#64748b' }}>Qualité ménage :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{getSatisfactionLabel(selectedFeedback.note_intervenant)}</span></div>
               
@@ -647,19 +731,19 @@ export default function Qualite() {
               <div><span style={{ color: '#64748b' }}>Recommande profil :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedFeedback.note_intervenant >= 4 ? 'Oui' : 'Non'}</span></div>
               
               <div><span style={{ color: '#64748b' }}>Recommande agence :</span> <span style={{ fontWeight: 600, color: '#0f172a' }}>{selectedFeedback.note_agence >= 4 ? 'Oui' : 'Non'}</span></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ color: '#64748b' }}>Note agence :</span> {renderStars(selectedFeedback.note_agence)}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ color: '#64748b' }}>Note agence :</span> {renderStars(selectedFeedback.note_agence)}</div>
               
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ color: '#64748b' }}>Note profil :</span> {renderStars(selectedFeedback.note_intervenant)}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ color: '#64748b' }}>Note profil :</span> {renderStars(selectedFeedback.note_intervenant)}</div>
             </div>
 
-            <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8, marginBottom: 16 }}>
-              <div style={{ color: '#64748b', fontSize: 13, marginBottom: 8 }}>Commentaire</div>
-              <div style={{ color: '#0f172a', fontSize: 14, lineHeight: 1.5, wordBreak: 'break-word' }}>
+            <div style={{ background: '#f8fafc', padding: 14, borderRadius: 10, marginBottom: 16 }}>
+              <div style={{ color: '#64748b', fontSize: 12, marginBottom: 6, fontWeight: 600 }}>Commentaire</div>
+              <div style={{ color: '#0f172a', fontSize: 13, lineHeight: 1.5, wordBreak: 'break-word' }}>
                 {selectedFeedback.commentaire || 'Aucun commentaire fourni.'}
               </div>
             </div>
 
-            <div style={{ color: '#64748b', fontSize: 13 }}>
+            <div style={{ color: '#64748b', fontSize: 12 }}>
               Soumis le {selectedFeedback.date ? new Date(selectedFeedback.date).toLocaleDateString('fr-FR') : '—'}
             </div>
           </div>

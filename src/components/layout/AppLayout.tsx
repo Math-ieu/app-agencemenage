@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Users, UserCheck, History, Calendar,
-  DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X, Globe, ChevronDown, Building2
+  DollarSign, Star, Megaphone, Settings, LogOut, ChevronLeft, ChevronRight, Menu, X, Globe, ChevronDown
 } from 'lucide-react';
 import { useAuthStore, useNotificationStore } from '../../store/auth';
 import { hasPermission } from '../../utils/permissions';
@@ -16,6 +16,7 @@ const navItems = [
   { to: '/clients', icon: Users, label: 'Listing clients' },
   { to: '/historique', icon: History, label: 'Historique' },
   { to: '/gestion-abonnement', icon: Calendar, label: 'Gestion Abonnement' },
+  /* Masqué temporairement en production
   {
     id: 'airbnb',
     icon: Building2,
@@ -31,6 +32,7 @@ const navItems = [
       { to: '/airbnb/parametres', label: 'Paramètres' },
     ]
   },
+  */
   {
     id: 'finance',
     icon: DollarSign,

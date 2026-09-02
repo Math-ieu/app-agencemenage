@@ -294,11 +294,12 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
         </h3>
       </div>
 
-      {/* Main Calendar Card Box */}
-      <div style={{ border: '1px solid #d0e3e0', borderRadius: 16, overflow: 'hidden', background: 'white' }}>
-        
-        {/* Header row (DIM, LUN, MAR...) */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#e6f2f0', borderBottom: '1px solid #d0e3e0' }}>
+      {/* Main Calendar Card Box (Scrollable on small devices) */}
+      <div className="sub-calendar-wrapper" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ border: '1px solid #d0e3e0', borderRadius: 16, overflow: 'hidden', background: 'white', minWidth: 600 }}>
+          
+          {/* Header row (DIM, LUN, MAR...) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#e6f2f0', borderBottom: '1px solid #d0e3e0' }}>
           {headers.map((h) => (
             <div key={h} style={{ color: '#037265', fontWeight: 800, fontSize: 12, textAlign: 'center', padding: '12px 0', letterSpacing: '0.05em' }}>
               {h}
@@ -923,6 +924,7 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
           })}
         </div>
       </div>
+    </div>
 
       {/* Exact Bottom Legend */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16, marginTop: 16, fontSize: 12, color: '#64748b' }}>
