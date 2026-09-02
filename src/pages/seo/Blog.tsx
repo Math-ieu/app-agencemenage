@@ -94,10 +94,10 @@ export default function Blog() {
   const drafts = articles.filter((a) => a.status === 'draft').length;
 
   return (
-    <div className="page" style={{ padding: '2rem', maxWidth: '100%', margin: '0 auto' }}>
+    <div className="page" style={{ padding: 'clamp(1rem, 3vw, 2rem)', maxWidth: '100%', margin: '0 auto' }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{ background: '#0ea5e9', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <LayoutDashboard size={24} color="white" />
@@ -131,16 +131,16 @@ export default function Blog() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '14px', marginBottom: '1.5rem' }}>
         <StatCard icon={<FileText size={18} />} iconBg="#f1f5f9" iconColor="#64748b" value={total} label="Total" />
         <StatCard icon={<Send size={18} />} iconBg="#e0f2fe" iconColor="#0ea5e9" value={published} label="Publiés" />
         <StatCard icon={<Edit size={18} />} iconBg="#fef9c3" iconColor="#ca8a04" value={drafts} label="Brouillons" />
       </div>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '2rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         {/* Search */}
-        <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+        <div style={{ position: 'relative', flex: '1 1 220px', minWidth: '180px' }}>
           <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
           <input
             type="text"
@@ -152,11 +152,11 @@ export default function Blog() {
         </div>
 
         {/* Status */}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', flex: '1 1 140px', minWidth: '140px' }}>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ ...inputStyle({ paddingRight: '32px', minWidth: '170px' }), appearance: 'none', cursor: 'pointer' }}
+            style={{ ...inputStyle({ paddingRight: '32px' }), appearance: 'none', cursor: 'pointer' }}
           >
             <option value="tous">Tous les statuts</option>
             <option value="published">Publiés</option>
@@ -166,26 +166,26 @@ export default function Blog() {
         </div>
 
         {/* Date début */}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', flex: '1 1 120px', minWidth: '120px' }}>
           <CalendarIcon size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
           <input
             type="date"
             value={dateStart}
             onChange={(e) => setDateStart(e.target.value)}
             placeholder="Date début"
-            style={inputStyle({ paddingLeft: '32px', width: '140px', color: dateStart ? '#0f172a' : '#94a3b8' })}
+            style={inputStyle({ paddingLeft: '32px', color: dateStart ? '#0f172a' : '#94a3b8' })}
           />
         </div>
 
         {/* Date fin */}
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', flex: '1 1 120px', minWidth: '120px' }}>
           <CalendarIcon size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
           <input
             type="date"
             value={dateEnd}
             onChange={(e) => setDateEnd(e.target.value)}
             placeholder="Date fin"
-            style={inputStyle({ paddingLeft: '32px', width: '140px', color: dateEnd ? '#0f172a' : '#94a3b8' })}
+            style={inputStyle({ paddingLeft: '32px', color: dateEnd ? '#0f172a' : '#94a3b8' })}
           />
         </div>
       </div>
@@ -224,21 +224,21 @@ function StatCard({ icon, iconBg, iconColor, value, label }: any) {
       background: 'white',
       border: '1px solid #f1f5f9',
       borderRadius: '12px',
-      padding: '16px 20px',
+      padding: '14px 16px',
       display: 'flex',
       alignItems: 'center',
-      gap: '14px',
+      gap: '12px',
       boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
     }}>
       <div style={{
-        width: '40px', height: '40px', borderRadius: '8px',
+        width: '38px', height: '38px', borderRadius: '8px',
         background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: iconColor, flexShrink: 0,
       }}>
         {icon}
       </div>
       <div>
-        <div style={{ fontSize: '22px', fontWeight: '700', color: '#0f172a', lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', lineHeight: 1 }}>{value}</div>
         <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>{label}</div>
       </div>
     </div>
@@ -262,18 +262,20 @@ function ArticleCard({ article, onEdit, onDelete, onTogglePublish, canEdit, canP
         background: 'white',
         border: `1px solid ${hovered ? '#e2e8f0' : '#f1f5f9'}`,
         borderRadius: '12px',
-        padding: '16px 20px',
+        padding: '16px',
         display: 'flex',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
         alignItems: 'center',
+        gap: '12px',
         transition: 'box-shadow 0.2s, border-color 0.2s',
         boxShadow: hovered ? '0 4px 16px -4px rgba(6,81,237,0.12)' : '0 1px 4px rgba(0,0,0,0.03)',
       }}
     >
       {/* Left */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: '1 1 260px', minWidth: 0 }}>
         {/* Badges */}
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
           {isPublished ? (
             <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: '600', padding: '3px 10px', borderRadius: '20px' }}>
               Publié
@@ -310,22 +312,21 @@ function ArticleCard({ article, onEdit, onDelete, onTogglePublish, canEdit, canP
         </div>
       </div>
 
-      {/* Actions */}
+      {/* Actions (always accessible on mobile/touch, subtle hover on desktop) */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '4px',
-        opacity: hovered ? 1 : 0, transition: 'opacity 0.2s',
-        flexShrink: 0, marginLeft: '16px',
+        display: 'flex', alignItems: 'center', gap: '6px',
+        flexShrink: 0,
       }}>
         {canEdit && (
-          <ActionBtn title="Éditer" onClick={onEdit} hoverColor="#64748b" hoverBg="#f1f5f9" icon={<Edit2 size={16} />} />
+          <ActionBtn title="Éditer" onClick={onEdit} hoverColor="#0ea5e9" hoverBg="#e0f2fe" icon={<Edit2 size={16} />} />
         )}
         
         {/* Link to public blog article */}
         <ActionBtn 
           title="Aperçu" 
           onClick={() => window.open(`/seo/blog/edit/${article.slug || article.id}?preview=true`, '_blank')} 
-          hoverColor="#64748b" 
-          hoverBg="#f1f5f9" 
+          hoverColor="#3b82f6" 
+          hoverBg="#eff6ff" 
           icon={<Eye size={16} />} 
         />
 
@@ -354,11 +355,11 @@ function ActionBtn({ icon, title, hoverColor, hoverBg, onClick }: any) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        width: '34px', height: '34px', border: 'none', cursor: 'pointer',
-        borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: hovered ? hoverBg : 'transparent',
-        color: hovered ? hoverColor : '#94a3b8',
-        transition: 'background 0.15s, color 0.15s',
+        width: '34px', height: '34px', border: '1px solid #e2e8f0', cursor: 'pointer',
+        borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: hovered ? hoverBg : '#ffffff',
+        color: hovered ? hoverColor : '#64748b',
+        transition: 'background 0.15s, color 0.15s, border-color 0.15s',
       }}
     >
       {icon}

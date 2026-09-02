@@ -7,6 +7,7 @@
   box-sizing: border-box;
   font-family: inherit;
   color: #1e293b;
+  overflow-x: hidden;
 }
 
 /* Header & Tabs */
@@ -534,11 +535,13 @@
   align-items: center;
   gap: 1rem;
   margin-bottom: 1.25rem;
+  width: 100%;
 }
 
 .ga-planning-nav {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
@@ -597,6 +600,7 @@
 .ga-planning-filters {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
 }
 
@@ -607,6 +611,15 @@
   font-size: 0.825rem;
   color: #1e293b;
   background: #ffffff;
+  min-width: 130px;
+}
+
+.ga-calendar-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.5rem;
 }
 
 /* Day cell in Planning tab */
@@ -1115,4 +1128,191 @@
 .ga-btn-file-facture:hover {
   background: #f8fafc;
   border-color: #94a3b8;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE STYLES (Tablet & Mobile)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Tablet & Smaller (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .ga-container {
+    padding: 1.25rem 1rem;
+  }
+
+  .ga-filters-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+
+  .ga-recap-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ga-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ga-planning-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .ga-planning-ctrls {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}
+
+/* Mobile (max-width: 768px) */
+@media (max-width: 768px) {
+  .ga-container {
+    padding: 1rem 0.75rem;
+  }
+
+  .ga-title {
+    font-size: 1.35rem;
+  }
+
+  .ga-subtitle {
+    font-size: 0.8rem;
+    margin-bottom: 1rem;
+  }
+
+  .ga-tabs-container {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    padding: 0.25rem;
+    margin: 0 0 1rem 0;
+  }
+
+  .ga-tabs-container::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ga-tab-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.825rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .ga-filters-card {
+    padding: 0.85rem;
+    margin-bottom: 1rem;
+  }
+
+  .ga-filters-grid {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .ga-recap-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .ga-kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .ga-kpi-card {
+    padding: 1rem;
+  }
+
+  .ga-kpi-value {
+    font-size: 1.5rem;
+  }
+
+  .ga-holiday-banner {
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .ga-holiday-header {
+    font-size: 0.875rem;
+  }
+
+  .ga-holiday-body {
+    font-size: 0.8rem;
+  }
+
+  .ga-planning-ctrls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .ga-planning-ctrls > * {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Calendar responsive horizontal scroll */
+  .ga-calendar-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ga-calendar-grid {
+    min-width: 620px;
+  }
+
+  /* Modals responsiveness */
+  .ga-modal-backdrop {
+    padding: 12px;
+    align-items: center;
+  }
+
+  .ga-modal-content {
+    width: 96vw !important;
+    max-width: 96vw !important;
+    max-height: 88vh !important;
+    padding: 1.25rem 1rem !important;
+    border-radius: 0.75rem !important;
+    overflow-y: auto !important;
+  }
+
+  .ga-modal-header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .ga-modal-footer {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding-top: 0.75rem;
+  }
+
+  .ga-modal-footer button {
+    width: 100%;
+    justify-content: center;
+    padding: 0.75rem;
+  }
+}
+
+/* Small Mobile (max-width: 480px) */
+@media (max-width: 480px) {
+  .ga-container {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .ga-recap-count {
+    font-size: 1.4rem;
+  }
+
+  .ga-table th,
+  .ga-table td {
+    padding: 0.65rem 0.75rem;
+    font-size: 0.8rem;
+  }
 }

@@ -5,6 +5,10 @@
   padding: 1.5rem;
   background-color: #f8fafc;
   min-height: calc(100vh - 60px);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .ls-header {
@@ -803,7 +807,7 @@
 
 .ls-ranking-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
 }
 

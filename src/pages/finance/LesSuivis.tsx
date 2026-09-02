@@ -2592,7 +2592,7 @@ export default function LesSuivis() {
                   </div>
 
                   {/* 4 KPIs */}
-                  <div className="ls-comm-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div className="ls-comm-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                     <div className="ls-comm-kpi-card">
                       <div className="ls-comm-kpi-icon" style={{ backgroundColor: '#e6f4ea', color: '#137333' }}>
                         <DollarSign size={20} />
@@ -2758,7 +2758,7 @@ export default function LesSuivis() {
               ) : (
                 <>
                   {/* General Overview Tab */}
-                  <div className="ls-comm-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div className="ls-comm-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                     <div className="ls-comm-kpi-card">
                       <div className="ls-comm-kpi-icon" style={{ backgroundColor: '#eff6ff', color: '#2563eb' }}>
                         <Users size={20} />
@@ -2829,7 +2829,7 @@ export default function LesSuivis() {
                             </div>
                           </div>
 
-                          <div className="ls-ranking-stats" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                          <div className="ls-ranking-stats" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
                             <div className="ls-ranking-stat-item">
                               <span className="ls-ranking-stat-label">Chiffre d'affaires réalisé</span>
                               <span className="ls-ranking-stat-val">{money(item.ca)}</span>

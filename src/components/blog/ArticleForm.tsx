@@ -642,9 +642,9 @@ export default function ArticleForm() {
                         <label style={st.label}>Categorie</label>
                         <select value={form.category} onChange={(e) => updateField("category", e.target.value)} style={st.select}>
                           {dynamicCategories.length > 0 ? (
-                            dynamicCategories.map((c) => <option key={c.id} value={c.id.toString()}>{c.name}</option>)
+                            dynamicCategories.map((c) => <option key={c.id || c.name} value={c.id ? c.id.toString() : c.name}>{c.name}</option>)
                           ) : (
-                            CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)
+                            CATEGORIES.map((c) => <option key={c.id || c.name} value={c.id ? c.id.toString() : c.name}>{c.name}</option>)
                           )}
                         </select>
                       </div>
@@ -684,7 +684,11 @@ export default function ArticleForm() {
                     <div>
                       <label style={st.label}>Categorie</label>
                       <select value={form.category} onChange={(e) => updateField("category", e.target.value)} style={st.select}>
-                        {CATEGORIES.map((c) => <option key={c.id} value={c.id.toString()}>{c.name}</option>)}
+                        {dynamicCategories.length > 0 ? (
+                          dynamicCategories.map((c) => <option key={c.id || c.name} value={c.id ? c.id.toString() : c.name}>{c.name}</option>)
+                        ) : (
+                          CATEGORIES.map((c) => <option key={c.id || c.name} value={c.id ? c.id.toString() : c.name}>{c.name}</option>)
+                        )}
                       </select>
                     </div>
                     <div>

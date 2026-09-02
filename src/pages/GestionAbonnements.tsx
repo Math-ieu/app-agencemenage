@@ -1869,63 +1869,65 @@ export default function GestionAbonnements() {
             </div>
           </div>
 
-          {/* Calendar Grid (7 Columns: LUN → DIM — Exact matching screenshot) */}
-          <div className="ga-calendar-grid" style={{ minHeight: '520px', gap: '0.4rem', width: '100%', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
-            {['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'].map(day => (
-              <div key={day} className="ga-calendar-day-head" style={{ fontWeight: 800, color: '#475569', fontSize: '0.8rem' }}>
-                {day}
-              </div>
-            ))}
-
-            {/* Offset blank cells for selected month start day (LUN-first) */}
-            {Array.from({ length: blankCount }).map((_, idx) => (
-              <div key={`blank-${idx}`} className="ga-plan-day-cell outside" />
-            ))}
-
-            {/* Days of Selected Month */}
-            {Array.from({ length: daysInSelectedMonth }, (_, i) => i + 1).map(dayNum => {
-              const dayStat = planningMonthData.statsMap[dayNum];
-              const now = new Date();
-              const isToday = now.getDate() === dayNum &&
-                              now.getMonth() === planningDate.getMonth() &&
-                              now.getFullYear() === planningDate.getFullYear();
-
-              const totalReporte = (dayStat?.reporte || 0) + (dayStat?.a_recuperer || 0);
-
-              return (
-                <div
-                  key={dayNum}
-                  className={`ga-plan-day-cell ${isToday ? 'current-day' : ''}`}
-                >
-                  <div className="ga-plan-day-num">{dayNum}</div>
-
-                  {dayStat && dayStat.interventions > 0 ? (
-                    <div className="ga-plan-stats">
-                      <div className="ga-stat-line ga-stat-interventions">
-                        Interventions : {dayStat.interventions}
-                      </div>
-                      {!!dayStat.termine && (
-                        <div className="ga-stat-line ga-stat-termine">
-                          Nbr terminé : {dayStat.termine}
-                        </div>
-                      )}
-                      {!!totalReporte && (
-                        <div className="ga-stat-line ga-stat-reporte">
-                          Nbre reporté : {totalReporte}
-                        </div>
-                      )}
-                      {!!dayStat.annule && (
-                        <div className="ga-stat-line ga-stat-annule">
-                          Nombre annulé : {dayStat.annule}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="ga-plan-empty-dash">—</div>
-                  )}
+          {/* Calendar Grid (7 Columns: LUN → DIM — Exact matching screenshot with responsive horizontal scroll) */}
+          <div className="ga-calendar-wrapper">
+            <div className="ga-calendar-grid" style={{ minHeight: '520px', gap: '0.4rem', width: '100%', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+              {['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'].map(day => (
+                <div key={day} className="ga-calendar-day-head" style={{ fontWeight: 800, color: '#475569', fontSize: '0.8rem' }}>
+                  {day}
                 </div>
-              );
-            })}
+              ))}
+
+              {/* Offset blank cells for selected month start day (LUN-first) */}
+              {Array.from({ length: blankCount }).map((_, idx) => (
+                <div key={`blank-${idx}`} className="ga-plan-day-cell outside" />
+              ))}
+
+              {/* Days of Selected Month */}
+              {Array.from({ length: daysInSelectedMonth }, (_, i) => i + 1).map(dayNum => {
+                const dayStat = planningMonthData.statsMap[dayNum];
+                const now = new Date();
+                const isToday = now.getDate() === dayNum &&
+                                now.getMonth() === planningDate.getMonth() &&
+                                now.getFullYear() === planningDate.getFullYear();
+
+                const totalReporte = (dayStat?.reporte || 0) + (dayStat?.a_recuperer || 0);
+
+                return (
+                  <div
+                    key={dayNum}
+                    className={`ga-plan-day-cell ${isToday ? 'current-day' : ''}`}
+                  >
+                    <div className="ga-plan-day-num">{dayNum}</div>
+
+                    {dayStat && dayStat.interventions > 0 ? (
+                      <div className="ga-plan-stats">
+                        <div className="ga-stat-line ga-stat-interventions">
+                          Interventions : {dayStat.interventions}
+                        </div>
+                        {!!dayStat.termine && (
+                          <div className="ga-stat-line ga-stat-termine">
+                            Nbr terminé : {dayStat.termine}
+                          </div>
+                        )}
+                        {!!totalReporte && (
+                          <div className="ga-stat-line ga-stat-reporte">
+                            Nbre reporté : {totalReporte}
+                          </div>
+                        )}
+                        {!!dayStat.annule && (
+                          <div className="ga-stat-line ga-stat-annule">
+                            Nombre annulé : {dayStat.annule}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="ga-plan-empty-dash">—</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

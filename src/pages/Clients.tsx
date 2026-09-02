@@ -92,15 +92,7 @@ const SERVICES_LIST = {
   ]
 };
 
-// ── Inline styles for the single-line filter bar ─────────────────────────────
-const filterBarStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  flexWrap: 'nowrap',
-  overflowX: 'auto',
-  padding: '12px 0',
-};
+// ── Inline styles for filter items ──────────────────────────────────────────
 
 const selectWrapStyle: React.CSSProperties = {
   position: 'relative',
@@ -476,10 +468,10 @@ export default function Clients() {
       </div>
 
       {/* ── Single-line filter bar ── */}
-      <div style={filterBarStyle}>
+      <div className="client-filter-bar">
 
         {/* Search */}
-        <div style={searchWrapStyle}>
+        <div style={searchWrapStyle} className="search-wrap-full">
           <Search size={16} style={searchIconStyle} />
           <input
             type="text"
@@ -598,164 +590,81 @@ export default function Clients() {
         )}
       </div>
 
-      {/* Table */}
+      {/* Table / Mobile Cards */}
       {loading ? (
         <div className="loading-state"><div className="spinner" /></div>
       ) : (
-        <div className={`table-wrapper ${clients.length >= 8 ? 'enable-table-scroll' : 'disable-table-scroll'}`}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th style={{ width: '100px' }}>Actions</th>
-                <th>Statut besoin</th>
-                <th>Statut paiem.</th>
-                <th>Segment</th>
-                <th>Fréquence</th>
-                <th>Commercial</th>
-                <th>Nom client</th>
-                <th>Quartier / Ville</th>
-                <th>Fidélité</th>
-                <th style={{ width: '92px' }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {clients.map((c, index) => (
-                <tr
-                  key={c.id}
-                  className={getRowClass(c)}
-                  style={{
-                    opacity: c.is_blacklisted ? 0.5 : 1,
-                    transition: 'opacity 0.2s ease',
-                  }}
-                >
-                  <td>
-                    {c.is_blacklisted ? (
-                      <Link
-                        to={`/clients/${encodeId(c.id)}`}
-                        className="actions-cell-btn py-1.5 px-3 flex items-center justify-center text-xs font-semibold rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
-                        style={{ width: 'fit-content' }}
-                      >
-                        <UserIcon size={14} className="mr-1.5" style={{ minWidth: '14px' }} />
-                        <span>Compte client</span>
-                      </Link>
-                    ) : (
-                      <div className="dropdown-container">
-                        <button className="actions-cell-btn" onClick={() => toggleDropdown('actions', c.id)}>
-                          <Settings size={14} />
-                          Actions
-                        </button>
-                        {activeDropdown?.type === 'actions' && activeDropdown.id === c.id && (
-                          <div className="dropdown-menu" ref={dropdownRef} style={{ left: 0, right: 'auto', ...(clients.length >= 8 && index >= clients.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
-                            <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
-                              <UserIcon size={16} className="dropdown-item-icon" />
-                              <span>Compte client</span>
-                            </Link>
-
-                            {hasPermissionWithContext(user, 'modifier_clients', c) && (
-                              <>
-                                <div className="dropdown-divider"></div>
-                                <div className="dropdown-item" onClick={() => {
-                                  setShowAvisModal({ clientId: c.id, type: 'commercial', avis: '' });
-                                  setActiveDropdown(null);
-                                }}>
-                                  <MessageSquare size={16} className="dropdown-item-icon" />
-                                  <span>Note commerciale</span>
-                                </div>
-                                <div className="dropdown-item" onClick={() => {
-                                  setShowAvisModal({ clientId: c.id, type: 'operationnel', avis: '' });
-                                  setActiveDropdown(null);
-                                }}>
-                                  <MessageSquare size={16} className="dropdown-item-icon" />
-                                  <span>Note opérationnelle</span>
-                                </div>
-                                <div className="dropdown-divider"></div>
-                              </>
-                            )}
-                            {(hasPermission(user, 'affectation_client') || hasPermission(user, 'affecter_commercial')) && (
-                              <div className="dropdown-item" onClick={(e) => {
-                                e.stopPropagation();
-                                setShowAssignmentModal(c.id);
-                                  setActiveDropdown(null);
-                              }}>
-                                <UserPlus size={16} className="dropdown-item-icon" />
-                                <span>Affectation</span>
-                              </div>
-                            )}
-                            {hasPermission(user, 'geste_commercial') && (
-                              <Link to="/marketing" state={{ tab: 'gestes' }} className="dropdown-item">
-                                <Slash size={16} className="dropdown-item-icon" />
-                                <span>Geste commercial</span>
-                              </Link>
-                            )}
-                            {hasPermission(user, 'delete_client') && (
-                              <>
-                                <div className="dropdown-divider"></div>
-                                <div className="dropdown-item dropdown-item-danger" onClick={() => handleDeleteClient(c)}>
-                                  <Trash2 size={16} className="dropdown-item-icon" />
-                                  <span>Supprimer</span>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                  <td>{getStatusBadge(c)}</td>
-                  <td>{getPaymentStatusBadge(c)}</td>
-                  <td>
-                    <span className={`badge ${c.segment === 'particulier' ? 'badge-dark-teal' : 'badge-lime'}`}>
-                      {c.segment === 'particulier' ? 'Particulier' : 'Entreprise'}
-                    </span>
-                  </td>
-                  <td>
-                    {c.latest_demande ? (
-                      c.latest_demande.frequency === 'abonnement' ? (
-                        <span className="badge badge-purple">Abonnement</span>
+        <>
+          {/* Desktop / Tablet Table View */}
+          <div className={`clients-desktop-table table-wrapper ${clients.length >= 8 ? 'enable-table-scroll' : 'disable-table-scroll'}`}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '100px' }}>Actions</th>
+                  <th>Statut besoin</th>
+                  <th>Statut paiem.</th>
+                  <th>Segment</th>
+                  <th>Fréquence</th>
+                  <th>Commercial</th>
+                  <th>Nom client</th>
+                  <th>Quartier / Ville</th>
+                  <th>Fidélité</th>
+                  <th style={{ width: '92px' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {clients.map((c, index) => (
+                  <tr
+                    key={c.id}
+                    className={getRowClass(c)}
+                    style={{
+                      opacity: c.is_blacklisted ? 0.5 : 1,
+                      transition: 'opacity 0.2s ease',
+                    }}
+                  >
+                    <td>
+                      {c.is_blacklisted ? (
+                        <Link
+                          to={`/clients/${encodeId(c.id)}`}
+                          className="actions-cell-btn py-1.5 px-3 flex items-center justify-center text-xs font-semibold rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+                          style={{ width: 'fit-content' }}
+                        >
+                          <UserIcon size={14} className="mr-1.5" style={{ minWidth: '14px' }} />
+                          <span>Compte client</span>
+                        </Link>
                       ) : (
-                        <span className="badge badge-gray">Une fois</span>
-                      )
-                    ) : (
-                      <span className="badge badge-gray">Une fois</span>
-                    )}
-                  </td>
-                  <td className="text-slate-500 font-medium">
-                    {c.assigned_commercial_name || '—'}
-                  </td>
-                  <td>
-                    <div className="flex items-center">
-                      <span className="font-bold text-slate-700 capitalize">{c.display_name.toLowerCase()}</span>
-                      <span className="client-id-badge">#{c.id}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-teal-800 text-sm">{c.neighborhood || ''}</span>
-                      <span className="text-xs text-slate-500 uppercase">{c.city || ''}</span>
-                    </div>
-                  </td>
-                  <td>
-                    {c.demandes_count > 0 ? (
-                      <span className="badge badge-fidely">
-                        {c.demandes_count} demande{c.demandes_count > 1 ? 's' : ''}
-                      </span>
-                    ) : (
-                      <span className="badge-new">Nouveau</span>
-                    )}
-                  </td>
-                  <td>
-                    {!c.is_blacklisted && (
-                      <div className="table-inline-actions table-inline-actions-right">
                         <div className="dropdown-container">
-                          <button className="btn-more" onClick={() => toggleDropdown('more', c.id)}>
-                            <MoreVertical size={18} />
+                          <button className="actions-cell-btn" onClick={() => toggleDropdown('actions', c.id)}>
+                            <Settings size={14} />
+                            Actions
                           </button>
-                          {activeDropdown?.type === 'more' && activeDropdown.id === c.id && (
-                            <div className="dropdown-menu" ref={dropdownRef} style={{ minWidth: '160px', ...(clients.length >= 8 && index >= clients.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
+                          {activeDropdown?.type === 'actions' && activeDropdown.id === c.id && (
+                            <div className="dropdown-menu" ref={dropdownRef} style={{ left: 0, right: 'auto', ...(clients.length >= 8 && index >= clients.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
                               <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
                                 <UserIcon size={16} className="dropdown-item-icon" />
-                                <span>Voir le compte</span>
+                                <span>Compte client</span>
                               </Link>
+
+                              {hasPermissionWithContext(user, 'modifier_clients', c) && (
+                                <>
+                                  <div className="dropdown-divider"></div>
+                                  <div className="dropdown-item" onClick={() => {
+                                    setShowAvisModal({ clientId: c.id, type: 'commercial', avis: '' });
+                                    setActiveDropdown(null);
+                                  }}>
+                                    <MessageSquare size={16} className="dropdown-item-icon" />
+                                    <span>Note commerciale</span>
+                                  </div>
+                                  <div className="dropdown-item" onClick={() => {
+                                    setShowAvisModal({ clientId: c.id, type: 'operationnel', avis: '' });
+                                    setActiveDropdown(null);
+                                  }}>
+                                    <MessageSquare size={16} className="dropdown-item-icon" />
+                                    <span>Note opérationnelle</span>
+                                  </div>
+                                  <div className="dropdown-divider"></div>
+                                </>
+                              )}
                               {(hasPermission(user, 'affectation_client') || hasPermission(user, 'affecter_commercial')) && (
                                 <div className="dropdown-item" onClick={(e) => {
                                   e.stopPropagation();
@@ -766,33 +675,239 @@ export default function Clients() {
                                   <span>Affectation</span>
                                 </div>
                               )}
+                              {hasPermission(user, 'geste_commercial') && (
+                                <Link to="/marketing" state={{ tab: 'gestes' }} className="dropdown-item">
+                                  <Slash size={16} className="dropdown-item-icon" />
+                                  <span>Geste commercial</span>
+                                </Link>
+                              )}
+                              {hasPermission(user, 'delete_client') && (
+                                <>
+                                  <div className="dropdown-divider"></div>
+                                  <div className="dropdown-item dropdown-item-danger" onClick={() => handleDeleteClient(c)}>
+                                    <Trash2 size={16} className="dropdown-item-icon" />
+                                    <span>Supprimer</span>
+                                  </div>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
-                        {hasPermission(user, 'delete_client') && (
-                          <button
-                            type="button"
-                            className="table-delete-icon-btn"
-                            title="Supprimer le client"
-                            aria-label="Supprimer le client"
-                            onClick={() => handleDeleteClient(c)}
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        )}
+                      )}
+                    </td>
+                    <td>{getStatusBadge(c)}</td>
+                    <td>{getPaymentStatusBadge(c)}</td>
+                    <td>
+                      <span className={`badge ${c.segment === 'particulier' ? 'badge-dark-teal' : 'badge-lime'}`}>
+                        {c.segment === 'particulier' ? 'Particulier' : 'Entreprise'}
+                      </span>
+                    </td>
+                    <td>
+                      {c.latest_demande ? (
+                        c.latest_demande.frequency === 'abonnement' ? (
+                          <span className="badge badge-purple">Abonnement</span>
+                        ) : (
+                          <span className="badge badge-gray">Une fois</span>
+                        )
+                      ) : (
+                        <span className="badge badge-gray">Une fois</span>
+                      )}
+                    </td>
+                    <td className="text-slate-500 font-medium">
+                      {c.assigned_commercial_name || '—'}
+                    </td>
+                    <td>
+                      <div className="flex items-center">
+                        <span className="font-bold text-slate-700 capitalize">{c.display_name.toLowerCase()}</span>
+                        <span className="client-id-badge">#{c.id}</span>
                       </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {clients.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="empty-row text-center py-12 text-slate-400">Aucun client trouvé.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </td>
+                    <td>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-teal-800 text-sm">{c.neighborhood || ''}</span>
+                        <span className="text-xs text-slate-500 uppercase">{c.city || ''}</span>
+                      </div>
+                    </td>
+                    <td>
+                      {c.demandes_count > 0 ? (
+                        <span className="badge badge-fidely">
+                          {c.demandes_count} demande{c.demandes_count > 1 ? 's' : ''}
+                        </span>
+                      ) : (
+                        <span className="badge-new">Nouveau</span>
+                      )}
+                    </td>
+                    <td>
+                      {!c.is_blacklisted && (
+                        <div className="table-inline-actions table-inline-actions-right">
+                          <div className="dropdown-container">
+                            <button className="btn-more" onClick={() => toggleDropdown('more', c.id)}>
+                              <MoreVertical size={18} />
+                            </button>
+                            {activeDropdown?.type === 'more' && activeDropdown.id === c.id && (
+                              <div className="dropdown-menu" ref={dropdownRef} style={{ minWidth: '160px', ...(clients.length >= 8 && index >= clients.length - 2 ? { top: 'auto', bottom: '100%' } : { top: '100%', bottom: 'auto' }) }}>
+                                <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
+                                  <UserIcon size={16} className="dropdown-item-icon" />
+                                  <span>Voir le compte</span>
+                                </Link>
+                                {(hasPermission(user, 'affectation_client') || hasPermission(user, 'affecter_commercial')) && (
+                                  <div className="dropdown-item" onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowAssignmentModal(c.id);
+                                    setActiveDropdown(null);
+                                  }}>
+                                    <UserPlus size={16} className="dropdown-item-icon" />
+                                    <span>Affectation</span>
+                                  </div>
+                                )}
+                                {hasPermission(user, 'geste_commercial') && (
+                                  <Link to="/marketing" state={{ tab: 'gestes' }} className="dropdown-item">
+                                    <Slash size={16} className="dropdown-item-icon" />
+                                    <span>Geste commercial</span>
+                                  </Link>
+                                )}
+                                {hasPermission(user, 'delete_client') && (
+                                  <>
+                                    <div className="dropdown-divider"></div>
+                                    <div className="dropdown-item dropdown-item-danger" onClick={() => handleDeleteClient(c)}>
+                                      <Trash2 size={16} className="dropdown-item-icon" />
+                                      <span>Supprimer</span>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Cards View (< 768px) */}
+          <div className="clients-mobile-cards">
+            {clients.map((c) => (
+              <div
+                key={c.id}
+                className="client-mobile-card"
+                style={{ opacity: c.is_blacklisted ? 0.6 : 1 }}
+              >
+                <div className="client-mobile-card-header">
+                  <div className="client-mobile-card-title">
+                    <div className="flex items-center gap-1.5">
+                      <span className="client-mobile-card-name">{c.display_name.toLowerCase()}</span>
+                      <span className="client-id-badge">#{c.id}</span>
+                    </div>
+                    <div className="client-mobile-card-location">
+                      <span>{c.neighborhood || c.city || 'Casablanca'}</span>
+                      {c.city && c.neighborhood && <span>• {c.city}</span>}
+                    </div>
+                  </div>
+                  <span className={`badge ${c.segment === 'particulier' ? 'badge-dark-teal' : 'badge-lime'}`}>
+                    {c.segment === 'particulier' ? 'Particulier' : 'Entreprise'}
+                  </span>
+                </div>
+
+                <div className="client-mobile-card-badges">
+                  {getStatusBadge(c)}
+                  {getPaymentStatusBadge(c)}
+                  {c.latest_demande?.frequency === 'abonnement' ? (
+                    <span className="badge badge-purple">Abonnement</span>
+                  ) : (
+                    <span className="badge badge-gray">Une fois</span>
+                  )}
+                  {c.demandes_count > 0 ? (
+                    <span className="badge badge-fidely">
+                      {c.demandes_count} demande{c.demandes_count > 1 ? 's' : ''}
+                    </span>
+                  ) : (
+                    <span className="badge-new text-xs">Nouveau</span>
+                  )}
+                  {c.assigned_commercial_name && (
+                    <span className="text-xs text-slate-500 font-medium">
+                      Comm: {c.assigned_commercial_name}
+                    </span>
+                  )}
+                </div>
+
+                <div className="client-mobile-card-footer">
+                  <Link
+                    to={`/clients/${encodeId(c.id)}`}
+                    className="actions-cell-btn py-1.5 px-3 flex items-center justify-center text-xs font-semibold rounded-md border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 transition-colors"
+                  >
+                    <UserIcon size={14} className="mr-1.5" />
+                    <span>Compte client</span>
+                  </Link>
+
+                  {!c.is_blacklisted && (
+                    <div className="dropdown-container">
+                      <button
+                        className="actions-cell-btn"
+                        onClick={() => toggleDropdown('actions', c.id)}
+                      >
+                        <Settings size={14} />
+                        <span>Actions</span>
+                      </button>
+                      {activeDropdown?.type === 'actions' && activeDropdown.id === c.id && (
+                        <div
+                          className="dropdown-menu"
+                          ref={dropdownRef}
+                          style={{ right: 0, left: 'auto', bottom: '100%', top: 'auto' }}
+                        >
+                          <Link to={`/clients/${encodeId(c.id)}`} className="dropdown-item">
+                            <UserIcon size={16} className="dropdown-item-icon" />
+                            <span>Voir le compte</span>
+                          </Link>
+                          {hasPermissionWithContext(user, 'modifier_clients', c) && (
+                            <>
+                              <div className="dropdown-divider"></div>
+                              <div className="dropdown-item" onClick={() => {
+                                setShowAvisModal({ clientId: c.id, type: 'commercial', avis: '' });
+                                setActiveDropdown(null);
+                              }}>
+                                <MessageSquare size={16} className="dropdown-item-icon" />
+                                <span>Note commerciale</span>
+                              </div>
+                              <div className="dropdown-item" onClick={() => {
+                                setShowAvisModal({ clientId: c.id, type: 'operationnel', avis: '' });
+                                setActiveDropdown(null);
+                              }}>
+                                <MessageSquare size={16} className="dropdown-item-icon" />
+                                <span>Note opérationnelle</span>
+                              </div>
+                            </>
+                          )}
+                          {(hasPermission(user, 'affectation_client') || hasPermission(user, 'affecter_commercial')) && (
+                            <div className="dropdown-item" onClick={(e) => {
+                              e.stopPropagation();
+                              setShowAssignmentModal(c.id);
+                              setActiveDropdown(null);
+                            }}>
+                              <UserPlus size={16} className="dropdown-item-icon" />
+                              <span>Affectation</span>
+                            </div>
+                          )}
+                          {hasPermission(user, 'delete_client') && (
+                            <>
+                              <div className="dropdown-divider"></div>
+                              <div className="dropdown-item dropdown-item-danger" onClick={() => handleDeleteClient(c)}>
+                                <Trash2 size={16} className="dropdown-item-icon" />
+                                <span>Supprimer</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Modal Avis */}
@@ -922,9 +1037,9 @@ export default function Clients() {
               </div>
 
               {/* Body */}
-              <div style={{ padding: '24px' }}>
+              <div style={{ padding: '20px' }}>
                 {/* Current Assignment Summary Card */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', padding: '16px', marginBottom: '24px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', padding: '14px', marginBottom: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
                   <div>
                     <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Commercial actuel</div>
                     <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155' }}>
@@ -947,7 +1062,7 @@ export default function Clients() {
                     Modifier l'affectation
                   </h3>
                   
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>Sélectionner un commercial</label>
                       <select

@@ -682,27 +682,27 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
     <div style={{
       position: "fixed", inset: 0, zIndex: 1000,
       background: "rgba(0,0,0,0.4)",
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 32,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: "16px",
     }} onClick={onClose}>
       <form
         onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
         style={{
           background: "#fff", borderRadius: 16,
           border: "0.5px solid #e4e4e7", width: "100%", maxWidth: 620,
-          overflow: "hidden",
+          maxHeight: "90vh", overflowY: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
       >
 
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 28px 18px", borderBottom: "0.5px solid #f0f0f0" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            {isEdit && initial && <Avatar name={initial.fullName} size={44} />}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 14px", borderBottom: "0.5px solid #f0f0f0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {isEdit && initial && <Avatar name={initial.fullName} size={40} />}
             <div>
               <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#18181b" }}>
                 {isEdit ? `Modifier — ${initial?.fullName}` : "Ajouter un collaborateur"}
               </p>
-              <p style={{ fontSize: 14, color: "#a1a1aa", margin: "2px 0 0" }}>
+              <p style={{ fontSize: 13, color: "#a1a1aa", margin: "2px 0 0" }}>
                 {isEdit ? "Modifiez les informations du compte" : "Renseignez les informations du nouveau compte"}
               </p>
             </div>
@@ -713,8 +713,8 @@ function UserFormDialog({ open, onClose, initial, onSubmit }: {
         </div>
 
         {/* Body */}
-        <div style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
             <div>
               <label style={labelStyle}>Nom complet <span style={{ color: "#E24B4A" }}>*</span></label>
               <input
@@ -1237,7 +1237,7 @@ export default function Utilisateurs() {
   });
 
   return (
-    <div style={{ position: "relative", width: "90%", margin: "0 auto", padding: "40px 16px 64px", display: "flex", flexDirection: "column", gap: 28, fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", color: "#18181b" }}>
+    <div style={{ position: "relative", width: "100%", maxWidth: 1280, margin: "0 auto", padding: "clamp(16px, 3vw, 36px) clamp(12px, 3vw, 24px) 64px", display: "flex", flexDirection: "column", gap: 24, fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", color: "#18181b", boxSizing: "border-box", overflowX: "hidden" }}>
       <style>{`
         @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
         .popover-item:hover { background-color: #f4f4f5 !important; }
@@ -1300,19 +1300,19 @@ export default function Utilisateurs() {
       <div style={!isSystemAdmin ? { filter: "grayscale(100%)", opacity: 0.45, pointerEvents: "none" } : undefined}>
 
         {/* Dynamic Header Section */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 14 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               {activeTab === 'rights' && (
-                <div style={{ width: 44, height: 44, borderRadius: 10, background: "#f4f4f5", border: "0.5px solid #e4e4e7", display: "flex", alignItems: "center", justifyContent: "center", color: "#71717a" }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, background: "#f4f4f5", border: "0.5px solid #e4e4e7", display: "flex", alignItems: "center", justifyContent: "center", color: "#71717a", flexShrink: 0 }}>
                   <Lock size={20} />
                 </div>
               )}
               <div>
-                <h1 style={{ fontSize: 26, fontWeight: 600, margin: 0, letterSpacing: "-0.3px" }}>
+                <h1 style={{ fontSize: 24, fontWeight: 600, margin: 0, letterSpacing: "-0.3px" }}>
                   {activeTab === 'users' ? "Gestion des collaborateurs" : "Droits d'accès & Privilèges par rôle"}
                 </h1>
-                <p style={{ fontSize: 14.5, color: "#71717a", margin: "4px 0 0" }}>
+                <p style={{ fontSize: 14, color: "#71717a", margin: "4px 0 0" }}>
                   {activeTab === 'users'
                     ? "Gérez les comptes d'utilisateurs et leurs droits d'accès au backoffice"
                     : "Configurez les autorisations pour chaque rôle de l'agence."}
@@ -1322,16 +1322,16 @@ export default function Utilisateurs() {
           </div>
 
           {activeTab === 'rights' && (
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button
                 onClick={handleResetChanges}
-                style={{ padding: "10px 20px", fontSize: 14.5, borderRadius: 10, border: "0.5px solid #e4e4e7", background: "#ffffff", color: "#3f3f46", cursor: "pointer", fontWeight: 500 }}
+                style={{ padding: "9px 18px", fontSize: 14, borderRadius: 10, border: "0.5px solid #e4e4e7", background: "#ffffff", color: "#3f3f46", cursor: "pointer", fontWeight: 500 }}
               >
                 Annuler
               </button>
               <button
                 onClick={handleSaveChanges}
-                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", fontSize: 14.5, fontWeight: 500, borderRadius: 10, border: "none", background: "#0F6E56", color: "#ffffff", cursor: "pointer" }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 20px", fontSize: 14, fontWeight: 500, borderRadius: 10, border: "none", background: "#0F6E56", color: "#ffffff", cursor: "pointer" }}
               >
                 <Check size={16} />
                 Enregistrer
@@ -1341,7 +1341,7 @@ export default function Utilisateurs() {
         </div>
 
         {/* Tab Controls Bar */}
-        <div style={{ display: "flex", gap: 8, background: "#f4f4f5", padding: 6, borderRadius: 12, width: "fit-content", marginBottom: 28 }}>
+        <div style={{ display: "flex", gap: 8, background: "#f4f4f5", padding: 6, borderRadius: 12, width: "fit-content", maxWidth: "100%", overflowX: "auto", marginBottom: 24 }}>
           <button onClick={() => setActiveTab('users')} style={tabItemStyle(activeTab === 'users')}>
             Collaborateurs
           </button>
@@ -1358,20 +1358,20 @@ export default function Utilisateurs() {
             description="Créez, modifiez, désactivez ou supprimez les comptes de l'agence"
           >
             {/* Toolbar */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-              <div style={{ flex: 1, position: "relative" }}>
+            <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 200px", position: "relative" }}>
                 <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#a1a1aa", pointerEvents: "none" }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
                 <input
                   value={search}
                   onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                   placeholder="Rechercher un collaborateur…"
-                  style={{ width: "100%", padding: "11px 12px 11px 40px", fontSize: 15, border: "0.5px solid #e4e4e7", borderRadius: 8, background: "#f9f9f9", color: "#18181b", outline: "none", fontFamily: "inherit" }}
+                  style={{ width: "100%", padding: "10px 12px 10px 40px", fontSize: 14, border: "0.5px solid #e4e4e7", borderRadius: 8, background: "#f9f9f9", color: "#18181b", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
                 />
               </div>
               <select
                 value={pageSize}
                 onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                style={{ padding: "11px 14px", fontSize: 15, border: "0.5px solid #e4e4e7", borderRadius: 8, background: "#f9f9f9", color: "#18181b", outline: "none", cursor: "pointer" }}
+                style={{ padding: "10px 14px", fontSize: 14, border: "0.5px solid #e4e4e7", borderRadius: 8, background: "#f9f9f9", color: "#18181b", outline: "none", cursor: "pointer" }}
               >
                 {[5, 10, 20].map((n) => <option key={n} value={n}>{n} / page</option>)}
               </select>
@@ -1385,7 +1385,7 @@ export default function Utilisateurs() {
                   setEditing(null);
                   setFormOpen(true);
                 }}
-                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 22px", fontSize: 15, fontWeight: 500, background: "#0F6E56", color: "#9FE1CB", border: "none", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", fontSize: 14, fontWeight: 500, background: "#0F6E56", color: "#9FE1CB", border: "none", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap" }}
               >
                 <Plus size={16} strokeWidth={2.5} />
                 Ajouter
@@ -1393,33 +1393,33 @@ export default function Utilisateurs() {
             </div>
 
             {/* Table */}
-            <div style={{ border: "0.5px solid #f0f0f0", borderRadius: 10, overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 15 }}>
+            <div style={{ border: "0.5px solid #f0f0f0", borderRadius: 10, overflowX: "auto" }}>
+              <table style={{ width: "100%", minWidth: 600, borderCollapse: "collapse", fontSize: 14 }}>
                 <thead>
                   <tr style={{ background: "#fafafa", borderBottom: "0.5px solid #f0f0f0" }}>
                     {["Collaborateur", "Rôle", "Ville", "Statut", ""].map((h, i) => (
-                      <th key={i} style={{ padding: "14px 18px", textAlign: i === 4 ? "right" : "left", fontSize: 13, fontWeight: 500, color: "#71717a", whiteSpace: "nowrap" }}>{h}</th>
+                      <th key={i} style={{ padding: "12px 16px", textAlign: i === 4 ? "right" : "left", fontSize: 12, fontWeight: 500, color: "#71717a", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {paged.length === 0 ? (
-                    <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: "#a1a1aa", fontSize: 15 }}>Aucun collaborateur trouvé</td></tr>
+                    <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: "#a1a1aa", fontSize: 14 }}>Aucun collaborateur trouvé</td></tr>
                   ) : paged.map((u) => (
                     <tr key={u.id} style={{ borderBottom: "0.5px solid #f5f5f5" }}>
-                      <td style={{ padding: "15px 18px" }}>
+                      <td style={{ padding: "14px 16px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                           <Avatar name={u.fullName} />
                           <div>
-                            <div style={{ fontWeight: 500, fontSize: 15, color: "#18181b" }}>{u.fullName}</div>
+                            <div style={{ fontWeight: 500, fontSize: 14.5, color: "#18181b" }}>{u.fullName}</div>
                             <div style={{ fontSize: 12, color: "#a1a1aa", marginTop: 1 }}>{u.email}</div>
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: "15px 18px" }}><RoleBadge role={u.position} /></td>
-                      <td style={{ padding: "15px 18px", fontSize: 14, color: "#71717a" }}>{u.city}</td>
-                      <td style={{ padding: "15px 18px" }}><StatusBadge status={u.status} /></td>
-                      <td style={{ padding: "15px 18px" }}>
+                      <td style={{ padding: "14px 16px" }}><RoleBadge role={u.position} /></td>
+                      <td style={{ padding: "14px 16px", fontSize: 13.5, color: "#71717a" }}>{u.city}</td>
+                      <td style={{ padding: "14px 16px" }}><StatusBadge status={u.status} /></td>
+                      <td style={{ padding: "14px 16px" }}>
                         <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                           <IconButton title="Modifier" onClick={() => {
                             const perm = checkPermission(user, 'manage_users');
@@ -1461,22 +1461,22 @@ export default function Utilisateurs() {
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
             {/* Horizontal Cards Row */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
               {CONFIGURABLE_ROLES.map((role) => {
                 const checkedCount = PERMISSIONS.filter(p => (draftPrivileges[role.key] || []).includes(p.key)).length;
                 const percentage = Math.round((checkedCount / PERMISSIONS.length) * 100);
                 return (
-                  <div key={role.key} style={{ background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between", height: 105, boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
+                  <div key={role.key} style={{ background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 90, boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: 15, fontWeight: 600, color: "#18181b" }}>{role.label}</span>
-                      <span style={{ fontSize: 11.5, color: "#71717a", background: "#f4f4f5", padding: "2px 8px", borderRadius: 6, fontWeight: 650 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: "#18181b" }}>{role.label}</span>
+                      <span style={{ fontSize: 11, color: "#71717a", background: "#f4f4f5", padding: "2px 6px", borderRadius: 6, fontWeight: 650 }}>
                         {checkedCount}/{PERMISSIONS.length}
                       </span>
                     </div>
-                    <div style={{ fontSize: 13, color: "#a1a1aa", marginTop: 2 }}>{role.description}</div>
+                    <div style={{ fontSize: 11.5, color: "#a1a1aa", marginTop: 2 }}>{role.description}</div>
 
                     {/* Progress Bar */}
-                    <div style={{ width: "100%", height: 5, background: "#f4f4f5", borderRadius: 10, overflow: "hidden", marginTop: 12 }}>
+                    <div style={{ width: "100%", height: 5, background: "#f4f4f5", borderRadius: 10, overflow: "hidden", marginTop: 8 }}>
                       <div style={{ width: `${percentage}%`, height: "100%", background: "#0F6E56", borderRadius: 10, transition: "width 0.2s" }} />
                     </div>
                   </div>
@@ -1485,46 +1485,47 @@ export default function Utilisateurs() {
             </div>
 
             {/* Toolbar: Search and Module Category Selector */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center" }}>
-              <div style={{ position: "relative" }}>
-                <Search style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#a1a1aa", pointerEvents: "none" }} size={18} />
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}>
+                <Search style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#a1a1aa", pointerEvents: "none" }} size={17} />
                 <input
                   value={privilegeSearch}
                   onChange={(e) => setPrivilegeSearch(e.target.value)}
                   placeholder="Rechercher une autorisation..."
-                  style={{ width: "100%", padding: "12px 14px 12px 42px", fontSize: 15, border: "0.5px solid #e4e4e7", borderRadius: 10, background: "#ffffff", color: "#18181b", outline: "none", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}
+                  style={{ width: "100%", padding: "10px 14px 10px 40px", fontSize: 14, border: "0.5px solid #e4e4e7", borderRadius: 10, background: "#ffffff", color: "#18181b", outline: "none", fontFamily: "inherit", boxSizing: "border-box", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}
                 />
               </div>
 
               {/* Module Selector Dropdown */}
-              <div style={{ position: "relative" }}>
+              <div style={{ position: "relative", flex: "0 1 auto" }}>
                 <select
                   value={selectedModule}
                   onChange={(e) => setSelectedModule(e.target.value)}
-                  style={{ padding: "12px 40px 12px 16px", fontSize: 15, border: "0.5px solid #e4e4e7", borderRadius: 10, background: "#ffffff", color: "#18181b", outline: "none", cursor: "pointer", minWidth: 200, appearance: "none", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}
+                  style={{ padding: "10px 38px 10px 14px", fontSize: 14, border: "0.5px solid #e4e4e7", borderRadius: 10, background: "#ffffff", color: "#18181b", outline: "none", cursor: "pointer", minWidth: 180, appearance: "none", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}
                 >
                   <option value="all">Tous les modules</option>
                   {moduleGroups.map((group) => (
                     <option key={group} value={group}>{group}</option>
                   ))}
                 </select>
-                <ChevronDown size={16} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", color: "#71717a", pointerEvents: "none" }} />
+                <ChevronDown size={15} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#71717a", pointerEvents: "none" }} />
               </div>
             </div>
 
-            {/* Access Rights Grid Card */}
-            <div style={{ background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, overflow: "visible", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-              <div style={{ overflow: "visible" }}>
-                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 15 }}>
-                  <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
-                    <tr style={{ background: "#ffffff", borderBottom: "1px solid #f0f0f0" }}>
-                      <th style={{ padding: "16px 20px", textAlign: "left", fontSize: 13, fontWeight: 500, color: "#71717a", width: "40%", borderBottom: "1px solid #f0f0f0", background: "#ffffff" }}>
+            {/* Access Rights Grid Card (contained scroll to avoid page overflow while keeping sticky header & left column) */}
+            <div style={{ background: "#ffffff", border: "0.5px solid #e4e4e7", borderRadius: 12, overflowX: "auto", overflowY: "auto", maxHeight: "74vh", WebkitOverflowScrolling: "touch", width: "100%", maxWidth: "100%", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <div style={{ minWidth: "max-content", width: "100%" }}>
+                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13.5 }}>
+                  <thead style={{ position: "sticky", top: 0, zIndex: 25 }}>
+                    <tr style={{ background: "#ffffff" }}>
+                      {/* Top-left cell: sticky both top and left, compact to maximize space for switches */}
+                      <th style={{ position: "sticky", top: 0, left: 0, zIndex: 30, padding: "12px 14px", textAlign: "left", fontSize: 12, fontWeight: 600, color: "#71717a", width: "clamp(150px, 24vw, 220px)", minWidth: 150, maxWidth: 220, borderBottom: "1.5px solid #e4e4e7", background: "#ffffff", boxShadow: "2px 2px 4px rgba(0,0,0,0.04)" }}>
                         Module & autorisation
                       </th>
                       {CONFIGURABLE_ROLES.map((role) => (
-                        <th key={role.key} className="role-popover-wrapper" style={{ position: "relative", padding: "16px 10px", width: "11%", textAlign: "center", borderBottom: "1px solid #f0f0f0", verticalAlign: "top", overflow: "visible", background: "#ffffff" }}>
+                        <th key={role.key} className="role-popover-wrapper" style={{ position: "sticky", top: 0, zIndex: 20, padding: "12px 12px", minWidth: 115, textAlign: "center", borderBottom: "1.5px solid #e4e4e7", verticalAlign: "top", background: "#ffffff", boxShadow: "0 2px 4px rgba(0,0,0,0.03)" }}>
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                            <span style={{ fontSize: 13.5, fontWeight: 650, color: "#18181b" }}>{role.label}</span>
+                            <span style={{ fontSize: 13, fontWeight: 650, color: "#18181b" }}>{role.label}</span>
                             <button
                               onClick={() => setActiveRolePopover(activeRolePopover === role.key ? null : role.key)}
                               style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", fontSize: 18, fontWeight: "bold", padding: "2px 8px", marginTop: 2, outline: "none" }}
@@ -1562,7 +1563,7 @@ export default function Utilisateurs() {
                           )}
                         </th>
                       ))}
-                      <th style={{ width: "5%", borderBottom: "1px solid #f0f0f0", background: "#ffffff" }}></th>
+                      <th style={{ position: "sticky", top: 0, zIndex: 20, width: 45, borderBottom: "1.5px solid #e4e4e7", background: "#ffffff", boxShadow: "0 2px 4px rgba(0,0,0,0.03)" }}></th>
                     </tr>
                   </thead>
 
@@ -1578,10 +1579,10 @@ export default function Utilisateurs() {
                             onClick={() => toggleGroupExpand(group)}
                             style={{ background: headerColors.bg, color: headerColors.text, cursor: "pointer", userSelect: "none" }}
                           >
-                            <td colSpan={7} style={{ padding: "14px 20px", fontSize: "14px", fontWeight: 700, letterSpacing: "0.3px", textTransform: "uppercase", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <td colSpan={CONFIGURABLE_ROLES.length + 2} style={{ padding: "11px 14px", fontSize: "13px", fontWeight: 700, letterSpacing: "0.3px", textTransform: "uppercase", borderBottom: "1px solid rgba(0,0,0,0.06)", background: headerColors.bg, color: headerColors.text }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, position: "sticky", left: 14, width: "fit-content" }}>
                                 <span style={{ transition: "transform 0.2s", display: "inline-block", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>
-                                  <ChevronRight size={16} strokeWidth={2.5} />
+                                  <ChevronRight size={15} strokeWidth={2.5} />
                                 </span>
                                 {group}
                               </div>
@@ -1597,33 +1598,38 @@ export default function Utilisateurs() {
                               <React.Fragment key={p.key}>
                                 {showSubgroup && (
                                   <tr style={{ background: "#fcfdfc" }}>
-                                    <td colSpan={CONFIGURABLE_ROLES.length + 2} style={{ padding: "10px 20px", fontSize: "11px", fontWeight: 700, color: "#0F6E56", letterSpacing: "0.5px", textTransform: "uppercase", borderBottom: "0.5px solid #e4e4e7" }}>
-                                      {p.subgroup}
+                                    <td colSpan={CONFIGURABLE_ROLES.length + 2} style={{ padding: "9px 14px", fontSize: "11px", fontWeight: 700, color: "#0F6E56", letterSpacing: "0.5px", textTransform: "uppercase", borderBottom: "0.5px solid #e4e4e7", background: "#fcfdfc" }}>
+                                      <div style={{ position: "sticky", left: 14, width: "fit-content" }}>
+                                        {p.subgroup}
+                                      </div>
                                     </td>
                                   </tr>
                                 )}
                                 <tr className="row-hover" style={{ borderBottom: "0.5px solid #e4e4e7" }}>
-                                  <td style={{ padding: "14px 20px", borderBottom: "0.5px solid #e4e4e7" }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                      <span style={{ fontSize: "14px", color: "#3f3f46", fontWeight: 500 }}>{p.label}</span>
-                                      <span style={{ fontSize: "11px", color: "#71717a", background: "#f4f4f5", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
+                                  {/* Left column sticky */}
+                                  <td style={{ position: "sticky", left: 0, zIndex: 10, padding: "10px 14px", borderBottom: "0.5px solid #e4e4e7", background: "#ffffff", width: "clamp(150px, 24vw, 220px)", minWidth: 150, maxWidth: 220, boxShadow: "2px 0 4px rgba(0,0,0,0.03)" }}>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                                      <span style={{ fontSize: "12px", color: "#3f3f46", fontWeight: 500, lineHeight: 1.35 }}>{p.label}</span>
+                                      <span style={{ fontSize: "10.5px", color: "#71717a", background: "#f4f4f5", padding: "1px 5px", borderRadius: 4, fontWeight: 600, flexShrink: 0 }}>
                                         {enabledRolesCount}/5
                                       </span>
                                     </div>
                                   </td>
 
                                   {CONFIGURABLE_ROLES.map((role) => (
-                                    <td key={role.key} style={{ padding: "10px", textAlign: "center", borderBottom: "0.5px solid #e4e4e7" }}>
-                                      <Toggle
-                                        checked={(draftPrivileges[role.key] || []).includes(p.key)}
-                                        onChange={() => handleTogglePermission(role.key, p.key)}
-                                        tooltip={role.label}
-                                      />
+                                    <td key={role.key} style={{ padding: "10px 12px", textAlign: "center", borderBottom: "0.5px solid #e4e4e7", minWidth: 115 }}>
+                                      <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+                                        <Toggle
+                                          checked={(draftPrivileges[role.key] || []).includes(p.key)}
+                                          onChange={() => handleTogglePermission(role.key, p.key)}
+                                          tooltip={role.label}
+                                        />
+                                      </div>
                                     </td>
                                   ))}
 
                                   {/* Row bulk actions (...) */}
-                                  <td className="row-popover-wrapper" style={{ position: "relative", padding: "14px 18px", textAlign: "right", borderBottom: "0.5px solid #e4e4e7", overflow: "visible" }}>
+                                  <td className="row-popover-wrapper" style={{ position: "relative", padding: "10px 12px", textAlign: "right", borderBottom: "0.5px solid #e4e4e7", overflow: "visible", width: 45 }}>
                                     <button
                                       onClick={() => setActiveRowPopover(activeRowPopover === p.key ? null : p.key)}
                                       style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", fontSize: 18, padding: "2px 8px", outline: "none" }}
