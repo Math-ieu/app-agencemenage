@@ -338,11 +338,16 @@ export default function LaCaisse() {
           const partProfil = rawPartProfil * ratio;
           const montant = Number(dem?.prix ?? 0) * ratio;
           const rawMontantPaye = m.montant_paye !== undefined ? Number(m.montant_paye) : 0;
-          const paiement = ['paye', 'agence_payee_client', 'profil_paye_client', 'effectue', 'integral'].includes(rawStatus) ? 'paye' : ['paiement_partiel', 'paiement_en_attente', 'partiel', 'acompte'].includes(rawStatus) ? 'partiellement_paye' : 'non_paye';
+          const isPaidStatus = ['paye', 'agence_payee_client', 'profil_paye_client', 'commercial_paye_client', 'effectue', 'integral', 'Agence payée / Client', 'Profil payé / Client', 'Commercial payé / client'].includes(rawStatus);
+          const isPartiallyPaidStatus = ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatus);
+          const paiement = isPaidStatus ? 'paye' : isPartiallyPaidStatus ? 'partiellement_paye' : 'non_paye';
           let montantPaye = rawMontantPaye * ratio;
-          if (montantPaye === 0) {
-            if (paiement === 'paye') montantPaye = montant;
-            else if (paiement === 'partiellement_paye') montantPaye = 0;
+          if (isPaidStatus) {
+            montantPaye = Number(fact.montant_verse) || montant;
+          } else if (isPartiallyPaidStatus) {
+            montantPaye = Number(fact.montant_verse) || 0;
+          } else if (montantPaye === 0 && paiement === 'paye') {
+            montantPaye = montant;
           }
           const montantProfilAnnulation = Number(dem?.montant_profil_annulation || m.montant_profil_annulation || fact.montant_profil_annulation || 0) * ratio;
 
@@ -380,14 +385,14 @@ export default function LaCaisse() {
           const isFacturationAnnulee = !isGratuit && fact.facturation_annulee === true;
           const isInterventionAnnulee = !isFacturationAnnulee && (d.statut === 'annule');
           const statut = isGratuit ? 'Intervention gratuite' : isInterventionAnnulee ? 'Intervention annulée' : isFacturationAnnulee ? 'Facturation annulée' : 'Confirmée';
-          const encaissePar = ['profil_paye_client'].includes(rawStatus) ? 'Profil' : 'Agence';
+          const encaissePar = ['profil_paye_client', 'Profil payé / Client'].includes(rawStatus) ? 'Profil' : 'Agence';
           const partProfilVersee = encaissePar === 'Agence' ? Boolean(fact.part_profil_versee) : Boolean(fact.part_agence_reversee);
           const reglementInterne = partProfilVersee ? 'Réglé' : 'Non réglé';
 
           const partAgence = (fact.part_agence !== null && fact.part_agence !== undefined)
             ? Number(fact.part_agence)
             : (d?.part_agence !== null && d?.part_agence !== undefined)
-              ? Number(d.part_agence)
+              ? Number(d?.part_agence)
               : 0;
 
           const parts = fact.parts_repartition || d.parts_repartition || [];
@@ -396,12 +401,12 @@ export default function LaCaisse() {
             ? partsSum
             : Number(fact.part_profil ?? (fact.montant_agence_doit_profil || (Number(d?.prix ?? 0) - partAgence)));
           const montant = Number(d?.prix ?? 0);
-          const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client'].includes(rawStatus);
+          const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client', 'commercial_paye_client', 'Commercial payé / client'].includes(rawStatus);
           const isPartiallyPaidStatus = ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatus);
           const paiement = isPaidStatus ? 'paye' : (isPartiallyPaidStatus ? 'partiellement_paye' : 'non_paye');
-          const montantPaye = paiement === 'paye'
+          const montantPaye = isPaidStatus
             ? (Number(fact.montant_verse) || montant)
-            : (paiement === 'partiellement_paye' ? (Number(fact.montant_verse) || 0) : 0);
+            : (isPartiallyPaidStatus ? (Number(fact.montant_verse) || 0) : 0);
           const montantProfilAnnulation = Number(d.montant_profil_annulation || fact.montant_profil_annulation || 0);
 
           return {
@@ -593,13 +598,23 @@ export default function LaCaisse() {
         if (isCancelled || isGratuit) continue;
         if (row.isSubscriptionSecondary) continue;
 
-        if (row.paiement !== 'non_paye' || row.cao === true || row.cao === 'oui') {
+        const isCaoConfirmed = (r: any): boolean => {
+          const val = r.cao;
+          return val === true || val === 1 || String(val).toLowerCase() === 'oui' || String(val).toLowerCase() === 'true';
+        };
+
+        const isClientPaidStatus = (statutUi?: string): boolean => {
+          if (!statutUi) return false;
+          return ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client', 'commercial_paye_client', 'Commercial payé / client'].includes(statutUi);
+        };
+
+        if (row.paiement !== 'non_paye' || isCaoConfirmed(row) || isClientPaidStatus(row.statutPaiementUi)) {
           if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
             totalCA += row.montant;
-          } else if (row.paiement === 'non_paye' && (row.cao === true || row.cao === 'oui')) {
+          } else if (isCaoConfirmed(row) || isClientPaidStatus(row.statutPaiementUi) || row.paiement === 'paye') {
             totalCA += row.montant;
           } else {
-            totalCA += (row.montantPaye ?? 0);
+            totalCA += (row.montantPaye && row.montantPaye > 0) ? row.montantPaye : row.montant;
           }
         }
         totalPartAgence += row.partAgence;
