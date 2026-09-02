@@ -525,16 +525,19 @@ export default function Dashboard() {
     try {
       const [resDemandes, resAgents] = await Promise.all([
         getDemandes({ no_page: 'true' }),
-        getAgents({ limit: 1000 }).catch(err => {
+        getAgents({ no_page: 'true', page_size: 1000 }).catch(err => {
           console.warn('Failed to fetch agents:', err);
-          return { data: { results: [] } };
+          return { data: [] };
         })
       ]);
       const data = resDemandes.data;
       const allResults: Demande[] = Array.isArray(data?.results) ? data.results : (Array.isArray(data) ? data : []);
 
-      if (resAgents.data) {
-        const agents = resAgents.data.results || [];
+      if (resAgents?.data) {
+        const rawAgents = Array.isArray(resAgents.data)
+          ? resAgents.data
+          : (Array.isArray(resAgents.data.results) ? resAgents.data.results : []);
+        const agents = [...rawAgents];
         agents.sort((a: any, b: any) => {
           const nameA = (a.full_name || `${a.first_name || ''} ${a.last_name || ''}`).trim().toLowerCase();
           const nameB = (b.full_name || `${b.first_name || ''} ${b.last_name || ''}`).trim().toLowerCase();
@@ -1259,6 +1262,20 @@ export default function Dashboard() {
   };
 
   const openDetail = (d: Demande) => {
+    if (allProfils.length === 0) {
+      getAgents({ no_page: 'true', page_size: 1000 }).then(res => {
+        const raw = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : []);
+        if (raw.length > 0) {
+          const sorted = [...raw].sort((a: any, b: any) => {
+            const nameA = (a.full_name || `${a.first_name || ''} ${a.last_name || ''}`).trim().toLowerCase();
+            const nameB = (b.full_name || `${b.first_name || ''} ${b.last_name || ''}`).trim().toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
+          setAllProfils(sorted);
+        }
+      }).catch(() => {});
+    }
+
     const formData = d.formulaire_data || {};
     const facturationData = formData.facturation || {};
     const prixValue = toNumber(d.prix);
@@ -1629,51 +1646,6 @@ export default function Dashboard() {
     });
   }, [demandes, typeFilter, search, serviceFilter, prestationFilter, dateRange]);
 
-  const busyAgentIds = useMemo(() => {
-    const activeIds = new Set<number>();
-    const list = allDemandes.length > 0 ? allDemandes : demandes;
-    for (const d of list) {
-      if (selectedDemande && Number(d.id) === Number(selectedDemande.id)) continue;
-      if (d.statut === 'en_attente' || d.statut === 'pres_terminee' || d.statut === 'termine') continue;
-
-      const factDataDef = d.formulaire_data?.facturation || {};
-      const statutUi = factDataDef.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(factDataDef.facturation_annulee));
-
-      if (statutUi === 'paye') continue;
-
-      const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || factDataDef.facturation_annulee;
-      if (isAnnule) {
-        const profilSeraPaye = (d as any).profil_sera_paye !== undefined ? Boolean((d as any).profil_sera_paye) : Boolean(factDataDef.profil_sera_paye);
-        if (profilSeraPaye) {
-          let allProfilesPaid = false;
-          const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
-          if (Array.isArray(parts) && parts.length > 0) {
-            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
-          } else {
-            allProfilesPaid = Boolean(factDataDef.part_profil_versee);
-          }
-          if (allProfilesPaid) continue;
-        } else {
-          continue;
-        }
-      }
-
-      if (Array.isArray(d.profils_envoyes)) {
-        for (const p of d.profils_envoyes) {
-          if (p.id) activeIds.add(Number(p.id));
-        }
-      }
-
-      const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
-      if (Array.isArray(parts)) {
-        for (const part of parts) {
-          const pid = Number(part.profile_id);
-          if (pid) activeIds.add(pid);
-        }
-      }
-    }
-    return activeIds;
-  }, [allDemandes, demandes, selectedDemande]);
   const montantHT = toNumber(editFormData.montant_ht ?? editFormData.prix);
   const montantTTC = roundMoney(editFormData.tva_active ? montantHT * 1.2 : montantHT);
   const partsRepartition: PartRepartitionItem[] = asArray<PartRepartitionItem>(editFormData.parts_repartition, []);
@@ -3537,7 +3509,11 @@ export default function Dashboard() {
                                     >
                                       <option value="">Sélectionner un profil...</option>
                                       {allProfils
-                                        .filter(p => p.id === line.profile_id || (p.statut === 'disponible' && !busyAgentIds.has(p.id) && !p.is_blacklisted))
+                                        .filter(p => {
+                                          if (p.id === line.profile_id) return true;
+                                          if (p.is_blacklisted || p.statut === 'blacklist' || p.is_archived) return false;
+                                          return true;
+                                        })
                                         .map(p => (
                                           <option key={p.id} value={p.id}>
                                             {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`}
