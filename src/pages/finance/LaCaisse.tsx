@@ -370,6 +370,7 @@ export default function LaCaisse() {
             profilId,
             profil: m.agent_detail ? (m.agent_detail.full_name || `${m.agent_detail.first_name || ''} ${m.agent_detail.last_name || ''}`).trim() : '—',
             parts_repartition: parts,
+            cao: (dem as any)?.cao || (m as any)?.cao,
           };
         }),
         ...uniqueDemands.map(d => {
@@ -386,7 +387,7 @@ export default function LaCaisse() {
           const partAgence = (fact.part_agence !== null && fact.part_agence !== undefined)
             ? Number(fact.part_agence)
             : (d?.part_agence !== null && d?.part_agence !== undefined)
-              ? Number(d.part_agence)
+              ? Number(d?.part_agence)
               : 0;
 
           const parts = fact.parts_repartition || d.parts_repartition || [];
@@ -427,6 +428,7 @@ export default function LaCaisse() {
             profilId: d.profil_id || null,
             profil: d.profil_name || '—',
             parts_repartition: fact.parts_repartition || d.parts_repartition || [],
+            cao: d.cao,
           };
         })
       ];
@@ -591,8 +593,15 @@ export default function LaCaisse() {
         if (isCancelled || isGratuit) continue;
         if (row.isSubscriptionSecondary) continue;
 
-        if (row.paiement !== 'non_paye') {
+        const isCaoConfirmed = (r: any): boolean => {
+          const val = r.cao;
+          return val === true || val === 1 || String(val).toLowerCase() === 'oui' || String(val).toLowerCase() === 'true';
+        };
+
+        if (row.paiement !== 'non_paye' || isCaoConfirmed(row)) {
           if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+            totalCA += row.montant;
+          } else if (row.paiement === 'non_paye' && isCaoConfirmed(row)) {
             totalCA += row.montant;
           } else {
             totalCA += (row.montantPaye ?? 0);

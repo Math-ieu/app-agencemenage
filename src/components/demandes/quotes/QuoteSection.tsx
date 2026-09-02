@@ -31,7 +31,7 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
   const isDevis = demande.segment === 'entreprise' || 
     demande.formulaire_data?.is_autre_service === true ||
     service.includes('air bnb') || service.includes('airbnb') || 
-    service.includes('sinistre') || service.includes('auxiliaire') || 
+    service.includes('sinistre') || service.includes('auxiliaire') || service.includes('garde') ||
     service.includes('chantier') || service.includes('placement') || service.includes('gestion') ||
     service.includes('standard') || service.includes('grand') || service.includes('bureaux') ||
     service.includes('autre service') || service.includes('autre_service');
@@ -258,7 +258,7 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
     }
     if (service.includes("air bnb") || service.includes("airbnb")) return <AirbnbQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} formData={formData} setFormData={setFormData} onUpdateDemandeData={patch => onUpdateDemandeData?.(demande.id, patch)} />;
     if (service.includes("chantier")) return <ChantierQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
-    if (service.includes("auxiliaire")) return <AuxvieQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
+    if (service.includes("auxiliaire") || service.includes("garde")) return <AuxvieQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
     if (service.includes("sinistre")) return <SinistreQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
     if (service.includes("bureaux")) return <BureauxQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;
     if (service.includes("placement") || service.includes("gestion")) return <PlacementQuote key={demande.id} demande={demande} onPrestationsChange={handlePrestationsChange} />;

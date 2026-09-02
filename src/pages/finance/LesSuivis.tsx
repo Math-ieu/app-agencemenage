@@ -78,6 +78,7 @@ interface FacturationRow {
   originalMission?: any;
   parts_repartition?: any[];
   _uniqueKey?: string;
+  cao?: boolean | string | number;
   note_commercial?: string;
   _partProfilDue?: number;
   _partProfilVersee?: boolean;
@@ -593,6 +594,7 @@ export default function LesSuivis() {
       originalMission: item,
       parts_repartition: Array.isArray(facturationData.parts_repartition) && facturationData.parts_repartition.length > 0 ? facturationData.parts_repartition : Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : undefined,
       note_commercial: partInfo?.note_commercial || demande?.note_commercial || facturationData.note_commercial || '—',
+      cao: (demande as any)?.cao || (item?.demande_detail as any)?.cao || (item as any)?.cao,
     };
   }, []);
 
@@ -732,6 +734,7 @@ export default function LesSuivis() {
       originalMission: null,
       parts_repartition: Array.isArray(facturationData.parts_repartition) && facturationData.parts_repartition.length > 0 ? facturationData.parts_repartition : Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : undefined,
       note_commercial: demande?.note_commercial || facturationData.note_commercial || '—',
+      cao: demande?.cao,
     };
   }, []);
 
@@ -1185,10 +1188,17 @@ export default function LesSuivis() {
         row.statut === 'Intervention gratuite' ||
         row.statutPaiementUi === 'intervention_gratuite';
 
+      const isCaoConfirmed = (r: FacturationRow): boolean => {
+        const val = r.cao ?? r.originalDemande?.cao ?? (r.originalMission as any)?.demande_detail?.cao;
+        return val === true || val === 1 || String(val).toLowerCase() === 'oui' || String(val).toLowerCase() === 'true';
+      };
+
       if (!isCancelled) {
         if (!row.isSubscriptionSecondary) {
-          if (row.paiement !== 'non_paye') {
+          if (row.paiement !== 'non_paye' || isCaoConfirmed(row)) {
             if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+              totalCa += row.montant;
+            } else if (row.paiement === 'non_paye' && isCaoConfirmed(row)) {
               totalCa += row.montant;
             } else {
               totalCa += (row.montantPaye ?? 0);

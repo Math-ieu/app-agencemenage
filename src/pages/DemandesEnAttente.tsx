@@ -26,7 +26,7 @@ const isDevisRequired = (d: Demande | null) => {
   if (d.formulaire_data?.is_autre_service) return true;
   const s = (d.service || '').toLowerCase();
   return s.includes('air bnb') || s.includes('airbnb') || 
-         s.includes('sinistre') || s.includes('auxiliaire') || 
+         s.includes('sinistre') || s.includes('auxiliaire') || s.includes('garde') ||
          s.includes('chantier') || s.includes('placement') || s.includes('gestion') ||
          s.includes('autre service') || s.includes('autre_service');
 };
@@ -255,7 +255,7 @@ export default function DemandesEnAttente() {
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const selectedServiceKey = normalizeServiceLabel(selectedService);
-  const isAuxiliaireService = selectedServiceKey.includes('auxiliaire de vie');
+  const isAuxiliaireService = selectedServiceKey.includes('auxiliaire') || selectedServiceKey.includes('garde malade') || selectedServiceKey.includes('garde-malade') || selectedServiceKey.includes('garde');
   // @ts-ignore
   const isPlacementGestionService = selectedServiceKey.includes('placement & gestion') || selectedServiceKey.includes('placement et gestion');
   const isCleaningService = selectedServiceKey.includes('menage') || selectedServiceKey.includes('nettoyage');
@@ -783,11 +783,11 @@ export default function DemandesEnAttente() {
       service_type: d.formulaire_data?.service_type || 'flexible',
       structure_type: normalizeStructure(d.formulaire_data?.structure_type || ''),
       nb_personnel: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || d.formulaire_data?.numberOfPeople || d.nb_intervenants || 1,
-      lieu_garde: d.formulaire_data?.lieu_garde || 'domicile',
-      age_personne: d.formulaire_data?.age_personne || '',
-      sexe_personne: normalizeSexe(d.formulaire_data?.sexe_personne || ''),
-      mobilite: normalizeMobilite(d.formulaire_data?.mobilite || ''),
-      situation_medicale: d.formulaire_data?.situation_medicale || '',
+      lieu_garde: d.formulaire_data?.lieu_garde || d.formulaire_data?.careLocation || 'domicile',
+      age_personne: d.formulaire_data?.age_personne || d.formulaire_data?.patientAge || '',
+      sexe_personne: normalizeSexe(d.formulaire_data?.sexe_personne || d.formulaire_data?.patientGender || ''),
+      mobilite: normalizeMobilite(d.formulaire_data?.mobilite || d.formulaire_data?.mobility || ''),
+      situation_medicale: d.formulaire_data?.situation_medicale || d.formulaire_data?.healthIssues || '',
       nb_jours: d.formulaire_data?.nb_jours || 1,
       rooms: d.formulaire_data?.rooms || {
         cuisine: 0, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 0, chambre: 0,
@@ -910,11 +910,11 @@ export default function DemandesEnAttente() {
       service_type: d.formulaire_data?.service_type || 'flexible',
       structure_type: normalizeStructure(d.formulaire_data?.structure_type || ''),
       nb_personnel: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || d.formulaire_data?.numberOfPeople || d.nb_intervenants || 1,
-      lieu_garde: d.formulaire_data?.lieu_garde || 'domicile',
-      age_personne: d.formulaire_data?.age_personne || '',
-      sexe_personne: normalizeSexe(d.formulaire_data?.sexe_personne || ''),
-      mobilite: normalizeMobilite(d.formulaire_data?.mobilite || ''),
-      situation_medicale: d.formulaire_data?.situation_medicale || '',
+      lieu_garde: d.formulaire_data?.lieu_garde || d.formulaire_data?.careLocation || 'domicile',
+      age_personne: d.formulaire_data?.age_personne || d.formulaire_data?.patientAge || '',
+      sexe_personne: normalizeSexe(d.formulaire_data?.sexe_personne || d.formulaire_data?.patientGender || ''),
+      mobilite: normalizeMobilite(d.formulaire_data?.mobilite || d.formulaire_data?.mobility || ''),
+      situation_medicale: d.formulaire_data?.situation_medicale || d.formulaire_data?.healthIssues || '',
       nb_jours: d.formulaire_data?.nb_jours || 1,
       rooms: d.formulaire_data?.rooms || {
         cuisine: 0, suiteAvecBain: 0, suiteSansBain: 0, salleDeBain: 0, chambre: 0,
@@ -1679,19 +1679,19 @@ export default function DemandesEnAttente() {
                     {isExpanded(d.id, 'details') && (
                       <div className="accordion-content">
                         <div className="detail-item"><span className="detail-label">Service :</span> <span className="detail-value text-main-teal fw-bold">{d.service}</span></div>
-                        {!(d.service || '').includes('Auxiliaire') && (
+                        {!(d.service || '').toLowerCase().includes('auxiliaire') && !(d.service || '').toLowerCase().includes('garde') && (
                           <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">{d.formulaire_data?.type_habitation || d.formulaire_data?.structure_type || '—'}</span></div>
                         )}
                         <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency_label || (d.frequency === 'oneshot' ? 'Une fois' : 'Abonnement')}</span></div>
                         <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.formulaire_data?.duree ? `${d.formulaire_data.duree}h` : (d.formulaire_data?.duration ? `${d.formulaire_data.duration}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—'))}</span></div>
                         <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || '—'}</span></div>
-                        {(d.service || '').includes('Auxiliaire') ? (
+                        {(d.service || '').toLowerCase().includes('auxiliaire') || (d.service || '').toLowerCase().includes('garde') ? (
                           <>
-                            <div className="detail-item"><span className="detail-label">Âge / Sexe :</span> <span className="detail-value">{d.formulaire_data?.age_personne ? `${d.formulaire_data.age_personne} ans` : '—'} / {d.formulaire_data?.sexe_personne || '—'}</span></div>
-                            <div className="detail-item"><span className="detail-label">Mobilité :</span> <span className="detail-value">{d.formulaire_data?.mobilite || '—'}</span></div>
+                            <div className="detail-item"><span className="detail-label">Âge / Sexe :</span> <span className="detail-value">{d.formulaire_data?.age_personne || d.formulaire_data?.patientAge ? `${d.formulaire_data?.age_personne || d.formulaire_data?.patientAge} ans` : '—'} / {d.formulaire_data?.sexe_personne || d.formulaire_data?.patientGender || '—'}</span></div>
+                            <div className="detail-item"><span className="detail-label">Mobilité :</span> <span className="detail-value">{d.formulaire_data?.mobilite || d.formulaire_data?.mobility || '—'}</span></div>
                             <div className="detail-item" style={{ gridColumn: 'span 2' }}>
                               <span className="detail-label">Médical :</span>
-                              <span className="detail-value">{d.formulaire_data?.situation_medicale || '—'}</span>
+                              <span className="detail-value">{d.formulaire_data?.situation_medicale || d.formulaire_data?.healthIssues || '—'}</span>
                             </div>
                           </>
                         ) : (
@@ -1945,16 +1945,16 @@ export default function DemandesEnAttente() {
                     </div>
                   )}
 
-                  {d.formulaire_data?.structure_type && !(d.service || '').includes('Auxiliaire') && (
+                  {d.formulaire_data?.structure_type && !(d.service || '').toLowerCase().includes('auxiliaire') && !(d.service || '').toLowerCase().includes('garde') && (
                     <div className="mobile-detail-row">
                       <span className="mobile-detail-label">Structure</span>
                       <span className="mobile-detail-value">{d.formulaire_data?.structure_type || '—'}</span>
                     </div>
                   )}
-                  {d.service.includes('Auxiliaire') && (
+                  {((d.service || '').toLowerCase().includes('auxiliaire') || (d.service || '').toLowerCase().includes('garde')) && (
                     <div className="mobile-detail-row">
                       <span className="mobile-detail-label">Profil</span>
-                      <span className="mobile-detail-value">{d.formulaire_data?.age_personne} ans ({d.formulaire_data?.sexe_personne})</span>
+                      <span className="mobile-detail-value">{d.formulaire_data?.age_personne || d.formulaire_data?.patientAge ? `${d.formulaire_data?.age_personne || d.formulaire_data?.patientAge} ans` : '—'} ({d.formulaire_data?.sexe_personne || d.formulaire_data?.patientGender || '—'})</span>
                     </div>
                   )}
                   <div className="mobile-detail-row">
