@@ -589,7 +589,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     }
   }
 
-  const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client'].includes(rawStatutPaiementUi);
+  const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client', 'commercial_paye_client', 'Commercial payé / client'].includes(rawStatutPaiementUi);
   const isPartiallyPaidStatus = ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi);
 
   const paiement: FacturationRow['paiement'] =
@@ -636,9 +636,12 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 
   // Rétrocompatibilité montant : si la BDD renvoie 0.00 mais que le statut est "payé", on calcule le dû réel
   let montantPaye = rawMontantPaye * ratio;
-  if (montantPaye === 0) {
-    if (paiement === 'paye') montantPaye = montant;
-    else if (paiement === 'partiellement_paye') montantPaye = 0;
+  if (isPaidStatus) {
+    montantPaye = Number(facturationData.montant_verse) || montant;
+  } else if (isPartiallyPaidStatus) {
+    montantPaye = Number(facturationData.montant_verse) || 0;
+  } else if (montantPaye === 0 && paiement === 'paye') {
+    montantPaye = montant;
   }
 
   let montantEncaisseProfil = item.montant_encaisse_profil !== undefined ? Number(item.montant_encaisse_profil) : 0;
@@ -778,7 +781,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     }
   }
 
-  const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client'].includes(rawStatutPaiementUi);
+  const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client', 'commercial_paye_client', 'Commercial payé / client'].includes(rawStatutPaiementUi);
   const isPartiallyPaidStatus = ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi);
 
   const paiement: FacturationRow['paiement'] =
@@ -824,9 +827,9 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     paiement,
     statut,
     reglementInterne,
-    montantPaye: paiement === 'paye'
+    montantPaye: isPaidStatus
       ? (Number(facturationData.montant_verse) || montant)
-      : (paiement === 'partiellement_paye' ? (Number(facturationData.montant_verse) || 0) : 0),
+      : (isPartiallyPaidStatus ? (Number(facturationData.montant_verse) || 0) : 0),
     montantEncaisseProfil: Number(facturationData.montant_encaisse_profil || 0),
     datePaiement: facturationData.date_paiement ? formatDateFR(facturationData.date_paiement) : (paiement === 'non_paye' ? '—' : (demande?.date_intervention ? formatDateFR(demande.date_intervention) : formatDateFR(demande?.created_at))),
     modePaiementReel: demande?.mode_paiement_label || modeLabelFromCode(demande?.mode_paiement) || '—',
@@ -1671,8 +1674,13 @@ export default function VueGlobale() {
       return val === true || val === 1 || String(val).toLowerCase() === 'oui' || String(val).toLowerCase() === 'true';
     };
 
+    const isClientPaidStatus = (statutUi?: string): boolean => {
+      if (!statutUi) return false;
+      return ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client', 'commercial_paye_client', 'Commercial payé / client'].includes(statutUi);
+    };
+
     const isCountedInCA = (row: FacturationRow) => {
-      const isPaid = row.paiement !== 'non_paye';
+      const isPaid = row.paiement !== 'non_paye' || isClientPaidStatus(row.statutPaiementUi);
       const isCao = isCaoConfirmed(row);
       return (isPaid || isCao) && !row.isSubscriptionSecondary;
     };
@@ -1681,10 +1689,10 @@ export default function VueGlobale() {
       if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
         return row.montant;
       }
-      if (row.paiement === 'non_paye' && isCaoConfirmed(row)) {
+      if (isCaoConfirmed(row) || isClientPaidStatus(row.statutPaiementUi) || row.paiement === 'paye') {
         return row.montant;
       }
-      return (row.montantPaye ?? 0);
+      return (row.montantPaye && row.montantPaye > 0) ? row.montantPaye : (row.paiement !== 'non_paye' ? row.montant : 0);
     };
 
     const chiffreAffaires = Math.max(0, activeRows
@@ -1779,8 +1787,13 @@ export default function VueGlobale() {
       return val === true || val === 1 || String(val).toLowerCase() === 'oui' || String(val).toLowerCase() === 'true';
     };
 
+    const isClientPaidStatus = (statutUi?: string): boolean => {
+      if (!statutUi) return false;
+      return ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client', 'commercial_paye_client', 'Commercial payé / client'].includes(statutUi);
+    };
+
     const isCountedInCA = (row: FacturationRow) => {
-      const isPaid = row.paiement !== 'non_paye';
+      const isPaid = row.paiement !== 'non_paye' || isClientPaidStatus(row.statutPaiementUi);
       const isCao = isCaoConfirmed(row);
       return (isPaid || isCao) && !row.isSubscriptionSecondary;
     };
@@ -1789,10 +1802,10 @@ export default function VueGlobale() {
       if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
         return row.montant;
       }
-      if (row.paiement === 'non_paye' && isCaoConfirmed(row)) {
+      if (isCaoConfirmed(row) || isClientPaidStatus(row.statutPaiementUi) || row.paiement === 'paye') {
         return row.montant;
       }
-      return (row.montantPaye ?? 0);
+      return (row.montantPaye && row.montantPaye > 0) ? row.montantPaye : (row.paiement !== 'non_paye' ? row.montant : 0);
     };
 
     const chiffreAffaires = Math.max(0, activeRows

@@ -460,7 +460,7 @@ export default function LesSuivis() {
       }
     }
 
-    const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client'].includes(rawStatutPaiementUi);
+    const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client', 'commercial_paye_client', 'Commercial payé / client'].includes(rawStatutPaiementUi);
     const isPartiallyPaidStatus = ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi);
 
     const paiement: FacturationRow['paiement'] =
@@ -506,9 +506,12 @@ export default function LesSuivis() {
     const montant = rawMontant * ratio;
 
     let montantPaye = rawMontantPaye * ratio;
-    if (montantPaye === 0) {
-      if (paiement === 'paye') montantPaye = montant;
-      else if (paiement === 'partiellement_paye') montantPaye = 0;
+    if (isPaidStatus) {
+      montantPaye = Number(facturationData.montant_verse) || montant;
+    } else if (isPartiallyPaidStatus) {
+      montantPaye = Number(facturationData.montant_verse) || 0;
+    } else if (montantPaye === 0 && paiement === 'paye') {
+      montantPaye = montant;
     }
 
     let montantEncaisseProfil = item.montant_encaisse_profil !== undefined ? Number(item.montant_encaisse_profil) : 0;
@@ -663,7 +666,7 @@ export default function LesSuivis() {
       }
     }
 
-    const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client'].includes(rawStatutPaiementUi);
+    const isPaidStatus = ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client', 'commercial_paye_client', 'Commercial payé / client'].includes(rawStatutPaiementUi);
     const isPartiallyPaidStatus = ['paiement_partiel', 'paiement_en_attente', 'Paiement partiel', 'Paiement en attente', 'partiel', 'acompte'].includes(rawStatutPaiementUi);
 
     const paiement: FacturationRow['paiement'] =
@@ -708,10 +711,10 @@ export default function LesSuivis() {
       paiement,
       statut,
       reglementInterne,
-      montantPaye: paiement === 'paye'
+      montantPaye: isPaidStatus
         ? (Number(facturationData.montant_verse) || montant)
-        : (paiement === 'partiellement_paye' ? (Number(facturationData.montant_verse) || 0) : 0),
-      montantEncaisseProfil: encaissePar === 'Profil' && paiement === 'paye' ? montant : 0,
+        : (isPartiallyPaidStatus ? (Number(facturationData.montant_verse) || 0) : 0),
+      montantEncaisseProfil: encaissePar === 'Profil' && isPaidStatus ? montant : 0,
       datePaiement: facturationData.date_paiement ? formatDateFR(facturationData.date_paiement) : (paiement === 'non_paye' ? '—' : formatDateFR(demande.date_intervention || demande.created_at)),
       modePaiementReel: modeLabelFromCode(demande.mode_paiement) || '—',
       commercialName: demande.assigned_to_name || demande.commercial_name || facturationData.commercial_name || '—',
@@ -1193,15 +1196,20 @@ export default function LesSuivis() {
         return val === true || val === 1 || String(val).toLowerCase() === 'oui' || String(val).toLowerCase() === 'true';
       };
 
+      const isClientPaidStatus = (statutUi?: string): boolean => {
+        if (!statutUi) return false;
+        return ['paye', 'integral', 'effectue', 'profil_paye_client', 'Profil payé / Client', 'agence_payee_client', 'Agence payée / Client', 'commercial_paye_client', 'Commercial payé / client'].includes(statutUi);
+      };
+
       if (!isCancelled) {
         if (!row.isSubscriptionSecondary) {
-          if (row.paiement !== 'non_paye' || isCaoConfirmed(row)) {
+          if (row.paiement !== 'non_paye' || isCaoConfirmed(row) || isClientPaidStatus(row.statutPaiementUi)) {
             if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
               totalCa += row.montant;
-            } else if (row.paiement === 'non_paye' && isCaoConfirmed(row)) {
+            } else if (isCaoConfirmed(row) || isClientPaidStatus(row.statutPaiementUi) || row.paiement === 'paye') {
               totalCa += row.montant;
             } else {
-              totalCa += (row.montantPaye ?? 0);
+              totalCa += (row.montantPaye && row.montantPaye > 0) ? row.montantPaye : row.montant;
             }
           }
           totalPartAgence += row.partAgence;
