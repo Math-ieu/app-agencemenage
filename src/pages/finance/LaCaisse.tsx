@@ -370,6 +370,7 @@ export default function LaCaisse() {
             profilId,
             profil: m.agent_detail ? (m.agent_detail.full_name || `${m.agent_detail.first_name || ''} ${m.agent_detail.last_name || ''}`).trim() : '—',
             parts_repartition: parts,
+            cao: (dem as any)?.cao || (m as any)?.cao,
           };
         }),
         ...uniqueDemands.map(d => {
@@ -427,6 +428,7 @@ export default function LaCaisse() {
             profilId: d.profil_id || null,
             profil: d.profil_name || '—',
             parts_repartition: fact.parts_repartition || d.parts_repartition || [],
+            cao: d.cao,
           };
         })
       ];
@@ -591,8 +593,10 @@ export default function LaCaisse() {
         if (isCancelled || isGratuit) continue;
         if (row.isSubscriptionSecondary) continue;
 
-        if (row.paiement !== 'non_paye') {
+        if (row.paiement !== 'non_paye' || row.cao === true || row.cao === 'oui') {
           if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+            totalCA += row.montant;
+          } else if (row.paiement === 'non_paye' && (row.cao === true || row.cao === 'oui')) {
             totalCA += row.montant;
           } else {
             totalCA += (row.montantPaye ?? 0);

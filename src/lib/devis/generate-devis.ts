@@ -772,13 +772,13 @@ export const generateDevisPdf = async (demande: Demande): Promise<{ blob: Blob; 
   } else if (serviceKey.includes('air bnb') || serviceKey.includes('airbnb')) {
     const data = buildAirbnbData(demande);
     blob = await genererDevisAirbnb(data, logoBase64, signatureBase64);
-  } else if (serviceKey.includes('auxiliaire')) {
+  } else if (serviceKey.includes('auxiliaire') || serviceKey.includes('garde')) {
     const data = buildAuxiliaireData(demande);
     blob = await genererDevisAuxiliaire(data, logoBase64, signatureBase64);
-  } else if (serviceKey.includes('post-sinistre') || serviceKey.includes('post sinistre')) {
+  } else if (serviceKey.includes('post-sinistre') || serviceKey.includes('post sinistre') || serviceKey.includes('sinistre')) {
     const data = buildPostSinistreData(demande);
     blob = await genererDevisPostSinistre(data, logoBase64, signatureBase64);
-  } else if (serviceKey.includes('fin de chantier') || serviceKey.includes('fin chantier')) {
+  } else if (serviceKey.includes('fin de chantier') || serviceKey.includes('fin chantier') || serviceKey.includes('chantier')) {
     const data = buildFinChantierData(demande);
     blob = await genererDevisFinChantier(data, logoBase64, signatureBase64);
   } else if (serviceKey.includes('bureaux')) {
@@ -796,7 +796,7 @@ export const generateDevisPdf = async (demande: Demande): Promise<{ blob: Blob; 
       const data = buildPlacementFlexibleData(demande);
       blob = await genererDevisPlacementFlexible(data, logoBase64, signatureBase64);
     }
-  } else if (serviceKey.includes('standard') || serviceKey.includes('grand')) {
+  } else if (serviceKey.includes('standard') || serviceKey.includes('grand') || serviceKey.includes('demenagement')) {
     const data = buildMenageStandardData(demande);
     blob = genererDevisMenageStandard(data, logoBase64, signatureBase64);
   } else {

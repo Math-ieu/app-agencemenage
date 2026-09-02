@@ -112,6 +112,7 @@ interface FacturationRow {
   originalDemande?: any;
   originalMission?: any;
   parts_repartition?: any[];
+  cao?: boolean | string;
 }
 
 interface ProfileAccount {
@@ -713,6 +714,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     originalDemande: demande,
     originalMission: item,
     parts_repartition: Array.isArray(facturationData.parts_repartition) && facturationData.parts_repartition.length > 0 ? facturationData.parts_repartition : Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : undefined,
+    cao: (demande as any)?.cao || (item?.demande_detail as any)?.cao || (item as any)?.cao,
   };
 };
 
@@ -847,6 +849,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     originalDemande: demande,
     originalMission: null,
     parts_repartition: Array.isArray(facturationData.parts_repartition) && facturationData.parts_repartition.length > 0 ? facturationData.parts_repartition : Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : undefined,
+    cao: demande?.cao,
   };
 };
 
@@ -1664,8 +1667,16 @@ export default function VueGlobale() {
     const totalSubCancellationsCA = subCancellations.reduce((sum, row) => sum + (row.subscriptionInterventionCA || 0), 0);
 
     const chiffreAffaires = Math.max(0, activeRows
-      .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
-      .reduce((sum, row) => sum + (row.montantPaye ?? 0), 0) - totalSubCancellationsCA);
+      .filter((row) => (row.paiement !== 'non_paye' || row.cao === true || row.cao === 'oui') && !row.isSubscriptionSecondary)
+      .reduce((sum, row) => {
+        if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+          return sum + row.montant;
+        }
+        if (row.paiement === 'non_paye' && (row.cao === true || row.cao === 'oui')) {
+          return sum + row.montant;
+        }
+        return sum + (row.montantPaye ?? 0);
+      }, 0) - totalSubCancellationsCA);
 
     const commissionBrute = activeRows.reduce((sum, row) => sum + getCommissionAgenceEncaissee(row, true), 0);
     const pertes = cancelledRows.reduce((sum, row) => {
@@ -1751,9 +1762,12 @@ export default function VueGlobale() {
     const totalSubCancellationsCA = subCancellations.reduce((sum, row) => sum + (row.subscriptionInterventionCA || 0), 0);
 
     const chiffreAffaires = Math.max(0, activeRows
-      .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
+      .filter((row) => (row.paiement !== 'non_paye' || row.cao === true || row.cao === 'oui') && !row.isSubscriptionSecondary)
       .reduce((sum, row) => {
         if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+          return sum + row.montant;
+        }
+        if (row.paiement === 'non_paye' && (row.cao === true || row.cao === 'oui')) {
           return sum + row.montant;
         }
         return sum + (row.montantPaye ?? 0);
@@ -1782,9 +1796,12 @@ export default function VueGlobale() {
     const totalUnfilteredSubCancellationsCA = unfilteredSubCancellations.reduce((sum, row) => sum + (row.subscriptionInterventionCA || 0), 0);
 
     const chiffreAffairesTotal = Math.max(0, unfilteredActiveRows
-      .filter((row) => row.paiement !== 'non_paye' && !row.isSubscriptionSecondary)
+      .filter((row) => (row.paiement !== 'non_paye' || row.cao === true || row.cao === 'oui') && !row.isSubscriptionSecondary)
       .reduce((sum, row) => {
         if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+          return sum + row.montant;
+        }
+        if (row.paiement === 'non_paye' && (row.cao === true || row.cao === 'oui')) {
           return sum + row.montant;
         }
         return sum + (row.montantPaye ?? 0);

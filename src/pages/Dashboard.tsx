@@ -676,6 +676,13 @@ export default function Dashboard() {
     return <span className={`badge ${badgeClass}`}>{label}</span>;
   };
 
+  const isPartProfilDefined = (d: Demande): boolean => {
+    const parts = (d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || d.formulaire_data?.parts_repartition || []) as any[];
+    const totalParts = Array.isArray(parts) ? parts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) : 0;
+    const singlePart = Number(d.formulaire_data?.facturation?.part_profil ?? d.formulaire_data?.facturation?.montant_agence_doit_profil ?? (d as any).part_profil ?? 0);
+    return totalParts > 0 || singlePart > 0;
+  };
+
   const handleCAOUpdate = async (demande: Demande, status: 'confirmed' | 'postponed' | 'cancelled') => {
     try {
       if (status === 'confirmed') {
@@ -989,6 +996,19 @@ export default function Dashboard() {
             ...p,
             amount: i === count - 1 ? roundMoney(amountToDistribute - (amountPerProfile * (count - 1))) : amountPerProfile
           }));
+        }
+      }
+
+      if (editFormData.statut === 'pres_terminee' && !isFreeOrCancelled) {
+        const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
+        const singlePart = Number(editFormData.part_profil || editFormData.montant_agence_doit_profil || 0);
+        if (totalParts <= 0 && singlePart <= 0) {
+          addToast('Veuillez définir la part de la femme de ménage.', 'warning');
+          setShowPartsSection(true);
+          setTimeout(() => {
+            document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 150);
+          return;
         }
       }
 
@@ -2139,12 +2159,12 @@ export default function Dashboard() {
                                   onClick={async () => {
                                     if (!d.cao) return;
                                     await updateDemande(d.id, { statut: 'pres_en_cours' });
-                                    addToast('Statut mis à jour : Prestation en cours', 'success');
+                                    addToast('Statut mis à jour : Prestation confirmée', 'success');
                                     fetchData();
                                     setActiveMoreMenu(null);
                                   }}
                                 >
-                                  <CheckCircle size={16} /> Pres. en cours
+                                  <CheckCircle size={16} /> Pres. confirmée
                                 </button>
 
                                 <button 
@@ -2157,6 +2177,16 @@ export default function Dashboard() {
                                   disabled={!(d.cao && d.statut === 'pres_en_cours')}
                                   onClick={async () => {
                                     if (!(d.cao && d.statut === 'pres_en_cours')) return;
+                                    if (!isPartProfilDefined(d)) {
+                                      addToast('Veuillez définir la part de la femme de ménage.', 'warning');
+                                      setActiveMoreMenu(null);
+                                      openDetail(d);
+                                      setShowPartsSection(true);
+                                      setTimeout(() => {
+                                        document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      }, 200);
+                                      return;
+                                    }
                                     await updateDemande(d.id, { statut: 'pres_terminee' });
                                     addToast('Statut mis à jour : Prestation terminée', 'success');
                                     addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
@@ -2311,12 +2341,12 @@ export default function Dashboard() {
                                   onClick={async () => {
                                     if (!d.cao) return;
                                     await updateDemande(d.id, { statut: 'pres_en_cours' });
-                                    addToast('Statut mis à jour : Prestation en cours', 'success');
+                                    addToast('Statut mis à jour : Prestation confirmée', 'success');
                                     fetchData();
                                     setActiveMoreMenu(null);
                                   }}
                                 >
-                                  <CheckCircle size={16} /> Pres. en cours
+                                  <CheckCircle size={16} /> Pres. confirmée
                                 </button>
 
                                 <button 
@@ -2329,6 +2359,16 @@ export default function Dashboard() {
                                   disabled={!(d.cao && d.statut === 'pres_en_cours')}
                                   onClick={async () => {
                                     if (!(d.cao && d.statut === 'pres_en_cours')) return;
+                                    if (!isPartProfilDefined(d)) {
+                                      addToast('Veuillez définir la part de la femme de ménage.', 'warning');
+                                      setActiveMoreMenu(null);
+                                      openDetail(d);
+                                      setShowPartsSection(true);
+                                      setTimeout(() => {
+                                        document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      }, 200);
+                                      return;
+                                    }
                                     await updateDemande(d.id, { statut: 'pres_terminee' });
                                     addToast('Statut mis à jour : Prestation terminée', 'success');
                                     addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
@@ -3378,7 +3418,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* ── Gestion des parts ── */}
-                      <div>
+                      <div id="gestion-des-parts-section">
                         <button type="button" onClick={() => setShowPartsSection(!showPartsSection)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 16px', borderRadius: '10px', background: '#ECFDF5', border: '1px solid #A7F3D0', marginBottom: '12px', cursor: 'pointer' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><UserCheck size={18} style={{ color: '#059669' }} /><span style={{ fontSize: '16px', fontWeight: 700, color: '#047857' }}>Gestion des parts</span></div>
                           {showPartsSection ? <ChevronUp size={16} style={{ color: '#059669' }} /> : <ChevronDown size={16} style={{ color: '#059669' }} />}
