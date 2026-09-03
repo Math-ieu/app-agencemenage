@@ -266,14 +266,14 @@ export default function DemandesEnAttente() {
   const isPostDemenagementService = selectedServiceKey.includes('post-demenagement') || selectedServiceKey.includes('post demenagement');
   // @ts-ignore
   const isMenageStandardService = selectedServiceKey.includes('menage standard');
-  const isGrandMenageService = selectedServiceKey.includes('grand menage');
+  const isGrandMenageService = selectedServiceKey.includes('grand menage') || selectedServiceKey.includes('grand');
   // @ts-ignore
   const isMenageAirBnBService = selectedServiceKey.includes('air bnb') || selectedServiceKey.includes('airbnb');
   // @ts-ignore
   const isFinChantierService = selectedServiceKey.includes('fin de chantier') || selectedServiceKey.includes('fin chantier');
   // @ts-ignore
   const isAutreService = selectedServiceKey.includes('autre service') || selectedServiceKey.includes('autre_service');
-  const minDuree = isGrandMenageService ? 6 : isMenageBureauxService ? (formData.frequence === 'une fois' ? 4 : 2) : 4;
+  const minDuree = isGrandMenageService ? 5 : isMenageBureauxService ? (formData.frequence === 'une fois' ? 4 : 2) : 4;
 
   const calculatedPrice = usePriceCalculator(formData, selectedService);
   const estimatedResources = useResourceEstimator(formData, selectedService);

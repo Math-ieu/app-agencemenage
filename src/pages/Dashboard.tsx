@@ -388,7 +388,7 @@ export default function Dashboard() {
   const isAuxiliaireService = exactEditServiceNormalized.includes('auxiliaire de vie') || exactEditServiceNormalized.includes('auxiliaire');
   // @ts-ignore
   const isPlacementGestionService = exactEditServiceNormalized.includes('placement & gestion') || exactEditServiceNormalized.includes('placement et gestion') || exactEditServiceNormalized.includes('placement');
-  const minDuree = (isGrandMenageService || isPostDemenagementService || isFinChantierService) ? 4 : isMenageBureauxService ? (editFormData.frequence === 'une fois' ? 4 : 2) : isMenageAirBnBService ? 2 : 3;
+  const minDuree = isGrandMenageService ? 5 : (isPostDemenagementService || isFinChantierService) ? 4 : isMenageBureauxService ? (editFormData.frequence === 'une fois' ? 4 : 2) : isMenageAirBnBService ? 2 : 3;
 
   const [showPreviewModal, setShowPreviewModal] = useState<{ url: string, type: 'devis' | 'png' | 'facture', name: string, demandeId: number } | null>(null);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
