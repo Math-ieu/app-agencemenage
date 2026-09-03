@@ -9,7 +9,7 @@ import { getDemandes, updateDemande, getFetesReligieuses, toggleAbonnementSuspen
 import { SubscriptionCalendarGrid } from '../components/client/SubscriptionCalendarGrid';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
-import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage, getStatutMoisProchainCalculated, getNextIntervention, getDemandeStartDate } from '../utils/pricing';
+import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage, getStatutMoisProchainCalculated, getNextIntervention, getDemandeStartDate, isAbonnementDemande, getCleanAboFrequencyLabel } from '../utils/pricing';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '../store/auth';
 import { checkPermission, hasPermission } from '../utils/permissions';
@@ -260,7 +260,7 @@ function CalendarModal({
             parentDemande={parentDemande}
             aboDateDebut={row.dateDebut || (parentDemande ? getDemandeStartDate(parentDemande) : '')}
             dateFinAuto={row.dateFin || parentDemande?.formulaire_data?.date_fin || ''}
-            aboFrequence={parentDemande?.formulaire_data?.frequence || parentDemande?.frequency_label || row.frequenceLabel || ''}
+            aboFrequence={row.frequenceLabel || 'Abonnement'}
             aboJours={joursDetail}
             aboDateOverrides={aboDateOverrides}
             setAboDateOverrides={handleUpdateDateOverrides}
@@ -382,16 +382,7 @@ export default function GestionAbonnements() {
   const subscriptionRows: SubscriptionRow[] = useMemo(() => {
     // Filter ONLY parent subscription contracts (exclude child interventions with parent_demande and exclude cancelled/resilié subscriptions)
     const subDemandes = demandes.filter(d => {
-      if (d.parent_demande) return false;
-      const isSub = (
-        d.frequency === 'abonnement' ||
-        (d as any).frequence === 'abonnement' ||
-        (d as any).frequency_label?.includes('/sem') ||
-        (d.formulaire_data as any)?.frequence?.includes('/sem') ||
-        (d.formulaire_data as any)?.subFrequency ||
-        demandes.some(child => Number(child.parent_demande) === Number(d.id))
-      );
-      if (!isSub) return false;
+      if (!isAbonnementDemande(d, demandes)) return false;
 
       const dbStatut = (d.statut || '').toLowerCase().trim();
       const stMoisEnCours = ((d.formulaire_data as any)?.statut_mois_en_cours || '').toLowerCase().trim();
@@ -425,17 +416,20 @@ export default function GestionAbonnements() {
       );
 
       if (jours.length === 0) {
-        const freqStr = d.frequency_label || (d.formulaire_data as any)?.frequence || (d.formulaire_data as any)?.subFrequency || '';
-        if (freqStr.includes('3') || freqStr.includes('3fois')) {
-          jours = ['lundi', 'mercredi', 'vendredi'];
-        } else if (freqStr.includes('2') || freqStr.includes('2fois')) {
-          jours = ['mardi', 'jeudi'];
-        } else if (freqStr.includes('4') || freqStr.includes('4fois')) {
-          jours = ['lundi', 'mardi', 'mercredi', 'jeudi'];
-        } else if (freqStr.includes('5') || freqStr.includes('5fois')) {
-          jours = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
-        } else if (freqStr.includes('1') || freqStr.includes('1fois')) {
-          jours = ['samedi'];
+        const subFreq = (d.formulaire_data as any)?.subFrequency || '';
+        const freqStr = String(d.frequency_label || (d.formulaire_data as any)?.frequence || subFreq || '').toLowerCase();
+        if (!freqStr.includes('une fois')) {
+          if (freqStr.includes('3') || freqStr.includes('3fois')) {
+            jours = ['lundi', 'mercredi', 'vendredi'];
+          } else if (freqStr.includes('2') || freqStr.includes('2fois')) {
+            jours = ['mardi', 'jeudi'];
+          } else if (freqStr.includes('4') || freqStr.includes('4fois')) {
+            jours = ['lundi', 'mardi', 'mercredi', 'jeudi'];
+          } else if (freqStr.includes('5') || freqStr.includes('5fois')) {
+            jours = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
+          } else if (freqStr.includes('1') || freqStr.includes('1fois')) {
+            jours = ['samedi'];
+          }
         }
       }
 
@@ -543,7 +537,7 @@ export default function GestionAbonnements() {
         clientName,
         clientVille: ville,
         serviceType: dAny.service_name || d.service_label || d.service || 'Ménage standard',
-        frequenceLabel: d.frequency_label || (jours.length > 0 ? `${jours.length}×/semaine` : 'Abonnement'),
+        frequenceLabel: getCleanAboFrequencyLabel(d, jours),
         heuresParPassage: (d.formulaire_data as any)?.duree_heures || d.nb_heures || dAny.nombre_heures || 4,
         joursChoice: jours,
         interventionsCompleted,
@@ -785,15 +779,7 @@ export default function GestionAbonnements() {
       if (!d.date_intervention) return false;
 
       // Exclude parent subscription contract records (they represent contracts, not individual interventions)
-      const isParentSub = !d.parent_demande && (
-        d.frequency === 'abonnement' ||
-        (d as any).frequence === 'abonnement' ||
-        (d as any).frequency_label?.includes('/sem') ||
-        (d.formulaire_data as any)?.frequence?.includes('/sem') ||
-        (d.formulaire_data as any)?.subFrequency ||
-        demandes.some(child => Number(child.parent_demande) === Number(d.id))
-      );
-      if (isParentSub) return false;
+      if (isAbonnementDemande(d, demandes)) return false;
 
       // If this is a child intervention, check if the parent subscription is résilié!
       if (d.parent_demande) {

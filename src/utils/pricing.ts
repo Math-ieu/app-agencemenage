@@ -555,6 +555,91 @@ export interface DevisDiscountInfo {
     passagesBase: number;
 }
 
+/**
+ * Helper to determine strictly if a demande record is a subscription (abonnement)
+ * and NOT a single passage ('une fois' / 'oneshot' / 'ponctuel').
+ */
+export const isAbonnementDemande = (demande: any, allDemandes: any[] = []): boolean => {
+    if (!demande) return false;
+    if (demande.parent_demande) return false; // Child interventions are not subscription contracts
+
+    const hasChildren = allDemandes.some(c => Number(c.parent_demande) === Number(demande.id));
+    if (hasChildren) return true;
+
+    const freq = String(demande.frequency || '').toLowerCase().trim();
+    const freqLabel = String(demande.frequency_label || '').toLowerCase().trim();
+    const formFreq = String((demande.formulaire_data as any)?.frequence || '').toLowerCase().trim();
+    const formFrequency = String((demande.formulaire_data as any)?.frequency || '').toLowerCase().trim();
+    const typeDemande = String(demande.type_demande || '').toLowerCase().trim();
+
+    // Strict exclusion: explicit one-shot / single passage indicators
+    if (
+        freq === 'oneshot' ||
+        freq === 'one-shot' ||
+        freq === 'once' ||
+        freq === 'une fois' ||
+        freqLabel === 'oneshot' ||
+        freqLabel === 'une fois' ||
+        freqLabel.includes('une fois') ||
+        formFreq === 'oneshot' ||
+        formFreq === 'one-shot' ||
+        formFreq === 'une fois' ||
+        formFrequency === 'oneshot' ||
+        formFrequency === 'une fois' ||
+        typeDemande === 'ponctuel' ||
+        typeDemande === 'oneshot'
+    ) {
+        return false;
+    }
+
+    // Must match subscription indicators
+    return (
+        freq === 'abonnement' ||
+        freq === 'subscription' ||
+        formFrequency === 'abonnement' ||
+        formFrequency === 'subscription' ||
+        formFreq === 'abonnement' ||
+        formFreq === 'subscription' ||
+        typeDemande === 'abonnement' ||
+        freqLabel.includes('/sem') ||
+        freqLabel.includes('semaine') ||
+        freqLabel.includes('mois') ||
+        formFreq.includes('/sem') ||
+        formFreq.includes('semaine') ||
+        formFreq.includes('mois') ||
+        (freq === 'abonnement' && Boolean((demande.formulaire_data as any)?.subFrequency))
+    );
+};
+
+/**
+ * Returns a subscription frequency label, ensuring it never outputs 'Une fois'.
+ */
+export const getCleanAboFrequencyLabel = (demande: any, jours: string[] = []): string => {
+    const raw = String(demande?.frequency_label || (demande?.formulaire_data as any)?.frequence_label || (demande?.formulaire_data as any)?.frequence || '').trim();
+    const lower = raw.toLowerCase();
+
+    if (!raw || lower.includes('une fois') || lower.includes('oneshot') || lower === 'once') {
+        if (jours.length > 0) return `${jours.length}×/semaine`;
+        const subFreq = String((demande?.formulaire_data as any)?.subFrequency || '');
+        if (subFreq.includes('1')) return '1×/semaine';
+        if (subFreq.includes('2')) return '2×/semaine';
+        if (subFreq.includes('3')) return '3×/semaine';
+        if (subFreq.includes('4')) return '4×/semaine';
+        if (subFreq.includes('5')) return '5×/semaine';
+        return 'Abonnement';
+    }
+
+    if (lower.includes('/sem') || lower.includes('semaine') || lower.includes('mois')) {
+        return raw;
+    }
+
+    if (jours.length > 0) {
+        return `${jours.length}×/semaine`;
+    }
+
+    return raw === 'abonnement' ? 'Abonnement' : raw;
+};
+
 export const getDevisDiscountDetails = (demande: any, monthIndex?: number): DevisDiscountInfo => {
     if (!demande) {
         return {
@@ -575,27 +660,7 @@ export const getDevisDiscountDetails = (demande: any, monthIndex?: number): Devi
     const passagesBase = devisMonthPassages > 0 ? devisMonthPassages : (getContractBaselinePassages(demande) || 4);
     const devisTotal = getDevisAmount(demande);
 
-    const freqStr = String(
-        formData.frequence ||
-        formData.frequency_label ||
-        demande.frequency_label ||
-        demande.frequency ||
-        demande.type_demande ||
-        ''
-    ).toLowerCase();
-    const isSubscription = (
-        demande.type_demande === 'abonnement' ||
-        freqStr.includes('mensuel') ||
-        freqStr.includes('abonnement') ||
-        freqStr.includes('semaine') ||
-        freqStr.includes('mois') ||
-        freqStr.includes('/')
-    ) &&
-    !freqStr.includes('une fois') &&
-    !freqStr.includes('oneshot') &&
-    !freqStr.includes('ponctuel') &&
-    demande.frequency !== 'oneshot' &&
-    demande.type_demande !== 'ponctuel';
+    const isSubscription = isAbonnementDemande(demande);
 
     let reductionPct = 0;
     let reductionAmountBase = 0;

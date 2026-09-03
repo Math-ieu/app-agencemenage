@@ -55,7 +55,12 @@ export const SubscriptionParamsCard: React.FC<SubscriptionParamsCardProps> = ({
 
   const serviceValue = `${latest.service || latest.type_prestation || 'Grand ménage'} — ${latest.segment || ((latest as any).type_service === 'SPP' ? 'particulier' : 'particulier')}`;
   
-  const rawFreq = frequencyLabel || latest.frequency_label || (selectedDays.length > 0 ? `${selectedDays.length} fois par semaine` : (latest.frequency ? `${latest.frequency}` : '—'));
+  const rawFreq = (() => {
+    if (frequencyLabel && !frequencyLabel.toLowerCase().includes('une fois')) return frequencyLabel;
+    if (latest.frequency_label && !latest.frequency_label.toLowerCase().includes('une fois')) return latest.frequency_label;
+    if (selectedDays.length > 0) return `${selectedDays.length} fois par semaine`;
+    return 'Abonnement';
+  })();
 
   const effectiveStart = dateDebut || getDemandeStartDate(latest);
   const startDateFormatted = effectiveStart 
