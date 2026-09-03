@@ -714,17 +714,18 @@ export default function GestionAbonnements() {
       }
     });
 
-    // 2. Scan standalone non-subscription demandes in suspension range
+    // 2. Scan subscription child interventions in suspension range
     demandes.forEach(d => {
-      if (!d.date_intervention) return;
+      if (!d.date_intervention || !d.parent_demande) return;
+      const parent = demandes.find(p => p.id === Number(d.parent_demande));
+      if (!parent || !isAbonnementDemande(parent, demandes)) return;
+
       const dDate = new Date(d.date_intervention);
       if (dDate >= debutSuspension && dDate <= finSuspension) {
-        if (d.frequency !== 'abonnement' && (d as any).frequence !== 'abonnement' && !d.parent_demande) {
-          totalPassages += 1;
-          const st = (d.statut || '').toLowerCase();
-          if (d.cao === 'reporte' || st === 'reporte' || st.includes('report')) {
-            reportsCount += 1;
-          }
+        totalPassages += 1;
+        const st = (d.statut || '').toLowerCase();
+        if (d.cao === 'reporte' || st === 'reporte' || st.includes('report')) {
+          reportsCount += 1;
         }
       }
     });
@@ -774,29 +775,28 @@ export default function GestionAbonnements() {
       return true;
     };
 
-    // 1. Process all Demande items in DB that have a date_intervention in this month (excluding parent subscription contracts and résilié subscriptions)
-    const childOrSingleDemandesInMonth = demandes.filter(d => {
+    // 1. Process child Demande items in DB that belong to an active subscription in this month
+    const activeSubIds = new Set(subscriptionRows.map(r => Number(r.demandeId)));
+
+    const childDemandesInMonth = demandes.filter(d => {
       if (!d.date_intervention) return false;
+      // Strictly require that this intervention is a child of an active subscription contract
+      if (!d.parent_demande) return false;
+      if (!activeSubIds.has(Number(d.parent_demande))) return false;
 
-      // Exclude parent subscription contract records (they represent contracts, not individual interventions)
-      if (isAbonnementDemande(d, demandes)) return false;
+      const parent = demandes.find(p => p.id === Number(d.parent_demande));
+      if (!parent || !isAbonnementDemande(parent, demandes)) return false;
 
-      // If this is a child intervention, check if the parent subscription is résilié!
-      if (d.parent_demande) {
-        const parent = demandes.find(p => p.id === Number(d.parent_demande));
-        if (parent) {
-          const pStatut = (parent.statut || '').toLowerCase().trim();
-          const pStEnCours = ((parent.formulaire_data as any)?.statut_mois_en_cours || '').toLowerCase().trim();
-          if (pStatut === 'resilie' || pStEnCours === 'résilié' || pStEnCours === 'resilie') {
-            return false;
-          }
-        }
+      const pStatut = (parent.statut || '').toLowerCase().trim();
+      const pStEnCours = ((parent.formulaire_data as any)?.statut_mois_en_cours || '').toLowerCase().trim();
+      if (pStatut === 'resilie' || pStEnCours === 'résilié' || pStEnCours === 'resilie') {
+        return false;
       }
 
       const dStatut = (d.statut || '').toLowerCase().trim();
       if (dStatut === 'resilie') return false;
 
-      const dService = d.service_label || d.service || 'Ménage standard';
+      const dService = d.service_label || d.service || parent.service_label || parent.service || 'Ménage standard';
       const dCommercial = (d as any).assigned_to_user_name || d.assigned_to_name || d.commercial_name || 'Non assigné';
       const dVille = d.client_city || d.client_neighborhood || (d as any).ville || 'Casablanca';
       if (!matchFilters(dService, dCommercial, dVille)) return false;
@@ -809,7 +809,7 @@ export default function GestionAbonnements() {
       return y === targetYear && m === targetMonth;
     });
 
-    childOrSingleDemandesInMonth.forEach(d => {
+    childDemandesInMonth.forEach(d => {
       const dateStr = d.date_intervention.includes('T') ? d.date_intervention.split('T')[0] : d.date_intervention.slice(0, 10);
       const parts = dateStr.split('-');
       const day = parseInt(parts[2], 10);
@@ -861,8 +861,8 @@ export default function GestionAbonnements() {
         const currentDate = new Date(targetYear, targetMonth, dayNum);
         const dayIso = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
 
-        // If a child demande for this parent is ALREADY in childOrSingleDemandesInMonth for dayIso, skip to prevent double counting
-        const hasChildOnDate = childOrSingleDemandesInMonth.some(c =>
+        // If a child demande for this parent is ALREADY in childDemandesInMonth for dayIso, skip to prevent double counting
+        const hasChildOnDate = childDemandesInMonth.some(c =>
           Number(c.parent_demande) === Number(subRow.demandeId) && c.date_intervention?.startsWith(dayIso)
         );
         if (hasChildOnDate) continue;
