@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { FormBlockProps } from '../ServiceFormBlocks';
 import { 
   FormulesAirbnbBlock,
-  FrequenceBlock,
   PlanningBlock
 } from '../ServiceFormBlocks';
 
@@ -12,10 +11,20 @@ interface MenageAirBnBFormProps extends FormBlockProps {
 }
 
 export const MenageAirBnBForm: React.FC<MenageAirBnBFormProps> = (props) => {
+  const { formData, setFormData } = props;
+
+  useEffect(() => {
+    if (formData.frequence !== 'une fois') {
+      setFormData({
+        ...formData,
+        frequence: 'une fois'
+      });
+    }
+  }, [formData.frequence]);
+
   return (
     <>
       <FormulesAirbnbBlock {...props} />
-      <FrequenceBlock {...props} />
       <PlanningBlock {...props} />
     </>
   );

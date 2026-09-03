@@ -10,6 +10,10 @@ import {
   OptionalServicesBlock 
 } from '../ServiceFormBlocks';
 
+// Contrôle de visibilité de la section descriptive des pièces (Cuisine, Chambres, etc.)
+// Mettre à true pour réactiver l'affichage dans l'application
+const SHOW_ROOMS_SECTION = false;
+
 interface MenageStandardFormProps extends FormBlockProps {
   minDuree: number;
   estimatedResources?: { duration: number; people: number } | null;
@@ -20,7 +24,7 @@ export const MenageStandardForm: React.FC<MenageStandardFormProps> = (props) => 
     <>
       <HabitationTypeBlock {...props} />
       <FrequenceBlock {...props} />
-      <RoomsGridBlock {...props} />
+      {SHOW_ROOMS_SECTION && <RoomsGridBlock {...props} />}
       <DurationBlock {...props} />
       <PeopleBlock {...props} />
       <PlanningBlock {...props} />

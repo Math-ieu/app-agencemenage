@@ -361,11 +361,11 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         const isGrand = serviceLower.includes('grand menage');
         const customRate = Number((input as any).tarif_horaire || (input as any).tarif_base || (input as any).rate);
         const baseRate = customRate > 0 ? customRate : (isGrand ? 70 : 60);
-        const minHours = isGrand ? 6 : 4;
+        const minHours = isGrand ? 5 : 4;
 
         // Auto-derive from surface if surface is specified (Grand Ménage / Post-Déménagement)
         const est = (isGrand || input.surface) ? estimateResources(serviceLower, input) : null;
-        const effDuree = Math.max(Number(duree) || 0, est ? est.duration : 0, minHours);
+        const effDuree = Number(duree) > 0 ? Math.max(Number(duree), minHours) : (est ? est.duration : minHours);
         const effPeople = Math.max(Number(nb_intervenants) || 1, est ? est.people : 1);
 
         let totalServicePrice = 0;
@@ -518,7 +518,7 @@ export const calculateSinglePassagePrice = (demande: any): number => {
     // 4. Standard / Grand Ménage / Autres services
     const isGrand = service.includes('grand');
     const baseRate = Number(formData.tarif_horaire) || (isGrand ? 70 : 60);
-    const minHours = isGrand ? 6 : 4;
+    const minHours = isGrand ? 5 : 4;
     const duree = Math.max(Number(demande.nb_heures || formData.duree) || 0, minHours);
     const nbPersonnes = Math.max(1, Number(demande.nb_intervenants || formData.nb_personnes || formData.nb_intervenants) || 1);
 
