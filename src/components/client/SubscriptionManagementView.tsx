@@ -15,7 +15,7 @@ import { SubscriptionCalendarGrid } from './SubscriptionCalendarGrid';
 import { SubscriptionSidebar } from './SubscriptionSidebar';
 import { FacturesReglementsCard } from './FacturesReglementsCard';
 import { InvoiceFormModal } from './InvoiceFormModal';
-import { extractJoursPassage, parseDateRobust, getStatutMoisProchainCalculated, getDemandeStartDate } from '../../utils/pricing';
+import { extractJoursPassage, parseDateRobust, getStatutMoisProchainCalculated, getDemandeStartDate, getCleanAboFrequencyLabel } from '../../utils/pricing';
 import { useAuthStore } from '../../store/auth';
 import { checkPermission } from '../../utils/permissions';
 
@@ -1044,7 +1044,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
             parentDemande={latest}
             aboDateDebut={dateDebut || getDemandeStartDate(latest)}
             dateFinAuto={latest?.formulaire_data?.date_fin || ''}
-            aboFrequence={latest?.formulaire_data?.frequence || latest?.frequency_label || frequencyLabel || ''}
+            aboFrequence={getCleanAboFrequencyLabel(latest, detailedAboJours.map(j => j.jour))}
             aboJours={detailedAboJours}
             aboDateOverrides={aboDateOverrides}
             setAboDateOverrides={handleUpdateDateOverrides}
