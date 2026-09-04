@@ -869,8 +869,21 @@ export default function LesSuivis() {
     });
 
     // Merge all rows
+    const parentIdsWithChildren = new Set(
+      demands.filter((d) => !!d.parent_demande).map((d) => Number(d.parent_demande))
+    );
+
     const missionDemandeIds = new Set(missions.map((m) => String(m.demande_detail?.id)).filter((id) => id !== 'undefined' && id !== 'null'));
-    const uniqueDemands = demands.filter((d) => !missionDemandeIds.has(String(d.id)));
+    const uniqueDemands = demands.filter((d) => {
+      if (missionDemandeIds.has(String(d.id))) return false;
+      // Exclure la demande mère d'abonnement si elle possède déjà des interventions enfants générées
+      const isRootContractWithChildren =
+        !d.parent_demande &&
+        d.frequency === 'abonnement' &&
+        parentIdsWithChildren.has(Number(d.id));
+      if (isRootContractWithChildren) return false;
+      return true;
+    });
 
     const missionRows = missions.map(mapMissionToFacturationRow);
     const demandRows = uniqueDemands.map(mapDemandeToFacturationRow);
@@ -896,9 +909,8 @@ export default function LesSuivis() {
       }
     }
 
-    for (const groupRows of subscriptionGroups.values()) {
-      const parentRow = groupRows.find(r => !r.parentDemandeId) || groupRows[0];
-      const parentDemande = parentRow?.originalDemande;
+    for (const [subId, groupRows] of subscriptionGroups.entries()) {
+      const parentDemande = allDemandsMap.get(Number(subId)) || groupRows.find(r => !r.parentDemandeId)?.originalDemande;
       const weeks = parentDemande?.planning?.semaines;
       
       let totalPlanned = 0;
@@ -914,8 +926,8 @@ export default function LesSuivis() {
         });
       }
       
-      const denominator = totalPlanned > 0 ? totalPlanned : groupRows.length;
-      const parentMontant = Number(parentDemande?.montant || parentRow?.montant || 0);
+      const parentMontant = Number(parentDemande?.prix) || Number(parentDemande?.montant) || Number(parentDemande?.formulaire_data?.facturation?.montant_ht) || 0;
+      const denominator = totalPlanned > 0 ? totalPlanned : (parentDemande ? getDynamicMonthPassagesCount(parentDemande, demands) : groupRows.length);
       const interventionCA = denominator > 0 ? parentMontant / denominator : 0;
 
       const monthGroups = new Map<number, FacturationRow[]>();
@@ -934,15 +946,35 @@ export default function LesSuivis() {
           if (dateA !== dateB) return dateA - dateB;
           return (a.demandeId || 0) - (b.demandeId || 0);
         });
-        const rootRow = rows.find(r => !r.parentDemandeId);
-        const primaryRow = rootRow || sorted[0];
 
-        for (const row of rows) {
-          const isPrimary = row === primaryRow;
+        for (let i = 0; i < sorted.length; i++) {
+          const row = sorted[i];
+          const isPrimary = i === 0;
           row.isSubscriptionPrimary = isPrimary;
           row.isSubscriptionSecondary = !isPrimary;
-          row.subscriptionDenominator = denominator;
+          row.subscriptionDenominator = denominator || sorted.length;
           row.subscriptionInterventionCA = Number(interventionCA.toFixed(2));
+
+          if (isPrimary && parentMontant > 0) {
+            row.montant = parentMontant;
+            if (parentDemande?.part_agence !== undefined && parentDemande?.part_agence !== null) {
+              row.partAgence = Number(parentDemande.part_agence);
+            }
+          }
+
+          // Inherit invoice payment status from parentDemande if child doesn't have an explicit override
+          if (parentDemande?.formulaire_data?.facturation) {
+            const pFact = parentDemande.formulaire_data.facturation;
+            if (!row.statutPaiementUi || row.statutPaiementUi === 'non_confirme' || row.statutPaiementUi === 'non_paye') {
+              if (pFact.statut_paiement_ui) {
+                row.statutPaiementUi = pFact.statut_paiement_ui;
+                if (['paye', 'integral', 'effectue', 'profil_paye_client', 'agence_payee_client'].includes(pFact.statut_paiement_ui)) {
+                  row.paiement = 'paye';
+                  row.statut = 'Payé';
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -1018,13 +1050,19 @@ export default function LesSuivis() {
       monthTotal = monthSubRows.length || 4;
     }
 
-    const indexInMonth = monthSubRows.findIndex(r => r.missionId === row.missionId && r.demandeId === row.demandeId && r.date === row.date);
+    const indexInMonth = monthSubRows.findIndex(r => 
+      (r.demandeId && r.demandeId === row.demandeId) ||
+      (r.missionId && r.missionId === row.missionId) ||
+      (r.date === row.date && r.client === row.client)
+    );
     const rank = indexInMonth !== -1 ? indexInMonth + 1 : 1;
+    const parentMontant = Number(parentDemande?.prix) || Number(parentDemande?.montant) || Number(parentDemande?.formulaire_data?.facturation?.montant_ht) || Number(row.montant) || 0;
 
     return {
       rank,
       total: monthTotal,
-      isFirst: !row.parentDemandeId
+      isFirst: rank === 1,
+      parentMontant,
     };
   }, [facturationData, demandsMap]);
 
@@ -1983,7 +2021,10 @@ export default function LesSuivis() {
             return '—';
           }
           const subInfo = getSubInfo(row);
-          if (subInfo && !subInfo.isFirst) {
+          if (subInfo) {
+            if (subInfo.rank === 1) {
+              return `${subInfo.parentMontant || row.montant} DH (Abonnement 1/${subInfo.total})`;
+            }
             return `Abonnement ${subInfo.rank}/${subInfo.total}`;
           }
           return `${row.montant} DH`;
@@ -2399,8 +2440,23 @@ export default function LesSuivis() {
                                   return '—';
                                 }
                                 const subInfo = getSubInfo(row);
-                                if (subInfo && !subInfo.isFirst) {
-                                  return `Abonnement ${subInfo.rank}/${subInfo.total}`;
+                                if (subInfo) {
+                                  if (subInfo.rank === 1) {
+                                    return (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', lineHeight: '1.2' }}>
+                                        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{money(subInfo.parentMontant || row.montant)}</span>
+                                        <span style={{ fontSize: '0.8rem', color: '#0f5f5b', fontWeight: 600 }}>Abonnement</span>
+                                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{subInfo.rank}/{subInfo.total}</span>
+                                      </div>
+                                    );
+                                  } else {
+                                    return (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', lineHeight: '1.2' }}>
+                                        <span style={{ fontSize: '0.85rem', color: '#0f5f5b', fontWeight: 600 }}>Abonnement</span>
+                                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{subInfo.rank}/{subInfo.total}</span>
+                                      </div>
+                                    );
+                                  }
                                 }
                                 return money(row.montant);
                               })()}

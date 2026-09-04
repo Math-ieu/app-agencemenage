@@ -36,6 +36,7 @@ import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../../utils/permissions';
 import { isFinanceRowVisible } from '../../utils/statusUtils';
+import { getDynamicMonthPassagesCount } from '../../utils/pricing';
 import './VueGlobale.css';
 
 type FinanceSubTab = 'vue-globale' | 'debit-profil' | 'credit-profil' | 'suivi-facturation' | 'comptes-profils';
@@ -100,6 +101,7 @@ interface FacturationRow {
   isSubscriptionPrimary?: boolean;
   isSubscriptionSecondary?: boolean;
   subscriptionDenominator?: number;
+  subscriptionRank?: number;
   subscriptionInterventionCA?: number;
   subscriptionMonth?: number | null;
   // New fields from Dashboard
@@ -706,7 +708,7 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     partAgenceReversee: item.part_agence_reversee,
     dateRemiseAgence: item.date_remise_agence || '—',
     parentDemandeId: (demande as any)?.parent_demande || (demande as any)?.parent_demande_id || null,
-    frequency: (demande as any)?.frequency || null,
+    frequency: (demande as any)?.frequency || ((demande as any)?.parent_demande ? 'abonnement' : null),
     subscriptionMonth: (demande as any)?.formulaire_data?.subscription_month || null,
     // New fields
     annulationRaison: (demande as any)?.annulation_raison || item.annulation_raison || facturationData.annulation_raison,
@@ -847,7 +849,7 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     partAgenceReversee,
     dateRemiseAgence: facturationData.date_remise_agence || '—',
     parentDemandeId: demande?.parent_demande || demande?.parent_demande_id || null,
-    frequency: demande?.frequency || null,
+    frequency: demande?.frequency || (demande?.parent_demande ? 'abonnement' : null),
     subscriptionMonth: demande?.formulaire_data?.subscription_month || null,
     annulationRaison: demande.annulation_raison || demande.motif || facturationData.annulation_raison,
     profilSeraPaye: (() => {
@@ -1094,9 +1096,29 @@ export default function VueGlobale() {
       if (d.id) dashDemandsMap.set(Number(d.id), d);
     });
 
+    const allDemandsMap = new Map<number, any>();
+    demands.forEach(d => {
+      if (d.id) allDemandsMap.set(Number(d.id), d);
+    });
+    dashDemandes.forEach(d => {
+      if (d.id) allDemandsMap.set(Number(d.id), d);
+    });
+
+    const parentIdsWithChildren = new Set(
+      demands.filter(d => !!d.parent_demande).map(d => Number(d.parent_demande))
+    );
+
     // Fusionner les données : Missions prioritaires, puis Demandes sans mission
     const missionDemandeIds = new Set(missions.map(m => String(m.demande_detail?.id)).filter(id => id !== 'undefined' && id !== 'null'));
-    const uniqueDemands = demands.filter(d => !missionDemandeIds.has(String(d.id)));
+    const uniqueDemands = demands.filter(d => {
+      if (missionDemandeIds.has(String(d.id))) return false;
+      const isRootContractWithChildren =
+        !d.parent_demande &&
+        d.frequency === 'abonnement' &&
+        parentIdsWithChildren.has(Number(d.id));
+      if (isRootContractWithChildren) return false;
+      return true;
+    });
 
     // Enrichir uniqueDemands avec les données complètes du Dashboard
     uniqueDemands.forEach(d => {
@@ -1153,9 +1175,8 @@ export default function VueGlobale() {
       }
     }
 
-    for (const groupRows of subscriptionGroups.values()) {
-      const parentRow = groupRows.find(r => !r.parentDemandeId) || groupRows[0];
-      const parentDemande = parentRow?.originalDemande;
+    for (const [subId, groupRows] of subscriptionGroups.entries()) {
+      const parentDemande = allDemandsMap.get(Number(subId)) || groupRows.find(r => !r.parentDemandeId)?.originalDemande;
       const weeks = parentDemande?.planning?.semaines;
       
       let totalPlanned = 0;
@@ -1171,8 +1192,8 @@ export default function VueGlobale() {
         });
       }
       
-      const denominator = totalPlanned > 0 ? totalPlanned : groupRows.length;
-      const parentMontant = Number(parentDemande?.montant || parentRow?.montant || 0);
+      const parentMontant = Number(parentDemande?.prix) || Number(parentDemande?.montant) || Number(parentDemande?.formulaire_data?.facturation?.montant_ht) || 0;
+      const denominator = totalPlanned > 0 ? totalPlanned : (parentDemande ? getDynamicMonthPassagesCount(parentDemande, demands) : groupRows.length);
       const interventionCA = denominator > 0 ? parentMontant / denominator : 0;
 
       const monthGroups = new Map<number, FacturationRow[]>();
@@ -1191,15 +1212,36 @@ export default function VueGlobale() {
           if (dateA !== dateB) return dateA - dateB;
           return (a.demandeId || 0) - (b.demandeId || 0);
         });
-        const rootRow = rows.find(r => !r.parentDemandeId);
-        const primaryRow = rootRow || sorted[0];
 
-        for (const row of rows) {
-          const isPrimary = row === primaryRow;
+        for (let i = 0; i < sorted.length; i++) {
+          const row = sorted[i];
+          const isPrimary = i === 0;
           row.isSubscriptionPrimary = isPrimary;
           row.isSubscriptionSecondary = !isPrimary;
-          row.subscriptionDenominator = denominator;
+          row.subscriptionRank = i + 1;
+          row.subscriptionDenominator = denominator || sorted.length;
           row.subscriptionInterventionCA = Number(interventionCA.toFixed(2));
+
+          if (isPrimary && parentMontant > 0) {
+            row.montant = parentMontant;
+            if (parentDemande?.part_agence !== undefined && parentDemande?.part_agence !== null) {
+              row.partAgence = Number(parentDemande.part_agence);
+            }
+          }
+
+          // Inherit invoice payment status from parentDemande if child doesn't have an explicit override
+          if (parentDemande?.formulaire_data?.facturation) {
+            const pFact = parentDemande.formulaire_data.facturation;
+            if (!row.statutPaiementUi || row.statutPaiementUi === 'non_confirme' || row.statutPaiementUi === 'non_paye') {
+              if (pFact.statut_paiement_ui) {
+                row.statutPaiementUi = pFact.statut_paiement_ui;
+                if (['paye', 'integral', 'effectue', 'profil_paye_client', 'agence_payee_client'].includes(pFact.statut_paiement_ui)) {
+                  row.paiement = 'paye';
+                  row.statut = 'Payé';
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -1698,7 +1740,7 @@ export default function VueGlobale() {
     };
 
     const getRowCA = (row: FacturationRow) => {
-      if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+      if ((row.frequency === 'abonnement' || row.parentDemandeId) && row.isSubscriptionPrimary) {
         return row.montant;
       }
       if (isCaoConfirmed(row) || isClientPaidStatus(row.statutPaiementUi) || row.paiement === 'paye') {
@@ -1811,7 +1853,7 @@ export default function VueGlobale() {
     };
 
     const getRowCA = (row: FacturationRow) => {
-      if (row.frequency === 'abonnement' && row.isSubscriptionPrimary) {
+      if ((row.frequency === 'abonnement' || row.parentDemandeId) && row.isSubscriptionPrimary) {
         return row.montant;
       }
       if (isCaoConfirmed(row) || isClientPaidStatus(row.statutPaiementUi) || row.paiement === 'paye') {
@@ -2916,8 +2958,11 @@ export default function VueGlobale() {
         row.ville,
         row.profil,
         row.service,
-        row.segment,
-        row.isSubscriptionSecondary ? `Abonnement (Mois ${row.subscriptionMonth || 1})` : ttc,
+        row.isSubscriptionSecondary
+          ? `Abonnement ${row.subscriptionRank || 2}/${row.subscriptionDenominator || 4}`
+          : (row.isSubscriptionPrimary && row.subscriptionRank === 1
+            ? `${ttc} (Abonnement 1/${row.subscriptionDenominator || 4})`
+            : ttc),
         row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 && paid === 0 ? '—' : paid),
         row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 ? '—' : ecart),
         row.partAgence,
@@ -2959,7 +3004,7 @@ export default function VueGlobale() {
         <td>${row.profil}</td>
         <td>${row.service}</td>
         <td>${row.segment}</td>
-        <td>${row.isSubscriptionSecondary ? `Abonnement (Mois ${row.subscriptionMonth || 1})` : money(ttc)}</td>
+        <td>${row.isSubscriptionSecondary ? `Abonnement ${row.subscriptionRank || 2}/${row.subscriptionDenominator || 4}` : (row.isSubscriptionPrimary && row.subscriptionRank === 1 ? `${money(ttc)} (Abonnement 1/${row.subscriptionDenominator || 4})` : money(ttc))}</td>
         <td>${row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 && paid === 0 ? '—' : money(paid))}</td>
         <td>${row.isSubscriptionSecondary ? '—' : (Math.abs(ecart) < 0.01 ? '—' : money(ecart))}</td>
       </tr>`;
@@ -3698,16 +3743,6 @@ export default function VueGlobale() {
                       </td>
                       <td style={{ color: '#64748b', lineHeight: '1.3' }}>
                         {row.service}
-                        {row.isSubscriptionSecondary && (
-                          <span style={{ fontSize: '0.75rem', color: '#0f5f5b', display: 'block', fontWeight: 600 }}>
-                            Inclus dans l'abonnement {row.subscriptionMonth ? `(Mois ${row.subscriptionMonth})` : ''}
-                          </span>
-                        )}
-                        {row.isSubscriptionPrimary && (
-                          <span style={{ fontSize: '0.75rem', color: '#d97706', display: 'block', fontWeight: 600 }}>
-                            Facturation globale abonnement
-                          </span>
-                        )}
                       </td>
                       <td><span className={`fg-pill ${row.segment === 'Particulier' ? 'fg-pill-outline-sky' : 'fg-pill-violet'}`}>{row.segment}</span></td>
                       <td className="fw-bold" style={{ color: ht < 0 ? '#dc2626' : '#0f5f5b' }}>
@@ -3717,7 +3752,28 @@ export default function VueGlobale() {
                         {row.isSubscriptionSecondary ? renderMoney(0) : renderMoney(tva)}
                       </td>
                       <td className="fw-bold" style={{ color: ttc < 0 ? '#dc2626' : '#0f5f5b' }}>
-                        {row.isSubscriptionSecondary ? 'Abonnement' : renderMoney(ttc)}
+                        {(() => {
+                          const isSub = row.frequency === 'abonnement' || row.isSubscriptionPrimary || row.isSubscriptionSecondary || Boolean(row.parentDemandeId);
+                          if (isSub) {
+                            if (row.isSubscriptionPrimary) {
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', lineHeight: '1.2' }}>
+                                  <span>{renderMoney(ttc)}</span>
+                                  <span style={{ fontSize: '0.8rem', color: '#0f5f5b', fontWeight: 600 }}>Abonnement</span>
+                                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{row.subscriptionRank || 1}/{row.subscriptionDenominator || 4}</span>
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', lineHeight: '1.2' }}>
+                                  <span style={{ fontSize: '0.85rem', color: '#0f5f5b', fontWeight: 600 }}>Abonnement</span>
+                                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{row.subscriptionRank || 2}/{row.subscriptionDenominator || 4}</span>
+                                </div>
+                              );
+                            }
+                          }
+                          return renderMoney(ttc);
+                        })()}
                       </td>
                       <td style={{ color: '#64748b' }}>{row.modePaiementReel || row.modePaiement || '—'}</td>
                       <td className="fw-bold" style={{ color: '#059669' }}>
