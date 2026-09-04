@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import StickyHorizontalScrollbar from '../../components/common/StickyHorizontalScrollbar';
 import {
   ArrowUpRight,
   BarChart3,
@@ -862,6 +863,7 @@ export default function VueGlobale() {
   const addToast = useToastStore((state) => state.addToast);
   const [commerciaux, setCommerciaux] = useState<ApiUser[]>([]);
   const [agents, setAgents] = useState<any[]>([]);
+  const suiviTableWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getUsers({ role: 'commercial' })
@@ -3595,7 +3597,7 @@ export default function VueGlobale() {
             </div>
           </div>
 
-          <div className="table-wrapper">
+          <div className="table-wrapper fg-facturation-table-wrap sticky-table-wrap" ref={suiviTableWrapRef}>
             <table className="data-table fg-facturation-table">
               <thead>
                 <tr>
@@ -3736,6 +3738,7 @@ export default function VueGlobale() {
 
             </table>
           </div>
+          <StickyHorizontalScrollbar targetRef={suiviTableWrapRef} dependencies={[filteredSuiviRows]} />
         </>
       )}
 

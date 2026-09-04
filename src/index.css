@@ -1698,20 +1698,26 @@ body {
   background-color: #f8fafb !important;
 }
 
-/* Dashboard table: compact layout without horizontal scroll and sticky head (Desktop) */
+/* Dashboard table: spacious layout with horizontal scroll and single-line text */
+.dashboard-table-wrapper {
+  overflow-x: auto !important;
+  position: relative;
+}
+
 .table-wrapper.enable-table-scroll {
-  overflow-x: hidden;
+  overflow-x: auto !important;
   overflow-y: auto !important;
-  max-height: calc(100vh - 300px);
-  min-height: 450px;
+  max-height: calc(100vh - 280px);
 }
 
 .table-wrapper.disable-table-scroll {
-  overflow: visible !important;
+  overflow-x: auto !important;
 }
 
 .dashboard-table {
-  table-layout: fixed;
+  table-layout: auto !important;
+  width: 100%;
+  min-width: 1950px;
 }
 
 .dashboard-table th {
@@ -1719,37 +1725,48 @@ body {
   top: 0;
   z-index: 30;
   background: #f6fafc;
-  padding: 0.65rem 0.55rem;
+  padding: 0.75rem 0.85rem;
   font-size: 0.8rem;
   letter-spacing: 0.02em;
-  white-space: normal;
-  line-height: 1.15;
+  white-space: nowrap !important;
+  line-height: 1.25;
 }
 
 .dashboard-table td {
-  padding: 0.6rem 0.55rem;
+  padding: 0.75rem 0.85rem;
   font-size: 0.85rem;
-  line-height: 1.2;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  line-height: 1.3;
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
 }
 
 .dashboard-table .price-main {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
+  white-space: nowrap !important;
 }
 
 .dashboard-table .price-sub {
   font-size: 0.72rem;
+  white-space: nowrap !important;
 }
 
 .dashboard-table .badge {
   font-size: 0.76rem;
-  padding: 0.22rem 0.45rem;
+  padding: 0.25rem 0.6rem;
+  white-space: nowrap !important;
+}
+
+.dashboard-table .client-link-group {
+  white-space: nowrap !important;
+}
+
+.dashboard-table .client-link {
+  white-space: nowrap !important;
 }
 
 /* Ensure dropdown menus are not clipped by table scroll container */
 .dashboard-table-wrapper .action-menu {
-  z-index: 1200;
+  z-index: 99999 !important;
 }
 
 .empty-row {
@@ -2277,11 +2294,11 @@ body {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 100;
+  z-index: 99999 !important;
   background: white;
   border: none;
   border-radius: 12px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.18), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   min-width: 220px;
   padding: 0.5rem;
   margin-top: 6px;
@@ -5569,7 +5586,7 @@ input:checked+.slider:before {
 
 .dashboard-table, 
 .dashboard-table-wrapper .data-table {
-  min-width: 1200px; /* Dashboard has many columns (15+) */
+  min-width: 1950px; /* Dashboard has 17 columns */
 }
 
 .lc-table, 
@@ -5586,12 +5603,43 @@ input:checked+.slider:before {
   min-width: 1350px;
 }
 
-/* Hide bottom scrollbar on profils table wrapper */
-.profils-table-wrap {
+.historique-table-wrap .data-table,
+.historique-table {
+  min-width: 1250px;
+}
+
+.fg-facturation-table-wrap .data-table,
+.fg-facturation-table {
+  min-width: 1450px;
+}
+
+.ls-table-section .ls-table {
+  min-width: 1400px;
+}
+
+.ga-table-wrapper .ga-table,
+.ga-table {
+  min-width: 1400px;
+}
+
+/* Hide bottom scrollbar on table wrappers with custom bottom sticky scrollbar */
+.profils-table-wrap,
+.historique-table-wrap,
+.fg-facturation-table-wrap,
+.ls-table-wrapper-sticky,
+.ga-table-wrapper-sticky,
+.dashboard-table-wrapper,
+.sticky-table-wrap {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
 }
-.profils-table-wrap::-webkit-scrollbar {
+.profils-table-wrap::-webkit-scrollbar,
+.historique-table-wrap::-webkit-scrollbar,
+.fg-facturation-table-wrap::-webkit-scrollbar,
+.ls-table-wrapper-sticky::-webkit-scrollbar,
+.ga-table-wrapper-sticky::-webkit-scrollbar,
+.dashboard-table-wrapper::-webkit-scrollbar,
+.sticky-table-wrap::-webkit-scrollbar {
   display: none !important;
   height: 0px !important;
 }

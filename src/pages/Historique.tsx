@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getDemandesHistorique, exportHistoriqueCsv } from '../api/client';
 import { Search, CalendarDays, Download, History as HistoryIcon, Loader2 } from 'lucide-react';
+import StickyHorizontalScrollbar from '../components/common/StickyHorizontalScrollbar';
 import { encodeId } from '../utils/obfuscation';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
 import { hasPermission } from '../utils/permissions';
@@ -55,6 +56,7 @@ export default function Historique() {
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [exportingCsv, setExportingCsv] = useState(false);
+  const tableWrapRef = useRef<HTMLDivElement>(null);
 
   const getRowClass = (d: Demande) => {
     if (d.statut_paiement === 'integral' || d.statut === 'termine') return 'row-status-paye';
@@ -176,8 +178,9 @@ export default function Historique() {
       {loading ? (
         <div className="loading-state"><div className="spinner" /></div>
       ) : (
-        <div className="table-wrapper">
-          <table className="data-table">
+        <>
+          <div className="table-wrapper historique-table-wrap sticky-table-wrap" ref={tableWrapRef}>
+            <table className="data-table">
             <thead>
               <tr>
                 <th>Réf</th>
@@ -243,7 +246,9 @@ export default function Historique() {
             </tbody>
           </table>
         </div>
-      )}
+        <StickyHorizontalScrollbar targetRef={tableWrapRef} dependencies={[demandes]} />
+      </>
+    )}
     </div>
   );
 }
