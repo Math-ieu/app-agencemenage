@@ -1,5 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import StickyHorizontalScrollbar from '../components/common/StickyHorizontalScrollbar';
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
   CheckCircle, UserCheck, MessageSquare, AlertTriangle, Gift, Lock,
@@ -361,6 +362,9 @@ export default function Dashboard() {
     };
   };
 
+  // Ref for sticky horizontal scrollbar
+  const dashboardTableWrapRef = useRef<HTMLDivElement>(null);
+
   // Filtres
   const [typeFilter, setTypeFilter] = useState<'tout' | 'oneshot' | 'abonnement' | 'airbnb'>('tout');
   const [search, setSearch] = useState('');
@@ -497,6 +501,8 @@ export default function Dashboard() {
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
   const [activeMoreMenu, setActiveMoreMenu] = useState<number | null>(null);
   const [menuDirection, setMenuDirection] = useState<'up' | 'down'>('down');
+  const [moreMenuCoords, setMoreMenuCoords] = useState<{ openUp: boolean; top?: number; bottom?: number; right?: number; maxHeight?: number } | null>(null);
+  const [cogMenuCoords, setCogMenuCoords] = useState<{ openUp: boolean; top?: number; bottom?: number; left?: number; maxHeight?: number } | null>(null);
   const [isAgencyExpanded, setIsAgencyExpanded] = useState(false);
   const [showPartsSection, setShowPartsSection] = useState(false);
   const [showHistorySection, setShowHistorySection] = useState(false);
@@ -1556,6 +1562,8 @@ export default function Dashboard() {
       }
       setActiveMenu(null);
       setActiveMoreMenu(null);
+      setCogMenuCoords(null);
+      setMoreMenuCoords(null);
     };
 
     if (activeMenu !== null || activeMoreMenu !== null) {
@@ -1871,83 +1879,129 @@ export default function Dashboard() {
       ) : (
         <>
           {viewMode === 'list' ? (
-            <div className={`table-wrapper dashboard-table-wrapper ${filtered.length >= 8 ? 'enable-table-scroll' : 'disable-table-scroll'}`}>
+            <>
+              <div
+                className={`table-wrapper dashboard-table-wrapper sticky-table-wrap ${filtered.length >= 8 ? 'enable-table-scroll' : 'disable-table-scroll'}`}
+                ref={dashboardTableWrapRef}
+              >
               <table className="data-table dashboard-table">
                 <thead>
                   <tr>
-                    <th></th>
-                    <th>Com</th>
-                    <th>Ops</th>
-                    <th>Date d'interv.</th>
-                    <th>Statut besoin</th>
-                    <th>Nom du client</th>
-                    <th>Quartier / Ville</th>
-                    <th>Type de service</th>
-                    <th>Seg.</th>
-                    <th>Nb d'heures</th>
-                    <th>Profils envoyés</th>
-                    <th>Option sup.</th>
-                    <th>Promo</th>
-                    <th>CAO</th>
-                    <th>Tarif total</th>
-                    <th>Statut paie.</th>
-                    <th></th>
+                    <th style={{ width: '48px', minWidth: '48px', textAlign: 'center' }}></th>
+                    <th style={{ minWidth: '130px' }}>Com</th>
+                    <th style={{ minWidth: '95px' }}>Ops</th>
+                    <th style={{ minWidth: '130px' }}>Date d'interv.</th>
+                    <th style={{ minWidth: '200px' }}>Statut besoin</th>
+                    <th style={{ minWidth: '180px' }}>Nom du client</th>
+                    <th style={{ minWidth: '180px' }}>Quartier / Ville</th>
+                    <th style={{ minWidth: '210px' }}>Type de service</th>
+                    <th style={{ minWidth: '80px', textAlign: 'center' }}>Seg.</th>
+                    <th style={{ minWidth: '100px', textAlign: 'center' }}>Nb d'heures</th>
+                    <th style={{ minWidth: '130px' }}>Profils envoyés</th>
+                    <th style={{ minWidth: '130px' }}>Option sup.</th>
+                    <th style={{ minWidth: '90px', textAlign: 'center' }}>Promo</th>
+                    <th style={{ minWidth: '80px', textAlign: 'center' }}>CAO</th>
+                    <th style={{ minWidth: '160px' }}>Tarif total</th>
+                    <th style={{ minWidth: '180px' }}>Statut paie.</th>
+                    <th style={{ width: '50px', minWidth: '50px', textAlign: 'center' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((d) => (
                     <tr key={d.id} className={getRowClass(d)}>
-                      <td className="relative">
+                      <td className="relative" style={{ width: '48px', minWidth: '48px', textAlign: 'center', zIndex: activeMenu === d.id ? 99999 : 'auto' }}>
                         <button
                           className="icon-btn"
                           onClick={(e) => {
-                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                            const spaceBelow = window.innerHeight - rect.bottom;
-                            setMenuDirection(spaceBelow < 300 ? 'up' : 'down');
-                            setActiveMenu(activeMenu === d.id ? null : d.id);
-                            setActiveMoreMenu(null);
+                            e.stopPropagation();
+                            if (activeMenu === d.id) {
+                              setActiveMenu(null);
+                              setCogMenuCoords(null);
+                            } else {
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                              const spaceBelow = window.innerHeight - rect.bottom;
+                              const spaceAbove = rect.top;
+                              const openUp = spaceBelow < 280 && spaceAbove > spaceBelow;
+                              const maxHeight = openUp ? Math.max(160, spaceAbove - 16) : Math.max(160, spaceBelow - 16);
+                              setCogMenuCoords({
+                                openUp,
+                                top: openUp ? undefined : Math.max(10, rect.bottom + 4),
+                                bottom: openUp ? Math.max(10, window.innerHeight - rect.top + 4) : undefined,
+                                left: Math.max(10, rect.left),
+                                maxHeight,
+                              });
+                              setActiveMenu(d.id);
+                              setActiveMoreMenu(null);
+                              setMoreMenuCoords(null);
+                            }
                           }}
                           aria-label="Actions"
                         >
                           <Settings size={14} />
                         </button>
 
-                        {activeMenu === d.id && (
-                          <div className="action-menu" style={{
-                            left: 0,
-                            right: 'auto',
-                            ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
-                          }}>
-                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
-                              <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); }}>
-                                <Edit2 size={14} /> Éditer le besoin
-                              </button>
-                            )}
+                        {activeMenu === d.id && cogMenuCoords && (
+                          <>
+                            <div
+                              style={{ position: 'fixed', inset: 0, zIndex: 99998 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(null);
+                                setCogMenuCoords(null);
+                              }}
+                            />
+                            <div
+                              className="action-menu shadow-xl border-0"
+                              style={{
+                                position: 'fixed',
+                                top: cogMenuCoords.openUp ? 'auto' : `${cogMenuCoords.top}px`,
+                                bottom: cogMenuCoords.openUp ? `${cogMenuCoords.bottom}px` : 'auto',
+                                left: `${cogMenuCoords.left}px`,
+                                right: 'auto',
+                                margin: 0,
+                                minWidth: '220px',
+                                maxHeight: cogMenuCoords.maxHeight ? `${cogMenuCoords.maxHeight}px` : 'calc(100vh - 40px)',
+                                overflowY: 'auto',
+                                zIndex: 99999,
+                                boxShadow: '0 12px 32px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.1)',
+                                background: '#ffffff',
+                                borderRadius: '12px',
+                                border: '1px solid #cbd5e1',
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
+                                <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); setCogMenuCoords(null); }}>
+                                  <Edit2 size={14} /> Éditer le besoin
+                                </button>
+                              )}
 
-                            {hasPermissionWithContext(user, 'confirmation_avant_operation', d) && (
-                              <button
-                                className="menu-item w-full"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openCAOModal(d);
-                                  setActiveMenu(null);
-                                }}
-                              >
-                                <CheckCircle size={14} className={d.cao ? 'text-green-500' : ''} /> {d.cao ? 'Confirmation avant opération' : 'Confirmation avant opération'}
-                              </button>
-                            )}
+                              {hasPermissionWithContext(user, 'confirmation_avant_operation', d) && (
+                                <button
+                                  className="menu-item w-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openCAOModal(d);
+                                    setActiveMenu(null);
+                                    setCogMenuCoords(null);
+                                  }}
+                                >
+                                  <CheckCircle size={14} className={d.cao ? 'text-green-500' : ''} /> {d.cao ? 'Confirmation avant opération' : 'Confirmation avant opération'}
+                                </button>
+                              )}
 
-                            {hasPermission(user, 'consulter_compte_client_dashboard') && (
-                              <Link
-                                to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
-                                className="menu-item"
-                                onClick={() => setActiveMenu(null)}
-                                style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}
-                              >
-                                <UserCheck size={14} /> Compte Client
-                              </Link>
-                            )}
-                          </div>
+                              {hasPermission(user, 'consulter_compte_client_dashboard') && (
+                                <Link
+                                  to={d.client ? `/clients/${encodeId(d.client)}` : '#'}
+                                  className="menu-item"
+                                  onClick={() => { setActiveMenu(null); setCogMenuCoords(null); }}
+                                  style={{ textDecoration: 'none', color: 'inherit', display: 'flex' }}
+                                >
+                                  <UserCheck size={14} /> Compte Client
+                                </Link>
+                              )}
+                            </div>
+                          </>
                         )}
                       </td>
                       <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
@@ -2069,150 +2123,198 @@ export default function Dashboard() {
                           })()}
                         </div>
                       </td>
-                      <td>
+                      <td style={{ minWidth: '180px' }}>
                         {renderPaymentStatus(d)}
                       </td>
-                      <td className="relative">
+                      <td className="relative" style={{ width: '50px', minWidth: '50px', textAlign: 'center', zIndex: activeMoreMenu === d.id ? 99999 : 'auto' }}>
                         <button
                           className="icon-btn"
                           onClick={(e) => {
-                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                            const spaceBelow = window.innerHeight - rect.bottom;
-                            setMenuDirection(spaceBelow < 350 ? 'up' : 'down');
-                            setActiveMoreMenu(activeMoreMenu === d.id ? null : d.id);
-                            setActiveMenu(null);
+                            e.stopPropagation();
+                            if (activeMoreMenu === d.id) {
+                              setActiveMoreMenu(null);
+                              setMoreMenuCoords(null);
+                            } else {
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                              const spaceBelow = window.innerHeight - rect.bottom;
+                              const spaceAbove = rect.top;
+                              const openUp = spaceBelow < 340 && spaceAbove > spaceBelow;
+                              const maxHeight = openUp ? Math.max(160, spaceAbove - 16) : Math.max(160, spaceBelow - 16);
+                              setMoreMenuCoords({
+                                openUp,
+                                top: openUp ? undefined : Math.max(10, rect.bottom + 4),
+                                bottom: openUp ? Math.max(10, window.innerHeight - rect.top + 4) : undefined,
+                                right: Math.max(10, window.innerWidth - rect.right),
+                                maxHeight,
+                              });
+                              setActiveMoreMenu(d.id);
+                              setActiveMenu(null);
+                              setCogMenuCoords(null);
+                            }
                           }}
                         >
                           <MoreVertical size={18} />
                         </button>
 
-                        {activeMoreMenu === d.id && (
-                          <div className="action-menu shadow-xl border-0" style={{
-                            right: 0,
-                            left: 'auto',
-                            minWidth: '220px',
-                            ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
-                          }}>
-                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
-                              <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
-                                <Pencil size={16} /> Éditer le besoin
-                              </button>
-                            )}
-
-                            {hasPermission(user, 'note_commerciale_dashboard') && (
-                              <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                                setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
+                        {activeMoreMenu === d.id && moreMenuCoords && (
+                          <>
+                            <div
+                              style={{ position: 'fixed', inset: 0, zIndex: 99998 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setActiveMoreMenu(null);
-                              }}>
-                                <MessageSquare size={16} /> Note commerciale
-                              </button>
-                            )}
-                            {hasPermission(user, 'note_operationnelle_dashboard') && (
-                              <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                                setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
-                                setActiveMoreMenu(null);
-                              }}>
-                                <MessageSquare size={16} /> Note opérationnelle
-                              </button>
-                            )}
-
-                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
-
-                            {hasPermissionWithContext(user, 'editer_besoin_agence', d) && (
-                              <>
-                                <button 
-                                  className="menu-item" 
-                                  style={{ 
-                                    color: '#6366f1',
-                                    opacity: !d.cao ? 0.5 : 1,
-                                    cursor: !d.cao ? 'not-allowed' : 'pointer'
-                                  }} 
-                                  disabled={!d.cao}
-                                  onClick={async () => {
-                                    if (!d.cao) return;
-                                    await updateDemande(d.id, { statut: 'pres_en_cours' });
-                                    addToast('Statut mis à jour : Prestation confirmée', 'success');
-                                    fetchData();
-                                    setActiveMoreMenu(null);
-                                  }}
-                                >
-                                  <CheckCircle size={16} /> Pres. confirmée
+                                setMoreMenuCoords(null);
+                              }}
+                            />
+                            <div
+                              className="action-menu shadow-xl border-0"
+                              style={{
+                                position: 'fixed',
+                                top: moreMenuCoords.openUp ? 'auto' : `${moreMenuCoords.top}px`,
+                                bottom: moreMenuCoords.openUp ? `${moreMenuCoords.bottom}px` : 'auto',
+                                right: `${moreMenuCoords.right}px`,
+                                left: 'auto',
+                                margin: 0,
+                                minWidth: '220px',
+                                maxHeight: moreMenuCoords.maxHeight ? `${moreMenuCoords.maxHeight}px` : 'calc(100vh - 40px)',
+                                overflowY: 'auto',
+                                zIndex: 99999,
+                                boxShadow: '0 12px 32px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.1)',
+                                background: '#ffffff',
+                                borderRadius: '12px',
+                                border: '1px solid #cbd5e1',
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
+                                <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); setMoreMenuCoords(null); }}>
+                                  <Pencil size={16} /> Éditer le besoin
                                 </button>
+                              )}
 
-                                <button 
-                                  className="menu-item" 
-                                  style={{ 
-                                    color: '#0ea5e9',
-                                    opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
-                                    cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
-                                  }} 
-                                  disabled={!(d.cao && d.statut === 'pres_en_cours')}
-                                  onClick={async () => {
-                                    if (!(d.cao && d.statut === 'pres_en_cours')) return;
-                                    if (!isPartProfilDefined(d)) {
-                                      addToast('Veuillez définir la part de la femme de ménage.', 'warning');
+                              {hasPermission(user, 'note_commerciale_dashboard') && (
+                                <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                  setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <MessageSquare size={16} /> Note commerciale
+                                </button>
+                              )}
+                              {hasPermission(user, 'note_operationnelle_dashboard') && (
+                                <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                  setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <MessageSquare size={16} /> Note opérationnelle
+                                </button>
+                              )}
+
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
+
+                              {hasPermissionWithContext(user, 'editer_besoin_agence', d) && (
+                                <>
+                                  <button 
+                                    className="menu-item" 
+                                    style={{ 
+                                      color: '#6366f1',
+                                      opacity: !d.cao ? 0.5 : 1,
+                                      cursor: !d.cao ? 'not-allowed' : 'pointer'
+                                    }} 
+                                    disabled={!d.cao}
+                                    onClick={async () => {
+                                      if (!d.cao) return;
+                                      await updateDemande(d.id, { statut: 'pres_en_cours' });
+                                      addToast('Statut mis à jour : Prestation confirmée', 'success');
+                                      fetchData();
                                       setActiveMoreMenu(null);
-                                      openDetail(d);
-                                      setShowPartsSection(true);
-                                      setTimeout(() => {
-                                        document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                      }, 200);
-                                      return;
-                                    }
-                                    await updateDemande(d.id, { statut: 'pres_terminee' });
-                                    addToast('Statut mis à jour : Prestation terminée', 'success');
-                                    addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
-                                    fetchData();
-                                    setActiveMoreMenu(null);
-                                  }}
-                                >
-                                  <CheckCircle size={16} /> Pres. terminée
+                                      setMoreMenuCoords(null);
+                                    }}
+                                  >
+                                    <CheckCircle size={16} /> Pres. confirmée
+                                  </button>
+
+                                  <button 
+                                    className="menu-item" 
+                                    style={{ 
+                                      color: '#0ea5e9',
+                                      opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
+                                      cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
+                                    }} 
+                                    disabled={!(d.cao && d.statut === 'pres_en_cours')}
+                                    onClick={async () => {
+                                      if (!(d.cao && d.statut === 'pres_en_cours')) return;
+                                      if (!isPartProfilDefined(d)) {
+                                        addToast('Veuillez définir la part de la femme de ménage.', 'warning');
+                                        setActiveMoreMenu(null);
+                                        setMoreMenuCoords(null);
+                                        openDetail(d);
+                                        setShowPartsSection(true);
+                                        setTimeout(() => {
+                                          document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        }, 200);
+                                        return;
+                                      }
+                                      await updateDemande(d.id, { statut: 'pres_terminee' });
+                                      addToast('Statut mis à jour : Prestation terminée', 'success');
+                                      addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
+                                      fetchData();
+                                      setActiveMoreMenu(null);
+                                      setMoreMenuCoords(null);
+                                    }}
+                                  >
+                                    <CheckCircle size={16} /> Pres. terminée
+                                  </button>
+                                  <div className="menu-divider" />
+                                </>
+                              )}
+
+                              {hasPermissionWithContext(user, 'annulation_demande', d) && (
+                                <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
+                                  setAnnulationReason('');
+                                  const isSubscription = d.frequency === 'abonnement' || !!d.parent_demande;
+                                  setShowAnnulationModal({ demandeId: d.id, isSubscription });
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <XCircle size={16} /> Rejeté / Annulé
                                 </button>
-                                <div className="menu-divider" />
-                              </>
-                            )}
+                              )}
 
-                            {hasPermissionWithContext(user, 'annulation_demande', d) && (
-                              <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
-                                setAnnulationReason('');
-                                const isSubscription = d.frequency === 'abonnement' || !!d.parent_demande;
-                                setShowAnnulationModal({ demandeId: d.id, isSubscription });
-                                setActiveMoreMenu(null);
-                              }}>
-                                <XCircle size={16} /> Rejeté / Annulé
-                              </button>
-                            )}
+                              {hasPermission(user, 'facturation_annulee') && (
+                                <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
+                                  const parts = (d.formulaire_data?.facturation?.parts_repartition || d.formulaire_data?.parts_repartition || []) as any[];
+                                  const totalParts = parts.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
+                                  setFacturationAnnuleeReason('');
+                                  setFacturationAnnuleeProfilPaye(totalParts > 0);
+                                  setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <XCircle size={16} /> Facturation annulée
+                                </button>
+                              )}
 
-                            {hasPermission(user, 'facturation_annulee') && (
-                              <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
-                                const parts = (d.formulaire_data?.facturation?.parts_repartition || d.formulaire_data?.parts_repartition || []) as any[];
-                                const totalParts = parts.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
-                                setFacturationAnnuleeReason('');
-                                setFacturationAnnuleeProfilPaye(totalParts > 0);
-                                setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
-                                setActiveMoreMenu(null);
-                              }}>
-                                <XCircle size={16} /> Facturation annulée
-                              </button>
-                            )}
-
-                            {hasPermission(user, 'supprimer_demande_dashboard') && (
-                              <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
-                                if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
-                                  try {
-                                    await deleteDemande(d.id);
-                                    addToast('Demande supprimée avec succès', 'success');
-                                    fetchData();
-                                    setActiveMoreMenu(null);
-                                  } catch (err) {
-                                    addToast('Erreur lors de la suppression', 'error');
+                              {hasPermission(user, 'supprimer_demande_dashboard') && (
+                                <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
+                                  if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
+                                    try {
+                                      await deleteDemande(d.id);
+                                      addToast('Demande supprimée avec succès', 'success');
+                                      fetchData();
+                                      setActiveMoreMenu(null);
+                                      setMoreMenuCoords(null);
+                                    } catch (err) {
+                                      addToast('Erreur lors de la suppression', 'error');
+                                    }
                                   }
-                                }
-                              }}>
-                                <Trash2 size={16} /> Supprimer
-                              </button>
-                            )}
-                          </div>
+                                }}>
+                                  <Trash2 size={16} /> Supprimer
+                                </button>
+                              )}
+                            </div>
+                          </>
                         )}
                       </td>
                     </tr>
@@ -2220,7 +2322,9 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
-          ) : (
+            <StickyHorizontalScrollbar targetRef={dashboardTableWrapRef} dependencies={[filtered]} />
+          </>
+        ) : (
             <div className="demandes-grid">
               {filtered.map((d) => (
                 <div key={d.id} className={`demande-card-detail ${getRowClass(d)}`}>
@@ -2253,148 +2357,195 @@ export default function Dashboard() {
                       {d.identification_statut === 'nouvelle' && <span className="badge badge-green" style={{ fontSize: '10px' }}>Nouvelle</span>}
                       {d.identification_statut === 'existant_valide' && <span className="badge badge-teal" style={{ fontSize: '10px' }}>Existant</span>}
                       {d.identification_statut === 'verification_requise' && <span className="badge badge-orange" style={{ fontSize: '10px' }}>Vérif.</span>}
-                      <div className="relative">
+                      <div className="relative" style={{ zIndex: activeMoreMenu === d.id ? 99999 : 'auto' }}>
                         <button
                           className="icon-btn"
                           onClick={(e) => {
-                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                            const spaceBelow = window.innerHeight - rect.bottom;
-                            setMenuDirection(spaceBelow < 350 ? 'up' : 'down');
-                            setActiveMoreMenu(activeMoreMenu === d.id ? null : d.id);
-                            setActiveMenu(null);
+                            e.stopPropagation();
+                            if (activeMoreMenu === d.id) {
+                              setActiveMoreMenu(null);
+                              setMoreMenuCoords(null);
+                            } else {
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                              const spaceBelow = window.innerHeight - rect.bottom;
+                              const spaceAbove = rect.top;
+                              const openUp = spaceBelow < 340 && spaceAbove > spaceBelow;
+                              const maxHeight = openUp ? Math.max(160, spaceAbove - 16) : Math.max(160, spaceBelow - 16);
+                              setMoreMenuCoords({
+                                openUp,
+                                top: openUp ? undefined : Math.max(10, rect.bottom + 4),
+                                bottom: openUp ? Math.max(10, window.innerHeight - rect.top + 4) : undefined,
+                                right: Math.max(10, window.innerWidth - rect.right),
+                                maxHeight,
+                              });
+                              setActiveMoreMenu(d.id);
+                              setActiveMenu(null);
+                              setCogMenuCoords(null);
+                            }
                           }}
                         >
                           <MoreVertical size={18} />
                         </button>
 
-                        {activeMoreMenu === d.id && (
-                          <div className="action-menu shadow-xl border-0" style={{
-                            right: 0,
-                            left: 'auto',
-                            minWidth: '220px',
-                            zIndex: 50,
-                            ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '5px' } : { top: '100%', bottom: 'auto', marginTop: '5px' })
-                          }}>
-                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
-                              <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); }}>
-                                <Pencil size={16} /> Éditer le besoin
-                              </button>
-                            )}
-
-                            {hasPermission(user, 'note_commerciale_dashboard') && (
-                              <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                                setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
+                        {activeMoreMenu === d.id && moreMenuCoords && (
+                          <>
+                            <div
+                              style={{ position: 'fixed', inset: 0, zIndex: 99998 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setActiveMoreMenu(null);
-                              }}>
-                                <MessageSquare size={16} /> Note commerciale
-                              </button>
-                            )}
-                            {hasPermission(user, 'note_operationnelle_dashboard') && (
-                              <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
-                                setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
-                                setActiveMoreMenu(null);
-                              }}>
-                                <MessageSquare size={16} /> Note opérationnelle
-                              </button>
-                            )}
-
-                            {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
-
-                            {hasPermissionWithContext(user, 'editer_besoin_agence', d) && (
-                              <>
-                                <button 
-                                  className="menu-item" 
-                                  style={{ 
-                                    color: '#6366f1',
-                                    opacity: !d.cao ? 0.5 : 1,
-                                    cursor: !d.cao ? 'not-allowed' : 'pointer'
-                                  }} 
-                                  disabled={!d.cao}
-                                  onClick={async () => {
-                                    if (!d.cao) return;
-                                    await updateDemande(d.id, { statut: 'pres_en_cours' });
-                                    addToast('Statut mis à jour : Prestation confirmée', 'success');
-                                    fetchData();
-                                    setActiveMoreMenu(null);
-                                  }}
-                                >
-                                  <CheckCircle size={16} /> Pres. confirmée
+                                setMoreMenuCoords(null);
+                              }}
+                            />
+                            <div
+                              className="action-menu shadow-xl border-0"
+                              style={{
+                                position: 'fixed',
+                                top: moreMenuCoords.openUp ? 'auto' : `${moreMenuCoords.top}px`,
+                                bottom: moreMenuCoords.openUp ? `${moreMenuCoords.bottom}px` : 'auto',
+                                right: `${moreMenuCoords.right}px`,
+                                left: 'auto',
+                                margin: 0,
+                                minWidth: '220px',
+                                maxHeight: moreMenuCoords.maxHeight ? `${moreMenuCoords.maxHeight}px` : 'calc(100vh - 40px)',
+                                overflowY: 'auto',
+                                zIndex: 99999,
+                                boxShadow: '0 12px 32px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.1)',
+                                background: '#ffffff',
+                                borderRadius: '12px',
+                                border: '1px solid #cbd5e1',
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
+                                <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); setMoreMenuCoords(null); }}>
+                                  <Pencil size={16} /> Éditer le besoin
                                 </button>
+                              )}
 
-                                <button 
-                                  className="menu-item" 
-                                  style={{ 
-                                    color: '#0ea5e9',
-                                    opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
-                                    cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
-                                  }} 
-                                  disabled={!(d.cao && d.statut === 'pres_en_cours')}
-                                  onClick={async () => {
-                                    if (!(d.cao && d.statut === 'pres_en_cours')) return;
-                                    if (!isPartProfilDefined(d)) {
-                                      addToast('Veuillez définir la part de la femme de ménage.', 'warning');
+                              {hasPermission(user, 'note_commerciale_dashboard') && (
+                                <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                  setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <MessageSquare size={16} /> Note commerciale
+                                </button>
+                              )}
+                              {hasPermission(user, 'note_operationnelle_dashboard') && (
+                                <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                  setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <MessageSquare size={16} /> Note opérationnelle
+                                </button>
+                              )}
+
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
+
+                              {hasPermissionWithContext(user, 'editer_besoin_agence', d) && (
+                                <>
+                                  <button 
+                                    className="menu-item" 
+                                    style={{ 
+                                      color: '#6366f1',
+                                      opacity: !d.cao ? 0.5 : 1,
+                                      cursor: !d.cao ? 'not-allowed' : 'pointer'
+                                    }} 
+                                    disabled={!d.cao}
+                                    onClick={async () => {
+                                      if (!d.cao) return;
+                                      await updateDemande(d.id, { statut: 'pres_en_cours' });
+                                      addToast('Statut mis à jour : Prestation confirmée', 'success');
+                                      fetchData();
                                       setActiveMoreMenu(null);
-                                      openDetail(d);
-                                      setShowPartsSection(true);
-                                      setTimeout(() => {
-                                        document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                      }, 200);
-                                      return;
-                                    }
-                                    await updateDemande(d.id, { statut: 'pres_terminee' });
-                                    addToast('Statut mis à jour : Prestation terminée', 'success');
-                                    addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
-                                    fetchData();
-                                    setActiveMoreMenu(null);
-                                  }}
-                                >
-                                  <CheckCircle size={16} /> Pres. terminée
+                                      setMoreMenuCoords(null);
+                                    }}
+                                  >
+                                    <CheckCircle size={16} /> Pres. confirmée
+                                  </button>
+
+                                  <button 
+                                    className="menu-item" 
+                                    style={{ 
+                                      color: '#0ea5e9',
+                                      opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
+                                      cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
+                                    }} 
+                                    disabled={!(d.cao && d.statut === 'pres_en_cours')}
+                                    onClick={async () => {
+                                      if (!(d.cao && d.statut === 'pres_en_cours')) return;
+                                      if (!isPartProfilDefined(d)) {
+                                        addToast('Veuillez définir la part de la femme de ménage.', 'warning');
+                                        setActiveMoreMenu(null);
+                                        setMoreMenuCoords(null);
+                                        openDetail(d);
+                                        setShowPartsSection(true);
+                                        setTimeout(() => {
+                                          document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        }, 200);
+                                        return;
+                                      }
+                                      await updateDemande(d.id, { statut: 'pres_terminee' });
+                                      addToast('Statut mis à jour : Prestation terminée', 'success');
+                                      addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
+                                      fetchData();
+                                      setActiveMoreMenu(null);
+                                      setMoreMenuCoords(null);
+                                    }}
+                                  >
+                                    <CheckCircle size={16} /> Pres. terminée
+                                  </button>
+                                  <div className="menu-divider" />
+                                </>
+                              )}
+
+                              {hasPermissionWithContext(user, 'annulation_demande', d) && (
+                                <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
+                                  setAnnulationReason('');
+                                  const isSubscription = d.frequency === 'abonnement' || !!d.parent_demande;
+                                  setShowAnnulationModal({ demandeId: d.id, isSubscription });
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <XCircle size={16} /> Rejeté / Annulé
                                 </button>
-                                <div className="menu-divider" />
-                              </>
-                            )}
+                              )}
 
-                            {hasPermissionWithContext(user, 'annulation_demande', d) && (
-                              <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
-                                setAnnulationReason('');
-                                const isSubscription = d.frequency === 'abonnement' || !!d.parent_demande;
-                                setShowAnnulationModal({ demandeId: d.id, isSubscription });
-                                setActiveMoreMenu(null);
-                              }}>
-                                <XCircle size={16} /> Rejeté / Annulé
-                              </button>
-                            )}
+                              {hasPermission(user, 'facturation_annulee') && (
+                                <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
+                                  const parts = (d.formulaire_data?.facturation?.parts_repartition || d.formulaire_data?.parts_repartition || []) as any[];
+                                  const totalParts = parts.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
+                                  setFacturationAnnuleeReason('');
+                                  setFacturationAnnuleeProfilPaye(totalParts > 0);
+                                  setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <XCircle size={16} /> Facturation annulée
+                                </button>
+                              )}
 
-                            {hasPermission(user, 'facturation_annulee') && (
-                              <button className="menu-item" style={{ color: '#f97316' }} onClick={() => {
-                                const parts = (d.formulaire_data?.facturation?.parts_repartition || d.formulaire_data?.parts_repartition || []) as any[];
-                                const totalParts = parts.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
-                                setFacturationAnnuleeReason('');
-                                setFacturationAnnuleeProfilPaye(totalParts > 0);
-                                setShowFacturationAnnuleeModal({ demandeId: d.id, type: 'facturation_annulee' });
-                                setActiveMoreMenu(null);
-                              }}>
-                                <XCircle size={16} /> Facturation annulée
-                              </button>
-                            )}
-
-                            {hasPermission(user, 'supprimer_demande_dashboard') && (
-                              <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
-                                if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
-                                  try {
-                                    await deleteDemande(d.id);
-                                    addToast('Demande supprimée avec succès', 'success');
-                                    fetchData();
-                                    setActiveMoreMenu(null);
-                                  } catch (err) {
-                                    addToast('Erreur lors de la suppression', 'error');
+                              {hasPermission(user, 'supprimer_demande_dashboard') && (
+                                <button className="menu-item" style={{ color: '#ef4444' }} onClick={async () => {
+                                  if (confirm('Êtes-vous sûr de vouloir supprimer définitivement cette demande ?')) {
+                                    try {
+                                      await deleteDemande(d.id);
+                                      addToast('Demande supprimée avec succès', 'success');
+                                      fetchData();
+                                      setActiveMoreMenu(null);
+                                      setMoreMenuCoords(null);
+                                    } catch (err) {
+                                      addToast('Erreur lors de la suppression', 'error');
+                                    }
                                   }
-                                }
-                              }}>
-                                <Trash2 size={16} /> Supprimer
-                              </button>
-                            )}
-                          </div>
+                                }}>
+                                  <Trash2 size={16} /> Supprimer
+                                </button>
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
@@ -2481,7 +2632,7 @@ export default function Dashboard() {
 
                       {activeMenu === d.id && (
                         <div className="action-menu shadow-xl border-0" style={{
-                          right: 'auto', left: 0, zIndex: 50, minWidth: '220px',
+                          right: 'auto', left: 0, zIndex: 99999, minWidth: '220px',
                           ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
                         }}>
                           {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (

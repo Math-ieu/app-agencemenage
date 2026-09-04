@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar, Eye, Pause, Play, Search, ChevronLeft, ChevronRight,
@@ -7,6 +7,7 @@ import {
 import jsPDF from 'jspdf';
 import { getDemandes, updateDemande, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { SubscriptionCalendarGrid } from '../components/client/SubscriptionCalendarGrid';
+import StickyHorizontalScrollbar from '../components/common/StickyHorizontalScrollbar';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
 import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPassage, getStatutMoisProchainCalculated, getNextIntervention, getDemandeStartDate, isAbonnementDemande, getCleanAboFrequencyLabel } from '../utils/pricing';
@@ -337,6 +338,9 @@ export default function GestionAbonnements() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+
+  const subsTableWrapRef = useRef<HTMLDivElement>(null);
+  const factTableWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchData();
@@ -1655,7 +1659,7 @@ export default function GestionAbonnements() {
           </div>
 
           <div className="ga-table-card">
-            <div className="ga-table-wrapper">
+            <div className="ga-table-wrapper sticky-table-wrap" ref={subsTableWrapRef}>
               <table className="ga-table">
                 <thead>
                   <tr>
@@ -1789,6 +1793,7 @@ export default function GestionAbonnements() {
               </table>
             </div>
           </div>
+          <StickyHorizontalScrollbar targetRef={subsTableWrapRef} dependencies={[filteredSubscriptions]} />
         </>
       )}
 
@@ -2193,7 +2198,7 @@ export default function GestionAbonnements() {
               </>
             )}
 
-            <div className="ga-table-wrapper">
+            <div className="ga-table-wrapper sticky-table-wrap" ref={factTableWrapRef}>
               <table className="ga-table">
                 <thead>
                   <tr>
@@ -2320,6 +2325,7 @@ export default function GestionAbonnements() {
               </table>
             </div>
           </div>
+          <StickyHorizontalScrollbar targetRef={factTableWrapRef} dependencies={[filteredFactures]} />
 
           {/* Automatismes de cette vue Black Banner */}
           <div className="ga-auto-banner">

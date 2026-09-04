@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { encodeId } from '../../utils/obfuscation';
+import StickyHorizontalScrollbar from '../../components/common/StickyHorizontalScrollbar';
 import {
   Calendar,
   ChevronDown,
@@ -364,6 +365,7 @@ export default function LesSuivis() {
   const [commerciauxList, setCommerciauxList] = useState<any[]>([]);
   const [agentsList, setAgentsList] = useState<AgentApiItem[]>([]);
   const [demandsMap, setDemandsMap] = useState<Map<number, any>>(new Map());
+  const dusTableWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!canSeeDus && activeTab === 'dus-profils' && canSeeCommerciaux) {
@@ -2224,7 +2226,7 @@ export default function LesSuivis() {
 
               {/* Main table */}
               <div className="ls-table-section">
-                <div className="ls-table-wrapper">
+                <div className="ls-table-wrapper sticky-table-wrap" ref={dusTableWrapRef}>
                   {isGroupedByProfil ? (
                     <table className="ls-table">
                       <thead>
@@ -2451,6 +2453,7 @@ export default function LesSuivis() {
                   )}
                 </div>
               </div>
+              <StickyHorizontalScrollbar targetRef={dusTableWrapRef} dependencies={[filteredRows, isGroupedByProfil]} />
             </>
           )}
 
