@@ -354,11 +354,13 @@ export default function Dashboard() {
 
     const indexInMonth = monthSubDemands.findIndex(x => Number(x.id) === Number(d.id));
     const rank = indexInMonth !== -1 ? indexInMonth + 1 : 1;
+    const parentMontant = Number(parentDemande?.prix) || Number((parentDemande as any)?.montant) || Number(parentDemande?.formulaire_data?.facturation?.montant_ht) || Number(d.prix) || 0;
 
     return {
       rank,
       total: monthTotal,
-      isFirst: !d.parent_demande
+      isFirst: rank === 1,
+      parentMontant,
     };
   };
 
@@ -2101,16 +2103,22 @@ export default function Dashboard() {
                           {(() => {
                             const subInfo = getSubInfo(d);
                             if (subInfo) {
-                              if (subInfo.isFirst) {
+                              if (subInfo.rank === 1) {
                                 return (
-                                  <>
-                                    <p className="price-main">{typeof d.prix === 'number' ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD — Abonnement</p>
-                                    <p className="price-sub">{d.is_devis ? 'Prix/devis' : 'Prix/réservation'}</p>
-                                  </>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', lineHeight: '1.2' }}>
+                                    <p className="price-main" style={{ margin: 0 }}>
+                                      {(subInfo.parentMontant || Number(d.prix) || 0).toLocaleString('fr-FR')} MAD
+                                    </p>
+                                    <span style={{ fontSize: '0.8rem', color: '#0f5f5b', fontWeight: 600 }}>Abonnement</span>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{subInfo.rank}/{subInfo.total}</span>
+                                  </div>
                                 );
                               } else {
                                 return (
-                                  <p className="price-main">Abonnement {subInfo.rank}/{subInfo.total}</p>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', lineHeight: '1.2' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#0f5f5b', fontWeight: 600 }}>Abonnement</span>
+                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{subInfo.rank}/{subInfo.total}</span>
+                                  </div>
                                 );
                               }
                             }
@@ -2582,8 +2590,9 @@ export default function Dashboard() {
                         {(() => {
                           const subInfo = getSubInfo(d);
                           if (subInfo) {
-                            if (subInfo.isFirst) {
-                              return `${typeof d.prix === 'number' && d.prix > 0 ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD — Abonnement`;
+                            if (subInfo.rank === 1) {
+                              const amount = (subInfo.parentMontant || Number(d.prix) || 0).toLocaleString('fr-FR');
+                              return `${amount} MAD — Abonnement ${subInfo.rank}/${subInfo.total}`;
                             } else {
                               return `Abonnement ${subInfo.rank}/${subInfo.total}`;
                             }
