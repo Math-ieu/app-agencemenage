@@ -137,3 +137,76 @@ export const renderPaymentStatusBadge = (statutUi: string | undefined, legacySta
   const { label, badgeClass } = getPaymentStatusInfo(statutUi, legacyStatut);
   return <span className={`badge ${badgeClass}`}>{label}</span>;
 };
+
+/**
+ * Règle de visibilité pour « Suivi des dus agence – profils » et « Suivi facturation » :
+ * - Ne pas afficher les demandes annulées (interventions annulées).
+ * - Afficher une facturation annulée si et seulement si l'agence doit payer le profil (profil_paye = oui).
+ * - Si « Profil payé » = non, ne pas afficher.
+ */
+export const isFinanceRowVisible = (row: any): boolean => {
+  if (!row) return false;
+
+  const facturationData = row.originalDemande?.formulaire_data?.facturation || row.formulaire_data?.facturation || {};
+  const statutUi = String(row.statutPaiementUi || facturationData.statut_paiement_ui || '').toLowerCase().trim();
+  const statut = String(row.statut || '').toLowerCase().trim();
+  const demandeStatut = String(row.originalDemande?.statut || row.statut_demande || '').toLowerCase().trim();
+  const missionStatut = String(row.originalMission?.statut || '').toLowerCase().trim();
+
+  // 1. Est-ce une facturation annulée ?
+  const isFacturationAnnulee =
+    statutUi === 'facturation_annulee' ||
+    statutUi === 'facturation annulée' ||
+    statutUi === 'facturation annulee' ||
+    statut === 'facturation annulée' ||
+    statut === 'facturation annulee' ||
+    Boolean(facturationData.facturation_annulee) ||
+    Boolean(row.facturation_annulee);
+
+  // 2. Est-ce une demande / intervention annulée (qui n'est pas une facturation annulée) ?
+  const isDemandeOrInterventionAnnulee =
+    !isFacturationAnnulee && (
+      statut === 'intervention annulée' ||
+      statut === 'intervention annulee' ||
+      statut === 'annulé' ||
+      statut === 'annule' ||
+      statut === 'annulée' ||
+      statut === 'annulee' ||
+      demandeStatut === 'annule' ||
+      demandeStatut === 'annulée' ||
+      demandeStatut === 'annulee' ||
+      demandeStatut === 'refuse' ||
+      demandeStatut === 'rejete' ||
+      missionStatut === 'annulee' ||
+      missionStatut === 'annulée' ||
+      missionStatut === 'annule'
+    );
+
+  // Règle 1 : Ne pas afficher les demandes annulées (interventions annulées)
+  if (isDemandeOrInterventionAnnulee) {
+    return false;
+  }
+
+  // Règle 2 : Si la facturation est annulée
+  if (isFacturationAnnulee) {
+    const rawVal =
+      row.profilSeraPaye !== undefined
+        ? row.profilSeraPaye
+        : row.originalDemande?.profil_sera_paye !== undefined
+          ? row.originalDemande.profil_sera_paye
+          : facturationData.profil_sera_paye;
+
+    const isProfilPaye =
+      rawVal === true ||
+      rawVal === 1 ||
+      rawVal === '1' ||
+      String(rawVal).trim().toLowerCase() === 'oui' ||
+      String(rawVal).trim().toLowerCase() === 'true';
+
+    // Afficher si profil payé = oui, masquer si profil payé = non
+    return isProfilPaye;
+  }
+
+  return true;
+};
+
