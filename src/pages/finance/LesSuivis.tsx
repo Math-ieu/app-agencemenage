@@ -27,6 +27,7 @@ import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
 import { hasPermission, hasPermissionWithContext } from '../../utils/permissions';
 import { getDynamicMonthPassagesCount } from '../../utils/pricing';
+import { isFinanceRowVisible } from '../../utils/statusUtils';
 import './LesSuivis.css';
 
 // Interface matching the FacturationRow definition in VueGlobale
@@ -474,8 +475,8 @@ export default function LesSuivis() {
 
     const missionStatus = item.statut;
     const isGratuit = rawStatutPaiementUi === 'intervention_gratuite';
-    const isFacturationAnnulee = !isGratuit && facturationData.facturation_annulee === true;
-    const isInterventionAnnulee = !isFacturationAnnulee && (missionStatus === 'annulee' || demande?.statut === 'annule');
+    const isFacturationAnnulee = !isGratuit && (facturationData.facturation_annulee === true || rawStatutPaiementUi === 'facturation_annulee' || rawStatutPaiementUi === 'Facturation annulée');
+    const isInterventionAnnulee = !isFacturationAnnulee && (missionStatus === 'annulee' || missionStatus === 'annulée' || demande?.statut === 'annule' || demande?.statut === 'annulée');
 
     const statut: FacturationRow['statut'] =
       isGratuit
@@ -589,7 +590,12 @@ export default function LesSuivis() {
       frequency: demande?.frequency || null,
       subscriptionMonth: demande?.formulaire_data?.subscription_month || null,
       annulationRaison: demande?.annulation_raison || item.annulation_raison || facturationData.annulation_raison,
-      profilSeraPaye: demande?.profil_sera_paye !== undefined ? demande.profil_sera_paye : item.profil_sera_paye,
+      profilSeraPaye: (() => {
+        const raw = demande?.profil_sera_paye !== undefined
+          ? demande.profil_sera_paye
+          : (item.profil_sera_paye !== undefined ? item.profil_sera_paye : facturationData.profil_sera_paye);
+        return raw === true || raw === 1 || raw === '1' || String(raw).trim().toLowerCase() === 'oui' || String(raw).trim().toLowerCase() === 'true';
+      })(),
       montantProfilAnnulation: Number(demande?.montant_profil_annulation || item.montant_profil_annulation || facturationData.montant_profil_annulation || 0) * ratio,
       montantAgenceDoitProfil: Number(demande?.montant_agence_doit_profil || item.montant_agence_doit_profil || facturationData.montant_agence_doit_profil || 0) * ratio,
       montantProfilDoitAgence: Number(demande?.montant_profil_doit_agence || item.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0) * ratio,
@@ -679,8 +685,8 @@ export default function LesSuivis() {
           : 'non_paye';
 
     const isGratuit = rawStatutPaiementUi === 'intervention_gratuite';
-    const isFacturationAnnulee = !isGratuit && facturationData.facturation_annulee === true;
-    const isInterventionAnnulee = !isFacturationAnnulee && (demande.statut === 'annule');
+    const isFacturationAnnulee = !isGratuit && (facturationData.facturation_annulee === true || rawStatutPaiementUi === 'facturation_annulee' || rawStatutPaiementUi === 'Facturation annulée');
+    const isInterventionAnnulee = !isFacturationAnnulee && (demande.statut === 'annule' || demande.statut === 'annulée' || demande.statut === 'refuse' || demande.statut === 'rejete');
 
     const statut: FacturationRow['statut'] =
       isGratuit ? 'Intervention gratuite' :
@@ -729,7 +735,10 @@ export default function LesSuivis() {
       frequency: demande.frequency || null,
       subscriptionMonth: demande?.formulaire_data?.subscription_month || null,
       annulationRaison: demande.annulation_raison || facturationData.annulation_raison,
-      profilSeraPaye: demande.profil_sera_paye !== undefined ? demande.profil_sera_paye : facturationData.profil_sera_paye,
+      profilSeraPaye: (() => {
+        const raw = demande?.profil_sera_paye !== undefined ? demande.profil_sera_paye : facturationData.profil_sera_paye;
+        return raw === true || raw === 1 || raw === '1' || String(raw).trim().toLowerCase() === 'oui' || String(raw).trim().toLowerCase() === 'true';
+      })(),
       montantProfilAnnulation: Number(demande.montant_profil_annulation || facturationData.montant_profil_annulation || 0),
       montantAgenceDoitProfil: Number(demande.montant_agence_doit_profil || facturationData.montant_agence_doit_profil || 0),
       montantProfilDoitAgence: Number(demande.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0),
@@ -1024,6 +1033,7 @@ export default function LesSuivis() {
     const result: FacturationRow[] = [];
 
     for (const row of facturationData) {
+      if (!isFinanceRowVisible(row)) continue;
       const isCredit = isCreditRow(row);
       const isDebit = isDebitRow(row);
 
@@ -1185,7 +1195,7 @@ export default function LesSuivis() {
       return true;
     };
 
-    facturationData.filter(isInDateRange).forEach((row) => {
+    facturationData.filter((r) => isFinanceRowVisible(r) && isInDateRange(r)).forEach((row) => {
       const isCancelled =
         row.statut === 'Facturation annulée' ||
         row.statut === 'Intervention annulée' ||

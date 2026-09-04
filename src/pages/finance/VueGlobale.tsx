@@ -35,6 +35,7 @@ import { encodeId } from '../../utils/obfuscation';
 import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../../utils/permissions';
+import { isFinanceRowVisible } from '../../utils/statusUtils';
 import './VueGlobale.css';
 
 type FinanceSubTab = 'vue-globale' | 'debit-profil' | 'credit-profil' | 'suivi-facturation' | 'comptes-profils';
@@ -602,8 +603,8 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
 
   const missionStatus = item.statut;
   const isGratuit = rawStatutPaiementUi === 'intervention_gratuite';
-  const isFacturationAnnulee = !isGratuit && facturationData.facturation_annulee === true;
-  const isInterventionAnnulee = !isFacturationAnnulee && (missionStatus === 'annulee' || (demande as any)?.statut === 'annule');
+  const isFacturationAnnulee = !isGratuit && (facturationData.facturation_annulee === true || rawStatutPaiementUi === 'facturation_annulee' || rawStatutPaiementUi === 'Facturation annulée');
+  const isInterventionAnnulee = !isFacturationAnnulee && (missionStatus === 'annulee' || missionStatus === 'annulé' || (demande as any)?.statut === 'annule' || (demande as any)?.statut === 'annulée' || (demande as any)?.statut === 'refuse' || (demande as any)?.statut === 'rejete');
 
   const statut: FacturationRow['statut'] =
     isGratuit
@@ -709,7 +710,12 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     subscriptionMonth: (demande as any)?.formulaire_data?.subscription_month || null,
     // New fields
     annulationRaison: (demande as any)?.annulation_raison || item.annulation_raison || facturationData.annulation_raison,
-    profilSeraPaye: (demande as any)?.profil_sera_paye !== undefined ? (demande as any).profil_sera_paye : item.profil_sera_paye,
+    profilSeraPaye: (() => {
+      const raw = (demande as any)?.profil_sera_paye !== undefined
+        ? (demande as any).profil_sera_paye
+        : (item.profil_sera_paye !== undefined ? item.profil_sera_paye : facturationData.profil_sera_paye);
+      return raw === true || raw === 1 || raw === '1' || String(raw).trim().toLowerCase() === 'oui' || String(raw).trim().toLowerCase() === 'true';
+    })(),
     montantProfilAnnulation: Number((demande as any)?.montant_profil_annulation || item.montant_profil_annulation || facturationData.montant_profil_annulation || 0) * ratio,
     montantAgenceDoitProfil: Number((demande as any)?.montant_agence_doit_profil || item.montant_agence_doit_profil || facturationData.montant_agence_doit_profil || 0) * ratio,
     montantProfilDoitAgence: Number((demande as any)?.montant_profil_doit_agence || item.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0) * ratio,
@@ -793,8 +799,8 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
         : 'non_paye';
 
   const isGratuit = rawStatutPaiementUi === 'intervention_gratuite';
-  const isFacturationAnnulee = !isGratuit && facturationData.facturation_annulee === true;
-  const isInterventionAnnulee = !isFacturationAnnulee && (demande.statut === 'annule');
+  const isFacturationAnnulee = !isGratuit && (facturationData.facturation_annulee === true || rawStatutPaiementUi === 'facturation_annulee' || rawStatutPaiementUi === 'Facturation annulée');
+  const isInterventionAnnulee = !isFacturationAnnulee && (demande.statut === 'annule' || demande.statut === 'annulée' || demande.statut === 'refuse' || demande.statut === 'rejete');
 
   const statut: FacturationRow['statut'] =
     isGratuit ? 'Intervention gratuite' :
@@ -844,7 +850,10 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     frequency: demande?.frequency || null,
     subscriptionMonth: demande?.formulaire_data?.subscription_month || null,
     annulationRaison: demande.annulation_raison || demande.motif || facturationData.annulation_raison,
-    profilSeraPaye: demande.profil_sera_paye !== undefined ? demande.profil_sera_paye : facturationData.profil_sera_paye,
+    profilSeraPaye: (() => {
+      const raw = demande?.profil_sera_paye !== undefined ? demande.profil_sera_paye : facturationData.profil_sera_paye;
+      return raw === true || raw === 1 || raw === '1' || String(raw).trim().toLowerCase() === 'oui' || String(raw).trim().toLowerCase() === 'true';
+    })(),
     montantProfilAnnulation: Number(demande.montant_profil_annulation || facturationData.montant_profil_annulation || 0),
     montantAgenceDoitProfil: Number(demande.montant_agence_doit_profil || facturationData.montant_agence_doit_profil || 0),
     montantProfilDoitAgence: Number(demande.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0),
@@ -1497,7 +1506,7 @@ export default function VueGlobale() {
   }, [facturationData, globalTableDateFrom, globalTableDateTo, globalTableSearch]);
 
   const suiviBaseRows = useMemo(() => {
-    return facturationData;
+    return facturationData.filter(isFinanceRowVisible);
   }, [facturationData]);
 
   const filteredSuiviRows = useMemo(() => {
@@ -1515,6 +1524,7 @@ export default function VueGlobale() {
         if (suiviPaiementFilter === 'Paiement partiel' && rowUi !== 'paiement_partiel') return false;
         if (suiviPaiementFilter === 'Payé' && rowUi !== 'paye') return false;
         if (suiviPaiementFilter === 'Confirmé' && row.statut !== 'Confirmée') return false;
+        if (suiviPaiementFilter === 'Facturation annulée' && rowUi !== 'facturation_annulee' && row.statut !== 'Facturation annulée') return false;
       }
 
       if (suiviDateFrom || suiviDateTo) {
@@ -1863,6 +1873,7 @@ export default function VueGlobale() {
 
   const debitRows = useMemo(
     () => facturationData.filter((row) =>
+      isFinanceRowVisible(row) &&
       row.reglementInterne !== 'Réglé' &&
       row.statut !== 'Intervention gratuite' &&
       row.statutPaiementUi !== 'intervention_gratuite' &&
@@ -1912,6 +1923,7 @@ export default function VueGlobale() {
 
   const creditRows = useMemo(
     () => facturationData.filter((row) =>
+      isFinanceRowVisible(row) &&
       row.reglementInterne !== 'Réglé' &&
       (row.statutPaiementUi === 'agence_payee_client' ||
         row.statutPaiementUi === 'Agence payée / Client' ||
@@ -3583,6 +3595,7 @@ export default function VueGlobale() {
                   <option>Paiement partiel</option>
                   <option>Payé</option>
                   <option>Confirmé</option>
+                  <option>Facturation annulée</option>
                 </select>
                 <ChevronDown size={14} />
               </label>
