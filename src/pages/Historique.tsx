@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getDemandesHistorique, exportHistoriqueCsv } from '../api/client';
-import { Search, CalendarDays, Download, History as HistoryIcon, Loader2 } from 'lucide-react';
+import { Search, CalendarDays, Download, History as HistoryIcon, Loader2, Pencil } from 'lucide-react';
 import StickyHorizontalScrollbar from '../components/common/StickyHorizontalScrollbar';
 import { encodeId } from '../utils/obfuscation';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
@@ -193,6 +193,7 @@ export default function Historique() {
                 <th>Promo</th>
                 <th>Statut paiement</th>
                 <th>Motif</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -236,11 +237,34 @@ export default function Historique() {
                   <td>
                     {d.motif || '—'}
                   </td>
+                  <td>
+                    {(hasPermission(user, 'editer_besoin') || hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin_facture') || hasPermission(user, 'editer_besoin_agence')) && (
+                      <Link
+                        to={`/?edit=${d.id}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '4px 8px',
+                          fontSize: '12px',
+                          backgroundColor: '#F1F5F9',
+                          borderRadius: '6px',
+                          color: '#037265',
+                          textDecoration: 'none',
+                          fontWeight: 600,
+                          transition: 'background-color 0.2s'
+                        }}
+                        title="Éditer le besoin"
+                      >
+                        <Pencil size={12} /> Éditer
+                      </Link>
+                    )}
+                  </td>
                 </tr>
               ))}
               {demandes.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="empty-row">Aucun historique trouvé.</td>
+                  <td colSpan={11} className="empty-row">Aucun historique trouvé.</td>
                 </tr>
               )}
             </tbody>

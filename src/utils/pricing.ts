@@ -169,6 +169,7 @@ export interface PricingInput {
     video_apres?: boolean;
     materiel_fourni?: boolean;
     service_linge?: boolean;
+    rooms?: any;
 }
 
 export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' => {

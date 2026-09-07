@@ -4542,7 +4542,13 @@ export default function VueGlobale() {
               {hasPermissionWithContext(user, 'modifier_facture', selectedMission?.originalDemande) && (
                 <button type="button" className="btn btn-secondary" onClick={() => openMissionEditModal()}>Modifier</button>
               )}
-              {selectedMission?.demandeId && hasPermissionWithContext(user, 'editer_besoin_facture', selectedMission?.originalDemande) && (
+              {selectedMission?.demandeId && (
+                hasPermissionWithContext(user, 'editer_besoin_facture', selectedMission?.originalDemande) ||
+                hasPermissionWithContext(user, 'editer_besoin', selectedMission?.originalDemande) ||
+                hasPermissionWithContext(user, 'editer_besoin_agence', selectedMission?.originalDemande) ||
+                hasPermissionWithContext(user, 'modifier_facture', selectedMission?.originalDemande) ||
+                hasPermission(user, 'modifier_demande')
+              ) && (
                 <button
                   type="button"
                   className="btn btn-secondary"

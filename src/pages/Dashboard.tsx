@@ -13,7 +13,7 @@ import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
-import { getDynamicMonthPassagesCount, getDemandeStartDate, getDemandeStartTime } from '../utils/pricing';
+import { getDynamicMonthPassagesCount, getDemandeStartDate, getDemandeStartTime, calculateTotalPrice, PricingInput } from '../utils/pricing';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
@@ -377,6 +377,7 @@ export default function Dashboard() {
   const [isEditing, setIsEditing] = useState(false);
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
+  const lastRecalculatedDurationRef = useRef<number | null>(null);
 
   // Nouveaux flags pour le formulaire complet
   const exactEditService = (editFormData.service || selectedDemande?.service || '').toString();
@@ -931,6 +932,148 @@ export default function Dashboard() {
     });
   };
 
+  const recalculatePriceAndSharesForDuration = (
+    newHours: number,
+    baseFormData?: any,
+    overrideParts?: PartRepartitionItem[]
+  ) => {
+    setEditFormData((prev: any) => {
+      const current = baseFormData || prev;
+      if (newHours <= 0) return current;
+      const oldHours = Number(current.duree || current.nb_heures || 4);
+
+      const isFreeOrCancelled = current.statut_paiement_ui === 'intervention_gratuite' || current.statut_paiement_ui === 'facturation_annulee' || Boolean(current.facturation_annulee);
+      const tvaActive = Boolean(current.tva_active);
+      const currentHT = toNumber(current.montant_ht ?? current.prix);
+
+      // 1. Recalculate Tarif HT and TTC
+      let newMontantHT = currentHT;
+      if (!isFreeOrCancelled) {
+        const pricingInput: PricingInput = {
+          service: current.service || selectedDemande?.service || '',
+          duree: newHours,
+          nb_intervenants: Number(current.nb_intervenants || current.nb_personnel || 1),
+          frequence: current.frequence || '',
+          produits: Boolean(current.produits || current.avec_produit),
+          torchons: Boolean(current.torchons || current.avec_torchons),
+          ville: current.ville || 'Casablanca',
+          date: current.date || current.date_demarrage || current.date_intervention || '',
+          scheduling_type: current.scheduling_type || 'flexible',
+          heure: current.heure || current.heure_intervention || '',
+          preference_horaire: current.preference_horaire || '',
+          surface: toNumber(current.surface),
+          rooms: current.rooms || {},
+          formula: current.formula,
+          size_tier: current.size_tier,
+          conso: current.conso,
+          linen_sets: current.linen_sets,
+        };
+
+        const calc = calculateTotalPrice(pricingInput);
+        if (typeof calc === 'number' && calc > 0) {
+          newMontantHT = calc;
+        } else if (oldHours > 0 && currentHT > 0) {
+          // Proportional fallback for custom pricing or devis
+          newMontantHT = roundMoney((currentHT / oldHours) * newHours);
+        }
+      } else {
+        newMontantHT = 0;
+      }
+
+      const newMontantTTC = isFreeOrCancelled ? 0 : roundMoney(tvaActive ? newMontantHT * 1.2 : newMontantHT);
+      const newCaInitial = isFreeOrCancelled ? 0 : newMontantHT;
+
+      // 2. Recalculate parts_repartition for profiles
+      const rawParts = overrideParts || asArray<PartRepartitionItem>(current.parts_repartition, []);
+      const updatedParts = rawParts.map(p => {
+        const rateType = p.rate_type || 'taux_horaire_standard';
+        if (rateType === 'taux_forfaitaire') {
+          return p;
+        }
+
+        let rateValue = p.rate_value;
+        if (rateType === 'taux_horaire_standard') {
+          rateValue = getServiceDefaultRate(current.service || selectedDemande?.service, 'taux_horaire_standard', newHours).rate;
+        }
+        const pAmount = roundMoney(newHours * (rateValue || 0));
+
+        return {
+          ...p,
+          hours: newHours,
+          rate_type: rateType,
+          rate_value: rateValue,
+          amount: pAmount,
+        };
+      });
+
+      const totalParts = updatedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+
+      // 3. Recalculate Part Agence
+      let nextPartAgence = 0;
+      const isAbonnement = current.frequency === 'abonnement' || !!current.parent_demande || !!selectedDemande?.parent_demande;
+
+      if (isAbonnement) {
+        const parentId = current.parent_demande || selectedDemande?.parent_demande || selectedDemande?.id;
+        const parentDemande = getParentDemande(parentId, selectedDemande!);
+        const parentPrice = (selectedDemande?.id && Number(selectedDemande.id) === Number(parentId))
+          ? newMontantTTC
+          : (parentDemande ? toNumber(parentDemande.prix) : 0);
+
+        const subscriptionDemandes = getSubscriptionDemandes(parentId);
+        const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande?.id)).reduce((sum, d) => {
+          const parts = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
+          return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+        }, 0);
+
+        const remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
+
+        if (current.parent_demande) {
+          nextPartAgence = 0;
+        } else {
+          nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(remainingAgencyShare);
+        }
+      } else {
+        nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(newMontantTTC - totalParts);
+      }
+
+      // 4. Balances due
+      let montantProfilDoitAgence = 0;
+      let montantAgenceDoitProfil = 0;
+      let nextMontantProfilAnnulation = current.montant_profil_annulation;
+      let nextProfilSeraPaye = current.profil_sera_paye;
+
+      if (isFreeOrCancelled) {
+        nextMontantProfilAnnulation = totalParts;
+        nextProfilSeraPaye = totalParts > 0;
+        montantAgenceDoitProfil = nextProfilSeraPaye ? nextMontantProfilAnnulation : 0;
+        montantProfilDoitAgence = 0;
+      } else {
+        if (current.statut_paiement_ui === 'profil_paye_client') {
+          montantProfilDoitAgence = nextPartAgence;
+          montantAgenceDoitProfil = 0;
+        } else if (current.statut_paiement_ui === 'agence_payee_client') {
+          montantAgenceDoitProfil = totalParts;
+          montantProfilDoitAgence = 0;
+        }
+      }
+
+      return {
+        ...current,
+        duree: newHours,
+        nb_heures: newHours,
+        montant_ht: newMontantHT,
+        prix: newMontantTTC,
+        ca_initial: newCaInitial,
+        parts_repartition: updatedParts,
+        part_agence: nextPartAgence,
+        montant_profil_doit_agence: montantProfilDoitAgence,
+        montant_agence_doit_profil: montantAgenceDoitProfil,
+        montant_profil_annulation: nextMontantProfilAnnulation,
+        profil_sera_paye: nextProfilSeraPaye,
+      };
+    });
+  };
+
   const handleUpdate = async () => {
     if (!selectedDemande) return;
     
@@ -1010,7 +1153,7 @@ export default function Dashboard() {
         }
       }
 
-      if (editFormData.statut === 'pres_terminee' && !isFreeOrCancelled) {
+      if (['pres_terminee', 'termine'].includes(editFormData.statut) && !isFreeOrCancelled) {
         const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
         const singlePart = Number(editFormData.part_profil || editFormData.montant_agence_doit_profil || 0);
         if (totalParts <= 0 && singlePart <= 0) {
@@ -1066,7 +1209,7 @@ export default function Dashboard() {
       let finalStatutPaiementUi = paymentUiValue;
       let triggerSatisfactionWhatsApp = false;
 
-      if (finalStatutPaiementUi === 'paye' && editFormData.statut !== 'pres_terminee') {
+      if (finalStatutPaiementUi === 'paye' && !['pres_terminee', 'termine'].includes(editFormData.statut)) {
         addToast("Le statut 'Payé' ne peut être sélectionné que si la prestation est terminée.", "error");
         return;
       }
@@ -1256,8 +1399,7 @@ export default function Dashboard() {
       }
 
       await fetchData();
-      setShowDetail(false);
-      setIsEditing(false);
+      closeDetailModal();
       addToast('Mise à jour effectuée avec succès !', 'success');
 
       if (editFormData.envoyer_whatsapp) {
@@ -1269,7 +1411,13 @@ export default function Dashboard() {
     }
   };
 
-  const openDetail = (d: Demande) => {
+  const closeDetailModal = () => {
+    lastRecalculatedDurationRef.current = null;
+    setShowDetail(false);
+    setIsEditing(false);
+  };
+
+  const openDetail = (d: Demande, autoExpand: boolean = false) => {
     if (allProfils.length === 0) {
       getAgents({ no_page: 'true', page_size: 1000 }).then(res => {
         const raw = Array.isArray(res?.data) ? res.data : (Array.isArray(res?.data?.results) ? res.data.results : []);
@@ -1508,8 +1656,10 @@ export default function Dashboard() {
       regenerer_devis: false,
       envoyer_whatsapp: false
     });
-    setIsFormExpanded(false);
-    setIsAgencyExpanded(false);
+    const initialDuration = Number(formData.duree || d.nb_heures || formData.duration || 4);
+    lastRecalculatedDurationRef.current = initialDuration;
+    setIsFormExpanded(autoExpand);
+    setIsAgencyExpanded(autoExpand);
     setShowPartsSection(false);
     setShowHistorySection(false);
     fetchAuditHistory(d.id);
@@ -1521,6 +1671,18 @@ export default function Dashboard() {
       setEditFormData((prev: any) => ({ ...prev, duree: minDuree }));
     }
   }, [minDuree, editFormData?.duree]);
+
+  // Real-time automatic recalculation of pricing, CA, profile parts, agency share and balances when hours change
+  useEffect(() => {
+    if (!showDetail || !isEditing) return;
+    const currentDuree = Number(editFormData?.duree || editFormData?.nb_heures);
+    if (!currentDuree || currentDuree <= 0) return;
+
+    if (lastRecalculatedDurationRef.current !== null && lastRecalculatedDurationRef.current !== currentDuree) {
+      lastRecalculatedDurationRef.current = currentDuree;
+      recalculatePriceAndSharesForDuration(currentDuree);
+    }
+  }, [editFormData?.duree, editFormData?.nb_heures, showDetail, isEditing]);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -1534,13 +1696,13 @@ export default function Dashboard() {
     // Try to find it in the current dashboard list first
     const found = demandes.find(d => d.id === id);
     if (found) {
-      openDetail(found);
+      openDetail(found, true);
       setSearchParams({}, { replace: true });
     } else {
       // Demande has left the dashboard — fetch it directly
       getDemande(id).then(res => {
         if (res.data) {
-          openDetail(res.data as Demande);
+          openDetail(res.data as Demande, true);
         } else {
           addToast('Demande introuvable', 'error');
         }
@@ -1659,6 +1821,20 @@ export default function Dashboard() {
   const montantHT = toNumber(editFormData.montant_ht ?? editFormData.prix);
   const montantTTC = roundMoney(editFormData.tva_active ? montantHT * 1.2 : montantHT);
   const partsRepartition: PartRepartitionItem[] = asArray<PartRepartitionItem>(editFormData.parts_repartition, []);
+  
+  const canEditBesoinForm = Boolean(
+    hasPermissionWithContext(user, 'editer_besoin', selectedDemande) ||
+    hasPermissionWithContext(user, 'editer_besoin_agence', selectedDemande) ||
+    hasPermissionWithContext(user, 'editer_besoin_facture', selectedDemande) ||
+    hasPermission(user, 'modifier_demande')
+  );
+
+  const canEditAgencyForm = Boolean(
+    hasPermissionWithContext(user, 'editer_besoin_agence', selectedDemande) ||
+    hasPermissionWithContext(user, 'editer_besoin_facture', selectedDemande) ||
+    hasPermissionWithContext(user, 'editer_besoin', selectedDemande) ||
+    hasPermission(user, 'modifier_demande')
+  );
   
   const currentPaymentStatutUi = editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee));
   const isPartsLocked = currentPaymentStatutUi === 'commercial_paye_client';  // Subscription remaining agency share calculation
@@ -2802,11 +2978,11 @@ export default function Dashboard() {
 
       {/* Detail Modal / Sheet */}
       {showDetail && selectedDemande && (
-        <div className="modal-overlay detail-overlay" onClick={() => setShowDetail(false)}>
+        <div className="modal-overlay detail-overlay" onClick={() => closeDetailModal()}>
           <div className="modal-content detail-sheet" onClick={e => e.stopPropagation()}>
             <div className="sheet-header py-4">
               <div className="form-header-compact">
-                <button className="back-btn-circle" onClick={() => setShowDetail(false)}>
+                <button className="back-btn-circle" onClick={() => closeDetailModal()}>
                   <ChevronLeft size={20} className="text-primary" />
                 </button>
                 <div>
@@ -2814,7 +2990,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted">Formulaire : {selectedDemande.service}</p>
                 </div>
               </div>
-              <button className="icon-btn" onClick={() => setShowDetail(false)}>✕</button>
+              <button className="icon-btn" onClick={() => closeDetailModal()}>✕</button>
             </div>
             <div className="sheet-body px-6">
               {isEditing ? (
@@ -2827,7 +3003,7 @@ export default function Dashboard() {
                       <div className="section-title">
                         <ClipboardList size={18} />
                         <span>Formulaire de la demande</span>
-                        {!hasPermissionWithContext(user, 'editer_besoin', selectedDemande) && (
+                        {!canEditBesoinForm && (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', background: 'rgba(0,0,0,0.06)', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', color: '#64748B' }}>
                             <Lock size={12} /> Lecture seule
                           </span>
@@ -2837,7 +3013,7 @@ export default function Dashboard() {
                     </div>
 
                     {isFormExpanded && (
-                      <fieldset disabled={!hasPermissionWithContext(user, 'editer_besoin', selectedDemande)} style={{ border: 'none', padding: 0, margin: 0, width: '100%' }}>
+                      <fieldset disabled={!canEditBesoinForm} style={{ border: 'none', padding: 0, margin: 0, width: '100%' }}>
                         <div className="form-section-content">
                         {/* ====== CONDITIONAL SERVICE SECTIONS ====== */}
                         {isAuxiliaireService ? (
@@ -3108,7 +3284,7 @@ export default function Dashboard() {
                       <div className="section-title">
                         <Building2 size={18} />
                         <span>Espace agence</span>
-                        {!hasPermissionWithContext(user, 'editer_besoin_agence', selectedDemande) && !hasPermissionWithContext(user, 'editer_besoin_facture', selectedDemande) && (
+                        {!canEditAgencyForm && (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', background: 'rgba(0,0,0,0.06)', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', color: '#64748B' }}>
                             <Lock size={12} /> Lecture seule
                           </span>
@@ -3118,7 +3294,7 @@ export default function Dashboard() {
                     </button>
 
                     {isAgencyExpanded && (
-                      <fieldset disabled={!hasPermissionWithContext(user, 'editer_besoin_agence', selectedDemande) && !hasPermissionWithContext(user, 'editer_besoin_facture', selectedDemande)} style={{ border: 'none', padding: 0, margin: 0, width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      <fieldset disabled={!canEditAgencyForm} style={{ border: 'none', padding: 0, margin: 0, width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                         <div className="form-section-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
                       {/* ── Besoin ── */}
@@ -3283,7 +3459,7 @@ export default function Dashboard() {
                                       className="edit-input"
                                     >
                                       {optionsToRender.map(o => {
-                                        const isPayeDisabled = o.value === 'paye' && editFormData.statut !== 'pres_terminee';
+                                        const isPayeDisabled = o.value === 'paye' && !['pres_terminee', 'termine'].includes(editFormData.statut);
                                         return (
                                           <option 
                                             key={o.value} 
@@ -3295,7 +3471,7 @@ export default function Dashboard() {
                                         );
                                       })}
                                     </select>
-                                    {editFormData.statut !== 'pres_terminee' && (
+                                    {!['pres_terminee', 'termine'].includes(editFormData.statut) && (
                                       <p style={{ fontSize: '11px', color: '#DC2626', fontWeight: 500, marginTop: '4px' }}>
                                         ⚠️ Le statut "Payé" n'est accessible que si la prestation est au statut "Prestation terminée".
                                       </p>
@@ -3844,7 +4020,13 @@ export default function Dashboard() {
 
                                             updatedLine.amount = roundMoney(val * (updatedLine.rate_value || 0));
                                             next[idx] = updatedLine;
-                                            updatePartsAndAgency(next);
+
+                                            if (partsRepartition.length === 1 && val > 0) {
+                                              lastRecalculatedDurationRef.current = val;
+                                              recalculatePriceAndSharesForDuration(val, editFormData, next);
+                                            } else {
+                                              updatePartsAndAgency(next);
+                                            }
                                           }}
                                           className="edit-input"
                                           style={{ width: '100%' }}
@@ -4269,7 +4451,7 @@ export default function Dashboard() {
                         <Eye size={18} /> Aperçu du {isDevisRequired(selectedDemande) ? 'Devis' : 'Récapitulatif'}
                       </button>
                     ) : (
-                      <button className="btn btn-secondary" onClick={() => setShowDetail(false)}>Fermer</button>
+                      <button className="btn btn-secondary" onClick={() => closeDetailModal()}>Fermer</button>
                     )}
                   </div>
                   <div className="flex gap-2">
@@ -4281,7 +4463,7 @@ export default function Dashboard() {
                         </button>
                       </>
                     ) : (
-                      (hasPermissionWithContext(user, 'editer_besoin', selectedDemande) || hasPermissionWithContext(user, 'editer_besoin_agence', selectedDemande) || hasPermissionWithContext(user, 'editer_besoin_facture', selectedDemande)) && (
+                      canEditBesoinForm && (
                         <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Modifier</button>
                       )
                     )}
