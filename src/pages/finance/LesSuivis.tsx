@@ -12,7 +12,8 @@ import {
   Users,
   TrendingUp,
   DollarSign,
-  X
+  X,
+  Clock
 } from 'lucide-react';
 import {
   getMissions,
@@ -27,7 +28,7 @@ import { useToastStore } from '../../store/toast';
 import { useAuthStore } from '../../store/auth';
 import { hasPermission, hasPermissionWithContext } from '../../utils/permissions';
 import { getDynamicMonthPassagesCount } from '../../utils/pricing';
-import { isFinanceRowVisible } from '../../utils/statusUtils';
+import { isFinanceRowVisible, getStatusInfo } from '../../utils/statusUtils';
 import './LesSuivis.css';
 
 // Interface matching the FacturationRow definition in VueGlobale
@@ -3175,6 +3176,70 @@ export default function LesSuivis() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Traçabilité du workflow de prestation */}
+                  {(() => {
+                    const history = selectedRow.originalDemande?.formulaire_data?.workflow_history;
+                    if (!Array.isArray(history) || history.length === 0) return null;
+
+                    return (
+                      <div style={{ marginTop: '20px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+                        <h4 style={{ margin: '0 0 12px 0', fontSize: '13.5px', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Clock size={16} style={{ color: '#0d9488' }} />
+                          Traçabilité du workflow de prestation
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {history.map((entry: any, idx: number) => {
+                            const fromInfo = entry.from_statut ? getStatusInfo(entry.from_statut) : null;
+                            const toInfo = entry.to_statut ? getStatusInfo(entry.to_statut) : null;
+                            const dateStr = entry.changed_at
+                              ? new Date(entry.changed_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                              : '—';
+                            return (
+                              <div
+                                key={idx}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '8px 12px',
+                                  backgroundColor: '#f8fafc',
+                                  borderRadius: '8px',
+                                  border: '1px solid #e2e8f0',
+                                  fontSize: '12.5px',
+                                  gap: '12px',
+                                  flexWrap: 'wrap'
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, color: '#475569' }}>{dateStr}</span>
+                                  {fromInfo && (
+                                    <>
+                                      <span className={`badge ${fromInfo.badgeClass}`} style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600 }}>
+                                        {fromInfo.label}
+                                      </span>
+                                      <span style={{ color: '#94a3b8' }}>→</span>
+                                    </>
+                                  )}
+                                  {toInfo && (
+                                    <span className={`badge ${toInfo.badgeClass}`} style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600 }}>
+                                      {toInfo.label}
+                                    </span>
+                                  )}
+                                  {entry.note && (
+                                    <span style={{ color: '#64748b', fontSize: '11.5px', fontStyle: 'italic' }}>({entry.note})</span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 500 }}>
+                                  {entry.changed_by || 'Système'}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="ls-modal-footer">

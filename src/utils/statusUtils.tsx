@@ -21,27 +21,39 @@ export const getStatusInfo = (statut: string, cao?: boolean | 'reporte'): Status
           badgeClass: 'badge-orange'
         };
       }
-      if (cao === true) {
+      if (cao === true || (cao as any) === 'oui' || (cao as any) === 'confirmed') {
         return { 
           label: 'Prestation confirmée', 
           badgeClass: 'badge-green' 
         };
       }
       return { 
-        label: 'Client à appeler (Opé.)', 
+        label: 'Client à appeler', 
         badgeClass: 'badge-nouveau' 
+      };
+
+    case 'pres_confirmee':
+      return {
+        label: 'Prestation confirmée',
+        badgeClass: 'badge-green'
       };
 
     case 'pres_en_cours':
       return { 
-        label: 'Prestation confirmée', 
+        label: 'Prestation en cours', 
         badgeClass: 'badge-purple' 
+      };
+
+    case 'pres_a_confirmer':
+      return { 
+        label: 'Prestation terminée (À confirmer)', 
+        badgeClass: 'badge-orange blink-animation' 
       };
 
     case 'pres_terminee':
       return { 
         label: 'Prestation terminée', 
-        badgeClass: 'badge-orange' 
+        badgeClass: 'badge-green' 
       };
 
     case 'termine':
