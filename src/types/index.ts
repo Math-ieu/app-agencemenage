@@ -104,6 +104,10 @@ export interface Demande {
   client_city?: string;
   client_neighborhood?: string;
   client_address?: string;
+  // From DemandeSerializer retrieve (read-only _display fields)
+  client_name_display?: string;
+  client_phone_display?: string;
+  client_whatsapp_display?: string;
   client_detail?: Client;
   assigned_to_name: string;
   assigned_to?: number | null;
