@@ -182,6 +182,12 @@ export const removeProfilFromDemande = (demandeId: number, agentId: number) =>
 export const confirmerCAO = (id: number) =>
   apiClient.post(`/api/demandes/${id}/confirmer_cao/`);
 
+export const syncPrestationWorkflow = () =>
+  apiClient.post('/api/demandes/sync-workflow/');
+
+export const confirmerFinPrestation = (id: number, data?: Record<string, unknown>) =>
+  apiClient.post(`/api/demandes/${id}/confirmer-fin/`, data);
+
 export const confirmerClient = (id: number) =>
   apiClient.post(`/api/demandes/${id}/confirmer_client/`);
 

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, affecterOperations, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, removeProfilFromDemande, uploadDocument, getDemande } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, affecterOperations, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, removeProfilFromDemande, uploadDocument, getDemande, syncPrestationWorkflow, confirmerFinPrestation } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
@@ -287,6 +287,10 @@ export default function Dashboard() {
   const [sendingCaoWhatsApp, setSendingCaoWhatsApp] = useState(false);
   const [caoPreviewIndex, setCaoPreviewIndex] = useState(0);
   const [allProfils, setAllProfils] = useState<any[]>([]);
+  const [selectedAgentToAddInCAO, setSelectedAgentToAddInCAO] = useState<string>('');
+  const [isAddingAgentInCAO, setIsAddingAgentInCAO] = useState<boolean>(false);
+  const [confirmTermineeModal, setConfirmTermineeModal] = useState<Demande | null>(null);
+  const [confirmingFin, setConfirmingFin] = useState<boolean>(false);
 
   const getSubInfo = (d: Demande) => {
     const isSub = d.frequency === 'abonnement' || !!d.parent_demande;
@@ -368,7 +372,7 @@ export default function Dashboard() {
   const dashboardTableWrapRef = useRef<HTMLDivElement>(null);
 
   // Filtres
-  const [typeFilter, setTypeFilter] = useState<'tout' | 'oneshot' | 'abonnement' | 'airbnb'>('tout');
+  const [typeFilter, setTypeFilter] = useState<'tout' | 'oneshot' | 'abonnement' | 'airbnb' | 'a_confirmer'>('tout');
   const [search, setSearch] = useState('');
   const [serviceFilter, setServiceFilter] = useState('tous');
   const [prestationFilter, setPrestationFilter] = useState('toutes');
@@ -649,7 +653,9 @@ export default function Dashboard() {
       else classes.push('row-status-nouveau');
     }
     else if (d.statut === 'en_attente') classes.push('row-status-attente');
+    else if (d.statut === 'pres_confirmee') classes.push('row-status-pres-confirmee');
     else if (d.statut === 'pres_en_cours') classes.push('row-status-pres-en-cours');
+    else if (d.statut === 'pres_a_confirmer') classes.push('row-status-pres-a-confirmer');
     else if (d.statut === 'pres_terminee') classes.push('row-status-pres-terminee');
     else if (d.statut === 'termine') classes.push('row-status-termine');
     else if (d.statut === 'annule') classes.push('row-status-annulee');
@@ -679,16 +685,71 @@ export default function Dashboard() {
     return totalParts > 0 || singlePart > 0;
   };
 
+  const handleConfirmFinPrestation = async (d: Demande) => {
+    if (!isPartProfilDefined(d)) {
+      addToast("Veuillez d'abord définir la part de la femme de ménage dans le détail du besoin.", 'warning');
+      setConfirmTermineeModal(null);
+      openDetail(d);
+      setShowPartsSection(true);
+      setTimeout(() => {
+        document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
+      return;
+    }
+
+    setConfirmingFin(true);
+    try {
+      await confirmerFinPrestation(d.id);
+      addToast('Prestation validée comme terminée avec succès', 'success');
+      addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
+      setConfirmTermineeModal(null);
+      await fetchData();
+    } catch (err: any) {
+      console.error("Erreur confirmation fin prestation:", err);
+      addToast(err.response?.data?.error || "Erreur lors de la confirmation de fin de prestation", 'error');
+    } finally {
+      setConfirmingFin(false);
+    }
+  };
+
+  const handleAddAgentInCAO = async () => {
+    if (!selectedAgentToAddInCAO || !showCAOModal) return;
+    const agentId = parseInt(selectedAgentToAddInCAO, 10);
+    if (isNaN(agentId)) return;
+
+    setIsAddingAgentInCAO(true);
+    try {
+      await sendProfilToDemande(showCAOModal.id, agentId);
+      const addedAgent = allProfils.find((p: any) => p.id === agentId);
+      addToast(`Femme de ménage (${addedAgent?.full_name || `#${agentId}`}) ajoutée avec succès`, 'success');
+
+      // Mettre à jour l'état local du modal CAO
+      const currentList = showCAOModal.profils_envoyes || [];
+      const updatedList = addedAgent && !currentList.some((p: any) => p.id === agentId)
+        ? [...currentList, addedAgent]
+        : currentList;
+
+      setShowCAOModal(prev => prev ? { ...prev, profils_envoyes: updatedList } : null);
+      setSelectedAgentToAddInCAO('');
+      await fetchData();
+    } catch (err: any) {
+      console.error("Erreur lors de l'ajout du profil en CAO:", err);
+      addToast(err.response?.data?.error || "Erreur lors de l'ajout de la femme de ménage", 'error');
+    } finally {
+      setIsAddingAgentInCAO(false);
+    }
+  };
+
   const handleCAOUpdate = async (demande: Demande, status: 'confirmed' | 'postponed' | 'cancelled') => {
     try {
       if (status === 'confirmed') {
         // Mark CAO as confirmed (cao = true)
         await confirmerCAO(demande.id);
-        // Change status to "pres_en_cours" (Confirmation automatique)
-        const updateData: any = { statut: 'pres_en_cours', cao: true, note_operationnel: caoNote || '' };
+        // Le statut devient "pres_confirmee" (Prestation confirmée)
+        const updateData: any = { statut: 'pres_confirmee', cao: true, note_operationnel: caoNote || '' };
         await updateDemande(demande.id, updateData);
 
-        addToast('Besoin confirmé intervention avec succès (sans envoi WhatsApp automatique)', 'success');
+        addToast('Prestation confirmée avec succès', 'success');
       } else if (status === 'postponed') {
         if (!caoPostponedDate) {
           addToast('Veuillez renseigner une nouvelle date proposée', 'warning');
@@ -723,6 +784,7 @@ export default function Dashboard() {
       setCaoPostponedDate('');
       setCaoPostponedTime('');
       setCaoNote('');
+      setSelectedAgentToAddInCAO('');
       setCaoMenuOpen(false);
       fetchData();
     } catch (err) {
@@ -733,10 +795,23 @@ export default function Dashboard() {
 
   const openCAOModal = (demande: Demande) => {
     setShowCAOModal(demande);
+    setSelectedAgentToAddInCAO('');
+
+    if (allProfils.length === 0) {
+      getAgents({ no_page: 'true', page_size: 1000 }).then(res => {
+        const rawAgents = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.results) ? res.data.results : []);
+        const sorted = [...rawAgents].sort((a: any, b: any) => {
+          const nameA = (a.full_name || `${a.first_name || ''} ${a.last_name || ''}`).trim().toLowerCase();
+          const nameB = (b.full_name || `${b.first_name || ''} ${b.last_name || ''}`).trim().toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        setAllProfils(sorted);
+      }).catch(err => console.warn('Failed to fetch agents for CAO:', err));
+    }
     
     // Initialiser la décision selon l'état actuel de la demande
     let initialDecision: 'confirmed' | 'postponed' | 'cancelled' | null = null;
-    if (demande.cao || ['pres_en_cours', 'pres_terminee', 'termine'].includes(demande.statut)) {
+    if (demande.cao || ['pres_confirmee', 'pres_en_cours', 'pres_a_confirmer', 'pres_terminee', 'termine'].includes(demande.statut)) {
       initialDecision = 'confirmed';
     } else if (demande.statut === 'annule') {
       initialDecision = 'cancelled';
@@ -1670,6 +1745,24 @@ export default function Dashboard() {
 
   useEffect(() => { fetchData(); }, []);
 
+  useEffect(() => {
+    // Synchroniser les statuts automatiques du workflow (heures de début / fin)
+    const runWorkflowSync = async () => {
+      try {
+        const res = await syncPrestationWorkflow();
+        if (res.data?.updated_to_en_cours > 0 || res.data?.updated_to_a_confirmer > 0) {
+          fetchData();
+        }
+      } catch (err) {
+        // En arrière-plan silencieux
+      }
+    };
+
+    runWorkflowSync();
+    const interval = setInterval(runWorkflowSync, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Auto-open edit modal when navigating with ?edit=<demandeId>
   useEffect(() => {
     const editId = searchParams.get('edit');
@@ -1741,9 +1834,13 @@ export default function Dashboard() {
       const isAirbnb = serviceLower.includes('airbnb') || serviceLower.includes('air bnb');
       const isAbonn = d.frequency === 'abonnement' || !!d.parent_demande;
 
-      if (typeFilter === 'oneshot' && (isAbonn || isAirbnb)) return false;
-      if (typeFilter === 'abonnement' && !isAbonn) return false;
-      if (typeFilter === 'airbnb' && !isAirbnb) return false;
+      if (typeFilter === 'a_confirmer') {
+        if (d.statut !== 'pres_a_confirmer') return false;
+      } else {
+        if (typeFilter === 'oneshot' && (isAbonn || isAirbnb)) return false;
+        if (typeFilter === 'abonnement' && !isAbonn) return false;
+        if (typeFilter === 'airbnb' && !isAirbnb) return false;
+      }
       
       // Exclure les missions payées du tableau de bord
       const facturation = d.formulaire_data?.facturation || {};
@@ -2017,6 +2114,34 @@ export default function Dashboard() {
         >
           Air bnb ({demandes.filter(d => (d.service || '').toLowerCase().includes('airbnb') || (d.service || '').toLowerCase().includes('air bnb')).length})
         </button>
+        {(() => {
+          const aConfirmerCount = demandes.filter(d => d.statut === 'pres_a_confirmer').length;
+          return (
+            <button
+              type="button"
+              className={`pill-btn ${typeFilter === 'a_confirmer' ? 'active' : ''}`}
+              onClick={() => setTypeFilter('a_confirmer')}
+              style={{
+                padding: '8px 20px',
+                borderRadius: '20px',
+                border: typeFilter === 'a_confirmer' ? '1px solid #d97706' : (aConfirmerCount > 0 ? '1px solid #f59e0b' : '1px solid #cbd5e1'),
+                backgroundColor: typeFilter === 'a_confirmer' ? '#d97706' : (aConfirmerCount > 0 ? '#fffbeb' : '#f1f5f9'),
+                color: typeFilter === 'a_confirmer' ? '#ffffff' : (aConfirmerCount > 0 ? '#b45309' : '#334155'),
+                fontWeight: 600,
+                fontSize: '14px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: typeFilter === 'a_confirmer' ? '0 2px 4px rgba(217,119,6,0.2)' : 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              {aConfirmerCount > 0 && <AlertTriangle size={15} style={{ color: typeFilter === 'a_confirmer' ? '#ffffff' : '#d97706' }} />}
+              Prestations à confirmer ({aConfirmerCount})
+            </button>
+          );
+        })()}
       </div>
 
       {/* Content area */}
@@ -2173,6 +2298,67 @@ export default function Dashboard() {
                       </td>
                       <td>
                         {renderStatusBadge(d.statut, d.cao)}
+                        {d.statut === 'pres_a_confirmer' && (
+                          <div style={{
+                            marginTop: '8px',
+                            padding: '8px 10px',
+                            backgroundColor: '#fffbeb',
+                            border: '1px solid #f59e0b',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            color: '#92400e',
+                            minWidth: '220px',
+                            maxWidth: '300px',
+                            boxShadow: '0 2px 5px rgba(245,158,11,0.15)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '8px', fontWeight: 600, lineHeight: 1.3 }}>
+                              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px', color: '#d97706' }} />
+                              <span>Veuillez vérifier si la prestation est réellement terminée.</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmTermineeModal(d);
+                                }}
+                                style={{
+                                  padding: '4px 10px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  backgroundColor: '#059669',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: '5px',
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                ✓ Oui, confirmer
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDetail(d);
+                                }}
+                                style={{
+                                  padding: '4px 10px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  backgroundColor: '#ffffff',
+                                  color: '#b45309',
+                                  border: '1px solid #f59e0b',
+                                  borderRadius: '5px',
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                Non, modifier la demande
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </td>
                       <td>
                         <div className="client-link-group">
@@ -2387,14 +2573,14 @@ export default function Dashboard() {
                                   <button 
                                     className="menu-item" 
                                     style={{ 
-                                      color: '#6366f1',
-                                      opacity: !d.cao ? 0.5 : 1,
-                                      cursor: !d.cao ? 'not-allowed' : 'pointer'
+                                       color: '#6366f1',
+                                       opacity: !d.cao ? 0.5 : 1,
+                                       cursor: !d.cao ? 'not-allowed' : 'pointer'
                                     }} 
                                     disabled={!d.cao}
                                     onClick={async () => {
                                       if (!d.cao) return;
-                                      await updateDemande(d.id, { statut: 'pres_en_cours' });
+                                      await updateDemande(d.id, { statut: 'pres_confirmee' });
                                       addToast('Statut mis à jour : Prestation confirmée', 'success');
                                       fetchData();
                                       setActiveMoreMenu(null);
@@ -2407,30 +2593,15 @@ export default function Dashboard() {
                                   <button 
                                     className="menu-item" 
                                     style={{ 
-                                      color: '#0ea5e9',
-                                      opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
-                                      cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
+                                       color: '#0ea5e9',
+                                       opacity: !d.cao ? 0.5 : 1,
+                                       cursor: !d.cao ? 'not-allowed' : 'pointer'
                                     }} 
-                                    disabled={!(d.cao && d.statut === 'pres_en_cours')}
-                                    onClick={async () => {
-                                      if (!(d.cao && d.statut === 'pres_en_cours')) return;
-                                      if (!isPartProfilDefined(d)) {
-                                        addToast('Veuillez définir la part de la femme de ménage.', 'warning');
-                                        setActiveMoreMenu(null);
-                                        setMoreMenuCoords(null);
-                                        openDetail(d);
-                                        setShowPartsSection(true);
-                                        setTimeout(() => {
-                                          document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        }, 200);
-                                        return;
-                                      }
-                                      await updateDemande(d.id, { statut: 'pres_terminee' });
-                                      addToast('Statut mis à jour : Prestation terminée', 'success');
-                                      addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
-                                      fetchData();
+                                    disabled={!d.cao}
+                                    onClick={() => {
                                       setActiveMoreMenu(null);
                                       setMoreMenuCoords(null);
+                                      setConfirmTermineeModal(d);
                                     }}
                                   >
                                     <CheckCircle size={16} /> Pres. terminée
@@ -2633,14 +2804,14 @@ export default function Dashboard() {
                                   <button 
                                     className="menu-item" 
                                     style={{ 
-                                      color: '#6366f1',
-                                      opacity: !d.cao ? 0.5 : 1,
-                                      cursor: !d.cao ? 'not-allowed' : 'pointer'
+                                       color: '#6366f1',
+                                       opacity: !d.cao ? 0.5 : 1,
+                                       cursor: !d.cao ? 'not-allowed' : 'pointer'
                                     }} 
                                     disabled={!d.cao}
                                     onClick={async () => {
                                       if (!d.cao) return;
-                                      await updateDemande(d.id, { statut: 'pres_en_cours' });
+                                      await updateDemande(d.id, { statut: 'pres_confirmee' });
                                       addToast('Statut mis à jour : Prestation confirmée', 'success');
                                       fetchData();
                                       setActiveMoreMenu(null);
@@ -2653,30 +2824,15 @@ export default function Dashboard() {
                                   <button 
                                     className="menu-item" 
                                     style={{ 
-                                      color: '#0ea5e9',
-                                      opacity: !(d.cao && d.statut === 'pres_en_cours') ? 0.5 : 1,
-                                      cursor: !(d.cao && d.statut === 'pres_en_cours') ? 'not-allowed' : 'pointer'
+                                       color: '#0ea5e9',
+                                       opacity: !d.cao ? 0.5 : 1,
+                                       cursor: !d.cao ? 'not-allowed' : 'pointer'
                                     }} 
-                                    disabled={!(d.cao && d.statut === 'pres_en_cours')}
-                                    onClick={async () => {
-                                      if (!(d.cao && d.statut === 'pres_en_cours')) return;
-                                      if (!isPartProfilDefined(d)) {
-                                        addToast('Veuillez définir la part de la femme de ménage.', 'warning');
-                                        setActiveMoreMenu(null);
-                                        setMoreMenuCoords(null);
-                                        openDetail(d);
-                                        setShowPartsSection(true);
-                                        setTimeout(() => {
-                                          document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        }, 200);
-                                        return;
-                                      }
-                                      await updateDemande(d.id, { statut: 'pres_terminee' });
-                                      addToast('Statut mis à jour : Prestation terminée', 'success');
-                                      addToast('Lien de satisfaction envoyé au client via WhatsApp', 'info');
-                                      fetchData();
+                                    disabled={!d.cao}
+                                    onClick={() => {
                                       setActiveMoreMenu(null);
                                       setMoreMenuCoords(null);
+                                      setConfirmTermineeModal(d);
                                     }}
                                   >
                                     <CheckCircle size={16} /> Pres. terminée
@@ -2779,25 +2935,74 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="flex gap-2 mb-4 items-center flex-wrap">
+                  <div className="flex gap-2 mb-3 items-center flex-wrap">
                     {(d.avec_produit || d.formulaire_data?.produits) && (
                       <span className="badge badge-teal" style={{ padding: '4px 10px', borderRadius: '8px' }}>
                         Produits
                       </span>
                     )}
-                    <span className={`badge ${d.statut === 'en_cours' ? 'badge-nouveau' :
-                      d.statut === 'termine' ? 'badge-green' :
-                        d.statut === 'pres_en_cours' ? 'badge-purple' :
-                          d.statut === 'pres_terminee' ? 'badge-orange' :
-                            'badge-orange'
-                      }`} style={{ padding: '4px 12px', borderRadius: '8px' }}>
-                      {d.statut === 'en_cours' ? (<><span>Nouveau</span><span>besoin</span></>) :
-                        d.statut === 'termine' ? 'Terminé' :
-                          d.statut === 'pres_en_cours' ? 'Pres. en cours' :
-                            d.statut === 'pres_terminee' ? 'Pres. terminée' :
-                              'En attente'}
-                    </span>
+                    {renderStatusBadge(d.statut, d.cao)}
                   </div>
+
+                  {d.statut === 'pres_a_confirmer' && (
+                    <div style={{
+                      marginBottom: '12px',
+                      padding: '8px 10px',
+                      backgroundColor: '#fffbeb',
+                      border: '1px solid #f59e0b',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      color: '#92400e',
+                      boxShadow: '0 2px 5px rgba(245,158,11,0.15)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '8px', fontWeight: 600, lineHeight: 1.3 }}>
+                        <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px', color: '#d97706' }} />
+                        <span>Veuillez vérifier si la prestation est réellement terminée.</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmTermineeModal(d);
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            backgroundColor: '#059669',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '5px',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          ✓ Oui, confirmer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDetail(d);
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            backgroundColor: '#ffffff',
+                            color: '#b45309',
+                            border: '1px solid #f59e0b',
+                            borderRadius: '5px',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          Non, modifier la demande
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px', display: 'flex', justifyContent: 'flex-start' }}>
                     <div className="relative">
@@ -4828,8 +5033,57 @@ export default function Dashboard() {
                   <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #d1d5db', padding: '12px', marginBottom: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                       <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Fiche candidat {showCAOModal.profils_envoyes?.length ? `(${showCAOModal.profils_envoyes.length})` : ''}
+                        Femmes de ménage assignées {showCAOModal.profils_envoyes?.length ? `(${showCAOModal.profils_envoyes.length})` : ''}
                       </p>
+                    </div>
+
+                    {/* Ajout d'une femme de ménage directement au niveau CAO */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
+                      <select
+                        value={selectedAgentToAddInCAO}
+                        onChange={(e) => setSelectedAgentToAddInCAO(e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: '7px 10px',
+                          fontSize: '13px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: '#ffffff',
+                          color: '#1e293b'
+                        }}
+                      >
+                        <option value="">Sélectionner une femme de ménage...</option>
+                        {allProfils
+                          .filter((p: any) => !p.is_blacklisted && p.statut !== 'blacklist' && !p.is_archived)
+                          .filter((p: any) => !(showCAOModal.profils_envoyes || []).some((item: any) => item.id === p.id))
+                          .map((p: any) => (
+                            <option key={p.id} value={p.id}>
+                              {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`} {p.phone ? `(${p.phone})` : ''}
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!selectedAgentToAddInCAO || isAddingAgentInCAO}
+                        onClick={handleAddAgentInCAO}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '7px 14px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          backgroundColor: '#059669',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: (!selectedAgentToAddInCAO || isAddingAgentInCAO) ? 'not-allowed' : 'pointer',
+                          opacity: (!selectedAgentToAddInCAO || isAddingAgentInCAO) ? 0.6 : 1,
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        <UserPlus size={15} /> {isAddingAgentInCAO ? 'Ajout...' : 'Ajouter'}
+                      </button>
                     </div>
 
                     {showCAOModal.profils_envoyes?.length ? (
@@ -5091,6 +5345,107 @@ export default function Dashboard() {
                 }}
               >
                 <Check size={16} /> Valider
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmation Fin de Prestation */}
+      {confirmTermineeModal && (
+        <div className="modal-overlay z-[110]" onClick={() => !confirmingFin && setConfirmTermineeModal(null)}>
+          <div
+            className="modal-content max-w-[480px]"
+            onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: 0, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', border: 'none' }}
+          >
+            {/* Header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ecfdf5' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+                  <CheckCircle size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#065f46' }}>
+                    Confirmation fin de prestation
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#047857' }}>
+                    Besoin #{confirmTermineeModal.id}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !confirmingFin && setConfirmTermineeModal(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', padding: '4px' }}
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '24px' }}>
+              <div style={{ padding: '14px', backgroundColor: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0', marginBottom: '16px' }}>
+                <p style={{ margin: 0, fontSize: '14.5px', fontWeight: 600, color: '#166534', lineHeight: 1.4 }}>
+                  Veuillez vérifier si la prestation est réellement terminée.
+                </p>
+              </div>
+
+              <div style={{ fontSize: '13px', color: '#374151', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px', backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div><strong>Client :</strong> {confirmTermineeModal.client_name || confirmTermineeModal.formulaire_data?.nom || '—'}</div>
+                <div><strong>Service :</strong> {confirmTermineeModal.service}</div>
+                <div><strong>Durée :</strong> {confirmTermineeModal.nb_heures || confirmTermineeModal.formulaire_data?.duree || confirmTermineeModal.formulaire_data?.nb_heures || '—'} h</div>
+                <div>
+                  <strong>Femme(s) de ménage :</strong>{' '}
+                  {confirmTermineeModal.profils_envoyes?.length
+                    ? confirmTermineeModal.profils_envoyes.map((p: any) => p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()).join(', ')
+                    : 'Aucun profil assigné'}
+                </div>
+              </div>
+
+              <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>
+                Si confirmé, le statut passera à <strong>Prestation terminée</strong>, le besoin quittera le tableau de bord opérationnel, et un message WhatsApp de satisfaction sera envoyé au client.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '16px 24px', backgroundColor: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                disabled={confirmingFin}
+                onClick={() => setConfirmTermineeModal(null)}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  backgroundColor: '#ffffff',
+                  color: '#374151',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: confirmingFin ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Non
+              </button>
+              <button
+                type="button"
+                disabled={confirmingFin}
+                onClick={() => handleConfirmFinPrestation(confirmTermineeModal)}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: confirmingFin ? '#9ca3af' : '#059669',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '14px',
+                  cursor: confirmingFin ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {confirmingFin ? 'Validation en cours...' : 'Oui, confirmer'}
               </button>
             </div>
           </div>
