@@ -608,8 +608,8 @@ export default function DemandesEnAttente() {
     try {
       if (action === 'valider') {
         const d = demandes.find(x => x.id === id);
+        const payload: any = {};
         if (d && d.formulaire_data) {
-          const payload: any = {};
           if (d.formulaire_data.montant !== undefined) payload.prix = d.formulaire_data.montant;
           else if (d.formulaire_data.prix !== undefined) payload.prix = d.formulaire_data.prix;
 
@@ -617,12 +617,16 @@ export default function DemandesEnAttente() {
           else if (d.formulaire_data.nb_heures !== undefined) payload.nb_heures = d.formulaire_data.nb_heures;
 
           if (d.formulaire_data.nb_intervenants !== undefined) payload.nb_intervenants = d.formulaire_data.nb_intervenants;
-
-          if (Object.keys(payload).length > 0) {
-            await updateDemande(id, payload);
-          }
         }
-        await validerDemande(id);
+
+        if (d && !d.assigned_to && user?.id) {
+          payload.assigned_to = user.id;
+        }
+
+        if (Object.keys(payload).length > 0) {
+          await updateDemande(id, payload);
+        }
+        await validerDemande(id, user?.id ? { assigned_to: user.id } : undefined);
         addToast('Demande validée !', 'success');
       }
       else if (action === 'nrp') {
