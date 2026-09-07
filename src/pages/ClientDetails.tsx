@@ -11,10 +11,10 @@ import {
   ChevronDown, User, FileText,
   MessageSquare, History, ArrowLeft, RefreshCw, Slash,
   Eye, Star, Clock, Heart, AlertCircle, FileDown,
-  XCircle, Send, Download, CheckCircle, X
+  XCircle, Send, Download, CheckCircle, X, Pencil
 } from 'lucide-react';
 import { useToastStore } from '../store/toast';
-import { checkPermission, hasPermission, hasPermissionWithClientContext } from '../utils/permissions';
+import { checkPermission, hasPermission, hasPermissionWithClientContext, hasPermissionWithContext } from '../utils/permissions';
 import { useAuthStore } from '../store/auth';
 import { Client, Demande } from '../types';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
@@ -2517,9 +2517,43 @@ export default function ClientDetails() {
               padding: '12px 24px',
               borderTop: '1px solid #e2e8f0',
               display: 'flex',
-              justifyContent: 'flex-end',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               backgroundColor: '#f8fafc'
             }}>
+              {(
+                hasPermissionWithContext(user, 'editer_besoin', showDemandDetails) ||
+                hasPermissionWithContext(user, 'editer_besoin_facture', showDemandDetails) ||
+                hasPermissionWithContext(user, 'editer_besoin_agence', showDemandDetails) ||
+                hasPermission(user, 'modifier_demande')
+              ) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const demandId = showDemandDetails.id;
+                    setShowDemandDetails(null);
+                    navigate(`/?edit=${demandId}`);
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    backgroundColor: '#037265',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#02584e'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#037265'}
+                >
+                  <Pencil size={14} /> Éditer le besoin
+                </button>
+              ) : <div />}
               <button
                 onClick={() => setShowDemandDetails(null)}
                 style={{
