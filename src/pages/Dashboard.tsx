@@ -719,17 +719,50 @@ export default function Dashboard() {
 
     setIsAddingAgentInCAO(true);
     try {
-      await sendProfilToDemande(showCAOModal.id, agentId);
+      const sendRes = await sendProfilToDemande(showCAOModal.id, agentId);
       const addedAgent = allProfils.find((p: any) => p.id === agentId);
-      addToast(`Femme de ménage (${addedAgent?.full_name || `#${agentId}`}) ajoutée avec succès`, 'success');
+      const agentName = addedAgent?.full_name || [addedAgent?.first_name, addedAgent?.last_name].filter(Boolean).join(' ') || `Profil #${agentId}`;
+      addToast(`Femme de ménage (${agentName}) ajoutée avec succès`, 'success');
 
-      // Mettre à jour l'état local du modal CAO
-      const currentList = showCAOModal.profils_envoyes || [];
-      const updatedList = addedAgent && !currentList.some((p: any) => p.id === agentId)
-        ? [...currentList, addedAgent]
-        : currentList;
+      const returnedShareId = sendRes.data?.share_id;
+      const returnedShareLink = sendRes.data?.share_link || (returnedShareId ? `https://profil.agencemenage.ma/view/${returnedShareId}` : '');
 
-      setShowCAOModal(prev => prev ? { ...prev, profils_envoyes: updatedList } : null);
+      let freshDemande: Demande | null = null;
+      try {
+        const freshRes = await getDemande(showCAOModal.id);
+        if (freshRes.data) {
+          freshDemande = freshRes.data as Demande;
+        }
+      } catch (e) {
+        console.warn('Erreur rechargement demande CAO:', e);
+      }
+
+      setShowCAOModal(prev => {
+        const base = freshDemande || prev;
+        if (!base) return null;
+
+        const currentList = base.profils_envoyes || [];
+        const updatedList = addedAgent && !currentList.some((p: any) => p.id === agentId)
+          ? [...currentList, addedAgent]
+          : currentList;
+
+        const currentLinks = Array.isArray(base.profil_share_links) ? [...base.profil_share_links] : [];
+        if (returnedShareLink && !currentLinks.some(l => l.agent_id === agentId)) {
+          currentLinks.push({
+            agent_id: agentId,
+            agent_name: agentName,
+            link: returnedShareLink
+          });
+        }
+
+        return {
+          ...base,
+          profils_envoyes: updatedList,
+          profil_share_links: currentLinks,
+          profil_share_link: returnedShareLink || base.profil_share_link || currentLinks[currentLinks.length - 1]?.link
+        };
+      });
+
       setSelectedAgentToAddInCAO('');
       await fetchData();
     } catch (err: any) {
@@ -796,6 +829,13 @@ export default function Dashboard() {
   const openCAOModal = (demande: Demande) => {
     setShowCAOModal(demande);
     setSelectedAgentToAddInCAO('');
+
+    // Recharger la demande complète pour s'assurer que profil_share_links est immédiatement à jour
+    getDemande(demande.id).then(res => {
+      if (res.data) {
+        setShowCAOModal(res.data as Demande);
+      }
+    }).catch(err => console.warn('Erreur chargement détails CAO:', err));
 
     if (allProfils.length === 0) {
       getAgents({ no_page: 'true', page_size: 1000 }).then(res => {
@@ -867,6 +907,20 @@ export default function Dashboard() {
           'Candidat',
         link: demande.profil_share_link,
       }];
+    }
+
+    if (demande.profils_envoyes?.length) {
+      return demande.profils_envoyes.map((p: any) => {
+        const shareRef = p.share_link || p.share_id || p.uuid;
+        const link = shareRef
+          ? (String(shareRef).startsWith('http') ? String(shareRef) : `https://profil.agencemenage.ma/view/${shareRef}`)
+          : '';
+        return {
+          agent_id: p.id,
+          agent_name: p.full_name || [p.first_name, p.last_name].filter(Boolean).join(' ') || `Profil #${p.id}`,
+          link: link,
+        };
+      }).filter(item => Boolean(item.link));
     }
 
     return [];
@@ -5046,18 +5100,23 @@ export default function Dashboard() {
                     </div>
 
                     {/* Ajout d'une femme de ménage directement au niveau CAO */}
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center', width: '100%', boxSizing: 'border-box' }}>
                       <select
                         value={selectedAgentToAddInCAO}
                         onChange={(e) => setSelectedAgentToAddInCAO(e.target.value)}
                         style={{
-                          flex: 1,
+                          flex: '1 1 0%',
+                          minWidth: 0,
+                          width: '100%',
                           padding: '7px 10px',
                           fontSize: '13px',
                           borderRadius: '8px',
                           border: '1px solid #cbd5e1',
                           backgroundColor: '#ffffff',
-                          color: '#1e293b'
+                          color: '#1e293b',
+                          boxSizing: 'border-box',
+                          textOverflow: 'ellipsis',
+                          overflow: 'hidden'
                         }}
                       >
                         <option value="">Sélectionner une femme de ménage...</option>
@@ -5075,19 +5134,20 @@ export default function Dashboard() {
                         disabled={!selectedAgentToAddInCAO || isAddingAgentInCAO}
                         onClick={handleAddAgentInCAO}
                         style={{
+                          flexShrink: 0,
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '6px',
-                          padding: '7px 14px',
+                          padding: '7px 12px',
                           fontSize: '13px',
                           fontWeight: 600,
-                          backgroundColor: '#059669',
+                          backgroundColor: (!selectedAgentToAddInCAO || isAddingAgentInCAO) ? '#9ca3af' : '#059669',
                           color: '#ffffff',
                           border: 'none',
                           borderRadius: '8px',
                           cursor: (!selectedAgentToAddInCAO || isAddingAgentInCAO) ? 'not-allowed' : 'pointer',
-                          opacity: (!selectedAgentToAddInCAO || isAddingAgentInCAO) ? 0.6 : 1,
-                          whiteSpace: 'nowrap'
+                          whiteSpace: 'nowrap',
+                          boxSizing: 'border-box'
                         }}
                       >
                         <UserPlus size={15} /> {isAddingAgentInCAO ? 'Ajout...' : 'Ajouter'}
@@ -5127,13 +5187,30 @@ export default function Dashboard() {
                                     try {
                                       await removeProfilFromDemande(showCAOModal.id, p.id);
                                       addToast(`Femme de ménage (${pName}) retirée de la demande`, 'success');
-                                      setShowCAOModal(prev => {
-                                        if (!prev) return null;
-                                        return {
-                                          ...prev,
-                                          profils_envoyes: (prev.profils_envoyes || []).filter((item: any) => item.id !== p.id)
-                                        };
-                                      });
+                                      try {
+                                        const freshRes = await getDemande(showCAOModal.id);
+                                        if (freshRes.data) {
+                                          setShowCAOModal(freshRes.data as Demande);
+                                        } else {
+                                          setShowCAOModal(prev => {
+                                            if (!prev) return null;
+                                            return {
+                                              ...prev,
+                                              profils_envoyes: (prev.profils_envoyes || []).filter((item: any) => item.id !== p.id),
+                                              profil_share_links: (prev.profil_share_links || []).filter((item: any) => item.agent_id !== p.id)
+                                            };
+                                          });
+                                        }
+                                      } catch {
+                                        setShowCAOModal(prev => {
+                                          if (!prev) return null;
+                                          return {
+                                            ...prev,
+                                            profils_envoyes: (prev.profils_envoyes || []).filter((item: any) => item.id !== p.id),
+                                            profil_share_links: (prev.profil_share_links || []).filter((item: any) => item.agent_id !== p.id)
+                                          };
+                                        });
+                                      }
                                       await fetchData();
                                     } catch (err) {
                                       console.error("Erreur retrait profil CAO:", err);
