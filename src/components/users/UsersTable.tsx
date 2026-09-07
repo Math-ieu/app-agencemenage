@@ -37,8 +37,8 @@ export function UsersTable({ users, onEdit, onDelete }: Props) {
   return (
     <TooltipProvider delayDuration={150}>
       {/* Desktop table */}
-      <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
-        <Table>
+      <div className="hidden overflow-x-auto rounded-lg border bg-card sm:block">
+        <Table className="min-w-[750px]">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[64px]">Photo</TableHead>
@@ -133,7 +133,7 @@ export function UsersTable({ users, onEdit, onDelete }: Props) {
       </div>
 
       {/* Mobile cards */}
-      <div className="grid gap-3 md:hidden">
+      <div className="grid gap-3 sm:hidden">
         {users.length === 0 ? (
           <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
             Aucun utilisateur trouvé.

@@ -12,6 +12,7 @@ import {
   RotateCw, Calendar, ChevronDown,
   User as UserIcon, MessageSquare, UserPlus, Slash, Trash2, XCircle, Save, History, Clock
 } from 'lucide-react';
+import StickyHorizontalScrollbar from '../components/common/StickyHorizontalScrollbar';
 
 interface LatestDemande {
   id: number;
@@ -196,6 +197,7 @@ export default function Clients() {
   const [activeTab, setActiveTab] = useState('tout');
   const [activeDropdown, setActiveDropdown] = useState<{ type: 'actions' | 'more', id: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const clientsTableWrapRef = useRef<HTMLDivElement>(null);
 
   const { user } = useAuthStore();
   const { addToast } = useToastStore();
@@ -596,7 +598,10 @@ export default function Clients() {
       ) : (
         <>
           {/* Desktop / Tablet Table View */}
-          <div className={`clients-desktop-table table-wrapper ${clients.length >= 8 ? 'enable-table-scroll' : 'disable-table-scroll'}`}>
+          <div
+            className={`clients-desktop-table table-wrapper sticky-table-wrap ${clients.length >= 8 ? 'enable-table-scroll' : 'disable-table-scroll'}`}
+            ref={clientsTableWrapRef}
+          >
             <table className="data-table">
               <thead>
                 <tr>
@@ -786,8 +791,9 @@ export default function Clients() {
               </tbody>
             </table>
           </div>
+          <StickyHorizontalScrollbar targetRef={clientsTableWrapRef} dependencies={[clients]} />
 
-          {/* Mobile Cards View (< 768px) */}
+          {/* Mobile Cards View (< 640px) */}
           <div className="clients-mobile-cards">
             {clients.map((c) => (
               <div

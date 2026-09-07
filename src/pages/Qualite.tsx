@@ -1,5 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import StickyHorizontalScrollbar from '../components/common/StickyHorizontalScrollbar';
 import {
   getFeedbacks,
   getFeedbackStats,
@@ -36,6 +37,7 @@ export default function Qualite() {
   const [loading, setLoading] = useState(true);
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
   const { addToast } = useToastStore();
+  const qualiteTableWrapRef = useRef<HTMLDivElement>(null);
 
   const [search, setSearch] = useState('');
   const [noteAgenceFilter, setNoteAgenceFilter] = useState('toutes');
@@ -432,8 +434,8 @@ export default function Qualite() {
         </div>
 
         {/* Desktop / Tablet Table */}
-        <div className="qualite-desktop-table" style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div className="qualite-desktop-table table-wrapper sticky-table-wrap" ref={qualiteTableWrapRef}>
+          <table className="data-table qualite-table">
             <thead>
               <tr style={{ background: '#f8fafc' }}>
                 {['Date prestation', 'Client', 'Ville / Quartier', 'Service', 'Segment', 'Profil', 'Satisfaction', 'Note agence', 'Note profil', 'Action'].map(col => (
@@ -591,8 +593,9 @@ export default function Qualite() {
             </tbody>
           </table>
         </div>
+        <StickyHorizontalScrollbar targetRef={qualiteTableWrapRef} dependencies={[filteredFeedbacks]} />
 
-        {/* Mobile Cards View (< 768px) */}
+        {/* Mobile Cards View (< 640px) */}
         <div className="qualite-mobile-cards">
           {filteredFeedbacks.map((f) => {
             const satKey = getSatisfactionLabel(f.note_agence);
