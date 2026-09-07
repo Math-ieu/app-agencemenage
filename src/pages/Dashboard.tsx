@@ -2138,7 +2138,7 @@ export default function Dashboard() {
               }}
             >
               {aConfirmerCount > 0 && <AlertTriangle size={15} style={{ color: typeFilter === 'a_confirmer' ? '#ffffff' : '#d97706' }} />}
-              Prestations à confirmer ({aConfirmerCount})
+              Prestations terminées à confirmer ({aConfirmerCount})
             </button>
           );
         })()}
@@ -2162,7 +2162,7 @@ export default function Dashboard() {
                     <th style={{ minWidth: '130px' }}>Com</th>
                     <th style={{ minWidth: '95px' }}>Ops</th>
                     <th style={{ minWidth: '130px' }}>Date d'interv.</th>
-                    <th style={{ minWidth: '200px' }}>Statut besoin</th>
+                    <th style={{ minWidth: '290px' }}>Statut besoin</th>
                     <th style={{ minWidth: '180px' }}>Nom du client</th>
                     <th style={{ minWidth: '180px' }}>Quartier / Ville</th>
                     <th style={{ minWidth: '210px' }}>Type de service</th>
@@ -2296,26 +2296,30 @@ export default function Dashboard() {
                           );
                         })()}
                       </td>
-                      <td>
+                      <td style={{ minWidth: '290px', whiteSpace: 'normal' }}>
                         {renderStatusBadge(d.statut, d.cao)}
                         {d.statut === 'pres_a_confirmer' && (
                           <div style={{
                             marginTop: '8px',
-                            padding: '8px 10px',
+                            padding: '10px 12px',
                             backgroundColor: '#fffbeb',
                             border: '1px solid #f59e0b',
                             borderRadius: '8px',
                             fontSize: '12px',
                             color: '#92400e',
-                            minWidth: '220px',
-                            maxWidth: '300px',
+                            width: '100%',
+                            maxWidth: '280px',
+                            whiteSpace: 'normal',
+                            boxSizing: 'border-box',
                             boxShadow: '0 2px 5px rgba(245,158,11,0.15)'
                           }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '8px', fontWeight: 600, lineHeight: 1.3 }}>
-                              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px', color: '#d97706' }} />
-                              <span>Veuillez vérifier si la prestation est réellement terminée.</span>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '8px', fontWeight: 600, lineHeight: 1.35, whiteSpace: 'normal' }}>
+                              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '2px', color: '#d97706' }} />
+                              <span style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                                Veuillez vérifier si la prestation est réellement terminée.
+                              </span>
                             </div>
-                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -2323,7 +2327,7 @@ export default function Dashboard() {
                                   setConfirmTermineeModal(d);
                                 }}
                                 style={{
-                                  padding: '4px 10px',
+                                  padding: '5px 10px',
                                   fontSize: '11px',
                                   fontWeight: 700,
                                   backgroundColor: '#059669',
@@ -2343,7 +2347,7 @@ export default function Dashboard() {
                                   openDetail(d);
                                 }}
                                 style={{
-                                  padding: '4px 10px',
+                                  padding: '5px 10px',
                                   fontSize: '11px',
                                   fontWeight: 600,
                                   backgroundColor: '#ffffff',
@@ -2947,19 +2951,23 @@ export default function Dashboard() {
                   {d.statut === 'pres_a_confirmer' && (
                     <div style={{
                       marginBottom: '12px',
-                      padding: '8px 10px',
+                      padding: '10px 12px',
                       backgroundColor: '#fffbeb',
                       border: '1px solid #f59e0b',
                       borderRadius: '8px',
                       fontSize: '12px',
                       color: '#92400e',
+                      whiteSpace: 'normal',
+                      boxSizing: 'border-box',
                       boxShadow: '0 2px 5px rgba(245,158,11,0.15)'
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '8px', fontWeight: 600, lineHeight: 1.3 }}>
-                        <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px', color: '#d97706' }} />
-                        <span>Veuillez vérifier si la prestation est réellement terminée.</span>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '8px', fontWeight: 600, lineHeight: 1.35, whiteSpace: 'normal' }}>
+                        <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '2px', color: '#d97706' }} />
+                        <span style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                          Veuillez vérifier si la prestation est réellement terminée.
+                        </span>
                       </div>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -2967,7 +2975,7 @@ export default function Dashboard() {
                             setConfirmTermineeModal(d);
                           }}
                           style={{
-                            padding: '4px 10px',
+                            padding: '5px 10px',
                             fontSize: '11px',
                             fontWeight: 700,
                             backgroundColor: '#059669',
@@ -2987,7 +2995,7 @@ export default function Dashboard() {
                             openDetail(d);
                           }}
                           style={{
-                            padding: '4px 10px',
+                            padding: '5px 10px',
                             fontSize: '11px',
                             fontWeight: 600,
                             backgroundColor: '#ffffff',
