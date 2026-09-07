@@ -560,6 +560,12 @@ body {
   color: white;
 }
 
+.sidebar,
+.sidebar-nav {
+  scrollbar-width: thin;
+  scrollbar-color: #f1f5f9 transparent;
+}
+
 .sidebar-nav {
   padding: 1.5rem 0.75rem;
   display: flex;
@@ -570,18 +576,22 @@ body {
 }
 
 /* Custom scrollbar for sidebar nav */
+.sidebar::-webkit-scrollbar,
 .sidebar-nav::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
+.sidebar::-webkit-scrollbar-track,
 .sidebar-nav::-webkit-scrollbar-track {
   background: transparent;
 }
+.sidebar::-webkit-scrollbar-thumb,
 .sidebar-nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: #f1f5f9; /* Couleur proche du blanc */
   border-radius: 99px;
 }
+.sidebar::-webkit-scrollbar-thumb:hover,
 .sidebar-nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: #ffffff;
 }
 
 .nav-item {

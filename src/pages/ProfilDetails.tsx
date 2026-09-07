@@ -1212,6 +1212,7 @@ export default function ProfilDetails() {
             <InfoField label="LANGUES" value={agent.languages?.join(', ')} />
             <InfoField label="EXPÉRIENCE TOTALE" value={`${agent.experience_years} an(s) ${agent.experience_months} mois`} />
             <InfoField label="TYPE DE PROFIL" value={agent.type_profil} />
+            <InfoField label="CATÉGORIE" value={agent.categorie === 'interne' ? 'Interne' : 'Externe'} />
             <InfoField label="SAIT LIRE ET ÉCRIRE" value={agent.can_read_write ? 'Oui' : 'Non'} />
             <InfoField label="MALADIE / HANDICAP" value={agent.health_issues} />
             <InfoField label="PRÉSENTATION PHYSIQUE" value={agent.physical_appearance} />
@@ -1677,7 +1678,18 @@ export default function ProfilDetails() {
                     </div>
                   )}
                   <div>
-                    <p style={{ fontWeight: 700, fontSize: 17, color: '#1e293b', margin: 0 }}>{agent.last_name} {agent.first_name}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <p style={{ fontWeight: 700, fontSize: 17, color: '#1e293b', margin: 0 }}>{agent.last_name} {agent.first_name}</p>
+                      {agent.categorie === 'interne' ? (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#0369A1', backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD', borderRadius: 4, padding: '2px 8px' }}>
+                          Interne
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 4, padding: '2px 8px' }}>
+                          Externe
+                        </span>
+                      )}
+                    </div>
                     <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>{agent.type_profil}</p>
                   </div>
                 </div>

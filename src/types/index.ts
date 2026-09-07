@@ -53,6 +53,7 @@ export interface Agent {
   cin: string;
   situation: string;
   type_profil: string;
+  categorie?: 'interne' | 'externe' | string;
   can_read_write: boolean;
   health_issues: string;
   physical_appearance: string;
@@ -170,6 +171,8 @@ export interface Demande {
   parent_demande?: number | null;
   part_agence?: number;
   parts_repartition?: any[];
+  supplement_heures_montant?: number;
+  supplement_heures_recupere_especes?: boolean;
   promo_code?: number | null;
   promo_code_name?: string;
   promo_code_code?: string;

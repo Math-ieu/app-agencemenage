@@ -63,6 +63,7 @@ const DEFAULT_FORM_DATA = {
   statut: 'nouveau',
   disponibilite_intervention: 'disponible',
   type_profil: '',
+  categorie: 'externe',
   can_read_write: false,
   health_issues: 'Non',
   physical_appearance: '',
@@ -118,6 +119,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
           statut: initialAgent.statut || 'nouveau',
           disponibilite_intervention: initialAgent.disponibilite_intervention || 'disponible',
           type_profil: initialAgent.type_profil || '',
+          categorie: initialAgent.categorie || 'externe',
           can_read_write: initialAgent.can_read_write ?? false,
           health_issues: initialAgent.health_issues || 'Non',
           physical_appearance: normalizePhysicalAppearance(initialAgent.physical_appearance || ''),
@@ -151,7 +153,13 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object' && parsed.formData) {
           return {
-            formData: { ...DEFAULT_FORM_DATA, ...parsed.formData },
+            formData: {
+              ...DEFAULT_FORM_DATA,
+              ...parsed.formData,
+              categorie: (parsed.formData?.categorie === 'interne' || parsed.formData?.categorie === 'externe')
+                ? parsed.formData.categorie
+                : 'externe',
+            },
             sameAsPhone: Boolean(parsed.sameAsPhone),
             experiences: Array.isArray(parsed.experiences) ? parsed.experiences : [],
             activePhoto: parsed.activePhoto || 'photo',
@@ -294,6 +302,7 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
       'last_name', 'first_name', 'neighborhood', 'city', 'cin', 'birth_date',
       'gender', 'phone', 'whatsapp', 'situation', 'nationality',
       'type_profil',
+      'categorie',
       'health_issues', 'physical_appearance', 'corpulence',
     ];
     const newErrors: Record<string, boolean> = {};
@@ -332,9 +341,20 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
     }
     try {
       const data = new FormData();
+      const categorieValue = (formData.categorie === 'interne' || formData.categorie === 'externe')
+        ? formData.categorie
+        : 'externe';
+
       Object.entries(formData).forEach(([key, value]) => {
-        data.append(key, ['languages', 'availability_calendar'].includes(key) ? JSON.stringify(value) : String(value));
+        if (key === 'categorie') {
+          data.append('categorie', categorieValue);
+        } else {
+          data.append(key, ['languages', 'availability_calendar'].includes(key) ? JSON.stringify(value) : String(value));
+        }
       });
+      if (!data.has('categorie')) {
+        data.append('categorie', categorieValue);
+      }
       data.append('experiences_json', JSON.stringify(experiences));
       data.append('active_photo', activePhoto);
 
@@ -362,9 +382,20 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
         addToast('Profil ajouté avec succès !', 'success');
       }
       onSuccess();
-    } catch (err) {
-      console.error('Error saving agent:', err);
-      addToast("Erreur lors de l'enregistrement du profil.", 'error');
+    } catch (err: any) {
+      console.error('Error saving agent:', err, err?.response?.data);
+      let errorMsg = "Erreur lors de l'enregistrement du profil.";
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') {
+          errorMsg = err.response.data;
+        } else if (typeof err.response.data === 'object') {
+          const fieldErrors = Object.entries(err.response.data)
+            .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+            .join(' | ');
+          if (fieldErrors) errorMsg = `Erreur (${fieldErrors})`;
+        }
+      }
+      addToast(errorMsg, 'error');
     }
   };
 
@@ -410,6 +441,21 @@ export default function AddProfileModal({ onClose, onSuccess, initialAgent }: Pr
                 <select value={formData.type_profil} onChange={e => { setFormData({ ...formData, type_profil: e.target.value }); if (errors.type_profil) setErrors({ ...errors, type_profil: false }); }} className={`form-select ${errors.type_profil ? 'form-input-error' : ''}`}>
                   <option value="">Choisir</option>
                   {TYPES_PROFIL.map(option => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Catégorie <span className="text-red-500">*</span></label>
+                <select
+                  value={formData.categorie}
+                  onChange={e => {
+                    setFormData({ ...formData, categorie: e.target.value });
+                    if (errors.categorie) setErrors({ ...errors, categorie: false });
+                  }}
+                  className={`form-select ${errors.categorie ? 'form-input-error' : ''}`}
+                >
+                  <option value="">Choisir</option>
+                  <option value="interne">Interne</option>
+                  <option value="externe">Externe</option>
                 </select>
               </div>
             </div>

@@ -971,6 +971,33 @@ export default function Dashboard() {
       const currentMontantTTC = isFreeOrCancelled ? 0 : roundMoney(tvaActive ? montantHT * 1.2 : montantHT);
 
       let adjustedParts = [...newParts];
+      if (adjustedParts.length === 1) {
+        adjustedParts[0] = { ...adjustedParts[0], is_delegate: true };
+      } else if (adjustedParts.length > 1) {
+        let foundDelegate = false;
+        adjustedParts = adjustedParts.map(p => {
+          if (p.is_delegate) {
+            if (!foundDelegate) {
+              foundDelegate = true;
+              return { ...p, is_delegate: true };
+            }
+            return { ...p, is_delegate: false };
+          }
+          return p;
+        });
+      }
+
+      adjustedParts = adjustedParts.map(p => {
+        const ag = allProfils.find(a => a.id === Number(p.profile_id)) || (selectedDemande?.profils_envoyes?.find((a: any) => a.id === Number(p.profile_id)));
+        if (ag?.categorie === 'interne') {
+          return {
+            ...p,
+            rate_value: 0,
+            amount: 0,
+          };
+        }
+        return p;
+      });
       let nextMontantProfilAnnulation = prev.montant_profil_annulation;
       let nextProfilSeraPaye = prev.profil_sera_paye;
 
@@ -1099,6 +1126,17 @@ export default function Dashboard() {
       // 2. Recalculate parts_repartition for profiles
       const rawParts = overrideParts || asArray<PartRepartitionItem>(current.parts_repartition, []);
       const updatedParts = rawParts.map(p => {
+        const ag = allProfils.find(a => a.id === Number(p.profile_id)) || (selectedDemande?.profils_envoyes?.find((a: any) => a.id === Number(p.profile_id)));
+        const isInterne = ag?.categorie === 'interne';
+        if (isInterne) {
+          return {
+            ...p,
+            hours: newHours,
+            rate_value: 0,
+            amount: 0,
+          };
+        }
+
         const rateType = p.rate_type || 'taux_horaire_standard';
         if (rateType === 'taux_forfaitaire') {
           return p;
@@ -1215,18 +1253,26 @@ export default function Dashboard() {
         : selectedDemande.frequency;
 
       let partsRepartition = asArray<PartRepartitionItem>(editFormData.parts_repartition, [])
-        .map((item) => ({
-          profile_id: item.profile_id,
-          amount: toNumber(item.amount),
-          is_delegate: Boolean(item.is_delegate),
-          rate_type: item.rate_type,
-          hours: item.hours,
-          days: item.days,
-          rate_value: item.rate_value,
-          created_at: item.created_at,
-          created_by_name: item.created_by_name,
-        }))
+        .map((item) => {
+          const ag = allProfils.find(a => a.id === Number(item.profile_id)) || (selectedDemande.profils_envoyes?.find((a: any) => a.id === Number(item.profile_id)));
+          const isInterne = ag?.categorie === 'interne';
+          return {
+            profile_id: item.profile_id,
+            amount: isInterne ? 0 : toNumber(item.amount),
+            is_delegate: Boolean(item.is_delegate),
+            rate_type: item.rate_type,
+            hours: item.hours,
+            days: item.days,
+            rate_value: isInterne ? 0 : item.rate_value,
+            created_at: item.created_at,
+            created_by_name: item.created_by_name,
+          };
+        })
         .filter((item) => item.profile_id !== '');
+
+      if (partsRepartition.length === 1) {
+        partsRepartition[0].is_delegate = true;
+      }
 
       const isAbonnement = frequency === 'abonnement' || !!editFormData.parent_demande || !!selectedDemande.parent_demande;
       let finalPartAgence = partAgence;
@@ -1327,6 +1373,18 @@ export default function Dashboard() {
         return;
       }
 
+      if (finalStatutPaiementUi === 'profil_paye_client') {
+        if (partsRepartition.length > 1) {
+          const hasDelegate = partsRepartition.some((p) => Boolean(p.is_delegate));
+          if (!hasDelegate) {
+            addToast("Il est nécessaire de sélectionner un délégué.", "error");
+            return;
+          }
+        } else if (partsRepartition.length === 1) {
+          partsRepartition[0].is_delegate = true;
+        }
+      }
+
       if (editFormData.statut === 'termine' && selectedDemande.statut !== 'termine') {
         finalStatutPaiementUi = 'paiement_en_attente';
         triggerSatisfactionWhatsApp = true;
@@ -1406,6 +1464,9 @@ export default function Dashboard() {
           encaisse_par: editFormData.encaisse_par || '',
           part_agence: finalPartAgence,
           parts_repartition: partsRepartition,
+          has_supplement_heures: Boolean(editFormData.has_supplement_heures),
+          supplement_heures_montant: editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_montant) : 0,
+          supplement_heures_recupere_especes: editFormData.has_supplement_heures ? Boolean(editFormData.supplement_heures_recupere_especes) : false,
           annulation_raison: editFormData.annulation_raison || '',
           profil_sera_paye: Boolean(editFormData.profil_sera_paye),
           montant_profil_annulation: editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0,
@@ -1419,11 +1480,17 @@ export default function Dashboard() {
         },
         part_agence: finalPartAgence,
         parts_repartition: partsRepartition,
+        has_supplement_heures: Boolean(editFormData.has_supplement_heures),
+        supplement_heures_montant: editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_montant) : 0,
+        supplement_heures_recupere_especes: editFormData.has_supplement_heures ? Boolean(editFormData.supplement_heures_recupere_especes) : false,
         notes: editFormData.note_client || '',
       };
 
       updateData.avec_produit = Boolean(editFormData.produits || editFormData.avec_produit);
       updateData.part_agence = finalPartAgence;
+      updateData.has_supplement_heures = Boolean(editFormData.has_supplement_heures);
+      updateData.supplement_heures_montant = editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_montant) : 0;
+      updateData.supplement_heures_recupere_especes = editFormData.has_supplement_heures ? Boolean(editFormData.supplement_heures_recupere_especes) : false;
 
       const response = await updateDemande(selectedDemande.id, updateData);
 
@@ -1594,6 +1661,9 @@ export default function Dashboard() {
 
     // Ensure all savedParts elements are fully initialized with rate details
     savedParts = savedParts.map(p => {
+      const ag = allProfils.find(a => a.id === Number(p.profile_id)) || (d.profils_envoyes?.find((a: any) => a.id === Number(p.profile_id)));
+      const isInterne = ag?.categorie === 'interne';
+
       const rateType = p.rate_type || getDefaultRateTypeForService(d.service);
       let hours = p.hours;
       let days = p.days;
@@ -1602,6 +1672,17 @@ export default function Dashboard() {
 
       const defaultHours = Number(d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || 4);
       const defaultDays = Number(d.formulaire_data?.nb_jours || 1);
+
+      if (isInterne) {
+        return {
+          ...p,
+          rate_type: rateType,
+          hours: hours !== undefined ? hours : (rateType === 'taux_forfaitaire' ? undefined : defaultHours),
+          days: days !== undefined ? days : (rateType === 'taux_forfaitaire' ? defaultDays : undefined),
+          rate_value: 0,
+          amount: 0,
+        };
+      }
 
       if (rateType === 'taux_forfaitaire') {
         if (days === undefined) days = defaultDays;
@@ -1653,6 +1734,22 @@ export default function Dashboard() {
       };
     });
 
+    if (savedParts.length === 1) {
+      savedParts[0] = { ...savedParts[0], is_delegate: true };
+    } else if (savedParts.length > 1) {
+      let foundDelegate = false;
+      savedParts = savedParts.map(p => {
+        if (p.is_delegate) {
+          if (!foundDelegate) {
+            foundDelegate = true;
+            return { ...p, is_delegate: true };
+          }
+          return { ...p, is_delegate: false };
+        }
+        return p;
+      });
+    }
+
     let initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
       ? 0
       : toNumber(facturationData.part_agence || formData.part_agence);
@@ -1678,6 +1775,11 @@ export default function Dashboard() {
           ? 0
           : roundMoney(remainingAgencyShare);
       }
+    } else {
+      const currentDemandProfilesTotal = savedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+      initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
+        ? 0
+        : roundMoney(montantTTC - currentDemandProfilesTotal);
     }
 
     setSelectedDemande(d);
@@ -1694,6 +1796,14 @@ export default function Dashboard() {
       facturation_annulee: Boolean(facturationData.facturation_annulee),
       part_agence: initialPartAgence,
       parts_repartition: savedParts,
+      has_supplement_heures: Boolean(
+        facturationData.has_supplement_heures ?? (
+          toNumber(facturationData.supplement_heures_montant ?? formData.supplement_heures_montant ?? d.supplement_heures_montant ?? 0) > 0 ||
+          Boolean(facturationData.supplement_heures_recupere_especes ?? formData.supplement_heures_recupere_especes ?? d.supplement_heures_recupere_especes ?? false)
+        )
+      ),
+      supplement_heures_montant: toNumber(facturationData.supplement_heures_montant ?? formData.supplement_heures_montant ?? d.supplement_heures_montant ?? 0),
+      supplement_heures_recupere_especes: Boolean(facturationData.supplement_heures_recupere_especes ?? formData.supplement_heures_recupere_especes ?? d.supplement_heures_recupere_especes ?? false),
       mode_paiement: facturationData.mode_paiement || d.mode_paiement || '',
       statut_paiement: d.statut_paiement,
       statut_paiement_ui: paymentUiValue,
@@ -4051,6 +4161,150 @@ export default function Dashboard() {
                               )}
                             </div>
                           </div>
+
+                          {/* ── Supplément d'heures payé en espèces : bascule Oui / Non ── */}
+                          {(() => {
+                            const hasSupplement = Boolean(editFormData.has_supplement_heures);
+                            const montantInitial = montantTTC;
+                            const supplementMontant = hasSupplement ? toNumber(editFormData.supplement_heures_montant) : 0;
+                            const isSupplementRecupere = hasSupplement && Boolean(editFormData.supplement_heures_recupere_especes);
+                            const totalEncaisse = montantInitial + (isSupplementRecupere ? supplementMontant : 0);
+
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+                                {/* Contrôle : Supplément payé Oui / Non */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                                    Supplément payé ?
+                                  </span>
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                    <label
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        cursor: 'pointer',
+                                        padding: '4px 12px',
+                                        borderRadius: '6px',
+                                        border: !hasSupplement ? '1.5px solid #64748B' : '1px solid #CBD5E1',
+                                        background: !hasSupplement ? '#F1F5F9' : '#FFFFFF',
+                                        color: !hasSupplement ? '#0F172A' : '#64748B',
+                                        fontWeight: !hasSupplement ? 700 : 500,
+                                        fontSize: '12.5px',
+                                        transition: 'all 0.15s ease',
+                                        userSelect: 'none'
+                                      }}
+                                    >
+                                      <input
+                                        type="radio"
+                                        name="has_supplement_heures_toggle"
+                                        checked={!hasSupplement}
+                                        onChange={() => {
+                                          setEditFormData({
+                                            ...editFormData,
+                                            has_supplement_heures: false,
+                                            supplement_heures_montant: 0,
+                                            supplement_heures_recupere_especes: false
+                                          });
+                                        }}
+                                        style={{ accentColor: '#0284C7', cursor: 'pointer' }}
+                                      />
+                                      Non
+                                    </label>
+
+                                    <label
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        cursor: 'pointer',
+                                        padding: '4px 12px',
+                                        borderRadius: '6px',
+                                        border: hasSupplement ? '1.5px solid #0284C7' : '1px solid #CBD5E1',
+                                        background: hasSupplement ? '#E0F2FE' : '#FFFFFF',
+                                        color: hasSupplement ? '#0369A1' : '#64748B',
+                                        fontWeight: hasSupplement ? 700 : 500,
+                                        fontSize: '12.5px',
+                                        transition: 'all 0.15s ease',
+                                        userSelect: 'none'
+                                      }}
+                                    >
+                                      <input
+                                        type="radio"
+                                        name="has_supplement_heures_toggle"
+                                        checked={hasSupplement}
+                                        onChange={() => {
+                                          setEditFormData({
+                                            ...editFormData,
+                                            has_supplement_heures: true
+                                          });
+                                        }}
+                                        style={{ accentColor: '#0284C7', cursor: 'pointer' }}
+                                      />
+                                      Oui
+                                    </label>
+                                  </div>
+                                </div>
+
+                                {/* Bloc de saisie du supplément : affiché UNIQUEMENT si Oui */}
+                                {hasSupplement && (
+                                  <div style={{ padding: '16px', borderRadius: '10px', border: '1px solid #BAE6FD', background: '#F0F9FF' }}>
+                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0369A1', marginBottom: '12px' }}>
+                                      Supplément d'heures payé en espèces
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '16px', alignItems: 'flex-end' }}>
+                                      <div>
+                                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
+                                          Montant du supplément (DH)
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step="any"
+                                          value={editFormData.supplement_heures_montant ?? 0}
+                                          onChange={e => setEditFormData({ ...editFormData, supplement_heures_montant: e.target.value })}
+                                          className="edit-input"
+                                          style={{ width: '100%', background: 'white' }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <label
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            padding: '0 12px',
+                                            height: '38px',
+                                            background: 'white',
+                                            border: '1px solid #CBD5E1',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                            userSelect: 'none'
+                                          }}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isSupplementRecupere}
+                                            onChange={e => setEditFormData({ ...editFormData, supplement_heures_recupere_especes: e.target.checked })}
+                                            style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#0284C7' }}
+                                          />
+                                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>
+                                            Montant récupéré en espèces par le profil
+                                          </span>
+                                        </label>
+                                      </div>
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginTop: '12px', fontSize: '12.5px', color: '#0369A1' }}>
+                                      <span>Montant initial : <strong>{montantInitial.toFixed(2).replace('.', ',')} DH</strong></span>
+                                      <span>Supplément espèces : <strong>{supplementMontant.toFixed(2).replace('.', ',')} DH</strong></span>
+                                      <span>Total encaissé : <strong>{totalEncaisse.toFixed(2).replace('.', ',')} DH</strong></span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                               <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>Profils intervenants</span>
@@ -4076,7 +4330,7 @@ export default function Dashboard() {
                                       days: defaultDays,
                                       rate_value: defaultRateVal,
                                       amount: defaultAmount,
-                                      is_delegate: false
+                                      is_delegate: partsRepartition.length === 0
                                     }
                                   ];
                                   updatePartsAndAgency(nextParts);
@@ -4087,277 +4341,408 @@ export default function Dashboard() {
                               </button>
                             </div>
 
-                            {partsRepartition.map((line, idx) => (
-                              <div key={`${line.profile_id}-${idx}`} style={{ padding: '16px', border: '1px solid #E2E8F0', borderRadius: '10px', backgroundColor: '#F8FAFC', marginBottom: '16px' }}>
-                                {/* First row of fields: Nom du profil, Type de taux, buttons */}
-                                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', marginBottom: '12px' }}>
-                                  <div style={{ flex: 2 }}>
-                                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                                      Nom du profil
-                                      {line.is_delegate && partsRepartition.length > 1 && (
-                                        <span style={{ fontSize: '10px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 6px' }}>
-                                          Délégué
-                                        </span>
-                                      )}
-                                    </label>
-                                    <select
-                                      value={line.profile_id}
-                                      onChange={e => {
-                                        const next = [...partsRepartition];
-                                        next[idx] = { ...line, profile_id: e.target.value ? parseInt(e.target.value, 10) : '' };
-                                        updatePartsAndAgency(next);
-                                      }}
-                                      className="edit-input"
-                                      style={{ width: '100%' }}
-                                    >
-                                      <option value="">Sélectionner un profil...</option>
-                                      {allProfils
-                                        .filter(p => {
-                                          if (p.id === line.profile_id) return true;
-                                          if (p.is_blacklisted || p.statut === 'blacklist' || p.is_archived) return false;
-                                          return true;
-                                        })
-                                        .map(p => (
-                                          <option key={p.id} value={p.id}>
-                                            {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`}
-                                          </option>
-                                        ))}
-                                    </select>
-                                  </div>
+                            {partsRepartition.map((line, idx) => {
+                              const currentAgent = allProfils.find(p => p.id === Number(line.profile_id)) || (selectedDemande.profils_envoyes?.find((p: any) => p.id === Number(line.profile_id)));
+                              const isCurrentInterne = currentAgent?.categorie === 'interne';
 
-                                  <div style={{ flex: 2 }}>
-                                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Type de taux</label>
-                                    <select
-                                      value={line.rate_type || 'taux_horaire_standard'}
-                                      onChange={e => {
-                                        const nextType = e.target.value as any;
-                                        const next = [...partsRepartition];
-                                        const updatedLine = { ...line, rate_type: nextType };
+                              return (
+                                <div key={`${line.profile_id}-${idx}`} style={{ padding: '16px', border: '1px solid #E2E8F0', borderRadius: '10px', backgroundColor: '#F8FAFC', marginBottom: '16px' }}>
+                                  {/* First row of fields: Nom du profil, Déléguée, Type de taux, buttons */}
+                                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', marginBottom: '12px' }}>
+                                    <div style={{ flex: 2 }}>
+                                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                        Nom du profil
+                                        {line.profile_id ? (
+                                          isCurrentInterne ? (
+                                            <span style={{ fontSize: '10px', fontWeight: 600, color: '#0369A1', background: '#E0F2FE', border: '1px solid #BAE6FD', borderRadius: '4px', padding: '1px 6px' }}>
+                                              Interne
+                                            </span>
+                                          ) : (
+                                            <span style={{ fontSize: '10px', fontWeight: 600, color: '#475569', background: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: '4px', padding: '1px 6px' }}>
+                                              Externe
+                                            </span>
+                                          )
+                                        ) : null}
+                                        {(line.is_delegate || partsRepartition.length === 1) && (
+                                          <span style={{ fontSize: '10px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 6px', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                            👑 Délégué
+                                          </span>
+                                        )}
+                                      </label>
+                                      <select
+                                        value={line.profile_id}
+                                        onChange={e => {
+                                          const nextProfileId: number | '' = e.target.value ? parseInt(e.target.value, 10) : '';
+                                          const newAgent = allProfils.find(p => p.id === Number(nextProfileId)) || (selectedDemande.profils_envoyes?.find((p: any) => p.id === Number(nextProfileId)));
+                                          const nextIsInterne = newAgent?.categorie === 'interne';
 
-                                        if (nextType === 'taux_forfaitaire') {
-                                          updatedLine.days = updatedLine.days || Number(editFormData.nb_jours || 1);
-                                          updatedLine.hours = undefined;
-                                          updatedLine.rate_value = undefined;
-                                          updatedLine.amount = 0;
-                                        } else if (nextType === 'taux_horaire_standard') {
-                                          updatedLine.hours = updatedLine.hours || Number(editFormData.nb_heures || editFormData.duree || 4);
-                                          updatedLine.days = undefined;
-                                          updatedLine.rate_value = getServiceDefaultRate(editFormData.service, nextType, updatedLine.hours).rate;
-                                          updatedLine.amount = roundMoney((updatedLine.hours || 0) * updatedLine.rate_value);
-                                        } else if (nextType === 'taux_horaire_exceptionnel') {
-                                          updatedLine.hours = updatedLine.hours || Number(editFormData.nb_heures || editFormData.duree || 4);
-                                          updatedLine.days = undefined;
-                                          updatedLine.rate_value = undefined;
-                                          updatedLine.amount = 0;
-                                        }
+                                          const next = [...partsRepartition];
+                                          const updatedLine: PartRepartitionItem = { ...line, profile_id: nextProfileId };
 
-                                        next[idx] = updatedLine;
-                                        updatePartsAndAgency(next);
-                                      }}
-                                      className="edit-input"
-                                      style={{ width: '100%' }}
-                                    >
-                                      <option value="taux_horaire_standard" disabled={!hasPermission(user, 'application_taux_horaire_standard')}>
-                                        Taux horaire standard {!hasPermission(user, 'application_taux_horaire_standard') && '🔒'}
-                                      </option>
-                                      <option value="taux_horaire_exceptionnel" disabled={!hasPermission(user, 'taux_horaire_exceptionnel')}>
-                                        Taux horaire exceptionnel {!hasPermission(user, 'taux_horaire_exceptionnel') && '🔒'}
-                                      </option>
-                                      <option value="taux_forfaitaire" disabled={!hasPermission(user, 'taux_forfaitaire')}>
-                                        Taux forfaitaire {!hasPermission(user, 'taux_forfaitaire') && '🔒'}
-                                      </option>
-                                    </select>
-                                  </div>
+                                          if (nextIsInterne) {
+                                            updatedLine.rate_value = 0;
+                                            updatedLine.amount = 0;
+                                          } else {
+                                            if (!updatedLine.rate_value || updatedLine.amount === 0) {
+                                              if (updatedLine.rate_type === 'taux_forfaitaire') {
+                                                const days = updatedLine.days || Number(editFormData.nb_jours || 1);
+                                                updatedLine.days = days;
+                                                updatedLine.rate_value = getServiceDefaultRate(editFormData.service, 'taux_forfaitaire').rate;
+                                                updatedLine.amount = roundMoney(days * updatedLine.rate_value);
+                                              } else {
+                                                const hours = updatedLine.hours || Number(editFormData.nb_heures || editFormData.duree || 4);
+                                                updatedLine.hours = hours;
+                                                updatedLine.rate_value = getServiceDefaultRate(editFormData.service, updatedLine.rate_type || 'taux_horaire_standard', hours).rate;
+                                                updatedLine.amount = roundMoney(hours * updatedLine.rate_value);
+                                              }
+                                            }
+                                          }
 
-                                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                                    {partsRepartition.length > 1 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const next = partsRepartition.map((p, i) => ({ ...p, is_delegate: i === idx ? !p.is_delegate : false }));
+                                          next[idx] = updatedLine;
                                           updatePartsAndAgency(next);
                                         }}
-                                        style={{
-                                          height: '38px',
-                                          padding: '0 12px',
-                                          borderRadius: '8px',
-                                          border: 'none',
-                                          fontSize: '12px',
-                                          fontWeight: 600,
-                                          cursor: 'pointer',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '4px',
-                                          background: line.is_delegate ? '#F59E0B' : '#E2E8F0',
-                                          color: line.is_delegate ? 'white' : '#475569',
-                                          transition: 'all 0.2s'
-                                        }}
-                                        title="Désigner comme délégué"
+                                        className="edit-input"
+                                        style={{ width: '100%' }}
                                       >
-                                        <UserCheck size={16} />
-                                        {line.is_delegate ? 'Délégué' : 'Désigner'}
-                                      </button>
-                                    )}
-                                    {partsRepartition.length > 1 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const f = partsRepartition.filter((_, i) => i !== idx);
-                                          if (!f.some(p => p.is_delegate) && f.length > 0) f[0] = { ...f[0], is_delegate: true };
-                                          updatePartsAndAgency(f);
-                                        }}
-                                        style={{
-                                          height: '38px',
-                                          width: '38px',
-                                          borderRadius: '8px',
-                                          border: '1px solid #FCA5A5',
-                                          background: 'white',
-                                          color: '#DC2626',
-                                          cursor: 'pointer',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          transition: 'all 0.2s'
-                                        }}
-                                      >
-                                        <Trash2 size={16} />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
+                                        <option value="">Sélectionner un profil...</option>
+                                        {allProfils
+                                          .filter(p => {
+                                            if (p.id === line.profile_id) return true;
+                                            if (p.is_blacklisted || p.statut === 'blacklist' || p.is_archived) return false;
+                                            return true;
+                                          })
+                                          .map(p => (
+                                            <option key={p.id} value={p.id}>
+                                              {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`} ({p.categorie === 'interne' ? 'Interne' : 'Externe'})
+                                            </option>
+                                          ))}
+                                      </select>
+                                      {/* Message sous le nom du profil délégué */}
+                                      {(() => {
+                                        const isDelegate = Boolean(line.is_delegate) || partsRepartition.length === 1;
+                                        const isProfilPayeClient = editFormData.statut_paiement_ui === 'profil_paye_client';
+                                        if (!isProfilPayeClient || !isDelegate) return null;
 
-                                {/* Second row of fields: duration, unit price, total */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'flex-end' }}>
-                                  {line.rate_type === 'taux_forfaitaire' ? (
-                                    <>
-                                      <div>
-                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Nombre de jours</label>
-                                        <input
-                                          type="number"
-                                          min={1}
-                                          value={line.days || ''}
-                                          onChange={e => {
-                                            const val = Number(e.target.value);
-                                            const next = [...partsRepartition];
-                                            const updatedLine = { ...line, days: val };
-                                            updatedLine.amount = roundMoney(val * (updatedLine.rate_value || 0));
-                                            next[idx] = updatedLine;
-                                            updatePartsAndAgency(next);
-                                          }}
-                                          className="edit-input"
-                                          style={{ width: '100%' }}
-                                        />
-                                      </div>
-                                      <div>
-                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Prix forfaitaire (MAD)</label>
-                                        <input
-                                          type="number"
-                                          value={line.rate_value || ''}
-                                          onChange={e => {
-                                            const val = Number(e.target.value);
-                                            const next = [...partsRepartition];
-                                            const updatedLine = { ...line, rate_value: val };
-                                            updatedLine.amount = roundMoney((updatedLine.days || 1) * val);
-                                            next[idx] = updatedLine;
-                                            updatePartsAndAgency(next);
-                                          }}
-                                          className="edit-input"
-                                          style={{ width: '100%' }}
-                                          required={true}
-                                        />
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <div>
-                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Nombre d'heures</label>
-                                        <input
-                                          type="number"
-                                          min={0.5}
-                                          step={0.5}
-                                          value={line.hours || ''}
-                                          onChange={e => {
-                                            const val = Number(e.target.value);
-                                            const next = [...partsRepartition];
-                                            const updatedLine = { ...line, hours: val };
+                                        const agent = allProfils.find(p => p.id === Number(line.profile_id)) || (selectedDemande.profils_envoyes?.find((p: any) => p.id === Number(line.profile_id)));
+                                        const profileName = agent ? (agent.full_name || `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || `Profil #${line.profile_id}`) : (line.profile_id ? `Profil #${line.profile_id}` : 'Le profil');
+                                        const partAgenceVal = toNumber(editFormData.part_agence);
+                                        const isSingleProfile = partsRepartition.length <= 1;
 
-                                            if (updatedLine.rate_type === 'taux_horaire_standard') {
-                                              updatedLine.rate_value = getServiceDefaultRate(editFormData.service, 'taux_horaire_standard', val).rate;
+                                        const montantInitial = montantTTC;
+                                        const hasSupplement = Boolean(editFormData.has_supplement_heures);
+                                        const supplementMontant = hasSupplement ? toNumber(editFormData.supplement_heures_montant) : 0;
+                                        const isSupplementRecupere = hasSupplement && Boolean(editFormData.supplement_heures_recupere_especes);
+                                        const totalEncaisse = montantInitial + (isSupplementRecupere ? supplementMontant : 0);
+
+                                        return (
+                                          <div style={{ marginTop: '8px', padding: '8px 12px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', fontSize: '12px', color: '#166534', lineHeight: '1.4' }}>
+                                            <div>
+                                              <strong>{profileName}</strong> a le montant de <strong>{partAgenceVal.toFixed(2).replace('.', ',')} DH</strong> comme part de l’agence.
+                                            </div>
+                                            {isSingleProfile && (
+                                              <div style={{ marginTop: '4px', fontSize: '11.5px', color: '#15803D' }}>
+                                                Montant récupéré : <strong>{totalEncaisse.toFixed(2).replace('.', ',')} DH</strong>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+
+                                    <div style={{ flex: 1 }}>
+                                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
+                                        Déléguée
+                                      </label>
+                                      {(() => {
+                                        const isSingle = partsRepartition.length === 1;
+                                        const hasOtherDelegate = partsRepartition.some((p, i) => i !== idx && p.is_delegate);
+                                        const isChecked = Boolean(line.is_delegate) || isSingle;
+                                        const isDisabled = isSingle || (!isChecked && hasOtherDelegate);
+
+                                        return (
+                                          <label
+                                            style={{
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '8px',
+                                              padding: '0 12px',
+                                              height: '38px',
+                                              background: isChecked ? '#F0FDF4' : (isDisabled ? '#F1F5F9' : '#FFFFFF'),
+                                              border: `1px solid ${isChecked ? '#86EFAC' : (isDisabled ? '#E2E8F0' : '#CBD5E1')}`,
+                                              borderRadius: '8px',
+                                              cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                              opacity: isDisabled && !isChecked ? 0.6 : 1,
+                                              userSelect: 'none'
+                                            }}
+                                            title={
+                                              isSingle
+                                                ? "Délégué unique par défaut"
+                                                : isDisabled
+                                                  ? "Un autre profil est déjà désigné comme délégué"
+                                                  : "Désigner ce profil comme délégué"
                                             }
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={isChecked}
+                                              disabled={isDisabled}
+                                              onChange={(e) => {
+                                                if (isSingle) return;
+                                                const willBeDelegate = e.target.checked;
+                                                const next = partsRepartition.map((p, i) => ({
+                                                  ...p,
+                                                  is_delegate: i === idx ? willBeDelegate : false
+                                                }));
+                                                updatePartsAndAgency(next);
+                                              }}
+                                              style={{ width: '16px', height: '16px', cursor: isDisabled ? 'not-allowed' : 'pointer', accentColor: '#059669' }}
+                                            />
+                                            <span style={{ fontSize: '13px', fontWeight: 600, color: isChecked ? '#166534' : '#475569' }}>
+                                              Déléguée
+                                            </span>
+                                          </label>
+                                        );
+                                      })()}
+                                    </div>
 
-                                            updatedLine.amount = roundMoney(val * (updatedLine.rate_value || 0));
-                                            next[idx] = updatedLine;
-
-                                            if (partsRepartition.length === 1 && val > 0) {
-                                              lastRecalculatedDurationRef.current = val;
-                                              recalculatePriceAndSharesForDuration(val, editFormData, next);
-                                            } else {
-                                              updatePartsAndAgency(next);
-                                            }
-                                          }}
-                                          className="edit-input"
-                                          style={{ width: '100%' }}
-                                        />
-                                      </div>
-                                      <div>
-                                        <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>
-                                          Prix par heure (MAD) {line.rate_type === 'taux_horaire_exceptionnel' && <span style={{ color: '#dc2626' }}>*</span>}
-                                        </label>
-                                        <input
-                                          type="number"
-                                          value={line.rate_value || ''}
-                                          onChange={e => {
-                                            const val = Number(e.target.value);
-                                            const next = [...partsRepartition];
-                                            const updatedLine = { ...line, rate_value: val };
-                                            updatedLine.amount = roundMoney((updatedLine.hours || 0) * val);
-                                            next[idx] = updatedLine;
-                                            updatePartsAndAgency(next);
-                                          }}
-                                          disabled={line.rate_type === 'taux_horaire_standard'}
-                                          className="edit-input"
-                                          style={{
-                                            width: '100%',
-                                            ...(line.rate_type === 'taux_horaire_standard' ? { background: '#E2E8F0', color: '#64748B', cursor: 'not-allowed' } : {})
-                                          }}
-                                          required={line.rate_type === 'taux_horaire_exceptionnel'}
-                                        />
-                                      </div>
-                                    </>
-                                  )}
-                                  <div>
-                                    <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Montant total (MAD)</label>
-                                    {(editFormData.statut_paiement_ui === 'intervention_gratuite' || editFormData.statut_paiement_ui === 'facturation_annulee' || Boolean(editFormData.facturation_annulee)) ? (
-                                      <input
-                                        type="number"
-                                        value={line.amount ?? ''}
-                                        disabled={!editFormData.profil_sera_paye}
+                                    <div style={{ flex: 2 }}>
+                                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>Type de taux</label>
+                                      <select
+                                        value={line.rate_type || 'taux_horaire_standard'}
+                                        disabled={isCurrentInterne}
                                         onChange={e => {
-                                          const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                          if (isCurrentInterne) return;
+                                          const nextType = e.target.value as any;
                                           const next = [...partsRepartition];
-                                          next[idx] = { ...line, amount: val };
+                                          const updatedLine = { ...line, rate_type: nextType };
+
+                                          if (nextType === 'taux_forfaitaire') {
+                                            updatedLine.days = updatedLine.days || Number(editFormData.nb_jours || 1);
+                                            updatedLine.hours = undefined;
+                                            updatedLine.rate_value = undefined;
+                                            updatedLine.amount = 0;
+                                          } else if (nextType === 'taux_horaire_standard') {
+                                            updatedLine.hours = updatedLine.hours || Number(editFormData.nb_heures || editFormData.duree || 4);
+                                            updatedLine.days = undefined;
+                                            updatedLine.rate_value = getServiceDefaultRate(editFormData.service, nextType, updatedLine.hours).rate;
+                                            updatedLine.amount = roundMoney((updatedLine.hours || 0) * updatedLine.rate_value);
+                                          } else if (nextType === 'taux_horaire_exceptionnel') {
+                                            updatedLine.hours = updatedLine.hours || Number(editFormData.nb_heures || editFormData.duree || 4);
+                                            updatedLine.days = undefined;
+                                            updatedLine.rate_value = undefined;
+                                            updatedLine.amount = 0;
+                                          }
+
+                                          next[idx] = updatedLine;
                                           updatePartsAndAgency(next);
                                         }}
                                         className="edit-input"
                                         style={{
                                           width: '100%',
-                                          ...(!editFormData.profil_sera_paye ? { background: '#E2E8F0', color: '#64748B', cursor: 'not-allowed' } : {})
+                                          ...(isCurrentInterne ? { background: '#E2E8F0', color: '#64748B', cursor: 'not-allowed' } : {})
                                         }}
-                                      />
-                                    ) : (
-                                      <div style={{ padding: '0 12px', background: '#F1F5F9', borderRadius: '8px', border: '1px solid #CBD5E1', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
-                                        {toNumber(line.amount).toFixed(2)}
+                                      >
+                                        <option value="taux_horaire_standard" disabled={!hasPermission(user, 'application_taux_horaire_standard')}>
+                                          Taux horaire standard {!hasPermission(user, 'application_taux_horaire_standard') && '🔒'}
+                                        </option>
+                                        <option value="taux_horaire_exceptionnel" disabled={!hasPermission(user, 'taux_horaire_exceptionnel')}>
+                                          Taux horaire exceptionnel {!hasPermission(user, 'taux_horaire_exceptionnel') && '🔒'}
+                                        </option>
+                                        <option value="taux_forfaitaire" disabled={!hasPermission(user, 'taux_forfaitaire')}>
+                                          Taux forfaitaire {!hasPermission(user, 'taux_forfaitaire') && '🔒'}
+                                        </option>
+                                      </select>
+                                    </div>
+
+                                    {partsRepartition.length > 1 && (
+                                      <div style={{ display: 'flex', alignItems: 'flex-end', height: '38px', marginTop: '19px' }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const f = partsRepartition.filter((_, i) => i !== idx);
+                                            if (f.length === 1) f[0] = { ...f[0], is_delegate: true };
+                                            updatePartsAndAgency(f);
+                                          }}
+                                          style={{
+                                            height: '38px',
+                                            width: '38px',
+                                            borderRadius: '8px',
+                                            border: '1px solid #FCA5A5',
+                                            background: 'white',
+                                            color: '#DC2626',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            transition: 'all 0.2s'
+                                          }}
+                                          title="Supprimer ce profil"
+                                        >
+                                          <Trash2 size={16} />
+                                        </button>
                                       </div>
                                     )}
                                   </div>
-                                </div>
-                                {line.created_at && (
-                                  <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B', paddingTop: '8px', borderTop: '1px dashed #E2E8F0' }}>
-                                    Part ajoutée le <strong>{line.created_at}</strong> par <strong>{line.created_by_name || 'Système'}</strong>
+
+                                  {/* Second row of fields: duration, unit price, total */}
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'flex-end' }}>
+                                    {line.rate_type === 'taux_forfaitaire' ? (
+                                      <>
+                                        <div>
+                                          <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Nombre de jours</label>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            value={line.days || ''}
+                                            onChange={e => {
+                                              const val = Number(e.target.value);
+                                              const next = [...partsRepartition];
+                                              const updatedLine = { ...line, days: val };
+                                              if (isCurrentInterne) {
+                                                updatedLine.rate_value = 0;
+                                                updatedLine.amount = 0;
+                                              } else {
+                                                updatedLine.amount = roundMoney(val * (updatedLine.rate_value || 0));
+                                              }
+                                              next[idx] = updatedLine;
+                                              updatePartsAndAgency(next);
+                                            }}
+                                            className="edit-input"
+                                            style={{ width: '100%' }}
+                                          />
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Prix forfaitaire (MAD)</label>
+                                          <input
+                                            type="number"
+                                            value={isCurrentInterne ? 0 : (line.rate_value || '')}
+                                            disabled={isCurrentInterne}
+                                            onChange={e => {
+                                              if (isCurrentInterne) return;
+                                              const val = Number(e.target.value);
+                                              const next = [...partsRepartition];
+                                              const updatedLine = { ...line, rate_value: val };
+                                              updatedLine.amount = roundMoney((updatedLine.days || 1) * val);
+                                              next[idx] = updatedLine;
+                                              updatePartsAndAgency(next);
+                                            }}
+                                            className="edit-input"
+                                            style={{
+                                              width: '100%',
+                                              ...(isCurrentInterne ? { background: '#E2E8F0', color: '#64748B', cursor: 'not-allowed' } : {})
+                                            }}
+                                            required={!isCurrentInterne}
+                                          />
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div>
+                                          <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Nombre d'heures</label>
+                                          <input
+                                            type="number"
+                                            min={0.5}
+                                            step={0.5}
+                                            value={line.hours || ''}
+                                            onChange={e => {
+                                              const val = Number(e.target.value);
+                                              const next = [...partsRepartition];
+                                              const updatedLine = { ...line, hours: val };
+
+                                              if (isCurrentInterne) {
+                                                updatedLine.rate_value = 0;
+                                                updatedLine.amount = 0;
+                                                next[idx] = updatedLine;
+                                                updatePartsAndAgency(next);
+                                              } else {
+                                                if (updatedLine.rate_type === 'taux_horaire_standard') {
+                                                  updatedLine.rate_value = getServiceDefaultRate(editFormData.service, 'taux_horaire_standard', val).rate;
+                                                }
+
+                                                updatedLine.amount = roundMoney(val * (updatedLine.rate_value || 0));
+                                                next[idx] = updatedLine;
+
+                                                if (partsRepartition.length === 1 && val > 0) {
+                                                  lastRecalculatedDurationRef.current = val;
+                                                  recalculatePriceAndSharesForDuration(val, editFormData, next);
+                                                } else {
+                                                  updatePartsAndAgency(next);
+                                                }
+                                              }
+                                            }}
+                                            className="edit-input"
+                                            style={{ width: '100%' }}
+                                          />
+                                        </div>
+                                        <div>
+                                          <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>
+                                            Prix par heure (MAD) {!isCurrentInterne && line.rate_type === 'taux_horaire_exceptionnel' && <span style={{ color: '#dc2626' }}>*</span>}
+                                          </label>
+                                          <input
+                                            type="number"
+                                            value={isCurrentInterne ? 0 : (line.rate_value || '')}
+                                            onChange={e => {
+                                              if (isCurrentInterne) return;
+                                              const val = Number(e.target.value);
+                                              const next = [...partsRepartition];
+                                              const updatedLine = { ...line, rate_value: val };
+                                              updatedLine.amount = roundMoney((updatedLine.hours || 0) * val);
+                                              next[idx] = updatedLine;
+                                              updatePartsAndAgency(next);
+                                            }}
+                                            disabled={isCurrentInterne || line.rate_type === 'taux_horaire_standard'}
+                                            className="edit-input"
+                                            style={{
+                                              width: '100%',
+                                              ...((isCurrentInterne || line.rate_type === 'taux_horaire_standard') ? { background: '#E2E8F0', color: '#64748B', cursor: 'not-allowed' } : {})
+                                            }}
+                                            required={!isCurrentInterne && line.rate_type === 'taux_horaire_exceptionnel'}
+                                          />
+                                        </div>
+                                      </>
+                                    )}
+                                    <div>
+                                      <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '4px' }}>Montant total (MAD)</label>
+                                      {(editFormData.statut_paiement_ui === 'intervention_gratuite' || editFormData.statut_paiement_ui === 'facturation_annulee' || Boolean(editFormData.facturation_annulee)) ? (
+                                        <input
+                                          type="number"
+                                          value={line.amount ?? ''}
+                                          disabled={!editFormData.profil_sera_paye}
+                                          onChange={e => {
+                                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                            const next = [...partsRepartition];
+                                            next[idx] = { ...line, amount: val };
+                                            updatePartsAndAgency(next);
+                                          }}
+                                          className="edit-input"
+                                          style={{
+                                            width: '100%',
+                                            ...(!editFormData.profil_sera_paye ? { background: '#E2E8F0', color: '#64748B', cursor: 'not-allowed' } : {})
+                                          }}
+                                        />
+                                      ) : (
+                                        <div style={{ padding: '0 12px', background: isCurrentInterne ? '#E2E8F0' : '#F1F5F9', borderRadius: '8px', border: '1px solid #CBD5E1', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 700, color: isCurrentInterne ? '#64748B' : '#0F172A' }}>
+                                          {toNumber(line.amount).toFixed(2)}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            ))}
+
+                                  {isCurrentInterne && (
+                                    <div style={{ marginTop: '10px', fontSize: '12px', color: '#0369A1', background: '#F0F9FF', border: '1px solid #BAE6FD', padding: '6px 12px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <span>ℹ️</span>
+                                      <span><strong>Profil interne</strong> : fait partie de l’agence (part profil = <strong>0,00 DH</strong>, l’intégralité revient à l’agence).</span>
+                                    </div>
+                                  )}
+
+                                  {line.created_at && (
+                                    <div style={{ marginTop: '12px', fontSize: '12px', color: '#64748B', paddingTop: '8px', borderTop: '1px dashed #E2E8F0' }}>
+                                      Part ajoutée le <strong>{line.created_at}</strong> par <strong>{line.created_by_name || 'Système'}</strong>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                           {(() => {
                             const isFreeOrCancelled = editFormData.statut_paiement_ui === 'intervention_gratuite' || editFormData.statut_paiement_ui === 'facturation_annulee' || Boolean(editFormData.facturation_annulee);

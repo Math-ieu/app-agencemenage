@@ -745,7 +745,44 @@ export default function Profils() {
                         <div className="table-avatar-placeholder">{getInitials(agent)}</div>
                       )}
                     </td>
-                    <td className="font-bold text-slate-700">{agent.last_name || '—'}</td>
+                    <td className="font-bold text-slate-700">
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+                        <span>{agent.last_name || '—'}</span>
+                        {agent.categorie === 'interne' ? (
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#0369A1',
+                            backgroundColor: '#E0F2FE',
+                            border: '1px solid #BAE6FD',
+                            borderRadius: '5px',
+                            padding: '2px 8px',
+                            whiteSpace: 'nowrap',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            lineHeight: 1.2
+                          }}>
+                            Interne
+                          </span>
+                        ) : (
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#475569',
+                            backgroundColor: '#F1F5F9',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '5px',
+                            padding: '2px 8px',
+                            whiteSpace: 'nowrap',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            lineHeight: 1.2
+                          }}>
+                            Externe
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="font-bold text-slate-700">{agent.first_name || '—'}</td>
                     <td className="text-slate-600 font-medium">{agent.phone || '—'}</td>
                     <td className="text-slate-600 font-medium">{agent.whatsapp || '—'}</td>
