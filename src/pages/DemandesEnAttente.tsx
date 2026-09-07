@@ -5,7 +5,7 @@ import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, cr
 import { decodeId } from '../utils/obfuscation';
 import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
-import { checkPermission, hasPermission, isExemptFromOwnership } from '../utils/permissions';
+import { checkPermission, hasPermission } from '../utils/permissions';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
 import {
   RefreshCw, Search, XCircle,
@@ -89,38 +89,29 @@ const strip212 = (p: string) => {
   return cleaned;
 };
 
-const canValidateDemande = (user: any, d: Demande) => {
+const canValidateDemande = (user: any, _d?: Demande) => {
   if (!user) return false;
-  if (isExemptFromOwnership(user)) {
-    return hasPermission(user, 'traiter_demandes_affectees') || hasPermission(user, 'creer_valider_demande');
-  }
-  if (d.created_by === user.id) {
-    return hasPermission(user, 'creer_valider_demande');
-  }
-  if (d.assigned_to === user.id || d.assigned_to_operations === user.id) {
-    return hasPermission(user, 'traiter_demandes_affectees');
-  }
-  return false;
+  return hasPermission(user, 'traiter_demandes_affectees') || hasPermission(user, 'creer_valider_demande');
 };
 
-const canModifyDemande = (user: any, d: Demande) => {
+const canModifyDemande = (user: any, _d?: Demande) => {
   if (!user) return false;
-  if (isExemptFromOwnership(user)) {
-    return hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin') || hasPermission(user, 'editer_besoin_agence') || hasPermission(user, 'editer_besoin_facture');
-  }
-  const hasPerm = hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin') || hasPermission(user, 'editer_besoin_agence') || hasPermission(user, 'editer_besoin_facture');
-  const isConcerned = d.created_by === user.id || d.assigned_to === user.id || d.assigned_to_operations === user.id;
-  return hasPerm && isConcerned;
+  return hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin') || hasPermission(user, 'editer_besoin_agence') || hasPermission(user, 'editer_besoin_facture');
 };
 
-const canRefuseDemande = (user: any, d: Demande) => {
+const canRefuseDemande = (user: any, _d?: Demande) => {
   if (!user) return false;
-  if (isExemptFromOwnership(user)) {
-    return hasPermission(user, 'refuser_demande') || hasPermission(user, 'annulation_demande');
-  }
-  const hasPerm = hasPermission(user, 'refuser_demande') || hasPermission(user, 'annulation_demande');
-  const isConcerned = d.created_by === user.id || d.assigned_to === user.id || d.assigned_to_operations === user.id;
-  return hasPerm && isConcerned;
+  return hasPermission(user, 'refuser_demande') || hasPermission(user, 'annulation_demande');
+};
+
+export const formatUserRole = (role?: string) => {
+  const r = (role || '').toLowerCase().trim();
+  if (r === 'admin') return 'Administrateur';
+  if (r === 'responsable_commercial' || r === 'responsable commercial') return 'Responsable commercial';
+  if (r === 'commercial') return 'Commercial';
+  if (r === 'charge_operations' || r === 'chargée des opérations') return 'Chargée des Opérations';
+  if (r === 'responsable_operations' || r === 'responsable des opérations') return 'Responsable des Opérations';
+  return role || 'Collaborateur';
 };
 
 
@@ -305,12 +296,12 @@ export default function DemandesEnAttente() {
     }
   }, [minDuree, formData.duree]);
 
-  // Fecth Commerciaux for Assignation
+  // Fetch Commerciaux / Responsables / Admins for Assignation
   useEffect(() => {
     if (checkPermission(user, 'affecter_commercial').allowed) {
-      getUsers({ role: 'commercial' }).then(res => {
+      getUsers({ role: 'commercial,responsable_commercial,admin', is_active: 'true' }).then(res => {
         setCommerciaux(Array.isArray(res.data?.results) ? res.data.results : (Array.isArray(res.data) ? res.data : []));
-      }).catch(err => console.error('Erreur commerciaux:', err));
+      }).catch(err => console.error('Erreur utilisateurs assignables:', err));
     }
   }, [user]);
 
@@ -596,7 +587,7 @@ export default function DemandesEnAttente() {
     if (action === 'valider') {
       const d = demandes.find(x => x.id === id);
       if (!d || !canValidateDemande(user, d)) {
-        addToast("Action non autorisée. Vous n'êtes ni le créateur de cette demande ni son commercial assigné.", 'error');
+        addToast("Action non autorisée. Votre rôle ne dispose pas de la permission requise pour valider une demande.", 'error');
         return;
       }
       const serviceName = (d.service || "").toLowerCase();
@@ -1848,7 +1839,7 @@ export default function DemandesEnAttente() {
                     </div>
                     <div className="self-end" style={{ paddingBottom: '2px' }}>
                       <span className="text-[13px] font-bold text-slate-800">
-                        {d.assigned_to_name ? `Affecté à commercial(${d.assigned_to_name})` : (d.source === 'site' ? "En attente d'affectation" : "Non affecté")}
+                        {d.assigned_to_name ? `Affecté à : ${d.assigned_to_name}` : (d.source === 'site' ? "En attente d'affectation" : "Non affecté")}
                       </span>
                     </div>
                   </div>
@@ -2548,7 +2539,7 @@ export default function DemandesEnAttente() {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-slate-800">Affectation</h2>
-                <p className="text-slate-500 text-sm mt-1">Sélectionnez le commercial pour cette demande</p>
+                <p className="text-slate-500 text-sm mt-1">Sélectionnez le collaborateur (commercial, responsable commercial ou admin) pour cette demande</p>
               </div>
               <button className="p-2 hover:bg-slate-100 rounded-full transition-colors" onClick={() => setShowAssignmentModal(null)}>
                 <XCircle size={24} className="text-slate-400" />
@@ -2570,7 +2561,7 @@ export default function DemandesEnAttente() {
                       </div>
                       <div className="flex-1">
                         <div className="font-bold text-slate-700 group-hover:text-teal-900">{comm.full_name || `${comm.first_name} ${comm.last_name}`}</div>
-                        <div className="text-xs text-slate-400">Commercial Agence</div>
+                        <div className="text-xs text-slate-400">{formatUserRole(comm.role)}</div>
                       </div>
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="bg-teal-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Choisir</div>
@@ -2581,8 +2572,8 @@ export default function DemandesEnAttente() {
               ) : (
                 <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                   <UserPlus size={40} className="mx-auto text-slate-300 mb-3" />
-                  <p className="text-slate-500 font-medium">Aucun commercial trouvé</p>
-                  <p className="text-slate-400 text-xs mt-1">Veuillez d'abord créer des commerciaux dans le système.</p>
+                  <p className="text-slate-500 font-medium">Aucun collaborateur trouvé</p>
+                  <p className="text-slate-400 text-xs mt-1">Veuillez d'abord créer des collaborateurs (commerciaux, responsables ou administrateurs) dans le système.</p>
                 </div>
               )}
             </div>
