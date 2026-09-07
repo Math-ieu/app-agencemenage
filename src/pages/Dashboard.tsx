@@ -2069,11 +2069,12 @@ export default function Dashboard() {
                               const spaceAbove = rect.top;
                               const openUp = spaceBelow < 280 && spaceAbove > spaceBelow;
                               const maxHeight = openUp ? Math.max(160, spaceAbove - 16) : Math.max(160, spaceBelow - 16);
+                              const safeLeft = Math.max(10, Math.min(rect.left, window.innerWidth - 240));
                               setCogMenuCoords({
                                 openUp,
                                 top: openUp ? undefined : Math.max(10, rect.bottom + 4),
                                 bottom: openUp ? Math.max(10, window.innerHeight - rect.top + 4) : undefined,
-                                left: Math.max(10, rect.left),
+                                left: safeLeft,
                                 maxHeight,
                               });
                               setActiveMenu(d.id);
@@ -2290,13 +2291,14 @@ export default function Dashboard() {
                               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                               const spaceBelow = window.innerHeight - rect.bottom;
                               const spaceAbove = rect.top;
-                              const openUp = spaceBelow < 340 && spaceAbove > spaceBelow;
-                              const maxHeight = openUp ? Math.max(160, spaceAbove - 16) : Math.max(160, spaceBelow - 16);
+                              const openUp = spaceBelow < 320 && spaceAbove > spaceBelow;
+                              const maxHeight = openUp ? Math.max(180, spaceAbove - 16) : Math.max(180, spaceBelow - 16);
+                              const safeRight = Math.max(10, Math.min(window.innerWidth - rect.right, window.innerWidth - 240));
                               setMoreMenuCoords({
                                 openUp,
                                 top: openUp ? undefined : Math.max(10, rect.bottom + 4),
                                 bottom: openUp ? Math.max(10, window.innerHeight - rect.top + 4) : undefined,
-                                right: Math.max(10, window.innerWidth - rect.right),
+                                right: safeRight,
                                 maxHeight,
                               });
                               setActiveMoreMenu(d.id);
