@@ -210,3 +210,12 @@ export const isFinanceRowVisible = (row: any): boolean => {
   return true;
 };
 
+export const formatUserRole = (role?: string) => {
+  const r = (role || '').toLowerCase().trim();
+  if (r === 'admin') return 'Administrateur';
+  if (r === 'responsable_commercial' || r === 'responsable commercial') return 'Responsable commercial';
+  if (r === 'commercial') return 'Commercial';
+  if (r === 'charge_operations' || r === 'chargée des opérations') return 'Chargée des Opérations';
+  if (r === 'responsable_operations' || r === 'responsable des opérations') return 'Responsable des Opérations';
+  return role || 'Collaborateur';
+};

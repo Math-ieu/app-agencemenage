@@ -15,7 +15,7 @@ import { encodeId } from '../utils/obfuscation';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
 import { getDynamicMonthPassagesCount, getDemandeStartDate, getDemandeStartTime, calculateTotalPrice, PricingInput } from '../utils/pricing';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
-import { renderStatusBadge, getStatusInfo } from '../utils/statusUtils';
+import { renderStatusBadge, getStatusInfo, formatUserRole } from '../utils/statusUtils';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
 import { DynamicServiceForm } from '../components/demandes/forms/DynamicServiceForm';
 // Services qui nécessitent un devis PDF (les autres ont un récapitulatif PNG)
@@ -413,7 +413,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (checkPermission(user, 'affecter_commercial').allowed) {
-      getUsers({ role: 'commercial' }).then(res => setCommerciaux(res.data?.results || res.data)).catch(console.error);
+      getUsers({ role: 'commercial,responsable_commercial,admin', is_active: 'true' }).then(res => setCommerciaux(res.data?.results || res.data)).catch(console.error);
     }
   }, [user]);
 
@@ -568,22 +568,6 @@ export default function Dashboard() {
         // Exclure les prestations terminées du tableau de bord
         if (d.statut === 'pres_terminee' || d.statut === 'termine') {
           return false;
-        }
-
-        // Filtre fenêtre 24h (Jour J et J+1)
-        const dateInterventionStr = getDemandeStartDate(d);
-        if (dateInterventionStr) {
-          const interDate = new Date(dateInterventionStr);
-          if (!isNaN(interDate.getTime())) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const limit24h = new Date(today);
-            limit24h.setDate(limit24h.getDate() + 1);
-            limit24h.setHours(23, 59, 59, 999);
-            if (interDate > limit24h) {
-              return false;
-            }
-          }
         }
         
         const facturation = d.formulaire_data?.facturation || {};
@@ -1768,22 +1752,6 @@ export default function Dashboard() {
         return false;
       }
 
-      // Filtre fenêtre 24h (Jour J et J+1)
-      const dateInterventionStr = getDemandeStartDate(d);
-      if (dateInterventionStr) {
-        const interDate = new Date(dateInterventionStr);
-        if (!isNaN(interDate.getTime())) {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const limit24h = new Date(today);
-          limit24h.setDate(limit24h.getDate() + 1);
-          limit24h.setHours(23, 59, 59, 999);
-          if (interDate > limit24h) {
-            return false;
-          }
-        }
-      }
-
       // Recherche
       if (search) {
         const clientName = d.client_name || d.formulaire_data?.nom || '';
@@ -2148,7 +2116,7 @@ export default function Dashboard() {
                               }}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande')) && (
                                 <button className="menu-item" onClick={() => { openDetail(d); setActiveMenu(null); setCogMenuCoords(null); }}>
                                   <Edit2 size={14} /> Éditer le besoin
                                 </button>
@@ -2370,9 +2338,24 @@ export default function Dashboard() {
                               }}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande')) && (
                                 <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); setMoreMenuCoords(null); }}>
                                   <Pencil size={16} /> Éditer le besoin
+                                </button>
+                              )}
+
+                              {hasPermissionWithContext(user, 'confirmation_avant_operation', d) && (
+                                <button 
+                                  className="menu-item" 
+                                  style={{ color: '#0d9488' }} 
+                                  onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    openCAOModal(d); 
+                                    setActiveMoreMenu(null); 
+                                    setMoreMenuCoords(null); 
+                                  }}
+                                >
+                                  <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> Confirmation avant opération (CAO)
                                 </button>
                               )}
 
@@ -2395,9 +2378,9 @@ export default function Dashboard() {
                                 </button>
                               )}
 
-                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande') || hasPermissionWithContext(user, 'confirmation_avant_operation', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
 
-                              {hasPermissionWithContext(user, 'editer_besoin_agence', d) && (
+                              {(hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin') || hasPermission(user, 'confirmation_avant_operation')) && (
                                 <>
                                   <button 
                                     className="menu-item" 
@@ -2601,9 +2584,24 @@ export default function Dashboard() {
                               }}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande')) && (
                                 <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMoreMenu(null); setMoreMenuCoords(null); }}>
                                   <Pencil size={16} /> Éditer le besoin
+                                </button>
+                              )}
+
+                              {hasPermissionWithContext(user, 'confirmation_avant_operation', d) && (
+                                <button 
+                                  className="menu-item" 
+                                  style={{ color: '#0d9488' }} 
+                                  onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    openCAOModal(d); 
+                                    setActiveMoreMenu(null); 
+                                    setMoreMenuCoords(null); 
+                                  }}
+                                >
+                                  <CheckCircle size={16} className={d.cao ? 'text-green-500' : ''} /> Confirmation avant opération (CAO)
                                 </button>
                               )}
 
@@ -2626,9 +2624,9 @@ export default function Dashboard() {
                                 </button>
                               )}
 
-                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande') || hasPermissionWithContext(user, 'confirmation_avant_operation', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
 
-                              {hasPermissionWithContext(user, 'editer_besoin_agence', d) && (
+                              {(hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin') || hasPermission(user, 'confirmation_avant_operation')) && (
                                 <>
                                   <button 
                                     className="menu-item" 
@@ -2820,7 +2818,7 @@ export default function Dashboard() {
                           right: 'auto', left: 0, zIndex: 99999, minWidth: '220px',
                           ...(menuDirection === 'up' ? { top: 'auto', bottom: '100%', marginBottom: '8px' } : { top: '100%', bottom: 'auto', marginTop: '8px' })
                         }}>
-                          {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d)) && (
+                          {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande')) && (
                             <button className="menu-item" style={{ color: '#334155' }} onClick={() => { openDetail(d); setActiveMenu(null); }}>
                               <Pencil size={16} /> Éditer le besoin
                             </button>
@@ -4523,7 +4521,7 @@ export default function Dashboard() {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h2 className="text-2xl font-bold text-slate-800">Affectation</h2>
-                <p className="text-slate-500 text-sm mt-1">Sélectionnez le commercial pour cette demande</p>
+                <p className="text-slate-500 text-sm mt-1">Sélectionnez le collaborateur (commercial, responsable commercial ou admin) pour cette demande</p>
               </div>
               <button className="p-2 hover:bg-slate-100 rounded-full transition-colors" onClick={() => setShowAssignmentModal(null)}>
                 <XCircle size={24} className="text-slate-400" />
@@ -4545,7 +4543,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex-1">
                         <div className="font-bold text-slate-700 group-hover:text-teal-900">{comm.full_name || `${comm.first_name} ${comm.last_name}`}</div>
-                        <div className="text-xs text-slate-400">Commercial Agence</div>
+                        <div className="text-xs text-slate-400">{formatUserRole(comm.role)}</div>
                       </div>
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="bg-teal-600 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Choisir</div>
@@ -4556,8 +4554,8 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                   <UserPlus size={40} className="mx-auto text-slate-300 mb-3" />
-                  <p className="text-slate-500 font-medium">Aucun commercial trouvé</p>
-                  <p className="text-slate-400 text-xs mt-1">Veuillez d'abord créer des commerciaux dans le système.</p>
+                  <p className="text-slate-500 font-medium">Aucun collaborateur trouvé</p>
+                  <p className="text-slate-400 text-xs mt-1">Veuillez d'abord créer des collaborateurs (commerciaux, responsables ou administrateurs) dans le système.</p>
                 </div>
               )}
             </div>

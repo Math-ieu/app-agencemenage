@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { encodeId } from '../utils/obfuscation';
 import { getClients, getUsers, updateClient, deleteClient, affecterClient, getClientAssignments } from '../api/client';
-import { renderStatusBadge } from '../utils/statusUtils';
+import { renderStatusBadge, formatUserRole } from '../utils/statusUtils';
 import { useAuthStore } from '../store/auth';
 import { checkPermission, hasPermission, hasPermissionWithContext } from '../utils/permissions';
 import { useToastStore } from '../store/toast';
@@ -236,7 +236,7 @@ export default function Clients() {
 
   useEffect(() => {
     if (checkPermission(user, 'affecter_commercial').allowed || checkPermission(user, 'affectation_client').allowed) {
-      getUsers({ role: 'commercial' }).then(res => setCommerciaux(res.data?.results || res.data)).catch(console.error);
+      getUsers({ role: 'commercial,responsable_commercial,admin', is_active: 'true' }).then(res => setCommerciaux(res.data?.results || res.data)).catch(console.error);
     }
   }, [user]);
 
@@ -1075,7 +1075,7 @@ export default function Clients() {
                         <option value="">Choisir...</option>
                         {commerciaux.map(comm => (
                           <option key={comm.id} value={comm.id}>
-                            {comm.full_name || `${comm.first_name} ${comm.last_name}`}
+                            {comm.full_name || `${comm.first_name} ${comm.last_name}`} ({formatUserRole(comm.role)})
                           </option>
                         ))}
                       </select>

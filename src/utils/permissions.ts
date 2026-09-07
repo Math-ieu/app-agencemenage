@@ -479,11 +479,8 @@ export const hasPermissionWithContext = (
   // Check if contextObj is a Demand
   const isDemand = 'created_by' in contextObj || 'assigned_to' in contextObj || 'assigned_to_operations' in contextObj;
   if (isDemand) {
-    const createdBy = typeof contextObj.created_by === 'object' && contextObj.created_by !== null ? contextObj.created_by.id : contextObj.created_by;
-    const assignedTo = typeof contextObj.assigned_to === 'object' && contextObj.assigned_to !== null ? contextObj.assigned_to.id : contextObj.assigned_to;
-    const assignedToOps = typeof contextObj.assigned_to_operations === 'object' && contextObj.assigned_to_operations !== null ? contextObj.assigned_to_operations.id : contextObj.assigned_to_operations;
-
-    return createdBy === user.id || assignedTo === user.id || assignedToOps === user.id;
+    // Restriction levée : tout collaborateur disposant de la permission peut traiter/éditer la demande
+    return true;
   }
 
   // Check if contextObj is a Client
@@ -500,25 +497,13 @@ export const hasPermissionWithContext = (
   // Check if contextObj is a Feedback
   const isFeedback = 'note_agence' in contextObj || 'note_intervenant' in contextObj || 'commentaire' in contextObj;
   if (isFeedback) {
-    const demand = contextObj.demande || (contextObj.mission ? contextObj.mission.demande : null);
-    if (demand) {
-      const createdBy = typeof demand.created_by === 'object' && demand.created_by !== null ? demand.created_by.id : demand.created_by;
-      const assignedTo = typeof demand.assigned_to === 'object' && demand.assigned_to !== null ? demand.assigned_to.id : demand.assigned_to;
-      const assignedToOps = typeof demand.assigned_to_operations === 'object' && demand.assigned_to_operations !== null ? demand.assigned_to_operations.id : demand.assigned_to_operations;
-      return createdBy === user.id || assignedTo === user.id || assignedToOps === user.id;
-    }
+    return true;
   }
 
   // Check if contextObj is a FacturationRow/Invoice
   const isInvoice = 'numero' in contextObj || ('missionNo' in contextObj && 'originalDemande' in contextObj);
   if (isInvoice) {
-    const demand = contextObj.originalDemande || contextObj.demande;
-    if (demand) {
-      const createdBy = typeof demand.created_by === 'object' && demand.created_by !== null ? demand.created_by.id : demand.created_by;
-      const assignedTo = typeof demand.assigned_to === 'object' && demand.assigned_to !== null ? demand.assigned_to.id : demand.assigned_to;
-      const assignedToOps = typeof demand.assigned_to_operations === 'object' && demand.assigned_to_operations !== null ? demand.assigned_to_operations.id : demand.assigned_to_operations;
-      return createdBy === user.id || assignedTo === user.id || assignedToOps === user.id;
-    }
+    return true;
   }
 
   return true;
