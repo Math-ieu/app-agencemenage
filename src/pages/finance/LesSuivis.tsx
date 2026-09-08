@@ -13,8 +13,14 @@ import {
   TrendingUp,
   DollarSign,
   X,
-  Clock
+  Clock,
+  FileText,
+  ArrowDownLeft,
+  ArrowUpRight,
+  User
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   getMissions,
   getDemandesHistorique,
@@ -88,6 +94,10 @@ interface FacturationRow {
   _partAgenceDue?: number;
   _partAgenceReversee?: boolean;
   isFirstProfileOfRow?: boolean;
+  isDelegate?: boolean;
+  hasSupplementHeures?: boolean;
+  supplementHeuresMontant?: number;
+  supplementHeuresRecupereEspeces?: boolean;
 }
 
 interface AgentApiItem {
@@ -121,6 +131,41 @@ const formatDateISO = (value?: string): string => {
   const [day, month, year] = value.split('/');
   if (!year || !month || !day) return '';
   return `${year}-${month}-${day}`;
+};
+
+/** Formats a date string into e.g. "vendredi 04/09/2026" */
+const formatDateFRWithDay = (value?: string): string => {
+  if (!value || value === '—') return '—';
+  const clean = value.includes('T') ? value.split('T')[0] : value.split(' ')[0];
+  let d: Date | null = null;
+  if (clean.includes('/')) {
+    const [day, month, year] = clean.split('/');
+    d = new Date(Number(year), Number(month) - 1, Number(day));
+  } else if (clean.includes('-')) {
+    const [year, month, day] = clean.split('-');
+    d = new Date(Number(year), Number(month) - 1, Number(day));
+  }
+  if (!d || isNaN(d.getTime())) return formatDateFR(value);
+  const weekday = d.toLocaleDateString('fr-FR', { weekday: 'long' });
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${weekday} ${day}/${month}/${year}`;
+};
+
+/** Calculates the default weekly cycle from Friday to Thursday for any given reference date */
+const getDefaultWeeklyFridayToThursday = (refDate = new Date()) => {
+  const day = refDate.getDay(); // 0: Sun, 1: Mon, 2: Tue, 3: Wed, 4: Thu, 5: Fri, 6: Sat
+  // Friday is day 5. If today is Fri, diff is 0; Sat: 1; Sun: 2; Mon: 3; Tue: 4; Wed: 5; Thu: 6
+  const diffToFriday = day >= 5 ? day - 5 : day + 2;
+  const friday = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() - diffToFriday);
+  const thursday = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate() + 6);
+  return {
+    from: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
+    to: `${thursday.getFullYear()}-${String(thursday.getMonth() + 1).padStart(2, '0')}-${String(thursday.getDate()).padStart(2, '0')}`,
+    friday,
+    thursday,
+  };
 };
 
 const isCreditRow = (row: FacturationRow): boolean => {
@@ -343,6 +388,253 @@ const getRowCommercialStats = (row: FacturationRow, allRows: FacturationRow[]) =
   };
 };
 
+const getRowDuesBreakdown = (row: FacturationRow) => {
+  const isCredit = isCreditRow(row);
+  const isDebit = isDebitRow(row);
+
+  let doitAgence = 0;
+  let hasSupplementNote = false;
+  let agenceDoit = 0;
+
+  if (isCredit) {
+    agenceDoit = row.partProfil || 0;
+    if (row.isDelegate && row.hasSupplementHeures && row.supplementHeuresRecupereEspeces && (row.supplementHeuresMontant || 0) > 0) {
+      doitAgence += Number(row.supplementHeuresMontant);
+      hasSupplementNote = true;
+    }
+  } else if (isDebit) {
+    doitAgence = row.partAgence || 0;
+    if (row.hasSupplementHeures && row.supplementHeuresRecupereEspeces) {
+      hasSupplementNote = true;
+    }
+  }
+
+  return {
+    doitAgence,
+    hasSupplementNote,
+    agenceDoit,
+  };
+};
+
+const generateProfileReceiptPdf = (
+  profile: {
+    profilName: string;
+    phone?: string;
+    rows: FacturationRow[];
+  },
+  dateFromStr: string,
+  dateToStr: string
+) => {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const primaryColor: [number, number, number] = [15, 23, 42]; // #0f172a
+  const tealColor: [number, number, number] = [15, 118, 110]; // #0f766e
+  const greenColor: [number, number, number] = [21, 128, 61]; // #15803d
+  const pinkColor: [number, number, number] = [190, 18, 60]; // #be123c
+  const textDark: [number, number, number] = [30, 41, 59];
+
+  // Header Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  doc.text('AGENCE MÉNAGE', 14, 20);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('Services de ménage professionnel & conciergerie', 14, 25);
+  doc.text('Casablanca, Maroc — contact@agencemenage.ma', 14, 29);
+
+  // Document Info Right
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(tealColor[0], tealColor[1], tealColor[2]);
+  doc.text('REÇU DE RÈGLEMENT & DÉCOMPTE', 196, 20, { align: 'right' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(`Date d'émission : ${new Date().toLocaleDateString('fr-FR')}`, 196, 26, { align: 'right' });
+  const periodLabel = `Semaine du ${formatDateFRWithDay(dateFromStr)} au ${formatDateFRWithDay(dateToStr)}`;
+  doc.text(periodLabel, 196, 31, { align: 'right' });
+
+  // Divider
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.5);
+  doc.line(14, 35, 196, 35);
+
+  // Profile Card
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(14, 40, 182, 22, 3, 3, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, 40, 182, 22, 3, 3, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text('FEMME DE MÉNAGE', 20, 46);
+
+  doc.setFontSize(14);
+  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  doc.text(profile.profilName, 20, 54);
+
+  if (profile.phone && profile.phone !== '—') {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Tél : ${profile.phone}`, 120, 54);
+  }
+
+  // Calculate table rows and totals
+  let totalDoitAgence = 0;
+  let totalAgenceDoit = 0;
+
+  const tableRows = profile.rows.map((row) => {
+    const b = getRowDuesBreakdown(row);
+    totalDoitAgence += b.doitAgence;
+    totalAgenceDoit += b.agenceDoit;
+
+    const dateVal = row.date ? formatDateFR(row.date) : '—';
+    const clientVal = row.client || '—';
+    const suppLabel = b.hasSupplementNote ? ' (Supplément espèces)' : '';
+    const doitAgenceCell = b.doitAgence > 0 ? `${b.doitAgence.toFixed(2)} DH${suppLabel}` : '—';
+    const agenceDoitCell = b.agenceDoit > 0 ? `${b.agenceDoit.toFixed(2)} DH` : '—';
+
+    return [dateVal, clientVal, doitAgenceCell, agenceDoitCell];
+  });
+
+  // Summary KPI Boxes
+  const kpiY = 67;
+  const colW = 58;
+
+  // Box 1: Missions
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(14, kpiY, colW, 16, 2, 2, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, kpiY, colW, 16, 2, 2, 'S');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Missions', 18, kpiY + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  doc.text(`${profile.rows.length}`, 18, kpiY + 13);
+
+  // Box 2: Revenu (Doit à l'agence)
+  doc.setFillColor(240, 253, 244);
+  doc.roundedRect(14 + colW + 4, kpiY, colW, 16, 2, 2, 'F');
+  doc.setDrawColor(187, 247, 208);
+  doc.roundedRect(14 + colW + 4, kpiY, colW, 16, 2, 2, 'S');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(22, 101, 52);
+  doc.text('Revenu (Doit à l\'agence)', 18 + colW + 4, kpiY + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(greenColor[0], greenColor[1], greenColor[2]);
+  doc.text(`${totalDoitAgence.toFixed(2)} DH`, 18 + colW + 4, kpiY + 13);
+
+  // Box 3: À payer (Agence doit au profil)
+  doc.setFillColor(255, 241, 242);
+  doc.roundedRect(14 + (colW + 4) * 2, kpiY, colW, 16, 2, 2, 'F');
+  doc.setDrawColor(254, 205, 211);
+  doc.roundedRect(14 + (colW + 4) * 2, kpiY, colW, 16, 2, 2, 'S');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(159, 18, 57);
+  doc.text('À payer (Agence doit au profil)', 18 + (colW + 4) * 2, kpiY + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(pinkColor[0], pinkColor[1], pinkColor[2]);
+  doc.text(`${totalAgenceDoit.toFixed(2)} DH`, 18 + (colW + 4) * 2, kpiY + 13);
+
+  // AutoTable
+  autoTable(doc, {
+    startY: kpiY + 22,
+    margin: { left: 14, right: 14 },
+    head: [['Date', 'Client', "Doit à l'agence", 'Agence doit au profil']],
+    body: tableRows,
+    foot: [
+      ['Total', '', `↙ ${totalDoitAgence.toFixed(2)} DH`, `↗ ${totalAgenceDoit.toFixed(2)} DH`]
+    ],
+    theme: 'grid',
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 9,
+      halign: 'left',
+    },
+    bodyStyles: {
+      textColor: [30, 41, 59],
+      fontSize: 9,
+      cellPadding: 4,
+    },
+    footStyles: {
+      fillColor: [248, 250, 252],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 10,
+    },
+    columnStyles: {
+      0: { cellWidth: 40 },
+      1: { cellWidth: 55 },
+      2: { cellWidth: 45, halign: 'right', fontStyle: 'bold', textColor: [21, 128, 61] },
+      3: { cellWidth: 42, halign: 'right', fontStyle: 'bold', textColor: [190, 18, 60] },
+    },
+    alternateRowStyles: {
+      fillColor: [255, 255, 255],
+    },
+  });
+
+  const finalY = (doc as any).lastAutoTable?.finalY || 160;
+
+  // Bottom Note
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(217, 119, 6);
+  doc.text('• NB : La période mentionnée va toujours du vendredi au jeudi.', 14, finalY + 8);
+
+  // Net Balance box
+  const netSolde = totalAgenceDoit - totalDoitAgence;
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(14, finalY + 14, 182, 14, 2, 2, 'F');
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(14, finalY + 14, 182, 14, 2, 2, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(30, 41, 59);
+  doc.text('SOLDE NET :', 20, finalY + 23);
+
+  doc.setFontSize(11);
+  if (netSolde > 0) {
+    doc.setTextColor(pinkColor[0], pinkColor[1], pinkColor[2]);
+    doc.text(`Agence doit au profil : +${netSolde.toFixed(2)} DH`, 110, finalY + 23);
+  } else if (netSolde < 0) {
+    doc.setTextColor(greenColor[0], greenColor[1], greenColor[2]);
+    doc.text(`Profil doit à l'agence : +${Math.abs(netSolde).toFixed(2)} DH`, 110, finalY + 23);
+  } else {
+    doc.setTextColor(71, 85, 105);
+    doc.text('Solde équilibré : 0,00 DH', 110, finalY + 23);
+  }
+
+  // Signatures
+  const signY = finalY + 36;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Signature & Cachet de l'Agence", 30, signY);
+  doc.text("Signature de l'Intervenante", 130, signY);
+
+  doc.setDrawColor(203, 213, 225);
+  doc.line(30, signY + 18, 85, signY + 18);
+  doc.line(130, signY + 18, 185, signY + 18);
+
+  const cleanName = profile.profilName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  doc.save(`Recu_${cleanName}_${dateFromStr}_${dateToStr}.pdf`);
+};
+
 export default function LesSuivis() {
   const { user } = useAuthStore();
   const addToast = useToastStore((state) => state.addToast);
@@ -377,6 +669,9 @@ export default function LesSuivis() {
     }
   }, [canSeeDus, canSeeCommerciaux, activeTab]);
 
+  // Default weekly date filter (Friday to Thursday)
+  const defaultWeeklyDates = useMemo(() => getDefaultWeeklyFridayToThursday(), []);
+
   // Search & Filters Tab 1
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -384,15 +679,12 @@ export default function LesSuivis() {
   const [kpiFilter, setKpiFilter] = useState<'all' | 'unpaid_agence' | 'unpaid_profil'>('all');
   const [isGroupedByProfil, setIsGroupedByProfil] = useState(false);
   const [freqFilter, setFreqFilter] = useState('all');
-  const [dateFrom, setDateFrom] = useState(() => {
-    const today = new Date();
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
-  });
-  const [dateTo, setDateTo] = useState(() => {
-    const today = new Date();
-    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
-  });
+  const [dateFrom, setDateFrom] = useState(defaultWeeklyDates.from);
+  const [dateTo, setDateTo] = useState(defaultWeeklyDates.to);
+
+  // New profile dues modals
+  const [selectedDuesProfile, setSelectedDuesProfile] = useState<any | null>(null);
+  const [settleConfirmProfile, setSettleConfirmProfile] = useState<any | null>(null);
 
   // Filters Tab 2
   const [periodFilter, setPeriodFilter] = useState<'mois-en-cours' | 'mois-dernier' | 'annee-en-cours' | 'tous' | 'personnalise'>('mois-en-cours');
@@ -607,6 +899,23 @@ export default function LesSuivis() {
       parts_repartition: Array.isArray(facturationData.parts_repartition) && facturationData.parts_repartition.length > 0 ? facturationData.parts_repartition : Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : undefined,
       note_commercial: partInfo?.note_commercial || demande?.note_commercial || facturationData.note_commercial || '—',
       cao: (demande as any)?.cao || (item?.demande_detail as any)?.cao || (item as any)?.cao,
+      isDelegate: Boolean(
+        partInfo?.is_delegate ||
+        (parts.length > 0 && parts.every((p: any) => !p.is_delegate) && Number(parts[0]?.profile_id) === Number(profilId)) ||
+        parts.length <= 1 ||
+        item.delegue_id === profilId ||
+        demande?.delegue_id === profilId ||
+        (!parts.length && agent?.id)
+      ),
+      hasSupplementHeures: Boolean(
+        facturationData.has_supplement_heures ??
+        demande?.has_supplement_heures ??
+        item.has_supplement_heures ??
+        (Number(facturationData.supplement_heures_montant ?? demande?.formulaire_data?.supplement_heures_montant ?? demande?.supplement_heures_montant ?? item.supplement_heures_montant ?? 0) > 0 ||
+         Boolean(facturationData.supplement_heures_recupere_especes ?? demande?.formulaire_data?.supplement_heures_recupere_especes ?? demande?.supplement_heures_recupere_especes ?? item.supplement_heures_recupere_especes ?? false))
+      ),
+      supplementHeuresMontant: Number(facturationData.supplement_heures_montant ?? demande?.formulaire_data?.supplement_heures_montant ?? demande?.supplement_heures_montant ?? item.supplement_heures_montant ?? 0),
+      supplementHeuresRecupereEspeces: Boolean(facturationData.supplement_heures_recupere_especes ?? demande?.formulaire_data?.supplement_heures_recupere_especes ?? demande?.supplement_heures_recupere_especes ?? item.supplement_heures_recupere_especes ?? false),
     };
   }, []);
 
@@ -750,6 +1059,20 @@ export default function LesSuivis() {
       parts_repartition: Array.isArray(facturationData.parts_repartition) && facturationData.parts_repartition.length > 0 ? facturationData.parts_repartition : Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : undefined,
       note_commercial: demande?.note_commercial || facturationData.note_commercial || '—',
       cao: demande?.cao,
+      isDelegate: Boolean(
+        (parts.find((p: any) => Number(p.profile_id) === Number(demande?.profil_id)))?.is_delegate ||
+        (parts.length > 0 && parts.every((p: any) => !p.is_delegate) && Number(parts[0]?.profile_id) === Number(demande?.profil_id)) ||
+        parts.length <= 1 ||
+        demande?.delegue_id === demande?.profil_id
+      ),
+      hasSupplementHeures: Boolean(
+        facturationData.has_supplement_heures ??
+        demande?.has_supplement_heures ??
+        (Number(facturationData.supplement_heures_montant ?? demande?.formulaire_data?.supplement_heures_montant ?? demande?.supplement_heures_montant ?? 0) > 0 ||
+         Boolean(facturationData.supplement_heures_recupere_especes ?? demande?.formulaire_data?.supplement_heures_recupere_especes ?? demande?.supplement_heures_recupere_especes ?? false))
+      ),
+      supplementHeuresMontant: Number(facturationData.supplement_heures_montant ?? demande?.formulaire_data?.supplement_heures_montant ?? demande?.supplement_heures_montant ?? 0),
+      supplementHeuresRecupereEspeces: Boolean(facturationData.supplement_heures_recupere_especes ?? demande?.formulaire_data?.supplement_heures_recupere_especes ?? demande?.supplement_heures_recupere_especes ?? false),
     };
   }, []);
 
@@ -1098,6 +1421,11 @@ export default function LesSuivis() {
             const pName = agentObj
               ? (agentObj.full_name || `${agentObj.first_name || ''} ${agentObj.last_name || ''}`.trim())
               : part.profile_name || row.profil;
+            
+            if (!pName || pName.trim() === '—' || pName === 'Non assigné' || pName === 'Profil inconnu') {
+              return;
+            }
+
             let portion = Number(part.amount || 0);
 
             const isGratuit = row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite';
@@ -1118,6 +1446,8 @@ export default function LesSuivis() {
               ? part.note_commercial
               : (row.note_commercial || '—');
 
+            const isDelegate = Boolean(part.is_delegate) || partsRep.length === 1 || (partsRep.every((p: any) => !p.is_delegate) && index === 0);
+
             result.push({
               ...row,
               profilId: pId,
@@ -1130,9 +1460,18 @@ export default function LesSuivis() {
               dateVersementProfil: versementDate,
               note_commercial: noteCommercial,
               isFirstProfileOfRow: index === 0,
+              isDelegate,
+              hasSupplementHeures: row.hasSupplementHeures,
+              supplementHeuresMontant: row.supplementHeuresMontant,
+              supplementHeuresRecupereEspeces: row.supplementHeuresRecupereEspeces,
             });
           });
         } else {
+          const pName = (row.profil || '').trim();
+          if (!pName || pName === '—' || pName === 'Non assigné' || pName === 'Profil inconnu') {
+            continue;
+          }
+
           const partProfilDue = getPartProfilDueFromAgence(row);
           const isPaid = row.partProfilVersee;
           const fallbackDate = isPaid ? (row.datePaiement && row.datePaiement !== '—' ? row.datePaiement : row.date) : '—';
@@ -1147,6 +1486,10 @@ export default function LesSuivis() {
             dateVersementProfil: versementDate,
             note_commercial: row.note_commercial || '—',
             isFirstProfileOfRow: true,
+            isDelegate: true,
+            hasSupplementHeures: row.hasSupplementHeures,
+            supplementHeuresMontant: row.supplementHeuresMontant,
+            supplementHeuresRecupereEspeces: row.supplementHeuresRecupereEspeces,
           });
         }
       } else if (isDebit) {
@@ -1160,6 +1503,10 @@ export default function LesSuivis() {
             const pName = agentObj
               ? (agentObj.full_name || `${agentObj.first_name || ''} ${agentObj.last_name || ''}`.trim())
               : delegatePart.profile_name || row.profil;
+
+            if (!pName || pName.trim() === '—' || pName === 'Non assigné' || pName === 'Profil inconnu') {
+              continue;
+            }
 
             const fallbackDate = isPaid ? (row.datePaiement && row.datePaiement !== '—' ? row.datePaiement : row.date) : '—';
             const remiseDate = (delegatePart.date_remise_agence && delegatePart.date_remise_agence !== '—')
@@ -1184,9 +1531,18 @@ export default function LesSuivis() {
               dateRemiseAgence: remiseDate,
               note_commercial: noteCommercial,
               isFirstProfileOfRow: true,
+              isDelegate: true,
+              hasSupplementHeures: row.hasSupplementHeures,
+              supplementHeuresMontant: row.supplementHeuresMontant,
+              supplementHeuresRecupereEspeces: row.supplementHeuresRecupereEspeces,
             });
           }
         } else {
+          const pName = (row.profil || '').trim();
+          if (!pName || pName === '—' || pName === 'Non assigné' || pName === 'Profil inconnu') {
+            continue;
+          }
+
           const partAgenceDue = getPartAgenceDueFromProfil(row);
           const isPaid = row.partAgenceReversee;
           const fallbackDate = isPaid ? (row.datePaiement && row.datePaiement !== '—' ? row.datePaiement : row.date) : '—';
@@ -1201,15 +1557,28 @@ export default function LesSuivis() {
             dateRemiseAgence: remiseDate,
             note_commercial: row.note_commercial || '—',
             isFirstProfileOfRow: true,
+            isDelegate: true,
+            hasSupplementHeures: row.hasSupplementHeures,
+            supplementHeuresMontant: row.supplementHeuresMontant,
+            supplementHeuresRecupereEspeces: row.supplementHeuresRecupereEspeces,
           });
         }
       } else {
         // Unsettled / not collected yet
+        const pName = (row.profil || '').trim();
+        if (!pName || pName === '—' || pName === 'Non assigné' || pName === 'Profil inconnu') {
+          continue;
+        }
+
         result.push({
           ...row,
           _uniqueKey: `${row.missionNo}-unsettled`,
           note_commercial: row.note_commercial || '—',
           isFirstProfileOfRow: true,
+          isDelegate: row.isDelegate ?? true,
+          hasSupplementHeures: row.hasSupplementHeures,
+          supplementHeuresMontant: row.supplementHeuresMontant,
+          supplementHeuresRecupereEspeces: row.supplementHeuresRecupereEspeces,
         });
       }
     }
@@ -1407,11 +1776,16 @@ export default function LesSuivis() {
     }>();
 
     filteredRows.forEach((row) => {
-      const key = row.profilId ? `id-${row.profilId}` : row.profil || 'Non assigné';
+      const pName = (row.profil || '').trim();
+      if (!pName || pName === '—' || pName === 'Non assigné' || pName === 'Profil inconnu') {
+        return;
+      }
+
+      const key = row.profilId ? `id-${row.profilId}` : pName;
       if (!map.has(key)) {
         map.set(key, {
           profilId: row.profilId,
-          profilName: row.profil || 'Non assigné',
+          profilName: pName,
           phone: row.phone,
           nbMissions: 0,
           profilDoitAgence: 0,
@@ -1424,18 +1798,25 @@ export default function LesSuivis() {
       item.nbMissions += 1;
       item.rows.push(row);
 
+      const b = getRowDuesBreakdown(row);
       const isCredit = isCreditRow(row);
       const isDebit = isDebitRow(row);
 
       if (isCredit) {
         const isPaid = row.partProfilVersee ?? row._partProfilVersee;
         if (!isPaid && row.reglementInterne !== 'Réglé') {
-          item.agenceDoitProfil += row.partProfil;
+          item.agenceDoitProfil += b.agenceDoit;
+        }
+        if (b.doitAgence > 0) {
+          const isRemitted = row.partAgenceReversee ?? row._partAgenceReversee;
+          if (!isRemitted && row.reglementInterne !== 'Réglé') {
+            item.profilDoitAgence += b.doitAgence;
+          }
         }
       } else if (isDebit) {
         const isPaid = row.partAgenceReversee ?? row._partAgenceReversee;
         if (!isPaid && row.reglementInterne !== 'Réglé') {
-          item.profilDoitAgence += row.partAgence;
+          item.profilDoitAgence += b.doitAgence;
         }
       }
     });
@@ -1926,6 +2307,152 @@ export default function LesSuivis() {
     }
   };
 
+  const [isSettlingProfile, setIsSettlingProfile] = useState(false);
+
+  const handleSettleProfileAllDues = async (profileItem: any) => {
+    if (!profileItem || !profileItem.rows || profileItem.rows.length === 0) return;
+    setIsSettlingProfile(true);
+    const todayIso = getISODateLocal(new Date());
+
+    try {
+      for (const row of profileItem.rows) {
+        const isCredit = isCreditRow(row);
+        const isDebit = isDebitRow(row);
+        const isCancelled =
+          row.statut === 'Facturation annulée' ||
+          row.statut === 'Intervention annulée' ||
+          row.statutPaiementUi === 'facturation_annulee' ||
+          row.statutPaiementUi === 'Facturation annulée' ||
+          row.statut === 'Intervention gratuite' ||
+          row.statutPaiementUi === 'intervention_gratuite';
+
+        const pId = row.profilId || profileItem.profilId;
+        const originalFormData = row.originalDemande?.formulaire_data || {};
+        const facturation = originalFormData.facturation || {};
+        const currentParts = facturation.parts_repartition || row.originalDemande?.parts_repartition || [];
+
+        if (isCredit) {
+          let updatedParts = currentParts;
+          let allPaid = true;
+          if (Array.isArray(currentParts) && currentParts.length > 0 && pId) {
+            updatedParts = currentParts.map((p: any) => {
+              if (Number(p.profile_id) === Number(pId)) {
+                return {
+                  ...p,
+                  part_profil_versee: true,
+                  date_versement_profil: todayIso,
+                };
+              }
+              return p;
+            });
+            allPaid = updatedParts.every((p: any) => p.part_profil_versee);
+          }
+
+          let partAgenceReversee = row.partAgenceReversee;
+          let dateRemiseAgence = row.dateRemiseAgence;
+          if (row.isDelegate && row.hasSupplementHeures && row.supplementHeuresRecupereEspeces) {
+            partAgenceReversee = true;
+            dateRemiseAgence = todayIso;
+          }
+
+          if (row.missionId) {
+            await updateMission(row.missionId, {
+              part_profil_versee: allPaid,
+              date_versement_profil: allPaid ? todayIso : null,
+              part_agence_reversee: partAgenceReversee,
+              date_remise_agence: dateRemiseAgence,
+              paiement_client_statut: isCancelled
+                ? (facturation.statut_paiement_ui === 'intervention_gratuite' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'intervention_gratuite' : 'facturation_annulee')
+                : (allPaid ? 'paye' : 'agence_payee_client')
+            });
+          }
+
+          if (row.demandeId && row.originalDemande) {
+            await updateDemande(row.demandeId, {
+              formulaire_data: {
+                ...originalFormData,
+                facturation: {
+                  ...facturation,
+                  parts_repartition: updatedParts,
+                  part_profil_versee: allPaid,
+                  date_versement_profil: allPaid ? todayIso : null,
+                  part_agence_reversee: partAgenceReversee,
+                  date_remise_agence: dateRemiseAgence,
+                  statut_paiement_ui: facturation.statut_paiement_ui === 'facturation_annulee'
+                    ? 'facturation_annulee'
+                    : facturation.statut_paiement_ui === 'intervention_gratuite'
+                      ? 'intervention_gratuite'
+                      : (allPaid ? 'paye' : 'agence_payee_client'),
+                }
+              },
+              statut_paiement: allPaid ? 'integral' : 'partiel',
+            });
+          }
+        } else if (isDebit) {
+          let updatedParts = currentParts;
+          let allPaid = true;
+          if (Array.isArray(currentParts) && currentParts.length > 0 && pId) {
+            updatedParts = currentParts.map((p: any) => {
+              if (Number(p.profile_id) === Number(pId)) {
+                return {
+                  ...p,
+                  part_agence_reversee: true,
+                  date_remise_agence: todayIso,
+                  part_profil_versee: true,
+                  date_versement_profil: p.date_versement_profil || todayIso,
+                };
+              }
+              return p;
+            });
+            allPaid = updatedParts.every((p: any) => p.part_agence_reversee);
+          }
+
+          if (row.missionId) {
+            await updateMission(row.missionId, {
+              part_agence_reversee: allPaid,
+              date_remise_agence: allPaid ? todayIso : null,
+              paiement_client_statut: isCancelled
+                ? (facturation.statut_paiement_ui === 'intervention_gratuite' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'intervention_gratuite' : 'facturation_annulee')
+                : (allPaid ? 'paye' : 'profil_paye_client'),
+              part_profil_versee: true,
+              date_versement_profil: todayIso
+            });
+          }
+
+          if (row.demandeId && row.originalDemande) {
+            await updateDemande(row.demandeId, {
+              formulaire_data: {
+                ...originalFormData,
+                facturation: {
+                  ...facturation,
+                  parts_repartition: updatedParts,
+                  part_agence_reversee: allPaid,
+                  date_remise_agence: allPaid ? todayIso : null,
+                  part_profil_versee: true,
+                  date_versement_profil: facturation.date_versement_profil || todayIso,
+                  statut_paiement_ui: isCancelled
+                    ? (facturation.statut_paiement_ui === 'intervention_gratuite' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite' ? 'intervention_gratuite' : 'facturation_annulee')
+                    : (allPaid ? 'paye' : 'profil_paye_client'),
+                }
+              },
+              statut_paiement: allPaid ? 'integral' : 'partiel',
+            });
+          }
+        }
+      }
+
+      addToast(`Règlement complet enregistré pour ${profileItem.profilName}`, 'success');
+      setSettleConfirmProfile(null);
+      setSelectedDuesProfile(null);
+      await loadData();
+    } catch (err) {
+      console.error('Erreur lors du règlement global:', err);
+      addToast('Erreur lors du règlement global du profil', 'error');
+    } finally {
+      setIsSettlingProfile(false);
+    }
+  };
+
   // CSV Exporters
   const exportDuesCsv = () => {
     if (isGroupedByProfil) {
@@ -2288,6 +2815,7 @@ export default function LesSuivis() {
                           <th>PROFIL DOIT À L'AGENCE</th>
                           <th>AGENCE DOIT AU PROFIL</th>
                           <th>SOLDE FINAL</th>
+                          <th style={{ textAlign: 'center' }}>ACTIONS</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2297,13 +2825,15 @@ export default function LesSuivis() {
                           return (
                             <tr key={item.profilName}>
                               <td>
-                                {item.profilId ? (
-                                  <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(item.profilId)}>
-                                    {item.profilName}
-                                  </button>
-                                ) : (
-                                  <span>{item.profilName}</span>
-                                )}
+                                <button
+                                  type="button"
+                                  className="fg-link-btn"
+                                  onClick={() => setSelectedDuesProfile(item)}
+                                  title="Afficher le décompte et reçu des dûs"
+                                  style={{ fontWeight: 600 }}
+                                >
+                                  {item.profilName}
+                                </button>
                               </td>
                               <td>
                                 <span className="ls-badge-count">{item.nbMissions}</span>
@@ -2337,12 +2867,34 @@ export default function LesSuivis() {
                                   );
                                 })()}
                               </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <div className="ls-grouped-actions">
+                                  <button
+                                    type="button"
+                                    className="ls-grouped-btn pay"
+                                    title="Régler la totalité des dûs entre l'agence et ce profil"
+                                    onClick={() => setSettleConfirmProfile(item)}
+                                  >
+                                    <Pencil size={13} />
+                                    <span>Payer</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="ls-grouped-btn receipt"
+                                    title="Générer le reçu PDF"
+                                    onClick={() => generateProfileReceiptPdf(item, dateFrom, dateTo)}
+                                  >
+                                    <FileText size={13} />
+                                    <span>Générer le reçu</span>
+                                  </button>
+                                </div>
+                              </td>
                             </tr>
                           );
                         })}
                         {groupedProfiles.length === 0 && (
                           <tr>
-                            <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                            <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
                               Aucun profil trouvé pour les filtres sélectionnés.
                             </td>
                           </tr>
@@ -2395,11 +2947,20 @@ export default function LesSuivis() {
                           <tr key={row._uniqueKey || `${row.missionNo}-${idx}`}>
                             <td>{row.date || '—'}</td>
                             <td>
-                              {row.profilId ? (
-                                <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>
-                                  {row.profil}
-                                </button>
-                              ) : row.profil}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                                {row.profilId ? (
+                                  <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>
+                                    {row.profil}
+                                  </button>
+                                ) : (
+                                  <span>{row.profil}</span>
+                                )}
+                                {row.isDelegate && (
+                                  <span className="ls-badge-delegate" title="Profil délégué sur la mission">
+                                    👑 Délégué
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td>
                               {row.clientId ? (
@@ -3263,6 +3824,257 @@ export default function LesSuivis() {
                   )}
                   <button className="btn btn-primary" onClick={() => setShowDetailsModal(false)}>
                     Fermer
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ─── MODAL: PROFILE DUES & RECEIPT POPUP (Matching Mockup) ─── */}
+          {selectedDuesProfile && (
+            <div className="ls-dues-modal-overlay" onClick={() => setSelectedDuesProfile(null)}>
+              <div className="ls-dues-modal-card" onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className="ls-dues-modal-header">
+                  <div>
+                    <div className="ls-dues-profile-title">
+                      <span className="ls-dues-profile-type">FEMME DE MÉNAGE</span>
+                      <h2>{selectedDuesProfile.profilName}</h2>
+                    </div>
+                    <div className="ls-dues-profile-subtitle">
+                      Semaine du {formatDateFRWithDay(dateFrom)} au {formatDateFRWithDay(dateTo)}
+                    </div>
+                  </div>
+                  <div className="ls-dues-header-actions">
+                    <button
+                      type="button"
+                      className="ls-dues-btn-pay"
+                      onClick={() => setSettleConfirmProfile(selectedDuesProfile)}
+                      title="Régler le paiement total entre l'agence et ce profil"
+                    >
+                      <Pencil size={15} />
+                      <span>Payer</span>
+                    </button>
+                    {selectedDuesProfile.profilId && (
+                      <button
+                        type="button"
+                        className="ls-dues-btn-details"
+                        onClick={() => goToProfilDetails(selectedDuesProfile.profilId)}
+                        title="Voir la fiche détaillée du profil"
+                      >
+                        <Eye size={15} />
+                        <span>Détails</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="ls-dues-btn-close"
+                      onClick={() => setSelectedDuesProfile(null)}
+                      title="Fermer"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3 KPI Cards */}
+                <div className="ls-dues-kpis-grid">
+                  <div className="ls-dues-kpi-card missions">
+                    <div className="ls-dues-kpi-label">Missions</div>
+                    <div className="ls-dues-kpi-value">{selectedDuesProfile.rows.length}</div>
+                    <div className="ls-dues-kpi-sub">Total prestations</div>
+                  </div>
+                  <div className="ls-dues-kpi-card revenue">
+                    <div className="ls-dues-kpi-label">Revenu (Doit à l'agence)</div>
+                    <div className="ls-dues-kpi-value green">
+                      {money(selectedDuesProfile.profilDoitAgence)}
+                    </div>
+                    <div className="ls-dues-kpi-sub">Montants dus à l'agence</div>
+                  </div>
+                  <div className="ls-dues-kpi-card to-pay">
+                    <div className="ls-dues-kpi-label">À payer (Agence doit au profil)</div>
+                    <div className="ls-dues-kpi-value pink">
+                      {money(selectedDuesProfile.agenceDoitProfil)}
+                    </div>
+                    <div className="ls-dues-kpi-sub">Rémunération due</div>
+                  </div>
+                </div>
+
+                {/* Dues breakdown table */}
+                <div className="ls-dues-table-wrap">
+                  <table className="ls-dues-table">
+                    <thead>
+                      <tr>
+                        <th>DATE</th>
+                        <th>CLIENT</th>
+                        <th>DOIT À L'AGENCE</th>
+                        <th>AGENCE DOIT AU PROFIL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedDuesProfile.rows.map((row: FacturationRow, idx: number) => {
+                        const b = getRowDuesBreakdown(row);
+                        const dateObj = parseFrenchDate(row.date);
+                        const dayNumber = dateObj ? dateObj.getDate() : '';
+
+                        return (
+                          <tr key={row._uniqueKey || `${row.missionNo}-${idx}`}>
+                            <td>
+                              <div className="ls-dues-date-cell">
+                                {dayNumber && <span className="ls-dues-day-circle">{dayNumber}</span>}
+                                <span>{row.date ? formatDateFRWithDay(row.date) : '—'}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="ls-dues-client-pill">
+                                <User size={13} />
+                                <span>{row.client || '—'}</span>
+                              </span>
+                            </td>
+                            <td>
+                              {b.doitAgence > 0 ? (
+                                <div className="ls-dues-val-wrap">
+                                  <span className="ls-dues-val-badge green">
+                                    <ArrowDownLeft size={14} />
+                                    {money(b.doitAgence)}
+                                  </span>
+                                  {b.hasSupplementNote && (
+                                    <span className="ls-dues-subtext-orange">
+                                      Supplément espèces
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span style={{ color: '#94a3b8' }}>—</span>
+                              )}
+                            </td>
+                            <td>
+                              {b.agenceDoit > 0 ? (
+                                <div className="ls-dues-val-wrap">
+                                  <span className="ls-dues-val-badge pink">
+                                    <ArrowUpRight size={14} />
+                                    {money(b.agenceDoit)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span style={{ color: '#94a3b8' }}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {selectedDuesProfile.rows.length === 0 && (
+                        <tr>
+                          <td colSpan={4} style={{ textAlign: 'center', padding: '1.5rem', color: '#64748b' }}>
+                            Aucune mission trouvée pour cette période.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td>Total</td>
+                        <td>—</td>
+                        <td>
+                          <span style={{ color: '#15803d', fontWeight: 800 }}>
+                            ↙ {money(selectedDuesProfile.profilDoitAgence)}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ color: '#be123c', fontWeight: 800 }}>
+                            ↗ {money(selectedDuesProfile.agenceDoitProfil)}
+                          </span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Footer Note & PDF Download */}
+                <div className="ls-dues-modal-footer">
+                  <div className="ls-dues-nb-note">
+                    <span className="ls-dues-dot-orange" />
+                    <span>• NB : la période mentionnée va toujours du vendredi au jeudi.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ls-dues-pdf-btn"
+                    onClick={() => generateProfileReceiptPdf(selectedDuesProfile, dateFrom, dateTo)}
+                  >
+                    <Download size={16} />
+                    <span>Générer le reçu en PDF</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ─── MODAL: SETTLE CONFIRMATION ─── */}
+          {settleConfirmProfile && (
+            <div className="ls-modal-backdrop" onClick={() => !isSettlingProfile && setSettleConfirmProfile(null)}>
+              <div className="ls-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+                <div className="ls-modal-header">
+                  <div>
+                    <h3 className="ls-modal-title">Confirmer le règlement complet</h3>
+                    <p className="ls-modal-subtitle">{settleConfirmProfile.profilName}</p>
+                  </div>
+                  <button
+                    className="ls-modal-close"
+                    onClick={() => !isSettlingProfile && setSettleConfirmProfile(null)}
+                    disabled={isSettlingProfile}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="ls-modal-body">
+                  <p style={{ fontSize: '0.9rem', color: '#334155', lineHeight: '1.5', marginBottom: '1rem' }}>
+                    Êtes-vous sûr de vouloir régler la totalité des sommes dues entre l'agence et{' '}
+                    <strong>{settleConfirmProfile.profilName}</strong> pour la période du{' '}
+                    <strong>{formatDateFR(dateFrom)}</strong> au <strong>{formatDateFR(dateTo)}</strong> ?
+                  </p>
+                  <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                      <span style={{ color: '#64748b' }}>Agence verse au profil :</span>
+                      <strong style={{ color: '#be123c' }}>{money(settleConfirmProfile.agenceDoitProfil)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                      <span style={{ color: '#64748b' }}>Profil remet à l'agence :</span>
+                      <strong style={{ color: '#15803d' }}>{money(settleConfirmProfile.profilDoitAgence)}</strong>
+                    </div>
+                    <div style={{ borderTop: '1px solid #cbd5e1', paddingTop: '0.6rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 700 }}>
+                      <span>Solde net à régler :</span>
+                      {(() => {
+                        const net = settleConfirmProfile.agenceDoitProfil - settleConfirmProfile.profilDoitAgence;
+                        if (net > 0) {
+                          return <span style={{ color: '#be123c' }}>Agence doit : +{money(net)}</span>;
+                        }
+                        if (net < 0) {
+                          return <span style={{ color: '#15803d' }}>Profil doit : +{money(Math.abs(net))}</span>;
+                        }
+                        return <span style={{ color: '#64748b' }}>Équilibré (0,00 DH)</span>;
+                      })()}
+                    </div>
+                  </div>
+                  <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.75rem', fontStyle: 'italic' }}>
+                    Cette action mettra à jour le statut de versement pour l'ensemble des {settleConfirmProfile.rows.length} mission(s) de ce profil sur cette période.
+                  </p>
+                </div>
+                <div className="ls-modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setSettleConfirmProfile(null)}
+                    disabled={isSettlingProfile}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => handleSettleProfileAllDues(settleConfirmProfile)}
+                    disabled={isSettlingProfile}
+                  >
+                    {isSettlingProfile ? 'Règlement en cours...' : 'Confirmer et Régler'}
                   </button>
                 </div>
               </div>

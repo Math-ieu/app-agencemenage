@@ -1258,7 +1258,7 @@ export default function VueGlobale() {
 
         const hasProfile = row.profilId || 
                            (row.parts_repartition && row.parts_repartition.length > 0) || 
-                           (row.profil && row.profil !== '—' && row.profil !== 'Profil inconnu');
+                           (row.profil && row.profil !== '—' && row.profil !== 'Profil inconnu' && row.profil !== 'Non assigné');
         return hasProfile;
       }).length;
       activeSubscriptionCounts.set(subId, activeCount || 1);
@@ -1273,7 +1273,8 @@ export default function VueGlobale() {
       const fullName =
         agent.full_name?.trim()
         || `${agent.first_name || ''} ${agent.last_name || ''}`.trim()
-        || 'Profil inconnu';
+        || '';
+      if (!fullName || fullName === '—' || fullName === 'Profil inconnu' || fullName === 'Non assigné') continue;
       const accountKey = `agent-${agent.id}`;
 
       if (!grouped.has(accountKey)) {
@@ -1330,7 +1331,10 @@ export default function VueGlobale() {
           const profileId = Number(part.profile_id);
           // If we can't find the name in the part object, we'll try to find it in the agents list
           const agentObj = agents.find(a => a.id === profileId);
-          const profileName = part.profile_name || (agentObj ? (agentObj.full_name || `${agentObj.first_name || ''} ${agentObj.last_name || ''}`).trim() : 'Profil inconnu');
+          const profileName = part.profile_name || (agentObj ? (agentObj.full_name || `${agentObj.first_name || ''} ${agentObj.last_name || ''}`).trim() : '');
+          if (!profileName || profileName.trim() === '—' || profileName === 'Profil inconnu' || profileName === 'Non assigné') {
+            continue;
+          }
           const accountKey = `agent-${profileId}`;
           const amount = Number(part.amount || 0);
           const ratio = totalProfilsAmount > 0 && amount > 0 ? (amount / totalProfilsAmount) : (1 / partsRep.length);
@@ -1361,12 +1365,12 @@ export default function VueGlobale() {
 
           if (isAnnule) {
             if (item.profilSeraPaye) {
-              const annulationAmount = Number(item.montantProfilAnnulation || item.partProfil || 0) * ratio;
+              const annulationAmount = Number(item.montantProfilAnnulation || (hasExplicitParts ? amount : (item.partProfil * ratio)));
               profile.factAnnulee += annulationAmount;
 
               if (item.encaissePar === 'Agence') {
                 profile.totalDueToProfile += annulationAmount;
-                const isPaid = item.reglementInterne === 'Réglé' || part.part_profil_versee;
+                const isPaid = part.part_profil_versee ?? (item.reglementInterne === 'Réglé');
                 if (isPaid) {
                   profile.verseAuProfil += annulationAmount;
                   profile.partProfil += annulationAmount;
@@ -1374,34 +1378,33 @@ export default function VueGlobale() {
               }
             }
           } else {
-            // Partage équitable du CA total généré (item.montant) entre tous les profils affectés
-            let baseMontant = item.montant;
+            let baseMontant = amount + splitPartAgence;
             const subId = item.parentDemandeId || (item.frequency === 'abonnement' ? item.demandeId : null);
-            if (subId) {
-              const activeCount = activeSubscriptionCounts.get(subId) || 1;
-              baseMontant = baseMontant / activeCount;
+            if (subId && item.isSubscriptionSecondary) {
+              baseMontant = amount;
             }
-            const sharedCa = baseMontant / partsRep.length;
-            profile.caTotal += sharedCa;
 
+            profile.caTotal += baseMontant;
+            profile.partAgence += splitPartAgence;
+
+            const encaissePar = item.encaissePar;
             const isConfirmed = item.statut !== 'En attente';
-            if (isConfirmed && hasExplicitParts) {
-              profile.partAgence += splitPartAgence;
-              profile.partProfil += amount;
-            }
 
-            if (item.encaissePar === 'Agence') {
-              const due = (item.paiement !== 'non_paye' && isConfirmed && hasExplicitParts) ? amount : 0;
+            if (encaissePar === 'Agence') {
+              const due = (item.paiement !== 'non_paye' && isConfirmed) ? amount : 0;
               profile.totalDueToProfile += due;
-              if (due > 0 && (item.reglementInterne === 'Réglé' || part.part_profil_versee)) {
+              const isPaid = part.part_profil_versee ?? (item.reglementInterne === 'Réglé');
+              if (due > 0 && isPaid) {
                 profile.verseAuProfil += due;
+                profile.partProfil += due;
               }
-            } else if (item.encaissePar === 'Profil') {
+            } else if (encaissePar === 'Profil') {
               const isDelegate = part === (partsRep.find((p: any) => p.is_delegate) || partsRep[0]);
               if (isDelegate) {
-                const due = (item.paiement !== 'non_paye' && isConfirmed && hasExplicitParts) ? Number(item.montantProfilDoitAgence || item.partAgence || 0) : 0;
+                const due = (item.paiement !== 'non_paye' && isConfirmed) ? getPartAgenceDueFromProfil(item) : 0;
                 profile.totalDueToAgence += due;
-                if (due > 0 && (item.reglementInterne === 'Réglé' || part.part_agence_reversee)) {
+                const isPaid = part.part_agence_reversee ?? (item.reglementInterne === 'Réglé');
+                if (due > 0 && isPaid) {
                   profile.recuDuProfil += due;
                 }
               }
@@ -1410,13 +1413,13 @@ export default function VueGlobale() {
         }
       } else {
         // Legacy single profile logic
-        const profileName = item.profil || 'Profil inconnu';
+        const profileName = (item.profil || '').trim();
         const profileId = item.profilId;
         const accountKey = profileId ? `agent-${profileId}` : `mission-${profileName}`;
         const partAgence = item.partAgence;
         const partProfil = item.partProfil;
 
-        if (profileName === '—' && !profileId) continue;
+        if (!profileName || profileName === '—' || profileName === 'Profil inconnu' || profileName === 'Non assigné') continue;
 
         if (!grouped.has(accountKey)) {
           grouped.set(accountKey, {
@@ -1458,24 +1461,22 @@ export default function VueGlobale() {
         } else {
           let baseMontant = partProfil + partAgence;
           const subId = item.parentDemandeId || (item.frequency === 'abonnement' ? item.demandeId : null);
-          if (subId) {
-            const activeCount = activeSubscriptionCounts.get(subId) || 1;
-            baseMontant = baseMontant / activeCount;
+          if (subId && item.isSubscriptionSecondary) {
+            baseMontant = partProfil;
           }
-          profile.caTotal += baseMontant;
 
-          const isConfirmed = item.statut !== 'En attente';
-          if (isConfirmed) {
-            profile.partAgence += partAgence;
-            profile.partProfil += partProfil;
-          }
+          profile.caTotal += baseMontant;
+          profile.partAgence += partAgence;
 
           const encaissePar = item.encaissePar;
+          const isConfirmed = item.statut !== 'En attente';
+
           if (encaissePar === 'Agence') {
             const due = (item.paiement !== 'non_paye' && isConfirmed) ? getPartProfilDueFromAgence(item) : 0;
             profile.totalDueToProfile += due;
             if (due > 0 && item.reglementInterne === 'Réglé') {
               profile.verseAuProfil += due;
+              profile.partProfil += due;
             }
           } else if (encaissePar === 'Profil') {
             const due = (item.paiement !== 'non_paye' && isConfirmed) ? getPartAgenceDueFromProfil(item) : 0;
@@ -1488,7 +1489,9 @@ export default function VueGlobale() {
       }
     }
 
-    const accounts = Array.from(grouped.values()).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    const accounts = Array.from(grouped.values())
+      .filter((a) => a.name && a.name.trim() !== '—' && a.name !== 'Profil inconnu' && a.name !== 'Non assigné')
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
     setProfileAccountsData(accounts);
     return allRows;
   }, []);
@@ -1666,7 +1669,7 @@ export default function VueGlobale() {
   const profileBalances = useMemo<ProfileBalance[]>(
     () =>
       profileAccountsData
-        .filter((profile) => activeProfilIds.has(profile.id))
+        .filter((profile) => activeProfilIds.has(profile.id) && profile.name && profile.name.trim() !== '—' && profile.name !== 'Profil inconnu' && profile.name !== 'Non assigné')
         .map((profile) => {
           const profilDoitAgence = Math.max(0, profile.totalDueToAgence - profile.recuDuProfil);
           const agenceDoitProfil = Math.max(0, profile.totalDueToProfile - profile.verseAuProfil);
@@ -2025,6 +2028,8 @@ export default function VueGlobale() {
 
           const pId = Number(part.profile_id);
           const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
+          if (!pName || pName.trim() === '—' || pName === 'Profil inconnu' || pName === 'Non assigné') continue;
+
           const portion = totalDue;
 
           if (portion < 0.01) continue;
@@ -2039,6 +2044,9 @@ export default function VueGlobale() {
           });
         }
       } else {
+        const pName = (row.profil || '').trim();
+        if (!pName || pName === '—' || pName === 'Profil inconnu' || pName === 'Non assigné') continue;
+
         const partAgenceDue = getPartAgenceDueFromProfil(row);
         if (partAgenceDue >= 0.01) {
           result.push({
@@ -2088,6 +2096,8 @@ export default function VueGlobale() {
 
           const pId = Number(part.profile_id);
           const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
+          if (!pName || pName.trim() === '—' || pName === 'Profil inconnu' || pName === 'Non assigné') continue;
+
           let portion = Number(part.amount || 0);
           const isGratuit = row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite';
           const isAnnule = !isGratuit && (row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'facturation_annulee');
@@ -2109,6 +2119,9 @@ export default function VueGlobale() {
           });
         }
       } else {
+        const pName = (row.profil || '').trim();
+        if (!pName || pName === '—' || pName === 'Profil inconnu' || pName === 'Non assigné') continue;
+
         const partProfilDue = getPartProfilDueFromAgence(row);
         if (partProfilDue >= 0.01) {
           result.push({
@@ -2145,16 +2158,22 @@ export default function VueGlobale() {
           if (!isPaid) {
             const profileId = Number(delegatePart.profile_id);
             const pName = profileAccountsData.find(a => a.id === profileId)?.name || delegatePart.profile_name || row.profil;
-            map.set(pName, (map.get(pName) || 0) + totalDue);
+            if (pName && pName.trim() !== '—' && pName !== 'Profil inconnu' && pName !== 'Non assigné') {
+              map.set(pName, (map.get(pName) || 0) + totalDue);
+            }
           }
         }
       } else {
         if (row.reglementInterne === 'Réglé') continue;
-        map.set(row.profil, (map.get(row.profil) || 0) + totalDue);
+        const pName = (row.profil || '').trim();
+        if (pName && pName !== '—' && pName !== 'Profil inconnu' && pName !== 'Non assigné') {
+          map.set(pName, (map.get(pName) || 0) + totalDue);
+        }
       }
     }
     return Array.from(map.entries())
-      .map(([name, amount]) => ({ name: name || '—', amount }))
+      .filter(([name]) => name && name.trim() !== '—' && name !== 'Profil inconnu' && name !== 'Non assigné')
+      .map(([name, amount]) => ({ name, amount }))
       .filter((item) => item.amount >= 0.01)
       .sort((a, b) => b.amount - a.amount);
   }, [facturationData, profileAccountsData]);
@@ -2195,6 +2214,8 @@ export default function VueGlobale() {
 
           const pId = Number(part.profile_id);
           const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
+          if (!pName || pName.trim() === '—' || pName === 'Profil inconnu' || pName === 'Non assigné') continue;
+
           let portion = totalPartsAmount > 0 ? Number(part.amount || 0) : (totalDue / partsRep.length);
           const isGratuit = row.statut === 'Intervention gratuite' || row.statutPaiementUi === 'intervention_gratuite';
           const isAnnule = !isGratuit && (row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'facturation_annulee');
@@ -2206,11 +2227,15 @@ export default function VueGlobale() {
         }
       } else {
         if (row.reglementInterne === 'Réglé') continue;
-        map.set(row.profil, (map.get(row.profil) || 0) + totalDue);
+        const pName = (row.profil || '').trim();
+        if (pName && pName !== '—' && pName !== 'Profil inconnu' && pName !== 'Non assigné') {
+          map.set(pName, (map.get(pName) || 0) + totalDue);
+        }
       }
     }
     return Array.from(map.entries())
-      .map(([name, amount]) => ({ name: name || '—', amount }))
+      .filter(([name]) => name && name.trim() !== '—' && name !== 'Profil inconnu' && name !== 'Non assigné')
+      .map(([name, amount]) => ({ name, amount }))
       .filter((item) => item.amount >= 0.01)
       .sort((a, b) => b.amount - a.amount);
   }, [facturationData, profileAccountsData]);
@@ -2251,7 +2276,8 @@ export default function VueGlobale() {
             if (isPaid) continue;
 
             const pId = Number(part.profile_id);
-            const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
+            const pName = (profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil || '').trim();
+            if (!pName || pName === '—' || pName === 'Profil inconnu' || pName === 'Non assigné') continue;
             const portion = totalDue;
 
             if (portion < 0.01) continue;
@@ -2282,7 +2308,8 @@ export default function VueGlobale() {
             if (isPaid) continue;
 
             const pId = Number(part.profile_id);
-            const pName = profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil;
+            const pName = (profileAccountsData.find(a => a.id === pId)?.name || part.profile_name || row.profil || '').trim();
+            if (!pName || pName === '—' || pName === 'Profil inconnu' || pName === 'Non assigné') continue;
             const portion = totalPartsAmount > 0 ? Number(part.amount || 0) : (totalDue / row.parts_repartition.length);
 
             if (portion < 0.01) continue;
@@ -2313,6 +2340,9 @@ export default function VueGlobale() {
             : true;
 
         if (!isPaid) {
+          const pName = (row.profil || '').trim();
+          if (!pName || pName === '—' || pName === 'Profil inconnu' || pName === 'Non assigné') continue;
+
           const partAgenceDue = isDebit ? getPartAgenceDueFromProfil(row) : null;
           const partProfilDue = isCredit ? getPartProfilDueFromAgence(row) : null;
 
@@ -2326,6 +2356,7 @@ export default function VueGlobale() {
           }
           result.push({
             ...row,
+            profil: pName,
             _partAgenceDue: partAgenceDue,
             _partProfilDue: partProfilDue,
             _commission: showCommission ? getCommissionAgenceEncaissee(row) : null,

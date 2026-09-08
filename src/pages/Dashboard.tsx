@@ -1038,17 +1038,10 @@ export default function Dashboard() {
           return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
         }, 0);
         
-        const remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
-        
-        if (prev.parent_demande) {
-          // Child demand: Agency share is this session's price minus cleaner parts
-          nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(currentMontantTTC - totalParts);
-        } else {
-          // Parent demand: Agency share is the remaining agency share
-          nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(remainingAgencyShare);
-        }
+        const remainingAgencyShare = Math.max(0, roundMoney(parentPrice - (totalParts + otherDemandsProfilesTotal)));
+        nextPartAgence = isFreeOrCancelled ? 0 : remainingAgencyShare;
       } else {
-        nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(currentMontantTTC - totalParts);
+        nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(currentMontantTTC - totalParts));
       }
 
       const updates: any = {
@@ -1187,15 +1180,10 @@ export default function Dashboard() {
           return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
         }, 0);
 
-        const remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
-
-        if (current.parent_demande) {
-          nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(newMontantTTC - totalParts);
-        } else {
-          nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(remainingAgencyShare);
-        }
+        const remainingAgencyShare = Math.max(0, roundMoney(parentPrice - (totalParts + otherDemandsProfilesTotal)));
+        nextPartAgence = isFreeOrCancelled ? 0 : remainingAgencyShare;
       } else {
-        nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(newMontantTTC - totalParts);
+        nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(newMontantTTC - totalParts));
       }
 
       // 4. Balances due
@@ -1256,7 +1244,6 @@ export default function Dashboard() {
       const tvaActive = isFreeOrCancelled ? false : Boolean(editFormData.tva_active);
       const montantTTC = isFreeOrCancelled ? 0 : roundMoney(tvaActive ? montantHT * 1.2 : montantHT);
       const montantVerse = isFreeOrCancelled ? 0 : toNumber(editFormData.montant_verse);
-      const partAgence = isFreeOrCancelled ? 0 : toNumber(editFormData.part_agence);
 
       const normalizedFrequence = (editFormData.frequence || '').toString().toLowerCase();
       const frequency = normalizedFrequence
@@ -1286,7 +1273,7 @@ export default function Dashboard() {
       }
 
       const isAbonnement = frequency === 'abonnement' || !!editFormData.parent_demande || !!selectedDemande.parent_demande;
-      let finalPartAgence = partAgence;
+      let finalPartAgence = 0;
       if (isAbonnement) {
         const parentId = editFormData.parent_demande || selectedDemande.parent_demande || selectedDemande.id;
         const parentDemande = getParentDemande(parentId, selectedDemande!);
@@ -1301,13 +1288,11 @@ export default function Dashboard() {
           return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
         }, 0);
         
-        const remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
-        
-        if (editFormData.parent_demande) {
-          finalPartAgence = isFreeOrCancelled ? 0 : roundMoney(montantTTC - totalParts);
-        } else {
-          finalPartAgence = isFreeOrCancelled ? 0 : roundMoney(remainingAgencyShare);
-        }
+        const remainingAgencyShare = Math.max(0, roundMoney(parentPrice - (totalParts + otherDemandsProfilesTotal)));
+        finalPartAgence = isFreeOrCancelled ? 0 : remainingAgencyShare;
+      } else {
+        const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
+        finalPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(montantTTC - totalParts));
       }
 
       if (isFreeOrCancelled) {
@@ -1503,6 +1488,7 @@ export default function Dashboard() {
 
       updateData.avec_produit = Boolean(editFormData.produits || editFormData.avec_produit);
       updateData.part_agence = finalPartAgence;
+      updateData.parts_repartition = partsRepartition;
       updateData.has_supplement_heures = Boolean(editFormData.has_supplement_heures);
       updateData.supplement_heures_montant = editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_montant) : 0;
       updateData.supplement_heures_recupere_especes = editFormData.has_supplement_heures ? Boolean(editFormData.supplement_heures_recupere_especes) : false;
@@ -1777,6 +1763,8 @@ export default function Dashboard() {
       ? 0
       : toNumber(facturationData.part_agence || formData.part_agence);
 
+    const currentDemandProfilesTotal = savedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+
     if (d.frequency === 'abonnement' || !!d.parent_demande) {
       const parentId = d.parent_demande || d.id;
       const parentDemande = getParentDemande(parentId, d);
@@ -1787,24 +1775,30 @@ export default function Dashboard() {
         const parts = x.parts_repartition || x.formulaire_data?.facturation?.parts_repartition || [];
         return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
       }, 0);
-      const currentDemandProfilesTotal = savedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
       
-      const remainingAgencyShare = parentPrice - (currentDemandProfilesTotal + otherDemandsProfilesTotal);
-      
-      if (d.parent_demande) {
-        initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
-          ? 0
-          : roundMoney(montantTTC - currentDemandProfilesTotal);
-      } else {
-        initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
-          ? 0
-          : roundMoney(remainingAgencyShare);
-      }
-    } else {
-      const currentDemandProfilesTotal = savedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+      const remainingAgencyShare = Math.max(0, roundMoney(parentPrice - (currentDemandProfilesTotal + otherDemandsProfilesTotal)));
       initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
         ? 0
-        : roundMoney(montantTTC - currentDemandProfilesTotal);
+        : remainingAgencyShare;
+    } else {
+      initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
+        ? 0
+        : Math.max(0, roundMoney(montantTTC - currentDemandProfilesTotal));
+    }
+
+    let initialMontantAgenceDoitProfil = toNumber(facturationData.montant_agence_doit_profil);
+    let initialMontantProfilDoitAgence = toNumber(facturationData.montant_profil_doit_agence);
+
+    if (paymentUiValue === 'agence_payee_client') {
+      if (initialMontantAgenceDoitProfil === 0 && currentDemandProfilesTotal > 0) {
+        initialMontantAgenceDoitProfil = currentDemandProfilesTotal;
+      }
+      initialMontantProfilDoitAgence = 0;
+    } else if (paymentUiValue === 'profil_paye_client') {
+      if (initialMontantProfilDoitAgence === 0 && initialPartAgence > 0) {
+        initialMontantProfilDoitAgence = initialPartAgence;
+      }
+      initialMontantAgenceDoitProfil = 0;
     }
 
     setSelectedDemande(d);
@@ -1836,8 +1830,8 @@ export default function Dashboard() {
       annulation_raison: facturationData.annulation_raison || '',
       profil_sera_paye: Boolean(facturationData.profil_sera_paye),
       montant_profil_annulation: toNumber(facturationData.montant_profil_annulation),
-      montant_agence_doit_profil: toNumber(facturationData.montant_agence_doit_profil),
-      montant_profil_doit_agence: toNumber(facturationData.montant_profil_doit_agence),
+      montant_agence_doit_profil: initialMontantAgenceDoitProfil,
+      montant_profil_doit_agence: initialMontantProfilDoitAgence,
       nb_heures: d.nb_heures || d.formulaire_data?.duree || d.formulaire_data?.nb_heures || '',
       duree: formData.duree || d.nb_heures || formData.duration || '',
       date_intervention: getDemandeStartDate(d),
@@ -2091,14 +2085,33 @@ export default function Dashboard() {
   );
   
   const currentPaymentStatutUi = editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee));
-  const isPartsLocked = currentPaymentStatutUi === 'commercial_paye_client';  // Subscription remaining agency share calculation
+  const isPartsLocked = currentPaymentStatutUi === 'commercial_paye_client';
   let remainingAgencyShare = 0;
-  if (editFormData.frequency === 'abonnement' && selectedDemande) {
+  let globalAbonnementPrice = 0;
+  const isAbonnement = editFormData.frequency === 'abonnement' || Boolean(editFormData.parent_demande) || Boolean(selectedDemande?.parent_demande) || selectedDemande?.frequency === 'abonnement';
+  const isChildSession = isAbonnement && Boolean(selectedDemande?.parent_demande || editFormData.parent_demande);
+  if (isAbonnement && selectedDemande) {
     const parentId = editFormData.parent_demande || selectedDemande.parent_demande || selectedDemande.id;
     const parentDemande = getParentDemande(parentId, selectedDemande);
-    const parentPrice = (Number(selectedDemande.id) === Number(parentId))
-      ? montantTTC
-      : (parentDemande ? toNumber(parentDemande.prix) : 0);
+    
+    if (parentDemande && Number(parentDemande.id) === Number(parentId) && toNumber(parentDemande.prix) > 0) {
+      globalAbonnementPrice = toNumber(parentDemande.prix);
+    }
+    if (globalAbonnementPrice <= 0) {
+      const fd = (selectedDemande as any)?.formulaire_data || editFormData || {};
+      globalAbonnementPrice = toNumber(fd.montant_1er_mois || fd.montant_devis || fd.prix_base || 0);
+    }
+    if (globalAbonnementPrice <= 0 && parentDemande) {
+      const pFd = (parentDemande as any)?.formulaire_data || {};
+      globalAbonnementPrice = toNumber(pFd.montant_1er_mois || pFd.montant_devis || pFd.prix_base || 0);
+    }
+    if (globalAbonnementPrice <= 0) {
+      globalAbonnementPrice = toNumber(parentDemande?.prix || selectedDemande?.prix || editFormData.prix || 0);
+    }
+
+    const parentPrice = globalAbonnementPrice > 0
+      ? globalAbonnementPrice
+      : ((Number(selectedDemande.id) === Number(parentId)) ? montantTTC : (parentDemande ? toNumber(parentDemande.prix) : 0));
       
     const subscriptionDemandes = getSubscriptionDemandes(parentId);
     const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
@@ -2107,7 +2120,7 @@ export default function Dashboard() {
       return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
     }, 0);
     
-    remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
+    remainingAgencyShare = Math.max(0, roundMoney(parentPrice - (totalParts + otherDemandsProfilesTotal)));
   }
 
   return (
@@ -3388,8 +3401,15 @@ export default function Dashboard() {
                   <ChevronLeft size={20} className="text-primary" />
                 </button>
                 <div>
-                  <h2 className="text-xl fw-bold">Éditer le besoin — # {selectedDemande.id}</h2>
-                  <p className="text-sm text-muted">Formulaire : {selectedDemande.service}</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <h2 className="text-xl fw-bold" style={{ margin: 0 }}>Éditer le besoin — # {selectedDemande.id}</h2>
+                    {isAbonnement && (
+                      <span style={{ fontSize: '12px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' }}>
+                        {isChildSession ? `Séance abonnement (Total : ${globalAbonnementPrice.toFixed(2)} MAD)` : `Abonnement : ${globalAbonnementPrice.toFixed(2)} MAD`}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted" style={{ margin: 0 }}>Formulaire : {selectedDemande.service}</p>
                 </div>
               </div>
               <button className="icon-btn" onClick={() => closeDetailModal()}>✕</button>
@@ -3737,13 +3757,28 @@ export default function Dashboard() {
 
                       {/* ── Facturation ── */}
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px', background: '#FFFBEB', border: '1px solid #FDE68A', marginBottom: '12px' }}>
-                          <FileText size={18} style={{ color: '#D97706' }} />
-                          <span style={{ fontSize: '16px', fontWeight: 700, color: '#B45309' }}>Facturation</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderRadius: '10px', background: '#FFFBEB', border: '1px solid #FDE68A', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <FileText size={18} style={{ color: '#D97706' }} />
+                            <span style={{ fontSize: '16px', fontWeight: 700, color: '#B45309' }}>Facturation</span>
+                          </div>
+                          {isAbonnement && (
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#92400E', background: '#FEF3C7', padding: '4px 10px', borderRadius: '6px', border: '1px solid #FCD34D' }}>
+                              Abonnement : {globalAbonnementPrice.toFixed(2)} MAD
+                            </span>
+                          )}
                         </div>
-                        <div className="form-grid-3 gap-4">
+                        <div className={isAbonnement ? "form-grid-4 gap-4" : "form-grid-3 gap-4"}>
+                          {isAbonnement && (
+                            <div className="form-group">
+                              <label style={{ color: '#B45309', fontWeight: 600 }}>Montant global abonnement (MAD)</label>
+                              <div style={{ padding: '0 12px', background: '#FFFBEB', borderRadius: '8px', border: '1px solid #FDE68A', display: 'flex', alignItems: 'center', fontWeight: 700, fontSize: '14px', height: '38px', color: '#B45309' }}>
+                                {globalAbonnementPrice.toFixed(2)}
+                              </div>
+                            </div>
+                          )}
                           <div className="form-group">
-                            <label>Montant HT (MAD)</label>
+                            <label>{isChildSession ? "Montant séance HT (MAD)" : "Montant HT (MAD)"}</label>
                             <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', fontWeight: 500, fontSize: '14px', height: '38px', color: '#64748b' }}>
                               {editFormData.montant_ht}
                             </div>
@@ -3770,7 +3805,7 @@ export default function Dashboard() {
                             {!editFormData.tva_active && <p style={{ fontSize: '11px', color: '#DC2626', fontWeight: 600, marginTop: '4px' }}>Montant sans TVA</p>}
                           </div>
                           <div className="form-group">
-                            <label>Montant TTC (MAD)</label>
+                            <label>{isChildSession ? "Montant séance TTC (MAD)" : "Montant TTC (MAD)"}</label>
                             <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 600 }}>{montantTTC.toFixed(2)}</div>
                           </div>
                         </div>
@@ -3807,23 +3842,42 @@ export default function Dashboard() {
                                       onChange={e => {
                                         const v = e.target.value;
                                         const isFreeOrCancelled = v === 'facturation_annulee' || v === 'intervention_gratuite';
-                                        const newMontantHT = isFreeOrCancelled ? 0 : toNumber(editFormData.ca_initial);
-                                        const newTvaActive = isFreeOrCancelled ? false : Boolean(editFormData.tva_active);
-                                        const currentMontantTTC = isFreeOrCancelled ? 0 : roundMoney(newTvaActive ? newMontantHT * 1.2 : newMontantHT);
-                                        
-                                        const parts = editFormData.parts_repartition || [];
-                                        let adjustedParts = [...parts];
-                                        let nextMontantProfilAnnulation = editFormData.montant_profil_annulation;
-                                        let nextProfilSeraPaye = editFormData.profil_sera_paye;
+                                         const isSub = editFormData.frequency === 'abonnement' || Boolean(editFormData.parent_demande) || Boolean(selectedDemande?.parent_demande);
+                                         const currentHT = toNumber(editFormData.montant_ht ?? editFormData.prix ?? editFormData.ca_initial);
+                                         const newMontantHT = isFreeOrCancelled ? 0 : currentHT;
+                                         const newTvaActive = isFreeOrCancelled ? false : Boolean(editFormData.tva_active);
+                                         const currentMontantTTC = isFreeOrCancelled ? 0 : roundMoney(newTvaActive ? newMontantHT * 1.2 : newMontantHT);
+                                         
+                                         const parts = editFormData.parts_repartition || [];
+                                         let adjustedParts = [...parts];
+                                         let nextMontantProfilAnnulation = editFormData.montant_profil_annulation;
+                                         let nextProfilSeraPaye = editFormData.profil_sera_paye;
 
-                                        if (isFreeOrCancelled) {
-                                          const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
-                                          nextMontantProfilAnnulation = totalParts;
-                                          nextProfilSeraPaye = totalParts > 0;
-                                        }
+                                         if (isFreeOrCancelled) {
+                                           const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                                           nextMontantProfilAnnulation = totalParts;
+                                           nextProfilSeraPaye = totalParts > 0;
+                                         }
 
-                                        const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
-                                        const nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(currentMontantTTC - totalParts);
+                                         const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                                         let nextPartAgence = 0;
+                                         if (isSub) {
+                                           const parentId = editFormData.parent_demande || selectedDemande?.parent_demande || selectedDemande?.id;
+                                           const parentDemande = getParentDemande(parentId, selectedDemande!);
+                                           const parentPrice = (selectedDemande?.id && Number(selectedDemande.id) === Number(parentId))
+                                             ? currentMontantTTC
+                                             : (parentDemande ? toNumber(parentDemande.prix) : 0);
+                                             
+                                           const subscriptionDemandes = getSubscriptionDemandes(parentId);
+                                           const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande?.id)).reduce((sum, d) => {
+                                             const pList = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
+                                             return sum + pList.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+                                           }, 0);
+                                           
+                                           nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(parentPrice - (totalParts + otherDemandsProfilesTotal)));
+                                         } else {
+                                           nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(currentMontantTTC - totalParts));
+                                         }
 
                                         const updates: any = { 
                                           ...editFormData, 
@@ -3917,15 +3971,33 @@ export default function Dashboard() {
                                   onClick={() => {
                                     const v = 'agence_payee_client';
                                     const isFreeOrCancelled = false;
-                                    const newMontantHT = toNumber(editFormData.ca_initial);
+                                    const isSub = editFormData.frequency === 'abonnement' || Boolean(editFormData.parent_demande) || Boolean(selectedDemande?.parent_demande);
+                                    const currentHT = toNumber(editFormData.montant_ht ?? editFormData.prix ?? editFormData.ca_initial);
+                                    const newMontantHT = currentHT;
                                     const newTvaActive = Boolean(editFormData.tva_active);
                                     const currentMontantTTC = roundMoney(newTvaActive ? newMontantHT * 1.2 : newMontantHT);
                                     
                                     const parts = editFormData.parts_repartition || [];
                                     let adjustedParts = [...parts];
-                                    
                                     const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
-                                    const nextPartAgence = roundMoney(currentMontantTTC - totalParts);
+                                    let nextPartAgence = 0;
+                                    if (isSub) {
+                                      const parentId = editFormData.parent_demande || selectedDemande?.parent_demande || selectedDemande?.id;
+                                      const parentDemande = getParentDemande(parentId, selectedDemande!);
+                                      const parentPrice = (selectedDemande?.id && Number(selectedDemande.id) === Number(parentId))
+                                        ? currentMontantTTC
+                                        : (parentDemande ? toNumber(parentDemande.prix) : 0);
+                                        
+                                      const subscriptionDemandes = getSubscriptionDemandes(parentId);
+                                      const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande?.id)).reduce((sum, d) => {
+                                        const pList = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
+                                        return sum + pList.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+                                      }, 0);
+                                      
+                                      nextPartAgence = Math.max(0, roundMoney(parentPrice - (totalParts + otherDemandsProfilesTotal)));
+                                    } else {
+                                      nextPartAgence = Math.max(0, roundMoney(currentMontantTTC - totalParts));
+                                    }
 
                                     const updates: any = { 
                                       ...editFormData, 
@@ -4148,42 +4220,53 @@ export default function Dashboard() {
                               </div>
                             )}
                             <div style={isPartsLocked ? { opacity: 0.5, pointerEvents: 'none', display: 'flex', flexDirection: 'column', gap: '16px' } : { display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                              <div className="form-grid-2 gap-4">
-                            <div className="form-group"><label>Montant total TTC (MAD)</label><div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 600 }}>{montantTTC.toFixed(2)}</div></div>
-                            <div className="form-group">
-                              <label>Part de l'agence (MAD)</label>
-                              <input 
-                                type="number" 
-                                value={
-                                  (editFormData.statut_paiement_ui === 'intervention_gratuite' || 
-                                   editFormData.statut_paiement_ui === 'facturation_annulee' || 
-                                   Boolean(editFormData.facturation_annulee)) 
-                                    ? 0 
-                                    : (!editFormData.parent_demande && editFormData.frequency === 'abonnement')
-                                      ? roundMoney(remainingAgencyShare)
-                                      : editFormData.part_agence
-                                } 
-                                onChange={e => setEditFormData({ ...editFormData, part_agence: e.target.value })} 
-                                className="edit-input" 
-                                disabled={
-                                  editFormData.statut_paiement_ui === 'intervention_gratuite' || 
-                                  editFormData.statut_paiement_ui === 'facturation_annulee' || 
-                                  Boolean(editFormData.facturation_annulee) ||
-                                  (!editFormData.parent_demande && editFormData.frequency === 'abonnement')
-                                }
-                                style={
-                                  (!editFormData.parent_demande && editFormData.frequency === 'abonnement')
-                                    ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', fontWeight: 600 }
-                                    : {}
-                                }
-                              />
-                              {!editFormData.parent_demande && editFormData.frequency === 'abonnement' && (
-                                <span style={{ fontSize: '11px', color: '#0d9488', marginTop: '4px', display: 'block' }}>
-                                  🔒 Part agence calculée automatiquement sur la commission restante.
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                              <div className={isAbonnement ? "form-grid-3 gap-4" : "form-grid-2 gap-4"}>
+                                {isAbonnement && (
+                                  <div className="form-group">
+                                    <label style={{ color: '#065F46', fontWeight: 600 }}>Montant global abonnement (MAD)</label>
+                                    <div style={{ padding: '0 12px', background: '#ECFDF5', borderRadius: '8px', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 700, color: '#065F46' }}>
+                                      {globalAbonnementPrice.toFixed(2)}
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="form-group">
+                                  <label>{isChildSession ? "Montant séance TTC (MAD)" : "Montant total TTC (MAD)"}</label>
+                                  <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 600 }}>{montantTTC.toFixed(2)}</div>
+                                </div>
+                                <div className="form-group">
+                                  <label>Part de l'agence (MAD)</label>
+                                  <input 
+                                    type="number" 
+                                    value={
+                                      (editFormData.statut_paiement_ui === 'intervention_gratuite' || 
+                                       editFormData.statut_paiement_ui === 'facturation_annulee' || 
+                                       Boolean(editFormData.facturation_annulee)) 
+                                        ? 0 
+                                        : isAbonnement
+                                          ? Math.max(0, roundMoney(remainingAgencyShare))
+                                          : Math.max(0, toNumber(editFormData.part_agence))
+                                    } 
+                                    onChange={e => setEditFormData({ ...editFormData, part_agence: Math.max(0, toNumber(e.target.value)) })} 
+                                    className="edit-input" 
+                                    disabled={
+                                      editFormData.statut_paiement_ui === 'intervention_gratuite' || 
+                                      editFormData.statut_paiement_ui === 'facturation_annulee' || 
+                                      Boolean(editFormData.facturation_annulee) ||
+                                      isAbonnement
+                                    }
+                                    style={
+                                      isAbonnement
+                                        ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', fontWeight: 600 }
+                                        : {}
+                                    }
+                                  />
+                                  {isAbonnement && (
+                                    <span style={{ fontSize: '11px', color: '#0d9488', marginTop: '4px', display: 'block' }}>
+                                      🔒 Part agence restante calculée automatiquement sur l'abonnement.
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
 
                           {/* ── Supplément d'heures payé en espèces : bascule Oui / Non ── */}
                           {(() => {
@@ -4791,45 +4874,42 @@ export default function Dashboard() {
                               
                               const ok = remainingAgencyShare >= -0.01;
                               
+                              if (editFormData.parent_demande) {
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', borderRadius: '12px', border: '1px solid #A7F3D0', background: '#ECFDF5' }}>
+                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#065f46', borderBottom: '1px dashed #A7F3D0', paddingBottom: '8px', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <span>Session d'abonnement — Répartition validée</span>
+                                      <span style={{ fontSize: '12px', background: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                                        ✓ Automatique
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '13px', color: '#374151' }}>
+                                      <div>Montant séance (TTC) : <strong>{montantTTC.toFixed(2)} MAD</strong></div>
+                                      <div>Parts profils (cette séance) : <strong>{currentDemandProfilesTotal.toFixed(2)} MAD</strong></div>
+                                      <div>Part agence restante (abonnement) : <strong style={{ color: '#059669', fontSize: '14px' }}>{Math.max(0, remainingAgencyShare).toFixed(2)} MAD</strong></div>
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#047857', fontWeight: 500 }}>
+                                      ✓ Les parts de cette intervention sont automatiquement équilibrées et validées.
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              
                               return (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', borderRadius: '12px', border: `1px solid ${ok ? '#A7F3D0' : '#FECACA'}`, background: ok ? '#ECFDF5' : '#FEF2F2' }}>
                                   <div style={{ fontSize: '14px', fontWeight: 700, color: ok ? '#065f46' : '#991b1b', borderBottom: `1px dashed ${ok ? '#A7F3D0' : '#FCA5A5'}`, paddingBottom: '8px', marginBottom: '4px' }}>
-                                    Abonnement — Suivi de la part de l'agence
+                                    Contrat d'abonnement — Suivi global de la part agence
                                   </div>
                                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px', color: '#374151' }}>
                                     <div>Commission initiale (TTC 1ère prest.) : <strong>{parentPrice.toFixed(2)} MAD</strong></div>
                                     <div>Parts profils (autres sessions) : <strong>{otherDemandsProfilesTotal.toFixed(2)} MAD</strong></div>
                                     <div>Parts profils (cette session) : <strong>{currentDemandProfilesTotal.toFixed(2)} MAD</strong></div>
-                                    <div>Part agence restante (mise à jour) : <strong style={{ color: ok ? '#059669' : '#DC2626', fontSize: '14px' }}>{remainingAgencyShare.toFixed(2)} MAD</strong></div>
+                                    <div>Part agence restante : <strong style={{ color: ok ? '#059669' : '#DC2626', fontSize: '14px' }}>{Math.max(0, remainingAgencyShare).toFixed(2)} MAD</strong></div>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
                                     <span style={{ fontSize: '12px', fontWeight: 600, color: ok ? '#059669' : '#DC2626' }}>
-                                      {ok ? '✓ Répartition correcte' : '⚠ Répartition incorrecte : les parts des profils dépassent la commission initiale !'}
+                                      {ok ? '✓ Répartition validée automatiquement' : '⚠ Répartition incorrecte : les parts des profils dépassent la commission initiale !'}
                                     </span>
-                                    {!editFormData.parent_demande && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setEditFormData((prev: any) => ({
-                                            ...prev,
-                                            part_agence: roundMoney(remainingAgencyShare),
-                                          }));
-                                        }}
-                                        style={{
-                                          padding: '6px 14px',
-                                          borderRadius: '8px',
-                                          backgroundColor: '#059669',
-                                          color: 'white',
-                                          border: 'none',
-                                          fontSize: '12px',
-                                          fontWeight: 600,
-                                          cursor: 'pointer',
-                                          transition: 'background 0.2s',
-                                        }}
-                                      >
-                                        Mettre à jour la part agence
-                                      </button>
-                                    )}
                                   </div>
                                 </div>
                               );
@@ -4838,59 +4918,21 @@ export default function Dashboard() {
                             const target = isFreeOrCancelled
                               ? (editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0)
                               : toNumber(montantTTC);
-                            const tr = tp + (isFreeOrCancelled ? 0 : toNumber(editFormData.part_agence));
+                            const currentPartAgence = isFreeOrCancelled ? 0 : roundMoney(montantTTC - tp);
+                            const tr = tp + currentPartAgence;
                             const r = target - tr;
                             const ok = Math.abs(r) < 0.01;
                             return (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: '10px', border: `1px solid ${ok ? '#A7F3D0' : '#FECACA'}`, background: ok ? '#ECFDF5' : '#FEF2F2' }}>
                                 <div style={{ display: 'flex', gap: '24px', fontSize: '13px' }}>
+                                  <span>Total profils : <strong>{tp.toFixed(2)} MAD</strong></span>
+                                  <span>Part agence : <strong style={{ color: '#059669' }}>{currentPartAgence.toFixed(2)} MAD</strong></span>
                                   <span>Total réparti : <strong>{tr.toFixed(2)} MAD</strong></span>
-                                  <span>Reste à répartir : <strong style={{ color: ok ? '#059669' : '#DC2626' }}>{r.toFixed(2)} MAD</strong></span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                  <span style={{ fontSize: '12px', fontWeight: 600, color: ok ? '#059669' : '#DC2626' }}>
-                                    {ok ? '✓ Répartition correcte' : '⚠ Répartition incorrecte'}
+                                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#059669' }}>
+                                    ✓ Répartition validée automatiquement
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
-                                      const nextPartAgence = roundMoney(montantTTC - totalParts);
-
-                                      setEditFormData((prev: any) => {
-                                        const updates: any = {
-                                          ...prev,
-                                          part_agence: nextPartAgence,
-                                        };
-                                        if (prev.statut_paiement_ui === 'profil_paye_client') {
-                                          updates.montant_profil_doit_agence = nextPartAgence;
-                                          updates.montant_agence_doit_profil = 0;
-                                        } else if (prev.statut_paiement_ui === 'agence_payee_client') {
-                                          updates.montant_agence_doit_profil = totalParts;
-                                          updates.montant_profil_doit_agence = 0;
-                                        } else {
-                                          updates.montant_profil_doit_agence = 0;
-                                          updates.montant_agence_doit_profil = 0;
-                                        }
-                                        return updates;
-                                      });
-                                    }}
-                                    style={{
-                                      padding: '8px 16px',
-                                      borderRadius: '8px',
-                                      backgroundColor: '#059669',
-                                      color: 'white',
-                                      border: 'none',
-                                      fontSize: '13px',
-                                      fontWeight: 600,
-                                      cursor: 'pointer',
-                                      transition: 'background 0.2s',
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#047857'}
-                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#059669'}
-                                  >
-                                    Valider les parts
-                                  </button>
                                 </div>
                               </div>
                             );
