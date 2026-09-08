@@ -4,6 +4,8 @@ import { fr } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, Clock } from 'lucide-react';
 import { Demande } from '../../types';
 import { createPlanningIntervention, updateDemande, deleteDemande } from '../../api/client';
 import { parseDateRobust, getDemandeStartDate } from '../../utils/pricing';
@@ -12,7 +14,7 @@ export interface DateOverrideItem {
   heure?: string;
   heure_fin?: string;
   excluded?: boolean;
-  statut?: "termine" | "annule" | "a_recuperer" | "reporte" | null;
+  statut?: "termine" | "pres_a_confirmer" | "pres_en_cours" | "pres_confirmee" | "en_cours" | "annule" | "a_recuperer" | "reporte" | string | null;
   reprogrammed_to?: string | null;
   reprogrammed_from?: string | null;
 }
@@ -327,18 +329,25 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
             }) || (isParentDate ? parentDemande : undefined);
 
             // Determine effective status from BDD child demande or overrides
-            let effectiveStatut = override?.statut || null;
+            let effectiveStatut: "termine" | "pres_a_confirmer" | "pres_en_cours" | "pres_confirmee" | "en_cours" | "annule" | "a_recuperer" | "reporte" | null = (override?.statut as any) || null;
             if (realDemande) {
               const st = (realDemande.statut || '').toLowerCase().trim();
               const isReported = realDemande.cao === 'reporte' || ['reporte', 'reportee', 'reportée'].includes(st);
               const isCancelled = ['annule', 'annulee', 'annulée'].includes(st);
               const isCompleted = ['termine', 'terminee', 'pres_terminee', 'pres. terminée'].includes(st);
+              const isAConfirmer = st === 'pres_a_confirmer';
+              const isEnCours = st === 'pres_en_cours';
+              const isConfirmee = st === 'pres_confirmee' || (st === 'en_cours' && (realDemande.cao === true || (realDemande.cao as any) === 'oui' || (realDemande.cao as any) === 'confirmed'));
               const isRecup = st.includes('recup');
 
               if (isCompleted) effectiveStatut = 'termine';
+              else if (isAConfirmer) effectiveStatut = 'pres_a_confirmer';
+              else if (isEnCours) effectiveStatut = 'pres_en_cours';
+              else if (isConfirmee) effectiveStatut = 'pres_confirmee';
               else if (isCancelled) effectiveStatut = 'annule';
               else if (isReported) effectiveStatut = 'reporte';
               else if (isRecup) effectiveStatut = 'a_recuperer';
+              else if (st === 'en_cours') effectiveStatut = 'en_cours';
             }
 
             const heure = override?.heure || (realDemande?.heure_intervention ? realDemande.heure_intervention.slice(0, 5) : '') || (isPattern ? heureByDow[d.getDay()] : "");
@@ -361,6 +370,26 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                 dateNumCol = '#15803d';
                 badgeBg = '#16a34a';
                 badgeText = 'TERMINÉ';
+              } else if (effectiveStatut === 'pres_a_confirmer') {
+                cellBg = '#fef3c7';
+                dateNumCol = '#b45309';
+                badgeBg = '#d97706';
+                badgeText = 'À CONFIRMER';
+              } else if (effectiveStatut === 'pres_en_cours') {
+                cellBg = '#faf5ff';
+                dateNumCol = '#7e22ce';
+                badgeBg = '#9333ea';
+                badgeText = 'EN COURS';
+              } else if (effectiveStatut === 'pres_confirmee') {
+                cellBg = '#f0fdf4';
+                dateNumCol = '#15803d';
+                badgeBg = '#16a34a';
+                badgeText = 'CONFIRMÉ';
+              } else if (effectiveStatut === 'en_cours') {
+                cellBg = '#eff6ff';
+                dateNumCol = '#1d4ed8';
+                badgeBg = '#3b82f6';
+                badgeText = 'À APPELER';
               } else if (effectiveStatut === 'annule') {
                 cellBg = '#fff1f2';
                 dateNumCol = '#dc2626';
@@ -456,6 +485,90 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                   <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', textTransform: 'capitalize', marginBottom: 14 }}>
                     {format(d, "EEEE d MMMM yyyy", { locale: fr })}
                   </div>
+
+                  {/* Alerte Prestation terminée (À confirmer) */}
+                  {effectiveStatut === 'pres_a_confirmer' && (
+                    <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 12px', marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 12.5, color: '#b45309', marginBottom: 4 }}>
+                        <AlertTriangle size={15} style={{ color: '#d97706', flexShrink: 0 }} />
+                        <span>Prestation terminée (À confirmer)</span>
+                      </div>
+                      <p style={{ margin: '0 0 8px 0', fontSize: 11.5, color: '#92400e', lineHeight: 1.35 }}>
+                        Veuillez vérifier si la prestation est réellement terminée.
+                      </p>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await setAboDateOverrides((prev) => ({
+                              ...prev, [key]: { ...prev[key], statut: "termine", excluded: false },
+                            }));
+                            if (onSetCellStatus) await onSetCellStatus(key, 'pres_terminee');
+                          }}
+                          style={{
+                            padding: '5px 10px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            backgroundColor: '#059669',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 6,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ✓ Oui, confirmer
+                        </button>
+                        {realDemande && (
+                          <Link
+                            to={`/dashboard?demande_id=${realDemande.id}`}
+                            style={{
+                              padding: '5px 10px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              backgroundColor: 'white',
+                              color: '#334155',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: 6,
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center'
+                            }}
+                          >
+                            Voir détail
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Alerte Client à appeler (CAO à effectuer) */}
+                  {effectiveStatut === 'en_cours' && realDemande && !realDemande.cao && (
+                    <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 12px', marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 12.5, color: '#1e40af', marginBottom: 4 }}>
+                        <Clock size={15} style={{ color: '#2563eb', flexShrink: 0 }} />
+                        <span>Client à appeler (CAO à effectuer)</span>
+                      </div>
+                      <p style={{ margin: '0 0 8px 0', fontSize: 11.5, color: '#1e3a8a', lineHeight: 1.35 }}>
+                        Cette intervention nécessite une Confirmation Avant Opération (CAO) manuelle.
+                      </p>
+                      <Link
+                        to={`/dashboard?demande_id=${realDemande.id}`}
+                        style={{
+                          padding: '5px 10px',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          backgroundColor: '#2563eb',
+                          color: 'white',
+                          borderRadius: 6,
+                          textDecoration: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        Valider CAO sur le tableau de bord
+                      </Link>
+                    </div>
+                  )}
 
                   {/* Inputs Heure début / fin */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>

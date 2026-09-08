@@ -593,7 +593,9 @@ export default function Dashboard() {
           return false;
         }
 
-        if (statutUi === 'paye') {
+        // Exclure les missions payées UNIQUEMENT si elles ne sont plus en cours d'opération
+        // (Les demandes en pres_confirmee, pres_en_cours, pres_a_confirmer ou les séances d'abonnement filles restent visibles pour les opérations)
+        if (statutUi === 'paye' && !['pres_confirmee', 'pres_en_cours', 'pres_a_confirmer'].includes(d.statut) && !d.parent_demande) {
           return false;
         }
         
@@ -682,7 +684,16 @@ export default function Dashboard() {
     const parts = (d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || d.formulaire_data?.parts_repartition || []) as any[];
     const totalParts = Array.isArray(parts) ? parts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) : 0;
     const singlePart = Number(d.formulaire_data?.facturation?.part_profil ?? d.formulaire_data?.facturation?.montant_agence_doit_profil ?? (d as any).part_profil ?? 0);
-    return totalParts > 0 || singlePart > 0;
+    
+    // Si toutes les intervenantes sont internes (amount = 0 légitime), la répartition est valide
+    const hasInterneAssigned = Array.isArray(parts) && parts.length > 0 && parts.every(p => {
+      const pId = Number(p.profile_id);
+      if (!pId) return false;
+      const ag = allProfils.find((a: any) => a.id === pId) || d.profils_envoyes?.find((a: any) => a.id === pId);
+      return ag?.categorie === 'interne';
+    });
+
+    return totalParts > 0 || singlePart > 0 || hasInterneAssigned;
   };
 
   const handleConfirmFinPrestation = async (d: Demande) => {
@@ -1030,8 +1041,8 @@ export default function Dashboard() {
         const remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
         
         if (prev.parent_demande) {
-          // Child demand: Agency share is frozen to 0
-          nextPartAgence = 0;
+          // Child demand: Agency share is this session's price minus cleaner parts
+          nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(currentMontantTTC - totalParts);
         } else {
           // Parent demand: Agency share is the remaining agency share
           nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(remainingAgencyShare);
@@ -1179,7 +1190,7 @@ export default function Dashboard() {
         const remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
 
         if (current.parent_demande) {
-          nextPartAgence = 0;
+          nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(newMontantTTC - totalParts);
         } else {
           nextPartAgence = isFreeOrCancelled ? 0 : roundMoney(remainingAgencyShare);
         }
@@ -1293,7 +1304,7 @@ export default function Dashboard() {
         const remainingAgencyShare = parentPrice - (totalParts + otherDemandsProfilesTotal);
         
         if (editFormData.parent_demande) {
-          finalPartAgence = 0;
+          finalPartAgence = isFreeOrCancelled ? 0 : roundMoney(montantTTC - totalParts);
         } else {
           finalPartAgence = isFreeOrCancelled ? 0 : roundMoney(remainingAgencyShare);
         }
@@ -1315,7 +1326,11 @@ export default function Dashboard() {
       if (['pres_terminee', 'termine'].includes(editFormData.statut) && !isFreeOrCancelled) {
         const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
         const singlePart = Number(editFormData.part_profil || editFormData.montant_agence_doit_profil || 0);
-        if (totalParts <= 0 && singlePart <= 0) {
+        const hasInterneOnly = partsRepartition.length > 0 && partsRepartition.every(p => {
+          const prof = allProfils.find((a: any) => a.id === Number(p.profile_id)) || selectedDemande.profils_envoyes?.find((a: any) => a.id === Number(p.profile_id));
+          return prof?.categorie === 'interne';
+        });
+        if (totalParts <= 0 && singlePart <= 0 && !hasInterneOnly) {
           addToast('Veuillez définir la part de la femme de ménage.', 'warning');
           setShowPartsSection(true);
           setTimeout(() => {
@@ -1631,8 +1646,16 @@ export default function Dashboard() {
     // Synchroniser automatiquement parts_repartition avec les profils actuellement assignés (profils_envoyes)
     let savedParts = asArray<PartRepartitionItem>(facturationData.parts_repartition || formData.parts_repartition, []);
     
-    if (d.profils_envoyes && d.profils_envoyes.length > 0) {
-      const activeProfileIds = new Set(d.profils_envoyes.map((p: any) => Number(p.id)).filter(id => !isNaN(id)));
+    let effectiveProfils = d.profils_envoyes;
+    if ((!effectiveProfils || effectiveProfils.length === 0) && d.parent_demande) {
+      const parentD = getParentDemande(d.parent_demande, d);
+      if (parentD?.profils_envoyes && parentD.profils_envoyes.length > 0) {
+        effectiveProfils = parentD.profils_envoyes;
+      }
+    }
+
+    if (effectiveProfils && effectiveProfils.length > 0) {
+      const activeProfileIds = new Set(effectiveProfils.map((p: any) => Number(p.id)).filter(id => !isNaN(id)));
       
       // 1. Conserver uniquement les parts des profils encore assignés à la demande
       savedParts = savedParts.filter(p => {
@@ -1643,7 +1666,7 @@ export default function Dashboard() {
       const existingProfileIds = new Set(savedParts.map(p => Number(p.profile_id)).filter(id => !isNaN(id)));
       
       // 2. Ajouter automatiquement les profils actuellement assignés mais absents de la répartition
-      d.profils_envoyes.forEach((p: any, idx: number) => {
+      effectiveProfils.forEach((p: any, idx: number) => {
         const pId = Number(p.id);
         if (pId && !existingProfileIds.has(pId)) {
           savedParts.push({
@@ -1769,7 +1792,9 @@ export default function Dashboard() {
       const remainingAgencyShare = parentPrice - (currentDemandProfilesTotal + otherDemandsProfilesTotal);
       
       if (d.parent_demande) {
-        initialPartAgence = 0;
+        initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
+          ? 0
+          : roundMoney(montantTTC - currentDemandProfilesTotal);
       } else {
         initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
           ? 0
@@ -2006,10 +2031,10 @@ export default function Dashboard() {
         if (typeFilter === 'airbnb' && !isAirbnb) return false;
       }
       
-      // Exclure les missions payées du tableau de bord
+      // Exclure les missions payées du tableau de bord (sauf si opérationnellement actives ou fille d'abonnement)
       const facturation = d.formulaire_data?.facturation || {};
       const statutUi = facturation.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
-      if (statutUi === 'paye') {
+      if (statutUi === 'paye' && !['pres_confirmee', 'pres_en_cours', 'pres_a_confirmer'].includes(d.statut) && !d.parent_demande) {
         return false;
       }
 
@@ -4134,7 +4159,7 @@ export default function Dashboard() {
                                    editFormData.statut_paiement_ui === 'facturation_annulee' || 
                                    Boolean(editFormData.facturation_annulee)) 
                                     ? 0 
-                                    : editFormData.frequency === 'abonnement'
+                                    : (!editFormData.parent_demande && editFormData.frequency === 'abonnement')
                                       ? roundMoney(remainingAgencyShare)
                                       : editFormData.part_agence
                                 } 
@@ -4144,19 +4169,17 @@ export default function Dashboard() {
                                   editFormData.statut_paiement_ui === 'intervention_gratuite' || 
                                   editFormData.statut_paiement_ui === 'facturation_annulee' || 
                                   Boolean(editFormData.facturation_annulee) ||
-                                  editFormData.frequency === 'abonnement'
+                                  (!editFormData.parent_demande && editFormData.frequency === 'abonnement')
                                 }
                                 style={
-                                  editFormData.frequency === 'abonnement'
+                                  (!editFormData.parent_demande && editFormData.frequency === 'abonnement')
                                     ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', fontWeight: 600 }
                                     : {}
                                 }
                               />
-                              {editFormData.frequency === 'abonnement' && (
+                              {!editFormData.parent_demande && editFormData.frequency === 'abonnement' && (
                                 <span style={{ fontSize: '11px', color: '#0d9488', marginTop: '4px', display: 'block' }}>
-                                  {editFormData.parent_demande 
-                                    ? "🔒 Part de l'agence restante sur cet abonnement (affichée à titre informatif, la commission réelle est enregistrée sur la demande parente)."
-                                    : "🔒 Part agence calculée automatiquement sur la commission restante."}
+                                  🔒 Part agence calculée automatiquement sur la commission restante.
                                 </span>
                               )}
                             </div>
@@ -5862,14 +5885,23 @@ export default function Dashboard() {
               </div>
 
               <div style={{ fontSize: '13px', color: '#374151', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px', backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                <div><strong>Client :</strong> {confirmTermineeModal.client_name || confirmTermineeModal.formulaire_data?.nom || '—'}</div>
-                <div><strong>Service :</strong> {confirmTermineeModal.service}</div>
-                <div><strong>Durée :</strong> {confirmTermineeModal.nb_heures || confirmTermineeModal.formulaire_data?.duree || confirmTermineeModal.formulaire_data?.nb_heures || '—'} h</div>
+                <div><strong>Client :</strong> {confirmTermineeModal.client_name || confirmTermineeModal.formulaire_data?.nom || (confirmTermineeModal.parent_demande ? getParentDemande(confirmTermineeModal.parent_demande, confirmTermineeModal)?.client_name : '') || '—'}</div>
+                <div><strong>Service :</strong> {confirmTermineeModal.service || (confirmTermineeModal.parent_demande ? getParentDemande(confirmTermineeModal.parent_demande, confirmTermineeModal)?.service : '') || '—'}</div>
+                <div><strong>Durée :</strong> {confirmTermineeModal.nb_heures || confirmTermineeModal.formulaire_data?.duree_heures || confirmTermineeModal.formulaire_data?.duree || confirmTermineeModal.formulaire_data?.nb_heures || (confirmTermineeModal.parent_demande ? getParentDemande(confirmTermineeModal.parent_demande, confirmTermineeModal)?.nb_heures : '') || '—'} h</div>
                 <div>
                   <strong>Femme(s) de ménage :</strong>{' '}
-                  {confirmTermineeModal.profils_envoyes?.length
-                    ? confirmTermineeModal.profils_envoyes.map((p: any) => p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()).join(', ')
-                    : 'Aucun profil assigné'}
+                  {(() => {
+                    let profils = confirmTermineeModal.profils_envoyes;
+                    if ((!profils || profils.length === 0) && confirmTermineeModal.parent_demande) {
+                      const parentD = getParentDemande(confirmTermineeModal.parent_demande, confirmTermineeModal);
+                      if (parentD?.profils_envoyes && parentD.profils_envoyes.length > 0) {
+                        profils = parentD.profils_envoyes;
+                      }
+                    }
+                    return profils?.length
+                      ? profils.map((p: any) => p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim()).join(', ')
+                      : 'Aucun profil assigné';
+                  })()}
                 </div>
               </div>
 

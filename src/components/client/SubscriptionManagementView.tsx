@@ -5,7 +5,7 @@ import { Client, Demande } from '../../types';
 import {
   updateDemande, deleteDemande, createPlanningIntervention,
   sendWhatsApp, toggleAbonnementSuspend, confirmAbonnementPaiement,
-  updatePlanning
+  updatePlanning, confirmerFinPrestation
 } from '../../api/client';
 import { SubscriptionHeaderCard } from './SubscriptionHeaderCard';
 import { SubscriptionMonthTabs } from './SubscriptionMonthTabs';
@@ -519,6 +519,9 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
         if (isRemovalOrReport) {
           await deleteDemande(existing.id);
           addToast("Intervention retirée / mise à jour sur le planning", "info");
+        } else if (newStatut === 'pres_terminee') {
+          await confirmerFinPrestation(existing.id);
+          addToast("Prestation validée comme terminée avec succès", "success");
         } else {
           await updateDemande(existing.id, {
             statut: newStatut,
@@ -527,10 +530,15 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
           addToast("Statut mis à jour", "success");
         }
       } else if (isParentDate) {
-        await updateDemande(latest.id, {
-          statut: newStatut
-        });
-        addToast("Statut de la première intervention mis à jour", "success");
+        if (newStatut === 'pres_terminee') {
+          await confirmerFinPrestation(latest.id);
+          addToast("Prestation validée comme terminée avec succès", "success");
+        } else {
+          await updateDemande(latest.id, {
+            statut: newStatut
+          });
+          addToast("Statut de la première intervention mis à jour", "success");
+        }
       } else if (!isRemovalOrReport) {
         const tom = new Date();
         tom.setDate(tom.getDate() + 1);

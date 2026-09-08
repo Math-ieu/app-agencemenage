@@ -10,7 +10,7 @@ import {
   ChevronDown, User, FileText,
   MessageSquare, History, ArrowLeft,
   Download, Eye, Star, Briefcase, ShieldAlert, CheckCircle,
-  ClipboardCheck, Search, Send, PlusCircle, AlertTriangle, Image, Pause
+  ClipboardCheck, Search, Send, PlusCircle, Image, Pause
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { renderStatusBadge, renderPaymentStatusBadge } from '../utils/statusUtils';
@@ -191,7 +191,6 @@ export default function ProfilDetails() {
   const [demandesSearch, setDemandesSearch] = useState('');
   const [selectedDemande, setSelectedDemande] = useState<any | null>(null);
   const [sending, setSending] = useState(false);
-  const [dashboardDemandes, setDashboardDemandes] = useState<any[]>([]);
 
   // History state
   const [history, setHistory] = useState<any[]>([]);
@@ -281,7 +280,6 @@ export default function ProfilDetails() {
       ]);
 
       const dashDemandsRaw = Array.isArray(dashDemandsRes?.data?.results) ? dashDemandsRes.data.results : (Array.isArray(dashDemandsRes?.data) ? dashDemandsRes.data : []);
-      setDashboardDemandes(dashDemandsRaw);
       const dashDemandsMap = new Map<number, any>();
       dashDemandsRaw.forEach((d: any) => {
         if (d.id) dashDemandsMap.set(Number(d.id), d);
@@ -534,68 +532,6 @@ export default function ProfilDetails() {
     }
     return action;
   };
-
-  const isAgentBusy = useMemo(() => {
-    const realId = agent?.id;
-    if (!realId) return false;
-
-    // 1. L'agent est occupé si son ID figure dans les profils_envoyes ou parts_repartition de n'importe quelle demande active non payée du dashboard
-    const isBusyOnDashboard = dashboardDemandes.some(d => {
-      if (d.statut === 'en_attente' || d.statut === 'pres_terminee' || d.statut === 'termine') return false;
-
-      const factDataDef = d.formulaire_data?.facturation || {};
-      const statutUi = factDataDef.statut_paiement_ui || d.statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(factDataDef.facturation_annulee));
-
-      // Une demande n'est pas active si elle est payée
-      if (statutUi === 'paye') return false;
-
-      // Si elle est annulée, elle reste sur le dashboard si les profils doivent être payés et ne le sont pas entièrement
-      const isAnnule = d.statut === 'annule' || statutUi === 'facturation_annulee' || factDataDef.facturation_annulee;
-      if (isAnnule) {
-        const profilSeraPaye = d.profil_sera_paye !== undefined ? Boolean(d.profil_sera_paye) : Boolean(factDataDef.profil_sera_paye);
-        if (profilSeraPaye) {
-          let allProfilesPaid = false;
-          const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
-          if (Array.isArray(parts) && parts.length > 0) {
-            allProfilesPaid = parts.every((p: any) => p.part_profil_versee);
-          } else {
-            allProfilesPaid = Boolean(factDataDef.part_profil_versee);
-          }
-          if (allProfilesPaid) return false;
-        } else {
-          return false;
-        }
-      }
-
-      // Vérifier profils_envoyes
-      if (Array.isArray(d.profils_envoyes) && d.profils_envoyes.some((p: any) => Number(p.id || p) === realId)) {
-        return true;
-      }
-
-      // Vérifier parts_repartition
-      const parts = d.parts_repartition || factDataDef.parts_repartition || d.formulaire_data?.parts_repartition || [];
-      if (Array.isArray(parts) && parts.some((p: any) => Number(p.profile_id) === realId)) {
-        return true;
-      }
-
-      return false;
-    });
-
-    if (isBusyOnDashboard) return true;
-
-    // 2. Fallback: vérifier aussi les missions (si une mission active non payée existe)
-    return missions.some(m => {
-      if (m.statut === 'annulee' || m.statut === 'terminee') return false;
-      const demande = m.demande_detail || {};
-      if (demande.statut === 'annule' || demande.statut === 'pres_terminee' || demande.statut === 'termine') return false;
-
-      const facturation = demande.formulaire_data?.facturation || {};
-      const rawStatutPaiementUi = facturation.statut_paiement_ui || m.paiement_client_statut || (demande.statut_paiement === 'integral' ? 'paye' : demande.statut_paiement === 'acompte' ? 'paiement_en_attente' : demande.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_paye');
-      
-      const isPaye = rawStatutPaiementUi === 'paye';
-      return !isPaye;
-    });
-  }, [agent, missions, dashboardDemandes]);
 
   const filteredHistory = history.filter(log => {
     if (!historySearch) return true;
@@ -1066,15 +1002,9 @@ export default function ProfilDetails() {
                 <FileText size={16} color={C.teal} /> Éditer
               </button>
             )}
-            {hasPermission(user, 'modifier_agents') && (
+            {(hasPermission(user, 'postuler_demande') || hasPermission(user, 'modifier_agents')) && (
               <button
-                disabled={isAgentBusy}
                 onClick={() => {
-                  const perm = checkPermission(user, 'edit_candidat');
-                  if (!perm.allowed) {
-                    addToast(perm.message || 'Action non autorisée', 'error');
-                    return;
-                  }
                   setShowPostulerModal(true);
                   setSelectedDemande(null);
                   setDemandesSearch('');
@@ -1082,16 +1012,14 @@ export default function ProfilDetails() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '10px 20px',
-                  backgroundColor: isAgentBusy ? '#94a3b8' : C.teal,
+                  backgroundColor: C.teal,
                   color: 'white',
                   borderRadius: 8, border: 'none', fontWeight: 700,
-                  fontSize: 14, cursor: isAgentBusy ? 'not-allowed' : 'pointer',
-                  opacity: isAgentBusy ? 0.8 : 1,
+                  fontSize: 14, cursor: 'pointer',
                 }}
-                title={isAgentBusy ? "Ce profil est déjà affecté à une prestation en cours" : ""}
+                title="Postuler à une demande"
               >
-                {isAgentBusy ? <AlertTriangle size={16} /> : <PlusCircle size={16} />}
-                {isAgentBusy ? 'Déjà affecté' : 'Affecter'}
+                <PlusCircle size={16} /> Postuler
               </button>
             )}
             {(hasPermission(user, 'blacklister_agents') || hasPermission(user, 'mettre_standby_profil')) && (
@@ -1594,16 +1522,15 @@ export default function ProfilDetails() {
                     return (
                       <div
                         key={d.id}
-                        onClick={() => !isAlreadyAssigned && setSelectedDemande(d)}
+                        onClick={() => setSelectedDemande(d)}
                         style={{
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           padding: '14px 24px', borderBottom: '1px solid #f8fafc',
-                          cursor: isAlreadyAssigned ? 'not-allowed' : 'pointer',
-                          opacity: isAlreadyAssigned ? 0.75 : 1,
+                          cursor: 'pointer',
                           transition: 'background 0.15s',
                         }}
-                        onMouseEnter={e => { if (!isAlreadyAssigned) e.currentTarget.style.background = '#f8fafc'; }}
-                        onMouseLeave={e => { if (!isAlreadyAssigned) e.currentTarget.style.background = 'white'; }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'white'; }}
                       >
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>

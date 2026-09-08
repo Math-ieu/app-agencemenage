@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/auth';
 import { checkPermission, hasPermission } from '../utils/permissions';
 import { renderStatusBadge } from '../utils/statusUtils';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
+import PlanInterventionsView from '../components/agents/PlanInterventionsView';
 
 // ── Filter bar styles ────────────────────────────────────────────────────────
 const filterBarStyle: React.CSSProperties = {
@@ -104,6 +105,7 @@ export default function Profils() {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'liste' | 'planning'>('liste');
 
   // Bottom sticky scrollbar refs & state
   const bottomScrollRef = useRef<HTMLDivElement>(null);
@@ -511,10 +513,10 @@ export default function Profils() {
   return (
     <div className="page" style={{ backgroundColor: 'white' }}>
       {/* Header */}
-      <div className="page-header flex justify-between items-center mb-6">
+      <div className="page-header flex justify-between items-center mb-4">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-slate-800">Liste des femmes de ménage</h1>
-          {!loading && (
+          {activeTab === 'liste' && !loading && (
             <span style={{
               fontSize: '13px',
               fontWeight: 600,
@@ -528,29 +530,78 @@ export default function Profils() {
             </span>
           )}
         </div>
-        <div className="flex gap-3">
-          <button className="btn btn-secondary" onClick={() => fetchData()}>
-            <RotateCw size={18} />
-            Actualiser
-          </button>
-          {hasPermission(user, 'creer_agents') && (
-            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-              <Plus size={18} />
-              Ajouter Profil
+        {activeTab === 'liste' && (
+          <div className="flex gap-3">
+            <button className="btn btn-secondary" onClick={() => fetchData()}>
+              <RotateCw size={18} />
+              Actualiser
             </button>
-          )}
-        </div>
+            {hasPermission(user, 'creer_agents') && (
+              <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+                <Plus size={18} />
+                Ajouter Profil
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {showAddModal && (
-        <AddProfileModal
-          onClose={() => setShowAddModal(false)}
-          onSuccess={() => { setShowAddModal(false); fetchData(); }}
-        />
-      )}
+      {/* Sub-tabs switch */}
+      <div style={{
+        display: 'inline-flex',
+        backgroundColor: '#f1f5f9',
+        borderRadius: 10,
+        padding: 4,
+        gap: 4,
+        marginBottom: 20
+      }}>
+        <button
+          onClick={() => setActiveTab('liste')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: 8,
+            border: 'none',
+            backgroundColor: activeTab === 'liste' ? '#037265' : 'transparent',
+            color: activeTab === 'liste' ? 'white' : '#64748b',
+            fontWeight: activeTab === 'liste' ? 700 : 500,
+            fontSize: 14,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          Liste femme de ménage
+        </button>
+        <button
+          onClick={() => setActiveTab('planning')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: 8,
+            border: 'none',
+            backgroundColor: activeTab === 'planning' ? '#037265' : 'transparent',
+            color: activeTab === 'planning' ? 'white' : '#64748b',
+            fontWeight: activeTab === 'planning' ? 700 : 500,
+            fontSize: 14,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          Plan intervention
+        </button>
+      </div>
 
-      {/* ── Single-line filter bar ── */}
-      <div style={filterBarStyle}>
+      {activeTab === 'planning' ? (
+        <PlanInterventionsView />
+      ) : (
+        <>
+          {showAddModal && (
+            <AddProfileModal
+              onClose={() => setShowAddModal(false)}
+              onSuccess={() => { setShowAddModal(false); fetchData(); }}
+            />
+          )}
+
+          {/* ── Single-line filter bar ── */}
+          <div style={filterBarStyle}>
 
         {/* Search */}
         <div style={searchWrapStyle}>
@@ -865,7 +916,7 @@ export default function Profils() {
                           <User size={16} />
                         </button>
 
-                        {hasPermission(user, 'postuler_demande') && (
+                        {(hasPermission(user, 'postuler_demande') || hasPermission(user, 'modifier_agents')) && (
                           <button
                             onClick={() => {
                               setSelectedAgentForPostuler(agent);
@@ -1135,6 +1186,8 @@ export default function Profils() {
           </div>
         </>
       )}
+    </>
+  )}
 
       {/* ── Postuler/Affectation Modal ── */}
       {showPostulerModal && selectedAgentForPostuler && (
@@ -1197,16 +1250,15 @@ export default function Profils() {
                     return (
                       <div
                         key={d.id}
-                        onClick={() => !isAlreadyAssigned && setSelectedDemande(d)}
+                        onClick={() => setSelectedDemande(d)}
                         style={{
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                           padding: '14px 24px', borderBottom: '1px solid #f8fafc',
-                          cursor: isAlreadyAssigned ? 'not-allowed' : 'pointer',
-                          opacity: isAlreadyAssigned ? 0.75 : 1,
+                          cursor: 'pointer',
                           transition: 'background 0.15s',
                         }}
-                        onMouseEnter={e => { if (!isAlreadyAssigned) e.currentTarget.style.background = '#f8fafc'; }}
-                        onMouseLeave={e => { if (!isAlreadyAssigned) e.currentTarget.style.background = 'white'; }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'white'; }}
                       >
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
