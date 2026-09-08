@@ -1939,7 +1939,7 @@ export default function Dashboard() {
     const runWorkflowSync = async () => {
       try {
         const res = await syncPrestationWorkflow();
-        if (res.data?.updated_to_en_cours > 0 || res.data?.updated_to_a_confirmer > 0) {
+        if (res.data?.to_en_cours > 0 || res.data?.to_a_confirmer > 0 || res.data?.alerts_sent > 0) {
           fetchData();
         }
       } catch (err) {
