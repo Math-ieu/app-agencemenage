@@ -8,7 +8,7 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .ls-header {
@@ -326,6 +326,23 @@
   transform: translateY(-50%);
   color: #64748b;
   pointer-events: none;
+}
+
+/* Top Sticky Scrollbar */
+.ls-table-top-scrollbar {
+  position: sticky !important;
+  top: 70px !important;
+  bottom: auto !important;
+  margin-top: 0 !important;
+  margin-bottom: 10px !important;
+  z-index: 25 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+@media (max-width: 768px) {
+  .ls-table-top-scrollbar {
+    top: 60px !important;
+  }
 }
 
 /* Tables Section */
@@ -1168,194 +1185,309 @@
   border-color: #1e293b;
 }
 
-/* Profile Dues Popup Modal (matching user design) */
+/* ==========================================================================
+   Profile Dues & Receipt Popup Modal (Executive High-End UI)
+   ========================================================================== */
+
 .ls-dues-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(4px);
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
+  z-index: 1050;
+  padding: 1.25rem;
 }
 
 .ls-dues-modal-card {
-  background-color: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(226, 232, 240, 0.8);
   width: 100%;
-  max-width: 860px;
-  max-height: 92vh;
+  max-width: 900px;
+  max-height: 90vh;
   overflow-y: auto;
-  padding: 1.75rem;
+  padding: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  animation: lsModalFadeIn 0.2s ease-out;
+  gap: 1.5rem;
+  animation: lsModalZoomIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes lsModalFadeIn {
+@keyframes lsModalZoomIn {
   from {
     opacity: 0;
-    transform: scale(0.97);
+    transform: scale(0.96) translateY(8px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 
+/* Modal Header */
 .ls-dues-modal-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  gap: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.ls-dues-header-profile {
+  display: flex;
+  align-items: center;
   gap: 1rem;
 }
 
-.ls-dues-title-block {
+.ls-dues-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0d9488 0%, #047857 100%);
+  color: #ffffff;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
+  flex-shrink: 0;
 }
 
-.ls-dues-pretitle {
+.ls-dues-profile-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.ls-dues-profile-badge {
   font-size: 0.6875rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #64748b;
+  color: #0d9488;
+  background: #f0fdfa;
+  border: 1px solid #ccfbf1;
+  padding: 0.15rem 0.55rem;
+  border-radius: 6px;
 }
 
-.ls-dues-name {
-  font-size: 2rem;
+.ls-dues-profile-id {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.ls-dues-profile-name {
+  font-size: 1.5rem;
   font-weight: 800;
   color: #0f172a;
-  margin: 0.15rem 0 0.5rem 0;
-  line-height: 1.1;
+  margin: 0;
+  line-height: 1.2;
 }
 
-.ls-dues-period-row {
+.ls-dues-period-tag {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.875rem;
-  color: #475569;
+  font-size: 0.8125rem;
+  color: #64748b;
   font-weight: 500;
+  margin-top: 0.25rem;
 }
 
 .ls-dues-header-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
+  flex-shrink: 0;
 }
 
-.ls-dues-top-btn {
+.ls-dues-btn-pay {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  background-color: #ffffff;
+  gap: 0.45rem;
+  background: #059669;
+  color: #ffffff;
+  border: 1px solid transparent;
+  padding: 0.55rem 1.1rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+  transition: all 0.15s ease;
+}
+
+.ls-dues-btn-pay:hover {
+  background: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(5, 150, 105, 0.35);
+}
+
+.ls-dues-btn-details {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #ffffff;
+  color: #334155;
   border: 1px solid #cbd5e1;
-  color: #0f172a;
-  padding: 0.45rem 0.875rem;
-  border-radius: 8px;
-  font-size: 0.8125rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.ls-dues-top-btn:hover {
-  background-color: #f8fafc;
+.ls-dues-btn-details:hover {
+  background: #f8fafc;
   border-color: #94a3b8;
-}
-
-.ls-dues-top-btn.close {
-  padding: 0.45rem;
-  color: #64748b;
-}
-
-.ls-dues-top-btn.close:hover {
   color: #0f172a;
-  background-color: #fee2e2;
-  border-color: #fca5a5;
 }
 
-/* 3 KPI Cards */
+.ls-dues-btn-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: #f1f5f9;
+  border: 1px solid transparent;
+  color: #64748b;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ls-dues-btn-close:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* 3 KPI Bento Cards */
 .ls-dues-kpis-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 1rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.125rem;
 }
 
 .ls-dues-kpi-card {
-  padding: 1rem 1.25rem;
-  border-radius: 12px;
+  padding: 1.125rem 1.25rem;
+  border-radius: 14px;
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.375rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.ls-dues-kpi-card.card-missions {
-  background-color: #ffffff;
+.ls-dues-kpi-card.missions {
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
 }
 
-.ls-dues-kpi-card.card-missions .kpi-label {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #64748b;
-}
-
-.ls-dues-kpi-card.card-missions .kpi-val {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.ls-dues-kpi-card.card-revenu {
-  background-color: #f0fdf4;
+.ls-dues-kpi-card.revenue {
+  background: #f0fdf4;
   border: 1px solid #bbf7d0;
 }
 
-.ls-dues-kpi-card.card-revenu .kpi-label {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #166534;
-}
-
-.ls-dues-kpi-card.card-revenu .kpi-val {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #15803d;
-}
-
-.ls-dues-kpi-card.card-apayer {
-  background-color: #fff1f2;
+.ls-dues-kpi-card.to-pay {
+  background: #fff1f2;
   border: 1px solid #fecdd3;
 }
 
-.ls-dues-kpi-card.card-apayer .kpi-label {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #9f1239;
+.ls-dues-kpi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.ls-dues-kpi-card.card-apayer .kpi-val {
-  font-size: 1.5rem;
-  font-weight: 800;
+.ls-dues-kpi-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.ls-dues-kpi-card.revenue .ls-dues-kpi-label {
+  color: #15803d;
+}
+
+.ls-dues-kpi-card.to-pay .ls-dues-kpi-label {
   color: #be123c;
 }
 
-/* Table inside modal */
+.ls-dues-kpi-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ls-dues-kpi-icon-wrap.neutral {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.ls-dues-kpi-icon-wrap.emerald {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.ls-dues-kpi-icon-wrap.rose {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+.ls-dues-kpi-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.ls-dues-kpi-value.neutral {
+  color: #0f172a;
+}
+
+.ls-dues-kpi-value.emerald {
+  color: #15803d;
+}
+
+.ls-dues-kpi-value.rose {
+  color: #be123c;
+}
+
+.ls-dues-kpi-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.ls-dues-kpi-card.revenue .ls-dues-kpi-sub {
+  color: #166534;
+}
+
+.ls-dues-kpi-card.to-pay .ls-dues-kpi-sub {
+  color: #9f1239;
+}
+
+/* Table styling */
 .ls-dues-table-box {
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  background: #ffffff;
 }
 
 .ls-dues-table {
@@ -1365,19 +1497,22 @@
 }
 
 .ls-dues-table thead {
-  background-color: #1e293b;
-  color: #ffffff;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .ls-dues-table th {
-  padding: 0.875rem 1rem;
-  font-size: 0.8125rem;
+  padding: 0.75rem 1.125rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #475569;
 }
 
 .ls-dues-table tbody tr {
   border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.1s ease;
 }
 
 .ls-dues-table tbody tr:last-child {
@@ -1389,7 +1524,7 @@
 }
 
 .ls-dues-table td {
-  padding: 0.875rem 1rem;
+  padding: 0.875rem 1.125rem;
   font-size: 0.875rem;
   vertical-align: middle;
 }
@@ -1404,32 +1539,55 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background-color: #f1f5f9;
-  border: 1px solid #cbd5e1;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
   font-size: 0.75rem;
   font-weight: 700;
-  color: #334155;
+  color: #1d4ed8;
+}
+
+.ls-dues-date-text {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.ls-dues-client-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .ls-dues-client-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.3rem 0.65rem;
-  background-color: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1d4ed8;
+  padding: 0.25rem 0.65rem;
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #1e293b;
   border-radius: 9999px;
   font-size: 0.8125rem;
   font-weight: 600;
+  width: fit-content;
+}
+
+.ls-dues-service-hint {
+  font-size: 0.6875rem;
+  color: #64748b;
+  font-weight: 500;
+  padding-left: 0.25rem;
 }
 
 .ls-dues-val-wrap {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
+}
+
+.ls-dues-val-wrap.align-right {
+  align-items: flex-end;
 }
 
 .ls-dues-val-badge {
@@ -1440,15 +1598,17 @@
   border-radius: 6px;
   font-weight: 700;
   font-size: 0.875rem;
-  width: fit-content;
 }
 
 .ls-dues-val-badge.green {
   background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
   color: #15803d;
 }
 
-.ls-dues-val-badge.pink {
+.ls-dues-val-badge.rose {
+  background-color: #fff1f2;
+  border: 1px solid #fecdd3;
   color: #be123c;
 }
 
@@ -1456,19 +1616,66 @@
   font-size: 0.6875rem;
   font-weight: 600;
   color: #d97706;
-  margin-top: 0.15rem;
+  margin-top: 0.2rem;
 }
 
-/* Table Total Row */
+.ls-dues-supplement-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #b45309;
+  background-color: #fef3c7;
+  border: 1px solid #fde68a;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.ls-dues-empty-val {
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.ls-dues-empty-row {
+  text-align: center;
+  padding: 2rem;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+/* Table Footer / Total */
 .ls-dues-table tfoot tr {
   background-color: #f8fafc;
-  border-top: 2px solid #0f172a;
+  border-top: 2px solid #e2e8f0;
 }
 
 .ls-dues-table tfoot td {
-  padding: 1rem;
+  padding: 1rem 1.125rem;
   font-size: 0.9375rem;
+  vertical-align: middle;
+}
+
+.ls-dues-total-label {
   font-weight: 800;
+  color: #0f172a;
+  text-transform: uppercase;
+  font-size: 0.8125rem;
+  letter-spacing: 0.05em;
+}
+
+.ls-dues-total-val {
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.ls-dues-total-val.green {
+  color: #15803d;
+}
+
+.ls-dues-total-val.rose {
+  color: #be123c;
 }
 
 /* Modal Footer */
@@ -1487,13 +1694,14 @@
   font-size: 0.8125rem;
   color: #64748b;
   font-weight: 500;
+  background: #f8fafc;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
 }
 
-.ls-dues-dot-orange {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #f59e0b;
+.ls-dues-info-icon {
+  color: #f59e0b;
   flex-shrink: 0;
 }
 
@@ -1501,28 +1709,38 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background-color: #0f172a;
+  background: #0f172a;
   color: #ffffff;
-  padding: 0.625rem 1.25rem;
-  border-radius: 8px;
+  padding: 0.65rem 1.35rem;
+  border-radius: 10px;
   font-size: 0.875rem;
   font-weight: 600;
   border: none;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  transition: all 0.18s ease;
 }
 
 .ls-dues-pdf-btn:hover {
-  background-color: #1e293b;
+  background: #1e293b;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
 }
 
-/* Responsive adjustments */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+  .ls-dues-modal-card {
+    padding: 1.25rem;
+  }
   .ls-dues-kpis-grid {
     grid-template-columns: 1fr;
   }
   .ls-dues-modal-header {
     flex-direction: column;
+    align-items: flex-start;
+  }
+  .ls-dues-header-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
   .ls-dues-modal-footer {
     flex-direction: column;

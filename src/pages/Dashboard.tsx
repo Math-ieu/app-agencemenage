@@ -1207,6 +1207,21 @@ export default function Dashboard() {
         }
       }
 
+      const baseMontantInitial = toNumber(current.montant_initial) > 0
+        ? toNumber(current.montant_initial)
+        : (toNumber(selectedDemande?.prix) > 0 ? toNumber(selectedDemande?.prix) : currentHT);
+
+      const diff = roundMoney(newMontantTTC - baseMontantInitial);
+      let nextHasSupplement = Boolean(current.has_supplement_heures);
+      let nextSupplementMontant = toNumber(current.supplement_heures_montant);
+      let nextSupplementRecupere = Boolean(current.supplement_heures_recupere_especes);
+
+      if (diff > 0) {
+        nextHasSupplement = true;
+        nextSupplementMontant = diff;
+        nextSupplementRecupere = true;
+      }
+
       return {
         ...current,
         duree: newHours,
@@ -1214,6 +1229,10 @@ export default function Dashboard() {
         montant_ht: newMontantHT,
         prix: newMontantTTC,
         ca_initial: newCaInitial,
+        montant_initial: baseMontantInitial,
+        has_supplement_heures: nextHasSupplement,
+        supplement_heures_montant: nextSupplementMontant,
+        supplement_heures_recupere_especes: nextSupplementRecupere,
         parts_repartition: updatedParts,
         part_agence: nextPartAgence,
         montant_profil_doit_agence: montantProfilDoitAgence,
@@ -1403,6 +1422,12 @@ export default function Dashboard() {
         updateData.date_intervention = effectiveStartDate;
       }
 
+      const baseMontantInitial = toNumber(editFormData.montant_initial) > 0
+        ? toNumber(editFormData.montant_initial)
+        : (toNumber((selectedDemande as any).montant_initial) > 0
+          ? toNumber((selectedDemande as any).montant_initial)
+          : (toNumber(selectedDemande.prix) > 0 ? toNumber(selectedDemande.prix) : montantTTC));
+
       updateData.formulaire_data = {
         ...(selectedDemande.formulaire_data || {}),
         nom: editFormData.client_name || previousFormData.nom || '',
@@ -1446,6 +1471,7 @@ export default function Dashboard() {
         mobilite: editFormData.mobilite || '',
         situation_medicale: editFormData.situation_medicale || '',
         nb_jours: parseInt(editFormData.nb_jours) || 1,
+        montant_initial: baseMontantInitial,
         additionalServices: {
           ...previousAdditional,
           produitsEtOutils: Boolean(editFormData.produits || editFormData.avec_produit),
@@ -1456,6 +1482,7 @@ export default function Dashboard() {
           montant_ht: montantHT,
           tva_active: tvaActive,
           montant_ttc: montantTTC,
+          montant_initial: baseMontantInitial,
           montant_verse: montantVerse,
           montant_profil_doit: toNumber(editFormData.montant_profil_doit),
           facturation_annulee: finalStatutPaiementUi === 'facturation_annulee' || finalStatutPaiementUi === 'intervention_gratuite',
@@ -1486,6 +1513,7 @@ export default function Dashboard() {
         notes: editFormData.note_client || '',
       };
 
+      updateData.montant_initial = baseMontantInitial;
       updateData.avec_produit = Boolean(editFormData.produits || editFormData.avec_produit);
       updateData.part_agence = finalPartAgence;
       updateData.parts_repartition = partsRepartition;
@@ -1622,6 +1650,25 @@ export default function Dashboard() {
       (facturationData.facturation_annulee 
         ? (tvaActive ? roundMoney(prixValue / 1.2) : prixValue)
         : (montantHT > 0 ? montantHT : (tvaActive ? roundMoney(prixValue / 1.2) : prixValue)));
+
+    const savedMontantInitial = toNumber(
+      facturationData.montant_initial ??
+      facturationData.prix_initial ??
+      formData.montant_initial ??
+      (d as any).montant_initial ??
+      0
+    );
+    const existingSuppMontant = toNumber(
+      facturationData.supplement_heures_montant ??
+      formData.supplement_heures_montant ??
+      d.supplement_heures_montant ??
+      0
+    );
+    const initialPrice = savedMontantInitial > 0
+      ? savedMontantInitial
+      : (existingSuppMontant > 0
+        ? Math.max(0, roundMoney(prixValue - existingSuppMontant))
+        : prixValue);
 
     const paymentUiValue = getPaymentUiValue(
       d.statut_paiement,
@@ -1807,6 +1854,7 @@ export default function Dashboard() {
       parent_demande: d.parent_demande || null,
       prix: prixValue,
       montant_ht: montantHT,
+      montant_initial: initialPrice,
       ca_initial: caInitial,
       tva_active: tvaActive,
       geste_commercial: d.geste_commercial || null,
@@ -4271,10 +4319,16 @@ export default function Dashboard() {
                           {/* ── Supplément d'heures payé en espèces : bascule Oui / Non ── */}
                           {(() => {
                             const hasSupplement = Boolean(editFormData.has_supplement_heures);
-                            const montantInitial = montantTTC;
                             const supplementMontant = hasSupplement ? toNumber(editFormData.supplement_heures_montant) : 0;
                             const isSupplementRecupere = hasSupplement && Boolean(editFormData.supplement_heures_recupere_especes);
-                            const totalEncaisse = montantInitial + (isSupplementRecupere ? supplementMontant : 0);
+
+                            // Base initial amount before the supplement was added:
+                            const baseMontantInitial = toNumber(editFormData.montant_initial) > 0
+                              ? toNumber(editFormData.montant_initial)
+                              : (hasSupplement && supplementMontant > 0 ? Math.max(0, roundMoney(montantTTC - supplementMontant)) : montantTTC);
+
+                            const calculatedDiff = Math.max(0, roundMoney(montantTTC - baseMontantInitial));
+                            const totalEncaisse = roundMoney(baseMontantInitial + (isSupplementRecupere ? supplementMontant : 0));
 
                             return (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
@@ -4340,9 +4394,16 @@ export default function Dashboard() {
                                         name="has_supplement_heures_toggle"
                                         checked={hasSupplement}
                                         onChange={() => {
+                                          const defaultSupp = toNumber(editFormData.supplement_heures_montant) > 0
+                                            ? editFormData.supplement_heures_montant
+                                            : (calculatedDiff > 0 ? calculatedDiff : 0);
+
                                           setEditFormData({
                                             ...editFormData,
-                                            has_supplement_heures: true
+                                            has_supplement_heures: true,
+                                            supplement_heures_montant: defaultSupp,
+                                            supplement_heures_recupere_especes: true,
+                                            montant_initial: baseMontantInitial,
                                           });
                                         }}
                                         style={{ accentColor: '#0284C7', cursor: 'pointer' }}
@@ -4355,8 +4416,28 @@ export default function Dashboard() {
                                 {/* Bloc de saisie du supplément : affiché UNIQUEMENT si Oui */}
                                 {hasSupplement && (
                                   <div style={{ padding: '16px', borderRadius: '10px', border: '1px solid #BAE6FD', background: '#F0F9FF' }}>
-                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0369A1', marginBottom: '12px' }}>
-                                      Supplément d'heures payé en espèces
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0369A1' }}>
+                                        Supplément d'heures payé en espèces
+                                      </div>
+                                      {calculatedDiff > 0 && supplementMontant !== calculatedDiff && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditFormData({ ...editFormData, supplement_heures_montant: calculatedDiff })}
+                                          style={{
+                                            background: '#E0F2FE',
+                                            color: '#0369A1',
+                                            border: '1px solid #BAE6FD',
+                                            borderRadius: '6px',
+                                            padding: '3px 8px',
+                                            fontSize: '11px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          Ajuster à la différence (+{calculatedDiff} DH)
+                                        </button>
+                                      )}
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '16px', alignItems: 'flex-end' }}>
                                       <div>
@@ -4401,7 +4482,7 @@ export default function Dashboard() {
                                       </div>
                                     </div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginTop: '12px', fontSize: '12.5px', color: '#0369A1' }}>
-                                      <span>Montant initial : <strong>{montantInitial.toFixed(2).replace('.', ',')} DH</strong></span>
+                                      <span>Montant initial : <strong>{baseMontantInitial.toFixed(2).replace('.', ',')} DH</strong></span>
                                       <span>Supplément espèces : <strong>{supplementMontant.toFixed(2).replace('.', ',')} DH</strong></span>
                                       <span>Total encaissé : <strong>{totalEncaisse.toFixed(2).replace('.', ',')} DH</strong></span>
                                     </div>
@@ -4534,11 +4615,13 @@ export default function Dashboard() {
                                         const partAgenceVal = toNumber(editFormData.part_agence);
                                         const isSingleProfile = partsRepartition.length <= 1;
 
-                                        const montantInitial = montantTTC;
                                         const hasSupplement = Boolean(editFormData.has_supplement_heures);
                                         const supplementMontant = hasSupplement ? toNumber(editFormData.supplement_heures_montant) : 0;
                                         const isSupplementRecupere = hasSupplement && Boolean(editFormData.supplement_heures_recupere_especes);
-                                        const totalEncaisse = montantInitial + (isSupplementRecupere ? supplementMontant : 0);
+                                        const baseMontantInitial = toNumber(editFormData.montant_initial) > 0
+                                          ? toNumber(editFormData.montant_initial)
+                                          : (hasSupplement && supplementMontant > 0 ? Math.max(0, roundMoney(montantTTC - supplementMontant)) : montantTTC);
+                                        const totalEncaisse = roundMoney(baseMontantInitial + (isSupplementRecupere ? supplementMontant : 0));
 
                                         return (
                                           <div style={{ marginTop: '8px', padding: '8px 12px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', fontSize: '12px', color: '#166534', lineHeight: '1.4' }}>

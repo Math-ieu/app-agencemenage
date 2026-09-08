@@ -17,7 +17,9 @@ import {
   FileText,
   ArrowDownLeft,
   ArrowUpRight,
-  User
+  User,
+  Info,
+  Sparkles
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -36,6 +38,27 @@ import { hasPermission, hasPermissionWithContext } from '../../utils/permissions
 import { getDynamicMonthPassagesCount } from '../../utils/pricing';
 import { isFinanceRowVisible, getStatusInfo } from '../../utils/statusUtils';
 import './LesSuivis.css';
+import logoUrl from '../../assets/LOGO-AGENCE-MENAGE.png';
+
+let cachedLogoBase64: string | null = null;
+const loadLogoBase64 = async (): Promise<string | null> => {
+  if (cachedLogoBase64) return cachedLogoBase64;
+  try {
+    const response = await fetch(logoUrl);
+    const blob = await response.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        cachedLogoBase64 = reader.result as string;
+        resolve(cachedLogoBase64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+};
 
 // Interface matching the FacturationRow definition in VueGlobale
 interface FacturationRow {
@@ -395,16 +418,18 @@ const getRowDuesBreakdown = (row: FacturationRow) => {
   let doitAgence = 0;
   let hasSupplementNote = false;
   let agenceDoit = 0;
+  const supplementMontant = Number(row.supplementHeuresMontant || 0);
+  const hasSupplement = Boolean(row.hasSupplementHeures && supplementMontant > 0);
 
   if (isCredit) {
     agenceDoit = row.partProfil || 0;
-    if (row.isDelegate && row.hasSupplementHeures && row.supplementHeuresRecupereEspeces && (row.supplementHeuresMontant || 0) > 0) {
-      doitAgence += Number(row.supplementHeuresMontant);
+    if (row.isDelegate && hasSupplement && row.supplementHeuresRecupereEspeces) {
+      doitAgence += supplementMontant;
       hasSupplementNote = true;
     }
   } else if (isDebit) {
     doitAgence = row.partAgence || 0;
-    if (row.hasSupplementHeures && row.supplementHeuresRecupereEspeces) {
+    if (hasSupplement && row.supplementHeuresRecupereEspeces) {
       hasSupplementNote = true;
     }
   }
@@ -413,10 +438,12 @@ const getRowDuesBreakdown = (row: FacturationRow) => {
     doitAgence,
     hasSupplementNote,
     agenceDoit,
+    hasSupplement,
+    supplementMontant,
   };
 };
 
-const generateProfileReceiptPdf = (
+const generateProfileReceiptPdf = async (
   profile: {
     profilName: string;
     phone?: string;
@@ -432,70 +459,83 @@ const generateProfileReceiptPdf = (
   const pinkColor: [number, number, number] = [190, 18, 60]; // #be123c
   const textDark: [number, number, number] = [30, 41, 59];
 
-  // Header Title
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.text('AGENCE MÉNAGE', 14, 20);
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text('Services de ménage professionnel & conciergerie', 14, 25);
-  doc.text('Casablanca, Maroc — contact@agencemenage.ma', 14, 29);
+  // 1. Logo de l'agence uniquement (sur le reçu en pdf, met juste le logo de l'agence)
+  const logoBase64 = await loadLogoBase64();
+  if (logoBase64) {
+    try {
+      doc.addImage(logoBase64, 'PNG', 14, 11, 44, 19.3);
+    } catch {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.text('AGENCE MÉNAGE', 14, 22);
+    }
+  } else {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text('AGENCE MÉNAGE', 14, 22);
+  }
 
   // Document Info Right
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(tealColor[0], tealColor[1], tealColor[2]);
-  doc.text('REÇU DE RÈGLEMENT & DÉCOMPTE', 196, 20, { align: 'right' });
+  doc.text('REÇU DE RÈGLEMENT & DÉCOMPTE', 196, 18, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-  doc.text(`Date d'émission : ${new Date().toLocaleDateString('fr-FR')}`, 196, 26, { align: 'right' });
+  doc.text(`Date d'émission : ${new Date().toLocaleDateString('fr-FR')}`, 196, 24, { align: 'right' });
   const periodLabel = `Semaine du ${formatDateFRWithDay(dateFromStr)} au ${formatDateFRWithDay(dateToStr)}`;
-  doc.text(periodLabel, 196, 31, { align: 'right' });
+  doc.text(periodLabel, 196, 29, { align: 'right' });
 
   // Divider
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.5);
-  doc.line(14, 35, 196, 35);
+  doc.line(14, 34, 196, 34);
 
   // Profile Card
   doc.setFillColor(248, 250, 252);
-  doc.roundedRect(14, 40, 182, 22, 3, 3, 'F');
+  doc.roundedRect(14, 38, 182, 22, 3, 3, 'F');
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(14, 40, 182, 22, 3, 3, 'S');
+  doc.roundedRect(14, 38, 182, 22, 3, 3, 'S');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
-  doc.text('FEMME DE MÉNAGE', 20, 46);
+  doc.text('FEMME DE MÉNAGE / INTERVENANTE', 20, 44);
 
-  doc.setFontSize(14);
+  doc.setFontSize(13);
   doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.text(profile.profilName, 20, 54);
+  doc.text(profile.profilName, 20, 52);
 
   if (profile.phone && profile.phone !== '—') {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(71, 85, 105);
-    doc.text(`Tél : ${profile.phone}`, 120, 54);
+    doc.text(`Tél : ${profile.phone}`, 120, 52);
   }
 
   // Calculate table rows and totals
   let totalDoitAgence = 0;
   let totalAgenceDoit = 0;
+  let totalSupplements = 0;
 
   const tableRows = profile.rows.map((row) => {
     const b = getRowDuesBreakdown(row);
     totalDoitAgence += b.doitAgence;
     totalAgenceDoit += b.agenceDoit;
+    if (b.hasSupplementNote && b.supplementMontant > 0) {
+      totalSupplements += b.supplementMontant;
+    }
 
     const dateVal = row.date ? formatDateFR(row.date) : '—';
-    const clientVal = row.client || '—';
-    const suppLabel = b.hasSupplementNote ? ' (Supplément espèces)' : '';
+    const suppBadge = b.supplementMontant > 0 ? ` (+Supplément : ${b.supplementMontant.toFixed(2)} DH)` : '';
+    const clientVal = `${row.client || '—'}${suppBadge}`;
+    const suppLabel = b.supplementMontant > 0
+      ? ` (Supplément espèces : ${b.supplementMontant.toFixed(2)} DH)`
+      : (b.hasSupplementNote ? ' (Supplément espèces)' : '');
     const doitAgenceCell = b.doitAgence > 0 ? `${b.doitAgence.toFixed(2)} DH${suppLabel}` : '—';
     const agenceDoitCell = b.agenceDoit > 0 ? `${b.agenceDoit.toFixed(2)} DH` : '—';
 
@@ -503,11 +543,11 @@ const generateProfileReceiptPdf = (
   });
 
   // Summary KPI Boxes
-  const kpiY = 67;
+  const kpiY = 65;
   const colW = 58;
 
   // Box 1: Missions
-  doc.setFillColor(255, 255, 255);
+  doc.setFillColor(248, 250, 252);
   doc.roundedRect(14, kpiY, colW, 16, 2, 2, 'F');
   doc.setDrawColor(226, 232, 240);
   doc.roundedRect(14, kpiY, colW, 16, 2, 2, 'S');
@@ -528,7 +568,13 @@ const generateProfileReceiptPdf = (
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(22, 101, 52);
-  doc.text('Revenu (Doit à l\'agence)', 18 + colW + 4, kpiY + 6);
+  doc.text("Revenu (Doit à l'agence)", 18 + colW + 4, kpiY + 6);
+  if (totalSupplements > 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(180, 83, 9);
+    doc.text(`dont suppl.: ${totalSupplements.toFixed(2)} DH`, 18 + colW + 28, kpiY + 6);
+  }
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(greenColor[0], greenColor[1], greenColor[2]);
@@ -555,7 +601,7 @@ const generateProfileReceiptPdf = (
     head: [['Date', 'Client', "Doit à l'agence", 'Agence doit au profil']],
     body: tableRows,
     foot: [
-      ['Total', '', `↙ ${totalDoitAgence.toFixed(2)} DH`, `↗ ${totalAgenceDoit.toFixed(2)} DH`]
+      ['Total', '', `${totalDoitAgence.toFixed(2)} DH`, `${totalAgenceDoit.toFixed(2)} DH`]
     ],
     theme: 'grid',
     headStyles: {
@@ -575,12 +621,45 @@ const generateProfileReceiptPdf = (
       textColor: [15, 23, 42],
       fontStyle: 'bold',
       fontSize: 10,
+      cellPadding: 4,
     },
     columnStyles: {
-      0: { cellWidth: 40 },
-      1: { cellWidth: 55 },
-      2: { cellWidth: 45, halign: 'right', fontStyle: 'bold', textColor: [21, 128, 61] },
-      3: { cellWidth: 42, halign: 'right', fontStyle: 'bold', textColor: [190, 18, 60] },
+      0: { cellWidth: 38 },
+      1: { cellWidth: 56 },
+      2: { cellWidth: 44, halign: 'right' },
+      3: { cellWidth: 44, halign: 'right' },
+    },
+    didParseCell: (data) => {
+      if (data.section === 'head') {
+        if (data.column.index === 2 || data.column.index === 3) {
+          data.cell.styles.halign = 'right';
+        }
+      }
+      if (data.section === 'body') {
+        if (data.column.index === 2) {
+          data.cell.styles.textColor = [21, 128, 61];
+          data.cell.styles.halign = 'right';
+          data.cell.styles.fontStyle = 'bold';
+        } else if (data.column.index === 3) {
+          data.cell.styles.textColor = [190, 18, 60];
+          data.cell.styles.halign = 'right';
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+      if (data.section === 'foot') {
+        if (data.column.index === 0) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.textColor = [15, 23, 42];
+        } else if (data.column.index === 2) {
+          data.cell.styles.textColor = [21, 128, 61];
+          data.cell.styles.halign = 'right';
+          data.cell.styles.fontStyle = 'bold';
+        } else if (data.column.index === 3) {
+          data.cell.styles.textColor = [190, 18, 60];
+          data.cell.styles.halign = 'right';
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
     },
     alternateRowStyles: {
       fillColor: [255, 255, 255],
@@ -2803,6 +2882,21 @@ export default function LesSuivis() {
                 </div>
               )}
 
+              {/* Horizontal scrollbar - moved up directly above the table for immediate access */}
+              <StickyHorizontalScrollbar
+                targetRef={dusTableWrapRef}
+                dependencies={[filteredRows, isGroupedByProfil]}
+                className="ls-table-top-scrollbar"
+                style={{
+                  position: 'sticky',
+                  top: '70px',
+                  bottom: 'auto',
+                  marginTop: '0px',
+                  marginBottom: '10px',
+                  zIndex: 25,
+                }}
+              />
+
               {/* Main table */}
               <div className="ls-table-section">
                 <div className="ls-table-wrapper sticky-table-wrap" ref={dusTableWrapRef}>
@@ -3081,7 +3175,6 @@ export default function LesSuivis() {
                   )}
                 </div>
               </div>
-              <StickyHorizontalScrollbar targetRef={dusTableWrapRef} dependencies={[filteredRows, isGroupedByProfil]} />
             </>
           )}
 
@@ -3830,184 +3923,265 @@ export default function LesSuivis() {
             </div>
           )}
 
-          {/* ─── MODAL: PROFILE DUES & RECEIPT POPUP (Matching Mockup) ─── */}
-          {selectedDuesProfile && (
-            <div className="ls-dues-modal-overlay" onClick={() => setSelectedDuesProfile(null)}>
-              <div className="ls-dues-modal-card" onClick={(e) => e.stopPropagation()}>
-                {/* Header */}
-                <div className="ls-dues-modal-header">
-                  <div>
-                    <div className="ls-dues-profile-title">
-                      <span className="ls-dues-profile-type">FEMME DE MÉNAGE</span>
-                      <h2>{selectedDuesProfile.profilName}</h2>
+          {/* ─── MODAL: PROFILE DUES & RECEIPT POPUP (Redesigned Executive UI) ─── */}
+          {selectedDuesProfile && (() => {
+            const initials = (selectedDuesProfile.profilName || '')
+              .split(' ')
+              .map((n: string) => n[0])
+              .filter(Boolean)
+              .slice(0, 2)
+              .join('')
+              .toUpperCase() || 'P';
+
+            return (
+              <div className="ls-dues-modal-overlay" onClick={() => setSelectedDuesProfile(null)}>
+                <div className="ls-dues-modal-card" onClick={(e) => e.stopPropagation()}>
+                  {/* Header */}
+                  <div className="ls-dues-modal-header">
+                    <div className="ls-dues-header-profile">
+                      <div className="ls-dues-avatar">{initials}</div>
+                      <div>
+                        <div className="ls-dues-profile-badge-row">
+                          <span className="ls-dues-profile-badge">INTERVENANTE</span>
+                          {selectedDuesProfile.profilId && (
+                            <span className="ls-dues-profile-id">#{selectedDuesProfile.profilId}</span>
+                          )}
+                        </div>
+                        <h2 className="ls-dues-profile-name">{selectedDuesProfile.profilName}</h2>
+                        <div className="ls-dues-period-tag">
+                          <Calendar size={14} />
+                          <span>Semaine du {formatDateFRWithDay(dateFrom)} au {formatDateFRWithDay(dateTo)}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="ls-dues-profile-subtitle">
-                      Semaine du {formatDateFRWithDay(dateFrom)} au {formatDateFRWithDay(dateTo)}
-                    </div>
-                  </div>
-                  <div className="ls-dues-header-actions">
-                    <button
-                      type="button"
-                      className="ls-dues-btn-pay"
-                      onClick={() => setSettleConfirmProfile(selectedDuesProfile)}
-                      title="Régler le paiement total entre l'agence et ce profil"
-                    >
-                      <Pencil size={15} />
-                      <span>Payer</span>
-                    </button>
-                    {selectedDuesProfile.profilId && (
+                    <div className="ls-dues-header-actions">
                       <button
                         type="button"
-                        className="ls-dues-btn-details"
-                        onClick={() => goToProfilDetails(selectedDuesProfile.profilId)}
-                        title="Voir la fiche détaillée du profil"
+                        className="ls-dues-btn-pay"
+                        onClick={() => setSettleConfirmProfile(selectedDuesProfile)}
+                        title="Régler le paiement total entre l'agence et ce profil"
                       >
-                        <Eye size={15} />
-                        <span>Détails</span>
+                        <Pencil size={15} />
+                        <span>Régler le paiement</span>
                       </button>
-                    )}
+                      {selectedDuesProfile.profilId && (
+                        <button
+                          type="button"
+                          className="ls-dues-btn-details"
+                          onClick={() => goToProfilDetails(selectedDuesProfile.profilId)}
+                          title="Voir la fiche détaillée du profil"
+                        >
+                          <Eye size={15} />
+                          <span>Fiche profil</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="ls-dues-btn-close"
+                        onClick={() => setSelectedDuesProfile(null)}
+                        title="Fermer"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 3 KPI Bento Cards */}
+                  {/* KPI Cards */}
+                  {(() => {
+                    const totalSupplementsPeriod = selectedDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
+                      return sum + (r.hasSupplementHeures && r.supplementHeuresRecupereEspeces ? Number(r.supplementHeuresMontant || 0) : 0);
+                    }, 0);
+
+                    return (
+                      <div className="ls-dues-kpis-grid">
+                        <div className="ls-dues-kpi-card missions">
+                          <div className="ls-dues-kpi-header">
+                            <span className="ls-dues-kpi-label">Prestations</span>
+                            <div className="ls-dues-kpi-icon-wrap neutral">
+                              <FileText size={16} />
+                            </div>
+                          </div>
+                          <div className="ls-dues-kpi-value neutral">{selectedDuesProfile.rows.length}</div>
+                          <div className="ls-dues-kpi-sub">Missions sur la période</div>
+                        </div>
+
+                        <div className="ls-dues-kpi-card revenue">
+                          <div className="ls-dues-kpi-header">
+                            <span className="ls-dues-kpi-label">Encaissé par le profil</span>
+                            <div className="ls-dues-kpi-icon-wrap emerald">
+                              <ArrowDownLeft size={16} />
+                            </div>
+                          </div>
+                          <div className="ls-dues-kpi-value emerald">
+                            {money(selectedDuesProfile.profilDoitAgence)}
+                          </div>
+                          <div className="ls-dues-kpi-sub">
+                            Montant dû à l'agence (espèces)
+                            {totalSupplementsPeriod > 0 && (
+                              <span style={{ display: 'block', color: '#b45309', fontWeight: 600, marginTop: '2px' }}>
+                                dont {money(totalSupplementsPeriod)} de suppléments
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="ls-dues-kpi-card to-pay">
+                          <div className="ls-dues-kpi-header">
+                            <span className="ls-dues-kpi-label">Rémunération due</span>
+                            <div className="ls-dues-kpi-icon-wrap rose">
+                              <ArrowUpRight size={16} />
+                            </div>
+                          </div>
+                          <div className="ls-dues-kpi-value rose">
+                            {money(selectedDuesProfile.agenceDoitProfil)}
+                          </div>
+                          <div className="ls-dues-kpi-sub">Part intervenante à verser</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Dues breakdown table */}
+                  <div className="ls-dues-table-box">
+                    <table className="ls-dues-table">
+                      <thead>
+                        <tr>
+                          <th>Date de mission</th>
+                          <th>Client & Prestation</th>
+                          <th style={{ textAlign: 'right' }}>Dû à l'agence</th>
+                          <th style={{ textAlign: 'right' }}>Agence doit au profil</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedDuesProfile.rows.map((row: FacturationRow, idx: number) => {
+                          const b = getRowDuesBreakdown(row);
+                          const dateObj = parseFrenchDate(row.date);
+                          const dayNumber = dateObj ? dateObj.getDate() : '';
+
+                          return (
+                            <tr key={row._uniqueKey || `${row.missionNo}-${idx}`}>
+                              <td>
+                                <div className="ls-dues-date-cell">
+                                  {dayNumber && <span className="ls-dues-day-circle">{dayNumber}</span>}
+                                  <span className="ls-dues-date-text">{row.date ? formatDateFRWithDay(row.date) : '—'}</span>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="ls-dues-client-cell">
+                                  <span className="ls-dues-client-pill">
+                                    <User size={13} />
+                                    <span>{row.client || '—'}</span>
+                                  </span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                    {row.service && (
+                                      <span className="ls-dues-service-hint">
+                                        {row.missionNo ? `#${row.missionNo} • ` : ''}{row.service}
+                                      </span>
+                                    )}
+                                    {b.supplementMontant > 0 && (
+                                      <span className="ls-dues-supplement-tag" title="Supplément d'heures réglé par le client">
+                                        <Sparkles size={11} />
+                                        <span>Supplément : +{money(b.supplementMontant)}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                {b.doitAgence > 0 ? (
+                                  <div className="ls-dues-val-wrap align-right">
+                                    <span className="ls-dues-val-badge green">
+                                      <ArrowDownLeft size={13} />
+                                      {money(b.doitAgence)}
+                                    </span>
+                                    {b.hasSupplementNote && b.supplementMontant > 0 && (
+                                      <span className="ls-dues-subtext-orange" style={{ fontWeight: 700, display: 'block', marginTop: '2px' }}>
+                                        Supplément espèces : {money(b.supplementMontant)}
+                                      </span>
+                                    )}
+                                    {b.hasSupplementNote && !b.supplementMontant && (
+                                      <span className="ls-dues-subtext-orange">
+                                        Supplément espèces
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="ls-dues-empty-val">—</span>
+                                )}
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                {b.agenceDoit > 0 ? (
+                                  <div className="ls-dues-val-wrap align-right">
+                                    <span className="ls-dues-val-badge rose">
+                                      <ArrowUpRight size={13} />
+                                      {money(b.agenceDoit)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="ls-dues-empty-val">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {selectedDuesProfile.rows.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="ls-dues-empty-row">
+                              Aucune mission trouvée pour cette période.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan={2}>
+                            <span className="ls-dues-total-label">Total de la période</span>
+                            {(() => {
+                              const suppSum = selectedDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
+                                return sum + (r.hasSupplementHeures && r.supplementHeuresRecupereEspeces ? Number(r.supplementHeuresMontant || 0) : 0);
+                              }, 0);
+                              return suppSum > 0 ? (
+                                <span style={{ display: 'block', fontSize: '0.75rem', color: '#b45309', fontWeight: 600, marginTop: '2px' }}>
+                                  (dont {money(suppSum)} de suppléments espèces)
+                                </span>
+                              ) : null;
+                            })()}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <span className="ls-dues-total-val green">
+                              {money(selectedDuesProfile.profilDoitAgence)}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <span className="ls-dues-total-val rose">
+                              {money(selectedDuesProfile.agenceDoitProfil)}
+                            </span>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Footer Note & PDF Download */}
+                  <div className="ls-dues-modal-footer">
+                    <div className="ls-dues-nb-note">
+                      <Info size={15} className="ls-dues-info-icon" />
+                      <span>Période de facturation hebdomadaire : du vendredi au jeudi inclus.</span>
+                    </div>
                     <button
                       type="button"
-                      className="ls-dues-btn-close"
-                      onClick={() => setSelectedDuesProfile(null)}
-                      title="Fermer"
+                      className="ls-dues-pdf-btn"
+                      onClick={() => generateProfileReceiptPdf(selectedDuesProfile, dateFrom, dateTo)}
                     >
-                      <X size={18} />
+                      <Download size={16} />
+                      <span>Générer le reçu en PDF</span>
                     </button>
                   </div>
                 </div>
-
-                {/* 3 KPI Cards */}
-                <div className="ls-dues-kpis-grid">
-                  <div className="ls-dues-kpi-card missions">
-                    <div className="ls-dues-kpi-label">Missions</div>
-                    <div className="ls-dues-kpi-value">{selectedDuesProfile.rows.length}</div>
-                    <div className="ls-dues-kpi-sub">Total prestations</div>
-                  </div>
-                  <div className="ls-dues-kpi-card revenue">
-                    <div className="ls-dues-kpi-label">Revenu (Doit à l'agence)</div>
-                    <div className="ls-dues-kpi-value green">
-                      {money(selectedDuesProfile.profilDoitAgence)}
-                    </div>
-                    <div className="ls-dues-kpi-sub">Montants dus à l'agence</div>
-                  </div>
-                  <div className="ls-dues-kpi-card to-pay">
-                    <div className="ls-dues-kpi-label">À payer (Agence doit au profil)</div>
-                    <div className="ls-dues-kpi-value pink">
-                      {money(selectedDuesProfile.agenceDoitProfil)}
-                    </div>
-                    <div className="ls-dues-kpi-sub">Rémunération due</div>
-                  </div>
-                </div>
-
-                {/* Dues breakdown table */}
-                <div className="ls-dues-table-wrap">
-                  <table className="ls-dues-table">
-                    <thead>
-                      <tr>
-                        <th>DATE</th>
-                        <th>CLIENT</th>
-                        <th>DOIT À L'AGENCE</th>
-                        <th>AGENCE DOIT AU PROFIL</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedDuesProfile.rows.map((row: FacturationRow, idx: number) => {
-                        const b = getRowDuesBreakdown(row);
-                        const dateObj = parseFrenchDate(row.date);
-                        const dayNumber = dateObj ? dateObj.getDate() : '';
-
-                        return (
-                          <tr key={row._uniqueKey || `${row.missionNo}-${idx}`}>
-                            <td>
-                              <div className="ls-dues-date-cell">
-                                {dayNumber && <span className="ls-dues-day-circle">{dayNumber}</span>}
-                                <span>{row.date ? formatDateFRWithDay(row.date) : '—'}</span>
-                              </div>
-                            </td>
-                            <td>
-                              <span className="ls-dues-client-pill">
-                                <User size={13} />
-                                <span>{row.client || '—'}</span>
-                              </span>
-                            </td>
-                            <td>
-                              {b.doitAgence > 0 ? (
-                                <div className="ls-dues-val-wrap">
-                                  <span className="ls-dues-val-badge green">
-                                    <ArrowDownLeft size={14} />
-                                    {money(b.doitAgence)}
-                                  </span>
-                                  {b.hasSupplementNote && (
-                                    <span className="ls-dues-subtext-orange">
-                                      Supplément espèces
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span style={{ color: '#94a3b8' }}>—</span>
-                              )}
-                            </td>
-                            <td>
-                              {b.agenceDoit > 0 ? (
-                                <div className="ls-dues-val-wrap">
-                                  <span className="ls-dues-val-badge pink">
-                                    <ArrowUpRight size={14} />
-                                    {money(b.agenceDoit)}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span style={{ color: '#94a3b8' }}>—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {selectedDuesProfile.rows.length === 0 && (
-                        <tr>
-                          <td colSpan={4} style={{ textAlign: 'center', padding: '1.5rem', color: '#64748b' }}>
-                            Aucune mission trouvée pour cette période.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td>Total</td>
-                        <td>—</td>
-                        <td>
-                          <span style={{ color: '#15803d', fontWeight: 800 }}>
-                            ↙ {money(selectedDuesProfile.profilDoitAgence)}
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{ color: '#be123c', fontWeight: 800 }}>
-                            ↗ {money(selectedDuesProfile.agenceDoitProfil)}
-                          </span>
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-
-                {/* Footer Note & PDF Download */}
-                <div className="ls-dues-modal-footer">
-                  <div className="ls-dues-nb-note">
-                    <span className="ls-dues-dot-orange" />
-                    <span>• NB : la période mentionnée va toujours du vendredi au jeudi.</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="ls-dues-pdf-btn"
-                    onClick={() => generateProfileReceiptPdf(selectedDuesProfile, dateFrom, dateTo)}
-                  >
-                    <Download size={16} />
-                    <span>Générer le reçu en PDF</span>
-                  </button>
-                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ─── MODAL: SETTLE CONFIRMATION ─── */}
           {settleConfirmProfile && (
