@@ -8,7 +8,6 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow-x: clip;
 }
 
 .ls-header {
@@ -328,22 +327,7 @@
   pointer-events: none;
 }
 
-/* Top Sticky Scrollbar */
-.ls-table-top-scrollbar {
-  position: sticky !important;
-  top: 70px !important;
-  bottom: auto !important;
-  margin-top: 0 !important;
-  margin-bottom: 10px !important;
-  z-index: 25 !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
-}
 
-@media (max-width: 768px) {
-  .ls-table-top-scrollbar {
-    top: 60px !important;
-  }
-}
 
 /* Tables Section */
 .ls-table-section {

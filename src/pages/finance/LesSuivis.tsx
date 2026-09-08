@@ -2882,21 +2882,6 @@ export default function LesSuivis() {
                 </div>
               )}
 
-              {/* Horizontal scrollbar - moved up directly above the table for immediate access */}
-              <StickyHorizontalScrollbar
-                targetRef={dusTableWrapRef}
-                dependencies={[filteredRows, isGroupedByProfil]}
-                className="ls-table-top-scrollbar"
-                style={{
-                  position: 'sticky',
-                  top: '70px',
-                  bottom: 'auto',
-                  marginTop: '0px',
-                  marginBottom: '10px',
-                  zIndex: 25,
-                }}
-              />
-
               {/* Main table */}
               <div className="ls-table-section">
                 <div className="ls-table-wrapper sticky-table-wrap" ref={dusTableWrapRef}>
@@ -3175,6 +3160,12 @@ export default function LesSuivis() {
                   )}
                 </div>
               </div>
+
+              {/* Bottom Sticky Horizontal Scrollbar - Figée en bas comme sur le dashboard */}
+              <StickyHorizontalScrollbar
+                targetRef={dusTableWrapRef}
+                dependencies={[filteredRows, isGroupedByProfil]}
+              />
             </>
           )}
 
