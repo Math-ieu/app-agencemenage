@@ -1806,10 +1806,19 @@ export default function Dashboard() {
       });
     }
 
-    let initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
+    const isFreeOrCancelledLocal = paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee';
+    const demandMontantTTC = isFreeOrCancelledLocal
       ? 0
-      : toNumber(facturationData.part_agence || formData.part_agence);
+      : (prixValue > 0 ? prixValue : roundMoney(tvaActive ? montantHT * 1.2 : montantHT));
 
+    const savedPartAgence = toNumber(
+      facturationData.part_agence ??
+      formData.part_agence ??
+      (d as any).part_agence ??
+      -1
+    );
+
+    let initialPartAgence = 0;
     const currentDemandProfilesTotal = savedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
 
     if (d.frequency === 'abonnement' || !!d.parent_demande) {
@@ -1824,13 +1833,16 @@ export default function Dashboard() {
       }, 0);
       
       const remainingAgencyShare = Math.max(0, roundMoney(parentPrice - (currentDemandProfilesTotal + otherDemandsProfilesTotal)));
-      initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
+      initialPartAgence = isFreeOrCancelledLocal
         ? 0
         : remainingAgencyShare;
     } else {
-      initialPartAgence = (paymentUiValue === 'intervention_gratuite' || paymentUiValue === 'facturation_annulee')
+      const calculatedOneshotShare = Math.max(0, roundMoney(demandMontantTTC - currentDemandProfilesTotal));
+      initialPartAgence = isFreeOrCancelledLocal
         ? 0
-        : Math.max(0, roundMoney(montantTTC - currentDemandProfilesTotal));
+        : (savedPartAgence >= 0 && Math.abs(savedPartAgence - calculatedOneshotShare) < 0.01
+            ? savedPartAgence
+            : calculatedOneshotShare);
     }
 
     let initialMontantAgenceDoitProfil = toNumber(facturationData.montant_agence_doit_profil);
@@ -4283,36 +4295,41 @@ export default function Dashboard() {
                                 </div>
                                 <div className="form-group">
                                   <label>Part de l'agence (MAD)</label>
-                                  <input 
-                                    type="number" 
-                                    value={
-                                      (editFormData.statut_paiement_ui === 'intervention_gratuite' || 
-                                       editFormData.statut_paiement_ui === 'facturation_annulee' || 
-                                       Boolean(editFormData.facturation_annulee)) 
-                                        ? 0 
+                                  {(() => {
+                                    const totalDemandProfiles = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                                    const calculatedOneshotShare = Math.max(0, roundMoney(montantTTC - totalDemandProfiles));
+                                    const effectivePartAgence = (editFormData.statut_paiement_ui === 'intervention_gratuite' || 
+                                      editFormData.statut_paiement_ui === 'facturation_annulee' || 
+                                      Boolean(editFormData.facturation_annulee))
+                                        ? 0
                                         : isAbonnement
                                           ? Math.max(0, roundMoney(remainingAgencyShare))
-                                          : Math.max(0, toNumber(editFormData.part_agence))
-                                    } 
-                                    onChange={e => setEditFormData({ ...editFormData, part_agence: Math.max(0, toNumber(e.target.value)) })} 
-                                    className="edit-input" 
-                                    disabled={
-                                      editFormData.statut_paiement_ui === 'intervention_gratuite' || 
-                                      editFormData.statut_paiement_ui === 'facturation_annulee' || 
-                                      Boolean(editFormData.facturation_annulee) ||
-                                      isAbonnement
-                                    }
-                                    style={
-                                      isAbonnement
-                                        ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', fontWeight: 600 }
-                                        : {}
-                                    }
-                                  />
-                                  {isAbonnement && (
-                                    <span style={{ fontSize: '11px', color: '#0d9488', marginTop: '4px', display: 'block' }}>
-                                      🔒 Part agence restante calculée automatiquement sur l'abonnement.
-                                    </span>
-                                  )}
+                                          : (toNumber(editFormData.part_agence) > 0 && Math.abs(toNumber(editFormData.part_agence) - calculatedOneshotShare) < 0.01
+                                              ? toNumber(editFormData.part_agence)
+                                              : calculatedOneshotShare);
+
+                                    return (
+                                      <>
+                                        <input 
+                                          type="number" 
+                                          value={effectivePartAgence} 
+                                          onChange={e => setEditFormData({ ...editFormData, part_agence: Math.max(0, toNumber(e.target.value)) })} 
+                                          className="edit-input" 
+                                          disabled={true}
+                                          style={{ background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', fontWeight: 600 }}
+                                        />
+                                        {isAbonnement ? (
+                                          <span style={{ fontSize: '11px', color: '#0d9488', marginTop: '4px', display: 'block' }}>
+                                            🔒 Part agence restante calculée automatiquement sur l'abonnement.
+                                          </span>
+                                        ) : (
+                                          <span style={{ fontSize: '11px', color: '#0d9488', marginTop: '4px', display: 'block' }}>
+                                            🔒 Part agence calculée automatiquement (Montant total TTC - Parts intervenantes).
+                                          </span>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               </div>
 
