@@ -276,43 +276,29 @@ export default function ParametresSite() {
             </div>
           </div>
 
-          {/* Section 2: Adresses E-mail */}
+          {/* Section 2: Adresse E-mail */}
           <div className="ps-card" style={{ marginTop: "24px" }}>
             <div className="ps-card-header">
               <div className="ps-card-header-icon">
                 <Mail size={20} />
               </div>
               <div>
-                <h2 className="ps-card-title">Adresses E-mail</h2>
-                <p className="ps-card-subtitle">Contact public et réception interne des messages</p>
+                <h2 className="ps-card-title">Adresse E-mail</h2>
+                <p className="ps-card-subtitle">Email de contact public affiché sur le site</p>
               </div>
             </div>
 
             <div className="ps-card-body">
-              <div className="ps-grid-2">
-                <div className="ps-form-group">
-                  <label className="ps-label">Email de Contact Public (Affiché sur le site)</label>
-                  <input
-                    type="email"
-                    value={config.email_contact}
-                    onChange={(e) => handleChange("email_contact", e.target.value)}
-                    placeholder="contact@agencemenage.ma"
-                    className="ps-input"
-                  />
-                  <p className="ps-hint">Visible dans le header, le footer et la page de contact.</p>
-                </div>
-
-                <div className="ps-form-group">
-                  <label className="ps-label">Email de Réception des Notifications (Interne)</label>
-                  <input
-                    type="email"
-                    value={config.email_notifications}
-                    onChange={(e) => handleChange("email_notifications", e.target.value)}
-                    placeholder="notification@agencemenage.ma"
-                    className="ps-input"
-                  />
-                  <p className="ps-hint">Reçoit les demandes de contact, devis et formulaires du site.</p>
-                </div>
+              <div className="ps-form-group" style={{ maxWidth: "480px" }}>
+                <label className="ps-label">Email de Contact Public (Affiché sur le site)</label>
+                <input
+                  type="email"
+                  value={config.email_contact}
+                  onChange={(e) => handleChange("email_contact", e.target.value)}
+                  placeholder="contact@agencemenage.ma"
+                  className="ps-input"
+                />
+                <p className="ps-hint">Visible dans le header, le footer et la page de contact.</p>
               </div>
             </div>
           </div>
