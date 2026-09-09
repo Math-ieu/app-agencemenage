@@ -147,6 +147,8 @@ export default function DemandesEnAttente() {
   // Payment mode modal states
   const [paymentModeDemande, setPaymentModeDemande] = useState<Demande | any | null>(null);
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<string>('');
+  const [splitVirement, setSplitVirement] = useState<number | ''>('');
+  const [splitEspeces, setSplitEspeces] = useState<number | ''>('');
   const [isSavingPaymentMode, setIsSavingPaymentMode] = useState<boolean>(false);
 
   // Nouveaux états pour le formulaire
@@ -598,6 +600,11 @@ export default function DemandesEnAttente() {
   const openPaymentModeModal = (d: Demande | any) => {
     setPaymentModeDemande(d);
     setSelectedPaymentMode(d.mode_paiement || '');
+    const formFact = d.formulaire_data?.facturation || {};
+    const mv = d.montant_virement ?? formFact.montant_virement ?? d.avance_paiement ?? '';
+    const me = d.montant_especes ?? formFact.montant_especes ?? d.reste_a_payer ?? '';
+    setSplitVirement(mv !== '' && mv !== undefined ? Number(mv) : '');
+    setSplitEspeces(me !== '' && me !== undefined ? Number(me) : '');
   };
 
   const handleSavePaymentMode = async () => {
@@ -606,19 +613,49 @@ export default function DemandesEnAttente() {
       addToast("Veuillez choisir un mode de paiement.", 'error');
       return;
     }
+
+    if (selectedPaymentMode === 'virement_especes') {
+      if (splitVirement === '' && splitEspeces === '') {
+        addToast("Veuillez saisir la répartition du virement et des espèces.", 'error');
+        return;
+      }
+    }
+
     try {
       setIsSavingPaymentMode(true);
       const prevForm = paymentModeDemande.formulaire_data || {};
       const prevFact = prevForm.facturation || {};
 
+      const virAmount = splitVirement === '' ? 0 : Number(splitVirement);
+      const espAmount = splitEspeces === '' ? 0 : Number(splitEspeces);
+
       const payload: any = {
         mode_paiement: selectedPaymentMode,
+        ...(selectedPaymentMode === 'virement_especes' ? {
+          montant_virement: virAmount,
+          montant_especes: espAmount,
+          avance_paiement: virAmount,
+          reste_a_payer: espAmount,
+        } : {}),
         formulaire_data: {
           ...prevForm,
           mode_paiement: selectedPaymentMode,
+          ...(selectedPaymentMode === 'virement_especes' ? {
+            montant_virement: virAmount,
+            montant_especes: espAmount,
+            avance_paiement: virAmount,
+            reste_a_payer: espAmount,
+          } : {}),
           facturation: {
             ...prevFact,
             mode_paiement: selectedPaymentMode,
+            ...(selectedPaymentMode === 'virement_especes' ? {
+              montant_virement: virAmount,
+              montant_especes: espAmount,
+              montant_verse: virAmount,
+              avance_paiement: virAmount,
+              reste_a_payer: espAmount,
+            } : {})
           }
         }
       };
@@ -630,12 +667,19 @@ export default function DemandesEnAttente() {
         return {
           ...item,
           mode_paiement: selectedPaymentMode,
+          ...(selectedPaymentMode === 'virement_especes' ? {
+            montant_virement: virAmount,
+            montant_especes: espAmount,
+            avance_paiement: virAmount,
+            reste_a_payer: espAmount,
+          } : {}),
           formulaire_data: payload.formulaire_data,
         };
       }));
 
       addToast("Mode de paiement mis à jour avec succès.", "success");
       setPaymentModeDemande(null);
+      await fetchDemandes();
     } catch (e: any) {
       console.error(e);
       const msg = e?.response?.data?.error || "Erreur lors de la mise à jour du mode de paiement.";
@@ -657,8 +701,8 @@ export default function DemandesEnAttente() {
         return;
       }
       if (d.mode_paiement === 'virement_especes') {
-        const virement = Number(d.formulaire_data?.montant_virement ?? d.avance_paiement ?? 0);
-        const especes = Number(d.formulaire_data?.montant_especes ?? (Number(d.prix || 0) - virement));
+        const virement = Number(d.montant_virement ?? d.formulaire_data?.montant_virement ?? d.avance_paiement ?? 0);
+        const especes = Number(d.montant_especes ?? d.formulaire_data?.montant_especes ?? (Number(d.prix || 0) - virement));
         if (virement <= 0 && especes <= 0) {
           addToast("Veuillez renseigner le montant du virement et le montant en espèces.", 'error');
           return;
@@ -691,6 +735,13 @@ export default function DemandesEnAttente() {
           else if (d.formulaire_data.nb_heures !== undefined) payload.nb_heures = d.formulaire_data.nb_heures;
 
           if (d.formulaire_data.nb_intervenants !== undefined) payload.nb_intervenants = d.formulaire_data.nb_intervenants;
+        }
+
+        if (d && d.mode_paiement === 'virement_especes') {
+          const vir = d.montant_virement ?? d.formulaire_data?.montant_virement ?? d.avance_paiement;
+          const esp = d.montant_especes ?? d.formulaire_data?.montant_especes;
+          if (vir !== undefined) payload.montant_virement = vir;
+          if (esp !== undefined) payload.montant_especes = esp;
         }
 
         if (d && !d.assigned_to && user?.id) {
@@ -3055,6 +3106,77 @@ export default function DemandesEnAttente() {
                   );
                 })}
               </div>
+
+              {/* Split fields for virement_especes */}
+              {selectedPaymentMode === 'virement_especes' && (
+                <div className="payment-split-container mt-3">
+                  <div className="payment-split-header">
+                    <span>Répartition des montants</span>
+                    <span>Total prestation : <strong>{paymentModeDemande.prix ? `${paymentModeDemande.prix} MAD` : '—'}</strong></span>
+                  </div>
+
+                  <div className="payment-split-grid">
+                    <div className="payment-split-field">
+                      <label>
+                        Montant Virement (MAD) *
+                      </label>
+                      <div className="payment-split-input-wrap">
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={splitVirement}
+                          onChange={e => {
+                            const val = e.target.value === '' ? '' : Number(e.target.value);
+                            setSplitVirement(val);
+                            const total = Number(paymentModeDemande.prix || 0);
+                            if (total > 0 && val !== '') {
+                              const remain = Math.max(0, total - Number(val));
+                              setSplitEspeces(remain);
+                            }
+                          }}
+                          placeholder="Ex: 100"
+                          className="payment-split-input"
+                        />
+                        <span className="payment-split-suffix">DH</span>
+                      </div>
+                    </div>
+
+                    <div className="payment-split-field">
+                      <label>
+                        Part en espèces (MAD) *
+                      </label>
+                      <div className="payment-split-input-wrap">
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={splitEspeces}
+                          onChange={e => {
+                            const val = e.target.value === '' ? '' : Number(e.target.value);
+                            setSplitEspeces(val);
+                            const total = Number(paymentModeDemande.prix || 0);
+                            if (total > 0 && val !== '') {
+                              const remain = Math.max(0, total - Number(val));
+                              setSplitVirement(remain);
+                            }
+                          }}
+                          placeholder="Ex: 140"
+                          className="payment-split-input"
+                        />
+                        <span className="payment-split-suffix">DH</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="payment-split-notice">
+                    <span className="font-bold">ℹ️</span>
+                    <span>
+                      La partie en espèces est récupérée directement sur place par le profil délégué (FDM). Elle ne modifie pas le calcul des parts agence.
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer */}

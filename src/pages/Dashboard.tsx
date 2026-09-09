@@ -2167,6 +2167,19 @@ export default function Dashboard() {
       updateData.supplement_encaisse_par = editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence');
       updateData.supplement_heures_recupere_especes = editFormData.has_supplement_heures ? Boolean(editFormData.supplement_encaisse_par === 'femme_de_menage' || editFormData.supplement_heures_recupere_especes) : false;
 
+      if (editFormData.mode_paiement === 'virement_especes') {
+        const virVal = montantVerse;
+        const espVal = toNumber(editFormData.montant_especes) > 0 
+          ? toNumber(editFormData.montant_especes) 
+          : Math.max(0, roundMoney(toNumber(montantTTC) - montantVerse));
+        updateData.montant_virement = virVal;
+        updateData.montant_especes = espVal;
+        updateData.avance_paiement = virVal;
+        updateData.reste_a_payer = espVal;
+        updateData.formulaire_data.montant_virement = virVal;
+        updateData.formulaire_data.montant_especes = espVal;
+      }
+
       const response = await updateDemande(selectedDemande.id, updateData);
 
       // If child subscription demand, update parent demand's part_agence in the DB
@@ -2507,6 +2520,23 @@ export default function Dashboard() {
       initialMontantAgenceDoitProfil = 0;
     }
 
+    const isVirEsp = (facturationData.mode_paiement || d.mode_paiement) === 'virement_especes';
+
+    const savedVirement = facturationData.montant_virement ?? (d as any).montant_virement ?? formData.montant_virement ?? (
+      isVirEsp ? (facturationData.montant_verse !== undefined && facturationData.montant_verse !== '' ? facturationData.montant_verse : d.avance_paiement) : undefined
+    );
+    const initialMontantVerse = savedVirement !== undefined && savedVirement !== ''
+      ? toNumber(savedVirement)
+      : toNumber(facturationData.montant_verse ?? d.avance_paiement ?? 0);
+
+    let initialMontantEspeces = facturationData.montant_especes ?? (d as any).montant_especes ?? formData.montant_especes;
+    if ((initialMontantEspeces === undefined || initialMontantEspeces === '') && isVirEsp) {
+      const tot = prixValue > 0 ? prixValue : (tvaActive ? roundMoney(montantHT * 1.2) : montantHT);
+      if (tot > 0) {
+        initialMontantEspeces = Math.max(0, roundMoney(tot - initialMontantVerse));
+      }
+    }
+
     setSelectedDemande(d);
     setIsEditing(true);
     setEditFormData({
@@ -2517,12 +2547,8 @@ export default function Dashboard() {
       ca_initial: caInitial,
       tva_active: tvaActive,
       geste_commercial: d.geste_commercial || null,
-      montant_verse: toNumber(facturationData.montant_verse),
-      montant_especes: facturationData.montant_especes ?? d.formulaire_data?.montant_especes ?? (
-        (facturationData.mode_paiement || d.mode_paiement) === 'virement_especes' && (d.prix ? Number(d.prix) : 0) > 0
-          ? Math.max(0, Number(d.prix) - toNumber(facturationData.montant_verse))
-          : ''
-      ),
+      montant_verse: initialMontantVerse,
+      montant_especes: initialMontantEspeces !== undefined && initialMontantEspeces !== '' ? toNumber(initialMontantEspeces) : '',
       montant_profil_doit: toNumber(facturationData.montant_profil_doit),
       facturation_annulee: Boolean(facturationData.facturation_annulee),
       part_agence: initialPartAgence,
@@ -3438,7 +3464,9 @@ export default function Dashboard() {
                                 <p className="price-sub">{d.is_devis ? 'Prix/devis' : 'Prix/réservation'}</p>
                                 {resteAPayer > 0 && (
                                   <p style={{ color: '#EF4444', fontSize: '11px', fontWeight: 600, fontStyle: 'italic', margin: 0, marginTop: '2px', lineHeight: '1.2', whiteSpace: 'nowrap' }}>
-                                    Reste à payer FDM – Espèces : {resteAPayer % 1 === 0 ? resteAPayer : resteAPayer.toFixed(2)} DH
+                                    {(d.mode_paiement || d.formulaire_data?.facturation?.mode_paiement || d.formulaire_data?.mode_paiement) === 'virement_especes'
+                                      ? `Reste à payer FDM – Espèces : ${resteAPayer % 1 === 0 ? resteAPayer : resteAPayer.toFixed(2)} DH`
+                                      : `Reste à payer : ${resteAPayer % 1 === 0 ? resteAPayer : resteAPayer.toFixed(2)} DH`}
                                   </p>
                                 )}
                               </>
@@ -3842,7 +3870,9 @@ export default function Dashboard() {
                               {basePrice}
                               {resteAPayer > 0 && (
                                 <span style={{ color: '#EF4444', fontSize: '11px', fontWeight: 600, fontStyle: 'italic', display: 'block' }}>
-                                  Reste à payer FDM – Espèces : {resteAPayer % 1 === 0 ? resteAPayer : resteAPayer.toFixed(2)} DH
+                                  {(d.mode_paiement || d.formulaire_data?.facturation?.mode_paiement || d.formulaire_data?.mode_paiement) === 'virement_especes'
+                                    ? `Reste à payer FDM – Espèces : ${resteAPayer % 1 === 0 ? resteAPayer : resteAPayer.toFixed(2)} DH`
+                                    : `Reste à payer : ${resteAPayer % 1 === 0 ? resteAPayer : resteAPayer.toFixed(2)} DH`}
                                 </span>
                               )}
                             </span>
@@ -4565,8 +4595,18 @@ export default function Dashboard() {
                                 const total = toNumber(montantTTC);
                                 let newVerse = editFormData.montant_verse;
                                 let newEspeces = editFormData.montant_especes;
-                                if (newMode === 'virement_especes' && (!newEspeces || newEspeces === '')) {
-                                  newEspeces = total > 0 && newVerse !== '' ? Math.max(0, roundMoney(total - toNumber(newVerse))) : '';
+                                if (newMode === 'virement_especes') {
+                                  const savedFact = selectedDemande?.formulaire_data?.facturation || {};
+                                  const savedVir = savedFact.montant_virement ?? (selectedDemande as any)?.montant_virement ?? selectedDemande?.formulaire_data?.montant_virement;
+                                  const savedEsp = savedFact.montant_especes ?? (selectedDemande as any)?.montant_especes ?? selectedDemande?.formulaire_data?.montant_especes;
+                                  if (savedVir !== undefined && savedVir !== '') {
+                                    newVerse = savedVir;
+                                  }
+                                  if (savedEsp !== undefined && savedEsp !== '') {
+                                    newEspeces = savedEsp;
+                                  } else if (total > 0 && newVerse !== '') {
+                                    newEspeces = Math.max(0, roundMoney(total - toNumber(newVerse)));
+                                  }
                                 }
                                 setEditFormData({ ...editFormData, mode_paiement: newMode, montant_verse: newVerse, montant_especes: newEspeces });
                               }} 
@@ -4717,7 +4757,7 @@ export default function Dashboard() {
                             />
                             {editFormData.mode_paiement !== 'virement_especes' && toNumber(montantTTC) > 0 && (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) > 0 && (
                               <p style={{ fontSize: '11px', color: '#EF4444', fontWeight: 600, fontStyle: 'italic', marginTop: '4px' }}>
-                                Reste à payer FDM – Espèces : {((toNumber(montantTTC) - toNumber(editFormData.montant_verse)) % 1 === 0 ? (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) : (toNumber(montantTTC) - toNumber(editFormData.montant_verse)).toFixed(2))} DH
+                                Reste à payer : {((toNumber(montantTTC) - toNumber(editFormData.montant_verse)) % 1 === 0 ? (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) : (toNumber(montantTTC) - toNumber(editFormData.montant_verse)).toFixed(2))} DH
                               </p>
                             )}
                           </div>

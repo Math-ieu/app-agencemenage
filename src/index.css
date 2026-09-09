@@ -2371,7 +2371,7 @@ body {
 
 .detail-sheet {
   width: 100%;
-  max-width: 500px;
+  max-width: 700px;
   height: auto;
   max-height: calc(100vh - 2rem);
   background: white;

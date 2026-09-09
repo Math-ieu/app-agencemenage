@@ -428,6 +428,67 @@
   border-color: #cbd5e1;
 }
 
+.ls-action-btn.missions {
+  position: relative;
+  background-color: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.ls-action-btn.missions:hover {
+  background-color: #059669;
+  border-color: #059669;
+  color: #ffffff;
+}
+
+.ls-action-btn.missions .ls-btn-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background-color: #0f172a;
+  color: #ffffff;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  z-index: 50;
+}
+
+.ls-action-btn.missions .ls-btn-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 4px;
+  border-style: solid;
+  border-color: #0f172a transparent transparent transparent;
+}
+
+.ls-action-btn.missions:hover .ls-btn-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.ls-action-btn.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ls-action-btn.disabled:hover {
+  background-color: #ffffff;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
 /* Status Pills */
 .ls-pill {
   display: inline-flex;

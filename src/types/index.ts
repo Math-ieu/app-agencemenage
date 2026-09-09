@@ -144,6 +144,8 @@ export interface Demande {
   tarif_total?: number;
   reste_a_payer?: number;
   avance_paiement?: number | string | null;
+  montant_virement?: number | string | null;
+  montant_especes?: number | string | null;
   mode_paiement: string;
   mode_paiement_label?: string;
   statut_paiement: string;

@@ -2058,7 +2058,7 @@ export default function LesSuivis() {
     if (!selectedDuesProfile) return null;
     const match = groupedProfiles.find((item) =>
       (selectedDuesProfile.profilId && item.profilId === selectedDuesProfile.profilId) ||
-      item.profilName === selectedDuesProfile.profilName
+      (selectedDuesProfile.profilName && item.profilName.trim().toLowerCase() === selectedDuesProfile.profilName.trim().toLowerCase())
     );
     if (match) return match;
     return {
@@ -2066,10 +2066,10 @@ export default function LesSuivis() {
       profilName: selectedDuesProfile.profilName,
       phone: selectedDuesProfile.phone,
       categorie: selectedDuesProfile.categorie,
-      nbMissions: 0,
-      profilDoitAgence: 0,
-      agenceDoitProfil: 0,
-      rows: [],
+      nbMissions: selectedDuesProfile.nbMissions || 0,
+      profilDoitAgence: selectedDuesProfile.profilDoitAgence || 0,
+      agenceDoitProfil: selectedDuesProfile.agenceDoitProfil || 0,
+      rows: selectedDuesProfile.rows || [],
     };
   }, [selectedDuesProfile, groupedProfiles]);
 
@@ -3051,7 +3051,7 @@ export default function LesSuivis() {
                         <th>Règlement FDM</th>
                         <th>Remarque</th>
                         <th>Fréquence</th>
-                        <th>Action</th>
+                        <th style={{ textAlign: 'center' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3187,7 +3187,7 @@ export default function LesSuivis() {
                               </span>
                             </td>
                             <td>
-                              <div className="ls-action-cell">
+                              <div className="ls-action-cell" style={{ justifyContent: 'center' }}>
                                 <button
                                   type="button"
                                   className="ls-action-btn"
@@ -3196,6 +3196,57 @@ export default function LesSuivis() {
                                 >
                                   <Eye size={13} />
                                 </button>
+                                {(() => {
+                                  const pName = (row.profil || '').trim();
+                                  const hasProfil = pName && pName !== '—' && pName !== 'Non assigné' && pName !== 'Profil inconnu';
+                                  if (!hasProfil) {
+                                    return (
+                                      <button
+                                        type="button"
+                                        className="ls-action-btn disabled"
+                                        disabled
+                                        title="Aucun profil assigné"
+                                        aria-label="Aucun profil assigné"
+                                        style={{ opacity: 0.35, cursor: 'not-allowed' }}
+                                      >
+                                        <Folder size={13} />
+                                      </button>
+                                    );
+                                  }
+
+                                  const profileItem = groupedProfiles.find((item) =>
+                                    (row.profilId && item.profilId === row.profilId) ||
+                                    item.profilName.trim().toLowerCase() === pName.toLowerCase()
+                                  );
+
+                                  return (
+                                    <button
+                                      type="button"
+                                      className="ls-action-btn missions"
+                                      title="Missions"
+                                      aria-label="Missions"
+                                      onClick={() => {
+                                        if (profileItem) {
+                                          setSelectedDuesProfile(profileItem);
+                                        } else {
+                                          setSelectedDuesProfile({
+                                            profilId: row.profilId,
+                                            profilName: pName,
+                                            phone: row.phone,
+                                            categorie: row.categorie,
+                                            nbMissions: 1,
+                                            profilDoitAgence: 0,
+                                            agenceDoitProfil: 0,
+                                            rows: [row],
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      <Folder size={13} />
+                                      <span className="ls-btn-tooltip">Missions</span>
+                                    </button>
+                                  );
+                                })()}
                               </div>
                             </td>
                           </tr>
