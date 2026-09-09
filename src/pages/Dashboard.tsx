@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
-import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, affecterOperations, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, removeProfilFromDemande, uploadDocument, getDemande, syncPrestationWorkflow, confirmerFinPrestation } from '../api/client';
+import { getDemandes, updateDemande, annulerDemande, confirmerCAO, getUsers, affecterDemande, affecterOperations, generateDocument, fetchSecureDocBlob, deleteDemande, sendWhatsApp, getAuditLogs, getAgents, sendProfilToDemande, removeProfilFromDemande, uploadDocument, getDemande, syncPrestationWorkflow, confirmerFinPrestation, ajouterHeuresSupplementaires } from '../api/client';
 import { useToastStore } from '../store/toast';
 import { useAuthStore } from '../store/auth';
 import { encodeId } from '../utils/obfuscation';
@@ -308,6 +308,10 @@ export default function Dashboard() {
   const [isAddingAgentInCAO, setIsAddingAgentInCAO] = useState<boolean>(false);
   const [confirmTermineeModal, setConfirmTermineeModal] = useState<Demande | null>(null);
   const [confirmingFin, setConfirmingFin] = useState<boolean>(false);
+  const [overtimeModal, setOvertimeModal] = useState<Demande | null>(null);
+  const [overtimeHours, setOvertimeHours] = useState<number>(1);
+  const [overtimeMotif, setOvertimeMotif] = useState<string>('');
+  const [savingOvertime, setSavingOvertime] = useState<boolean>(false);
 
   const getParentDemande = (parentId: number | string, fallback: Demande): Demande => {
     const list = allDemandes.length > 0 ? allDemandes : demandes;
@@ -808,6 +812,26 @@ export default function Dashboard() {
       addToast(err.response?.data?.error || "Erreur lors de la confirmation de fin de prestation", 'error');
     } finally {
       setConfirmingFin(false);
+    }
+  };
+
+  const handleAddOvertime = async (d: Demande, hours: number, motif?: string) => {
+    if (!d || hours <= 0) return;
+    setSavingOvertime(true);
+    try {
+      const res = await ajouterHeuresSupplementaires(d.id, { heures: hours, motif });
+      const heureFin = res.data?.nouvelle_heure_fin_display || res.data?.nouvelle_heure_fin;
+      addToast(`${hours}h supplémentaire(s) enregistrée(s). Alerte initiale désactivée, reprise prévue à ${heureFin}.`, 'success');
+      setOvertimeModal(null);
+      setConfirmTermineeModal(null);
+      setOvertimeHours(1);
+      setOvertimeMotif('');
+      await fetchData();
+    } catch (err: any) {
+      console.error("Erreur ajout heures supplémentaires:", err);
+      addToast(err.response?.data?.error || "Erreur lors de l'enregistrement des heures supplémentaires", 'error');
+    } finally {
+      setSavingOvertime(false);
     }
   };
 
@@ -3251,6 +3275,33 @@ export default function Dashboard() {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  setOvertimeHours(1);
+                                  setOvertimeMotif('');
+                                  setOvertimeModal(d);
+                                }}
+                                style={{
+                                  padding: '5px 10px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  backgroundColor: '#7c3aed',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: '5px',
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                title="Prolonger la prestation avec des heures supplémentaires (désactive l'alerte)"
+                              >
+                                <Clock size={12} />
+                                + Heure sup.
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   openDetail(d);
                                 }}
                                 style={{
@@ -3265,7 +3316,7 @@ export default function Dashboard() {
                                   whiteSpace: 'nowrap'
                                 }}
                               >
-                                Non, modifier la demande
+                                Non, modifier
                               </button>
                             </div>
                           </div>
@@ -3817,6 +3868,33 @@ export default function Dashboard() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
+                            setOvertimeHours(1);
+                            setOvertimeMotif('');
+                            setOvertimeModal(d);
+                          }}
+                          style={{
+                            padding: '5px 10px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            backgroundColor: '#7c3aed',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '5px',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                          title="Prolonger la prestation avec des heures supplémentaires (désactive l'alerte)"
+                        >
+                          <Clock size={12} />
+                          + Heure sup.
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
                             openDetail(d);
                           }}
                           style={{
@@ -3831,7 +3909,7 @@ export default function Dashboard() {
                             whiteSpace: 'nowrap'
                           }}
                         >
-                          Non, modifier la demande
+                          Non, modifier
                         </button>
                       </div>
                     </div>
@@ -7016,11 +7094,230 @@ export default function Dashboard() {
             </div>
 
             {/* Footer */}
-            <div style={{ padding: '16px 24px', backgroundColor: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div style={{ padding: '16px 24px', backgroundColor: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
               <button
                 type="button"
                 disabled={confirmingFin}
-                onClick={() => setConfirmTermineeModal(null)}
+                onClick={() => {
+                  const target = confirmTermineeModal;
+                  setConfirmTermineeModal(null);
+                  setOvertimeHours(1);
+                  setOvertimeMotif('');
+                  setOvertimeModal(target);
+                }}
+                style={{
+                  padding: '9px 15px',
+                  borderRadius: '8px',
+                  border: '1px solid #7c3aed',
+                  backgroundColor: '#f5f3ff',
+                  color: '#6d28d9',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: confirmingFin ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                title="Définir des heures supplémentaires pour désactiver l'alerte"
+              >
+                <Clock size={15} />
+                + Heures supplémentaires
+              </button>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  disabled={confirmingFin}
+                  onClick={() => setConfirmTermineeModal(null)}
+                  style={{
+                    padding: '9px 18px',
+                    borderRadius: '8px',
+                    border: '1px solid #d1d5db',
+                    backgroundColor: '#ffffff',
+                    color: '#374151',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    cursor: confirmingFin ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Non
+                </button>
+                {(() => {
+                  const partsValid = isPartProfilDefined(confirmTermineeModal);
+                  const paymentNonConfirme = isPaymentNonConfirme(confirmTermineeModal);
+                  const isBlocked = !partsValid || paymentNonConfirme;
+
+                  return (
+                    <button
+                      type="button"
+                      disabled={confirmingFin}
+                      onClick={() => handleConfirmFinPrestation(confirmTermineeModal)}
+                      style={{
+                        padding: '9px 20px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        backgroundColor: confirmingFin ? '#9ca3af' : (isBlocked ? '#ea580c' : '#059669'),
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        fontSize: '14px',
+                        cursor: confirmingFin ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      {confirmingFin
+                        ? 'Validation en cours...'
+                        : isBlocked
+                          ? 'Régulariser dans le besoin'
+                          : 'Oui, confirmer'}
+                    </button>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ajout Heures Supplémentaires */}
+      {overtimeModal && (
+        <div className="modal-overlay z-[120]" onClick={() => !savingOvertime && setOvertimeModal(null)}>
+          <div
+            className="modal-content max-w-[490px]"
+            onClick={e => e.stopPropagation()}
+            style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: 0, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden', border: 'none' }}
+          >
+            {/* Header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f5f3ff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed' }}>
+                  <Clock size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#4c1d95' }}>
+                    Heures supplémentaires
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#6d28d9' }}>
+                    Besoin #{overtimeModal.id} — Prolongation de l'intervention
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !savingOvertime && setOvertimeModal(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', padding: '4px' }}
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '24px' }}>
+              <div style={{ padding: '12px 14px', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', marginBottom: '18px', fontSize: '12.5px', color: '#1e40af', lineHeight: 1.45 }}>
+                ℹ️ <strong>Désactivation de l'alerte :</strong> L'alerte initiale et les rappels WhatsApp sont <strong>immédiatement désactivés</strong>. L'alerte reprendra uniquement à partir de la nouvelle heure de fin calculée.
+              </div>
+
+              {(() => {
+                const baseHours = Number(overtimeModal.nb_heures || overtimeModal.formulaire_data?.duree_heures || overtimeModal.formulaire_data?.duree || 4);
+                const startTimeStr = String(overtimeModal.heure_intervention || overtimeModal.formulaire_data?.heure || '09:00');
+                
+                const match = startTimeStr.match(/^(\d{1,2})(?:[:hH](\d{2}))?/);
+                const startH = match ? parseInt(match[1], 10) % 24 : 9;
+                const startM = match ? parseInt(match[2] || '0', 10) % 60 : 0;
+                const newTotalHours = baseHours + overtimeHours;
+                const totalMinutes = Math.round(startH * 60 + startM + newTotalHours * 60);
+                const endH = Math.floor((totalMinutes / 60) % 24);
+                const endM = totalMinutes % 60;
+                const newEndStr = `${String(endH).padStart(2, '0')}h${String(endM).padStart(2, '0')}`;
+
+                return (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#374151', marginBottom: '8px' }}>
+                      Heures supplémentaires à ajouter :
+                    </label>
+
+                    {/* Presets */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                      {[0.5, 1, 1.5, 2, 3].map(val => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setOvertimeHours(val)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: overtimeHours === val ? 700 : 500,
+                            border: overtimeHours === val ? '2px solid #7c3aed' : '1px solid #d1d5db',
+                            backgroundColor: overtimeHours === val ? '#ede9fe' : '#ffffff',
+                            color: overtimeHours === val ? '#6d28d9' : '#374151',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          +{val}h
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                      <input
+                        type="number"
+                        min="0.5"
+                        step="0.5"
+                        value={overtimeHours}
+                        onChange={e => setOvertimeHours(Math.max(0.5, parseFloat(e.target.value) || 0.5))}
+                        style={{
+                          width: '100px',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '15px',
+                          fontWeight: 700,
+                          textAlign: 'center'
+                        }}
+                      />
+                      <span style={{ fontSize: '14px', color: '#64748b' }}>heure(s) supplémentaire(s)</span>
+                    </div>
+
+                    <div style={{ backgroundColor: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '8px', padding: '12px 14px', marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#6b21a8', marginBottom: '4px' }}>
+                        <span>Heure de début :</span>
+                        <strong>{startTimeStr}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#6b21a8', marginBottom: '4px' }}>
+                        <span>Durée totale (base {baseHours}h + {overtimeHours}h sup) :</span>
+                        <strong>{newTotalHours} h</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#581c87', fontWeight: 700, borderTop: '1px dashed #d8b4fe', paddingTop: '6px', marginTop: '6px' }}>
+                        <span>Nouvelle heure de fin prévue :</span>
+                        <span style={{ color: '#7c3aed', fontSize: '15px' }}>{newEndStr}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '8px' }}>
+                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#4b5563', marginBottom: '4px' }}>
+                        Motif / Commentaire (optionnel) :
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex : Travaux supplémentaires, salissure, demande client..."
+                        value={overtimeMotif}
+                        onChange={e => setOvertimeMotif(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '16px 24px', backgroundColor: '#f8fafc', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                disabled={savingOvertime}
+                onClick={() => setOvertimeModal(null)}
                 style={{
                   padding: '9px 18px',
                   borderRadius: '8px',
@@ -7029,43 +7326,31 @@ export default function Dashboard() {
                   color: '#374151',
                   fontWeight: 600,
                   fontSize: '14px',
-                  cursor: confirmingFin ? 'not-allowed' : 'pointer'
+                  cursor: savingOvertime ? 'not-allowed' : 'pointer'
                 }}
               >
-                Non
+                Annuler
               </button>
-              {(() => {
-                const partsValid = isPartProfilDefined(confirmTermineeModal);
-                const paymentNonConfirme = isPaymentNonConfirme(confirmTermineeModal);
-                const isBlocked = !partsValid || paymentNonConfirme;
-
-                return (
-                  <button
-                    type="button"
-                    disabled={confirmingFin}
-                    onClick={() => handleConfirmFinPrestation(confirmTermineeModal)}
-                    style={{
-                      padding: '9px 20px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      backgroundColor: confirmingFin ? '#9ca3af' : (isBlocked ? '#ea580c' : '#059669'),
-                      color: '#ffffff',
-                      fontWeight: 700,
-                      fontSize: '14px',
-                      cursor: confirmingFin ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}
-                  >
-                    {confirmingFin
-                      ? 'Validation en cours...'
-                      : isBlocked
-                        ? 'Régulariser dans le besoin'
-                        : 'Oui, confirmer'}
-                  </button>
-                );
-              })()}
+              <button
+                type="button"
+                disabled={savingOvertime || overtimeHours <= 0}
+                onClick={() => handleAddOvertime(overtimeModal, overtimeHours, overtimeMotif)}
+                style={{
+                  padding: '9px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: savingOvertime ? '#9ca3af' : '#7c3aed',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '14px',
+                  cursor: savingOvertime ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {savingOvertime ? 'Enregistrement...' : 'Valider et prolonger'}
+              </button>
             </div>
           </div>
         </div>

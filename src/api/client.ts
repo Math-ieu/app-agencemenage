@@ -188,6 +188,9 @@ export const syncPrestationWorkflow = () =>
 export const confirmerFinPrestation = (id: number, data?: Record<string, unknown>) =>
   apiClient.post(`/api/demandes/${id}/confirmer-fin/`, data);
 
+export const ajouterHeuresSupplementaires = (id: number, data: { heures: number; motif?: string }) =>
+  apiClient.post(`/api/demandes/${id}/heures-supplementaires/`, data);
+
 export const confirmerClient = (id: number) =>
   apiClient.post(`/api/demandes/${id}/confirmer_client/`);
 

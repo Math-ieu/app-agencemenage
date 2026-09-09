@@ -7,7 +7,7 @@ import { Label } from '../ui/label';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, Clock } from 'lucide-react';
 import { Demande } from '../../types';
-import { createPlanningIntervention, updateDemande, deleteDemande } from '../../api/client';
+import { createPlanningIntervention, updateDemande, deleteDemande, ajouterHeuresSupplementaires } from '../../api/client';
 import { parseDateRobust, getDemandeStartDate } from '../../utils/pricing';
 
 export interface DateOverrideItem {
@@ -500,9 +500,11 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                         <button
                           type="button"
                           onClick={async () => {
-                            await setAboDateOverrides((prev) => ({
-                              ...prev, [key]: { ...prev[key], statut: "termine", excluded: false },
-                            }));
+                            if (setAboDateOverrides) {
+                              await setAboDateOverrides((prev) => ({
+                                ...prev, [key]: { ...prev[key], statut: "termine", excluded: false },
+                              }));
+                            }
                             if (onSetCellStatus) await onSetCellStatus(key, 'pres_terminee');
                           }}
                           style={{
@@ -518,6 +520,44 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
                         >
                           ✓ Oui, confirmer
                         </button>
+                        {realDemande && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await ajouterHeuresSupplementaires(realDemande.id, { heures: 1 });
+                                if (setAboDateOverrides) {
+                                  await setAboDateOverrides((prev) => ({
+                                    ...prev,
+                                    [key]: { ...prev[key], statut: "pres_en_cours" }
+                                  }));
+                                }
+                                if (onSetCellStatus) await onSetCellStatus(key, 'pres_en_cours');
+                                if (addToast) addToast("1h supplémentaire ajoutée. Prestation prolongée et alerte désactivée.", "success");
+                                if (fetchData) await fetchData();
+                              } catch (err: any) {
+                                if (addToast) addToast(err.response?.data?.error || "Erreur ajout heure sup", "error");
+                              }
+                            }}
+                            style={{
+                              padding: '5px 10px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              backgroundColor: '#7c3aed',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}
+                            title="Ajouter 1h supplémentaire (désactive l'alerte)"
+                          >
+                            <Clock size={12} />
+                            + 1h sup.
+                          </button>
+                        )}
                         {realDemande && (
                           <Link
                             to={`/dashboard?demande_id=${realDemande.id}`}
