@@ -24,6 +24,7 @@ import Marketing from './pages/Marketing';
 import ParametresProfil from './pages/parametres/Profil';
 import ParametresUtilisateurs from './pages/parametres/Utilisateurs';
 import ParametresJoursFeries from './pages/parametres/JoursFeries';
+import ParametresSite from './pages/parametres/ParametresSite';
 import ClientDetails from './pages/ClientDetails.tsx';
 import ProfilDetails from './pages/ProfilDetails.tsx';
 import Blog from './pages/seo/Blog';
@@ -158,6 +159,7 @@ export default function App() {
             <Route path="profil" element={<ParametresProfil />} />
             <Route path="utilisateurs" element={<PermissionRoute permission="parametres_globaux"><ParametresUtilisateurs /></PermissionRoute>} />
             <Route path="jours-feries" element={<PermissionRoute permission="parametres_globaux"><ParametresJoursFeries /></PermissionRoute>} />
+            <Route path="site" element={<PermissionRoute permission="parametres_globaux"><ParametresSite /></PermissionRoute>} />
           </Route>
 
           {/* SEO / Blog Routes */}

@@ -122,6 +122,7 @@ interface FacturationRow {
   hasSupplementHeures?: boolean;
   supplementHeuresMontant?: number;
   supplementHeuresRecupereEspeces?: boolean;
+  supplementEncaissePar?: 'femme_de_menage' | 'agence' | string;
 }
 
 interface AgentApiItem {
@@ -423,16 +424,19 @@ const getRowDuesBreakdown = (row: FacturationRow) => {
   let agenceDoit = 0;
   const supplementMontant = Number(row.supplementHeuresMontant || 0);
   const hasSupplement = Boolean(row.hasSupplementHeures && supplementMontant > 0);
+  const isFdmCash = row.supplementEncaissePar === 'femme_de_menage' || (
+    row.supplementEncaissePar !== 'agence' && Boolean(row.supplementHeuresRecupereEspeces)
+  );
 
   if (isCredit) {
     agenceDoit = row.partProfil || 0;
-    if (row.isDelegate && hasSupplement && row.supplementHeuresRecupereEspeces) {
+    if (row.isDelegate && hasSupplement && isFdmCash) {
       doitAgence += supplementMontant;
       hasSupplementNote = true;
     }
   } else if (isDebit) {
     doitAgence = row.partAgence || 0;
-    if (hasSupplement && row.supplementHeuresRecupereEspeces) {
+    if (hasSupplement && isFdmCash) {
       hasSupplementNote = true;
     }
   }
@@ -999,6 +1003,14 @@ export default function LesSuivis() {
       ),
       supplementHeuresMontant: Number(facturationData.supplement_heures_montant ?? demande?.formulaire_data?.supplement_heures_montant ?? demande?.supplement_heures_montant ?? item.supplement_heures_montant ?? 0),
       supplementHeuresRecupereEspeces: Boolean(facturationData.supplement_heures_recupere_especes ?? demande?.formulaire_data?.supplement_heures_recupere_especes ?? demande?.supplement_heures_recupere_especes ?? item.supplement_heures_recupere_especes ?? false),
+      supplementEncaissePar: (
+        facturationData.supplement_encaisse_par ||
+        demande?.formulaire_data?.facturation?.supplement_encaisse_par ||
+        demande?.formulaire_data?.supplement_encaisse_par ||
+        demande?.supplement_encaisse_par ||
+        item.supplement_encaisse_par ||
+        (facturationData.supplement_heures_recupere_especes === false && (facturationData.has_supplement_heures || item.has_supplement_heures) ? 'agence' : 'femme_de_menage')
+      ),
     };
   }, []);
 
@@ -1157,6 +1169,13 @@ export default function LesSuivis() {
       ),
       supplementHeuresMontant: Number(facturationData.supplement_heures_montant ?? demande?.formulaire_data?.supplement_heures_montant ?? demande?.supplement_heures_montant ?? 0),
       supplementHeuresRecupereEspeces: Boolean(facturationData.supplement_heures_recupere_especes ?? demande?.formulaire_data?.supplement_heures_recupere_especes ?? demande?.supplement_heures_recupere_especes ?? false),
+      supplementEncaissePar: (
+        facturationData.supplement_encaisse_par ||
+        demande?.formulaire_data?.facturation?.supplement_encaisse_par ||
+        demande?.formulaire_data?.supplement_encaisse_par ||
+        demande?.supplement_encaisse_par ||
+        (facturationData.supplement_heures_recupere_especes === false && (facturationData.has_supplement_heures || demande?.has_supplement_heures) ? 'agence' : 'femme_de_menage')
+      ),
     };
   }, []);
 
@@ -1549,6 +1568,7 @@ export default function LesSuivis() {
               hasSupplementHeures: row.hasSupplementHeures,
               supplementHeuresMontant: row.supplementHeuresMontant,
               supplementHeuresRecupereEspeces: row.supplementHeuresRecupereEspeces,
+              supplementEncaissePar: row.supplementEncaissePar,
             });
           });
         } else {
@@ -1576,6 +1596,7 @@ export default function LesSuivis() {
             hasSupplementHeures: row.hasSupplementHeures,
             supplementHeuresMontant: row.supplementHeuresMontant,
             supplementHeuresRecupereEspeces: row.supplementHeuresRecupereEspeces,
+            supplementEncaissePar: row.supplementEncaissePar,
           });
         }
       } else if (isDebit) {
@@ -1622,6 +1643,7 @@ export default function LesSuivis() {
               hasSupplementHeures: row.hasSupplementHeures,
               supplementHeuresMontant: row.supplementHeuresMontant,
               supplementHeuresRecupereEspeces: row.supplementHeuresRecupereEspeces,
+              supplementEncaissePar: row.supplementEncaissePar,
             });
           }
         } else {
@@ -1649,6 +1671,7 @@ export default function LesSuivis() {
             hasSupplementHeures: row.hasSupplementHeures,
             supplementHeuresMontant: row.supplementHeuresMontant,
             supplementHeuresRecupereEspeces: row.supplementHeuresRecupereEspeces,
+            supplementEncaissePar: row.supplementEncaissePar,
           });
         }
       } else {

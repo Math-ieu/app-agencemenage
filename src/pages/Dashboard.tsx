@@ -4,7 +4,7 @@ import StickyHorizontalScrollbar from '../components/common/StickyHorizontalScro
 import {
   RefreshCw, ClipboardCheck, Building2, Clock, Search, List, Grid, MoreVertical, Edit2, Settings,
   CheckCircle, UserCheck, MessageSquare, AlertTriangle, Gift, Lock,
-  Check, ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, UserMinus, Eye, Download, Send, Save, XCircle, Calendar, Trash2, Plus, Pencil
+  Check, ChevronLeft, ChevronUp, ChevronDown, FileText, ClipboardList, UserPlus, UserMinus, User as UserIcon, Eye, Download, Send, Save, XCircle, Calendar, Trash2, Plus, Pencil, Coins
 } from 'lucide-react';
 
 import { Demande, User } from '../types';
@@ -135,6 +135,23 @@ const getDefaultRateTypeForService = (service: string): 'taux_horaire_standard' 
     return 'taux_forfaitaire';
   }
   return 'taux_horaire_standard';
+};
+
+const getServiceBaseHourlyRate = (serviceName?: string, demande?: any): number => {
+  if (demande?.formulaire_data?.planning?.hourly_rate && Number(demande.formulaire_data.planning.hourly_rate) > 0) {
+    return Number(demande.formulaire_data.planning.hourly_rate);
+  }
+  if (demande?.formulaire_data?.tarif_horaire && Number(demande.formulaire_data.tarif_horaire) > 0) {
+    return Number(demande.formulaire_data.tarif_horaire);
+  }
+  if (demande?.formulaire_data?.tarification?.taux_horaire && Number(demande.formulaire_data.tarification.taux_horaire) > 0) {
+    return Number(demande.formulaire_data.tarification.taux_horaire);
+  }
+  const norm = (serviceName || demande?.service || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  if (norm.includes('grand menage') || norm.includes('grand')) {
+    return 70;
+  }
+  return 60;
 };
 
 
@@ -382,6 +399,7 @@ export default function Dashboard() {
   const [isFormExpanded, setIsFormExpanded] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
   const lastRecalculatedDurationRef = useRef<number | null>(null);
+  const lastRecalculatedPeopleRef = useRef<number | null>(null);
 
   // Nouveaux flags pour le formulaire complet
   const exactEditService = (editFormData.service || selectedDemande?.service || '').toString();
@@ -1211,15 +1229,15 @@ export default function Dashboard() {
         ? toNumber(current.montant_initial)
         : (toNumber(selectedDemande?.prix) > 0 ? toNumber(selectedDemande?.prix) : currentHT);
 
-      const diff = roundMoney(newMontantTTC - baseMontantInitial);
+      const peopleCount = Math.max(1, Number(current.nb_intervenants || current.nb_personnel || 1));
       let nextHasSupplement = Boolean(current.has_supplement_heures);
-      let nextSupplementMontant = toNumber(current.supplement_heures_montant);
+      let nextSupplementMontant = 0;
       let nextSupplementRecupere = Boolean(current.supplement_heures_recupere_especes);
 
-      if (diff > 0) {
-        nextHasSupplement = true;
-        nextSupplementMontant = diff;
-        nextSupplementRecupere = true;
+      if (nextHasSupplement) {
+        const suppHours = toNumber(current.supplement_heures_nombre || 0);
+        const suppRate = toNumber(current.supplement_heures_tarif_horaire) || getServiceBaseHourlyRate(current.service || selectedDemande?.service, selectedDemande);
+        nextSupplementMontant = roundMoney(suppHours * suppRate * peopleCount);
       }
 
       return {
@@ -1241,6 +1259,384 @@ export default function Dashboard() {
         profil_sera_paye: nextProfilSeraPaye,
       };
     });
+  };
+
+  const recalculatePriceAndSharesForPeople = (
+    newPeople: number,
+    baseFormData?: any,
+    overrideParts?: PartRepartitionItem[]
+  ) => {
+    setEditFormData((prev: any) => {
+      const current = baseFormData || prev;
+      if (newPeople <= 0) return current;
+      const oldPeople = Number(current.nb_intervenants || current.nb_personnel || 1);
+      const hours = Number(current.duree || current.nb_heures || 4);
+
+      const isFreeOrCancelled = current.statut_paiement_ui === 'intervention_gratuite' || current.statut_paiement_ui === 'facturation_annulee' || Boolean(current.facturation_annulee);
+      const tvaActive = Boolean(current.tva_active);
+      const currentHT = toNumber(current.montant_ht ?? current.prix);
+
+      // 1. Recalculate Tarif HT and TTC
+      let newMontantHT = currentHT;
+      if (!isFreeOrCancelled) {
+        const pricingInput: PricingInput = {
+          service: current.service || selectedDemande?.service || '',
+          duree: hours,
+          nb_intervenants: newPeople,
+          frequence: current.frequence || '',
+          produits: Boolean(current.produits || current.avec_produit),
+          torchons: Boolean(current.torchons || current.avec_torchons),
+          ville: current.ville || 'Casablanca',
+          date: current.date || current.date_demarrage || current.date_intervention || '',
+          scheduling_type: current.scheduling_type || 'flexible',
+          heure: current.heure || current.heure_intervention || '',
+          preference_horaire: current.preference_horaire || '',
+          surface: toNumber(current.surface),
+          rooms: current.rooms || {},
+          formula: current.formula,
+          size_tier: current.size_tier,
+          conso: current.conso,
+          linen_sets: current.linen_sets,
+        };
+
+        const calc = calculateTotalPrice(pricingInput);
+        if (typeof calc === 'number' && calc > 0) {
+          newMontantHT = calc;
+        } else if (oldPeople > 0 && currentHT > 0) {
+          // Proportional fallback for custom pricing, sur devis, or services like Auxiliaire
+          newMontantHT = roundMoney((currentHT / oldPeople) * newPeople);
+        }
+      } else {
+        newMontantHT = 0;
+      }
+
+      const newMontantTTC = isFreeOrCancelled ? 0 : roundMoney(tvaActive ? newMontantHT * 1.2 : newMontantHT);
+      const newCaInitial = isFreeOrCancelled ? 0 : newMontantHT;
+
+      // 2. Adjust and recalculate parts_repartition for profiles
+      const rawParts = overrideParts || asArray<PartRepartitionItem>(current.parts_repartition, []);
+      let updatedParts = [...rawParts];
+
+      const defaultRateType = getDefaultRateTypeForService(current.service || selectedDemande?.service);
+      const defaultHours = defaultRateType !== 'taux_forfaitaire' ? hours : undefined;
+      const defaultDays = defaultRateType === 'taux_forfaitaire' ? Number(current.nb_jours || 1) : undefined;
+      const defaultRateVal = defaultRateType === 'taux_horaire_standard'
+        ? getServiceDefaultRate(current.service || selectedDemande?.service, defaultRateType, defaultHours).rate
+        : (defaultRateType === 'taux_forfaitaire' ? getServiceDefaultRate(current.service || selectedDemande?.service, 'taux_forfaitaire').rate : 0);
+      const defaultAmount = defaultRateVal !== undefined
+        ? roundMoney((defaultRateType === 'taux_forfaitaire' ? defaultDays! : defaultHours!) * defaultRateVal)
+        : 0;
+
+      // Add profile slots if number of people increased
+      while (updatedParts.length < newPeople) {
+        updatedParts.push({
+          profile_id: '',
+          rate_type: defaultRateType,
+          hours: defaultHours,
+          days: defaultDays,
+          rate_value: defaultRateVal,
+          amount: defaultAmount,
+          is_delegate: updatedParts.length === 0
+        });
+      }
+
+      // If number of people decreased, trim unassigned slots first, then trailing slots
+      if (updatedParts.length > newPeople) {
+        while (updatedParts.length > newPeople && updatedParts[updatedParts.length - 1].profile_id === '') {
+          updatedParts.pop();
+        }
+        while (updatedParts.length > newPeople) {
+          updatedParts.pop();
+        }
+      }
+
+      // Recalculate each profile part
+      const hasExistingDelegate = rawParts.some(p => p.is_delegate);
+      updatedParts = updatedParts.map((p, idx) => {
+        const ag = allProfils.find(a => a.id === Number(p.profile_id)) || (selectedDemande?.profils_envoyes?.find((a: any) => a.id === Number(p.profile_id)));
+        const isInterne = ag?.categorie === 'interne';
+        const isDelegate = hasExistingDelegate ? Boolean(p.is_delegate) : idx === 0;
+        if (isInterne) {
+          return {
+            ...p,
+            hours,
+            rate_value: 0,
+            amount: 0,
+            is_delegate: isDelegate,
+          };
+        }
+
+        const rateType = p.rate_type || 'taux_horaire_standard';
+        if (rateType === 'taux_forfaitaire') {
+          return {
+            ...p,
+            is_delegate: isDelegate,
+          };
+        }
+
+        let rateValue = p.rate_value;
+        if (rateType === 'taux_horaire_standard' || !rateValue) {
+          rateValue = getServiceDefaultRate(current.service || selectedDemande?.service, 'taux_horaire_standard', hours).rate;
+        }
+        const pAmount = roundMoney(hours * (rateValue || 0));
+
+        return {
+          ...p,
+          hours,
+          rate_type: rateType,
+          rate_value: rateValue,
+          amount: pAmount,
+          is_delegate: isDelegate,
+        };
+      });
+
+      const totalParts = updatedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+
+      // 3. Recalculate Part Agence
+      let nextPartAgence = 0;
+      const isAbonnement = current.frequency === 'abonnement' || !!current.parent_demande || !!selectedDemande?.parent_demande;
+
+      if (isAbonnement) {
+        const parentId = current.parent_demande || selectedDemande?.parent_demande || selectedDemande?.id;
+        const parentDemande = getParentDemande(parentId, selectedDemande!);
+        const parentPrice = (selectedDemande?.id && Number(selectedDemande.id) === Number(parentId))
+          ? newMontantTTC
+          : (parentDemande ? toNumber(parentDemande.prix) : 0);
+
+        const subscriptionDemandes = getSubscriptionDemandes(parentId);
+        const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande?.id)).reduce((sum, d) => {
+          const parts = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
+          return sum + parts.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+        }, 0);
+
+        const remainingAgencyShare = Math.max(0, roundMoney(parentPrice - (totalParts + otherDemandsProfilesTotal)));
+        nextPartAgence = isFreeOrCancelled ? 0 : remainingAgencyShare;
+      } else {
+        nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(newMontantTTC - totalParts));
+      }
+
+      // 4. Balances due
+      let montantProfilDoitAgence = 0;
+      let montantAgenceDoitProfil = 0;
+      let nextMontantProfilAnnulation = current.montant_profil_annulation;
+      let nextProfilSeraPaye = current.profil_sera_paye;
+
+      if (isFreeOrCancelled) {
+        nextMontantProfilAnnulation = totalParts;
+        nextProfilSeraPaye = totalParts > 0;
+        montantAgenceDoitProfil = nextProfilSeraPaye ? nextMontantProfilAnnulation : 0;
+        montantProfilDoitAgence = 0;
+      } else {
+        if (current.statut_paiement_ui === 'profil_paye_client') {
+          montantProfilDoitAgence = nextPartAgence;
+          montantAgenceDoitProfil = 0;
+        } else if (current.statut_paiement_ui === 'agence_payee_client') {
+          montantAgenceDoitProfil = totalParts;
+          montantProfilDoitAgence = 0;
+        }
+      }
+
+      const hasSupplement = Boolean(current.has_supplement_heures);
+      let updatedSuppMontant = 0;
+      const suppHours = toNumber(current.supplement_heures_nombre || 0);
+      const suppRate = toNumber(current.supplement_heures_tarif_horaire) || getServiceBaseHourlyRate(current.service || selectedDemande?.service, selectedDemande);
+
+      if (hasSupplement && suppHours > 0) {
+        updatedSuppMontant = roundMoney(suppHours * suppRate * newPeople);
+      }
+
+      return {
+        ...current,
+        nb_intervenants: newPeople,
+        nb_personnel: newPeople,
+        montant_ht: newMontantHT,
+        prix: newMontantTTC,
+        ca_initial: newCaInitial,
+        has_supplement_heures: hasSupplement,
+        supplement_heures_nombre: suppHours,
+        supplement_heures_tarif_horaire: suppRate,
+        supplement_heures_montant: updatedSuppMontant,
+        parts_repartition: updatedParts,
+        part_agence: nextPartAgence,
+        montant_profil_doit_agence: montantProfilDoitAgence,
+        montant_agence_doit_profil: montantAgenceDoitProfil,
+        profil_sera_paye: nextProfilSeraPaye,
+        montant_profil_annulation: nextMontantProfilAnnulation,
+      };
+    });
+  };
+
+  const handleSupplementToggle = (activate: boolean) => {
+    setEditFormData((prev: any) => {
+      const currentDuree = Number(prev.duree || prev.nb_heures || 4);
+      const currentPrice = toNumber(prev.prix || prev.montant_ht || 0);
+      const currentSuppHours = toNumber(prev.supplement_heures_nombre || 0);
+      const currentSuppAmount = toNumber(prev.supplement_heures_montant || 0);
+      const defaultRate = toNumber(prev.supplement_heures_tarif_horaire) || getServiceBaseHourlyRate(prev.service, selectedDemande);
+      const peopleCount = Math.max(1, Number(prev.nb_intervenants || prev.nb_personnel || 1));
+
+      if (activate) {
+        const suppHours = currentSuppHours > 0 ? currentSuppHours : 2;
+        const suppAmount = roundMoney(suppHours * defaultRate * peopleCount);
+        const deltaHours = suppHours - (prev.has_supplement_heures ? currentSuppHours : 0);
+        const deltaPrice = suppAmount - (prev.has_supplement_heures ? currentSuppAmount : 0);
+
+        const newTotalHours = Math.max(0.5, roundMoney(currentDuree + deltaHours));
+        const newTotalCA = Math.max(0, roundMoney(currentPrice + deltaPrice));
+        lastRecalculatedDurationRef.current = newTotalHours;
+
+        const currentParts = asArray<PartRepartitionItem>(prev.parts_repartition, []);
+        const updatedParts = currentParts.map(p => {
+          const ag = allProfils.find(a => a.id === Number(p.profile_id)) || (selectedDemande?.profils_envoyes?.find((a: any) => a.id === Number(p.profile_id)));
+          if (ag?.categorie === 'interne') {
+            return { ...p, hours: newTotalHours, rate_value: 0, amount: 0 };
+          }
+          if (p.rate_type === 'taux_forfaitaire') {
+            return p;
+          }
+          const rateVal = p.rate_value || getServiceDefaultRate(prev.service || selectedDemande?.service, p.rate_type || 'taux_horaire_standard', newTotalHours).rate;
+          return {
+            ...p,
+            hours: newTotalHours,
+            rate_value: rateVal,
+            amount: roundMoney(newTotalHours * rateVal),
+          };
+        });
+
+        const totalParts = updatedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+        const newPartAgence = Math.max(0, roundMoney(newTotalCA - totalParts));
+
+        return {
+          ...prev,
+          duree: newTotalHours,
+          nb_heures: newTotalHours,
+          prix: newTotalCA,
+          montant_ht: prev.tva_active ? roundMoney(newTotalCA / 1.2) : newTotalCA,
+          has_supplement_heures: true,
+          supplement_heures_nombre: suppHours,
+          supplement_heures_tarif_horaire: defaultRate,
+          supplement_heures_montant: suppAmount,
+          supplement_encaisse_par: prev.supplement_encaisse_par || 'femme_de_menage',
+          supplement_heures_recupere_especes: (prev.supplement_encaisse_par || 'femme_de_menage') === 'femme_de_menage',
+          parts_repartition: updatedParts,
+          part_agence: newPartAgence,
+          montant_agence_doit_profil: prev.statut_paiement_ui === 'agence_payee_client' ? totalParts : prev.montant_agence_doit_profil,
+          montant_profil_doit_agence: prev.statut_paiement_ui === 'profil_paye_client' ? newPartAgence : prev.montant_profil_doit_agence,
+        };
+      } else {
+        if (!prev.has_supplement_heures) return prev;
+
+        const deltaHours = -currentSuppHours;
+        const deltaPrice = -currentSuppAmount;
+
+        const newTotalHours = Math.max(0.5, roundMoney(currentDuree + deltaHours));
+        const newTotalCA = Math.max(0, roundMoney(currentPrice + deltaPrice));
+        lastRecalculatedDurationRef.current = newTotalHours;
+
+        const currentParts = asArray<PartRepartitionItem>(prev.parts_repartition, []);
+        const updatedParts = currentParts.map(p => {
+          const ag = allProfils.find(a => a.id === Number(p.profile_id)) || (selectedDemande?.profils_envoyes?.find((a: any) => a.id === Number(p.profile_id)));
+          if (ag?.categorie === 'interne') {
+            return { ...p, hours: newTotalHours, rate_value: 0, amount: 0 };
+          }
+          if (p.rate_type === 'taux_forfaitaire') {
+            return p;
+          }
+          const rateVal = p.rate_value || getServiceDefaultRate(prev.service || selectedDemande?.service, p.rate_type || 'taux_horaire_standard', newTotalHours).rate;
+          return {
+            ...p,
+            hours: newTotalHours,
+            rate_value: rateVal,
+            amount: roundMoney(newTotalHours * rateVal),
+          };
+        });
+
+        const totalParts = updatedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+        const newPartAgence = Math.max(0, roundMoney(newTotalCA - totalParts));
+
+        return {
+          ...prev,
+          duree: newTotalHours,
+          nb_heures: newTotalHours,
+          prix: newTotalCA,
+          montant_ht: prev.tva_active ? roundMoney(newTotalCA / 1.2) : newTotalCA,
+          has_supplement_heures: false,
+          supplement_heures_nombre: 0,
+          supplement_heures_montant: 0,
+          supplement_heures_recupere_especes: false,
+          parts_repartition: updatedParts,
+          part_agence: newPartAgence,
+          montant_agence_doit_profil: prev.statut_paiement_ui === 'agence_payee_client' ? totalParts : prev.montant_agence_doit_profil,
+          montant_profil_doit_agence: prev.statut_paiement_ui === 'profil_paye_client' ? newPartAgence : prev.montant_profil_doit_agence,
+        };
+      }
+    });
+  };
+
+  const handleSupplementChange = (newSuppHours: number, newSuppRate: number) => {
+    setEditFormData((prev: any) => {
+      const currentDuree = Number(prev.duree || prev.nb_heures || 4);
+      const currentPrice = toNumber(prev.prix || prev.montant_ht || 0);
+      const oldSuppHours = toNumber(prev.supplement_heures_nombre || 0);
+      const oldSuppAmount = toNumber(prev.supplement_heures_montant || 0);
+      const peopleCount = Math.max(1, Number(prev.nb_intervenants || prev.nb_personnel || 1));
+
+      const safeSuppHours = Math.max(0, newSuppHours);
+      const safeSuppRate = Math.max(0, newSuppRate);
+      const newSuppAmount = roundMoney(safeSuppHours * safeSuppRate * peopleCount);
+
+      const deltaHours = safeSuppHours - oldSuppHours;
+      const deltaPrice = newSuppAmount - oldSuppAmount;
+
+      const newTotalHours = Math.max(0.5, roundMoney(currentDuree + deltaHours));
+      const newTotalCA = Math.max(0, roundMoney(currentPrice + deltaPrice));
+      lastRecalculatedDurationRef.current = newTotalHours;
+
+      const currentParts = asArray<PartRepartitionItem>(prev.parts_repartition, []);
+      const updatedParts = currentParts.map(p => {
+        const ag = allProfils.find(a => a.id === Number(p.profile_id)) || (selectedDemande?.profils_envoyes?.find((a: any) => a.id === Number(p.profile_id)));
+        if (ag?.categorie === 'interne') {
+          return { ...p, hours: newTotalHours, rate_value: 0, amount: 0 };
+        }
+        if (p.rate_type === 'taux_forfaitaire') {
+          return p;
+        }
+        const rateVal = p.rate_value || getServiceDefaultRate(prev.service || selectedDemande?.service, p.rate_type || 'taux_horaire_standard', newTotalHours).rate;
+        return {
+          ...p,
+          hours: newTotalHours,
+          rate_value: rateVal,
+          amount: roundMoney(newTotalHours * rateVal),
+        };
+      });
+
+      const totalParts = updatedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+      const newPartAgence = Math.max(0, roundMoney(newTotalCA - totalParts));
+
+      return {
+        ...prev,
+        duree: newTotalHours,
+        nb_heures: newTotalHours,
+        prix: newTotalCA,
+        montant_ht: prev.tva_active ? roundMoney(newTotalCA / 1.2) : newTotalCA,
+        has_supplement_heures: true,
+        supplement_heures_nombre: safeSuppHours,
+        supplement_heures_tarif_horaire: safeSuppRate,
+        supplement_heures_montant: newSuppAmount,
+        parts_repartition: updatedParts,
+        part_agence: newPartAgence,
+        montant_agence_doit_profil: prev.statut_paiement_ui === 'agence_payee_client' ? totalParts : prev.montant_agence_doit_profil,
+        montant_profil_doit_agence: prev.statut_paiement_ui === 'profil_paye_client' ? newPartAgence : prev.montant_profil_doit_agence,
+      };
+    });
+  };
+
+  const handleSupplementEncaissementChange = (encaissement: 'femme_de_menage' | 'agence') => {
+    setEditFormData((prev: any) => ({
+      ...prev,
+      supplement_encaisse_par: encaissement,
+      supplement_heures_recupere_especes: encaissement === 'femme_de_menage',
+    }));
   };
 
   const handleUpdate = async () => {
@@ -1492,8 +1888,11 @@ export default function Dashboard() {
           part_agence: finalPartAgence,
           parts_repartition: partsRepartition,
           has_supplement_heures: Boolean(editFormData.has_supplement_heures),
+          supplement_heures_nombre: editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_nombre) : 0,
+          supplement_heures_tarif_horaire: editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_tarif_horaire) : 0,
           supplement_heures_montant: editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_montant) : 0,
-          supplement_heures_recupere_especes: editFormData.has_supplement_heures ? Boolean(editFormData.supplement_heures_recupere_especes) : false,
+          supplement_encaisse_par: editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence'),
+          supplement_heures_recupere_especes: editFormData.has_supplement_heures ? Boolean(editFormData.supplement_encaisse_par === 'femme_de_menage' || editFormData.supplement_heures_recupere_especes) : false,
           annulation_raison: editFormData.annulation_raison || '',
           profil_sera_paye: Boolean(editFormData.profil_sera_paye),
           montant_profil_annulation: editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0,
@@ -1508,8 +1907,11 @@ export default function Dashboard() {
         part_agence: finalPartAgence,
         parts_repartition: partsRepartition,
         has_supplement_heures: Boolean(editFormData.has_supplement_heures),
+        supplement_heures_nombre: editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_nombre) : 0,
+        supplement_heures_tarif_horaire: editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_tarif_horaire) : 0,
         supplement_heures_montant: editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_montant) : 0,
-        supplement_heures_recupere_especes: editFormData.has_supplement_heures ? Boolean(editFormData.supplement_heures_recupere_especes) : false,
+        supplement_encaisse_par: editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence'),
+        supplement_heures_recupere_especes: editFormData.has_supplement_heures ? Boolean(editFormData.supplement_encaisse_par === 'femme_de_menage' || editFormData.supplement_heures_recupere_especes) : false,
         notes: editFormData.note_client || '',
       };
 
@@ -1518,8 +1920,11 @@ export default function Dashboard() {
       updateData.part_agence = finalPartAgence;
       updateData.parts_repartition = partsRepartition;
       updateData.has_supplement_heures = Boolean(editFormData.has_supplement_heures);
+      updateData.supplement_heures_nombre = editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_nombre) : 0;
+      updateData.supplement_heures_tarif_horaire = editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_tarif_horaire) : 0;
       updateData.supplement_heures_montant = editFormData.has_supplement_heures ? toNumber(editFormData.supplement_heures_montant) : 0;
-      updateData.supplement_heures_recupere_especes = editFormData.has_supplement_heures ? Boolean(editFormData.supplement_heures_recupere_especes) : false;
+      updateData.supplement_encaisse_par = editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence');
+      updateData.supplement_heures_recupere_especes = editFormData.has_supplement_heures ? Boolean(editFormData.supplement_encaisse_par === 'femme_de_menage' || editFormData.supplement_heures_recupere_especes) : false;
 
       const response = await updateDemande(selectedDemande.id, updateData);
 
@@ -1622,6 +2027,7 @@ export default function Dashboard() {
 
   const closeDetailModal = () => {
     lastRecalculatedDurationRef.current = null;
+    lastRecalculatedPeopleRef.current = null;
     setShowDetail(false);
     setIsEditing(false);
   };
@@ -1878,11 +2284,22 @@ export default function Dashboard() {
       has_supplement_heures: Boolean(
         facturationData.has_supplement_heures ?? (
           toNumber(facturationData.supplement_heures_montant ?? formData.supplement_heures_montant ?? d.supplement_heures_montant ?? 0) > 0 ||
-          Boolean(facturationData.supplement_heures_recupere_especes ?? formData.supplement_heures_recupere_especes ?? d.supplement_heures_recupere_especes ?? false)
+          toNumber(facturationData.supplement_heures_nombre ?? 0) > 0
         )
       ),
+      supplement_heures_nombre: toNumber(facturationData.supplement_heures_nombre ?? (
+        toNumber(facturationData.supplement_heures_montant ?? 0) > 0
+          ? Math.round(toNumber(facturationData.supplement_heures_montant) / (toNumber(facturationData.supplement_heures_tarif_horaire) || getServiceBaseHourlyRate(d.service, d)))
+          : 0
+      )),
+      supplement_heures_tarif_horaire: toNumber(facturationData.supplement_heures_tarif_horaire) || getServiceBaseHourlyRate(d.service, d),
       supplement_heures_montant: toNumber(facturationData.supplement_heures_montant ?? formData.supplement_heures_montant ?? d.supplement_heures_montant ?? 0),
-      supplement_heures_recupere_especes: Boolean(facturationData.supplement_heures_recupere_especes ?? formData.supplement_heures_recupere_especes ?? d.supplement_heures_recupere_especes ?? false),
+      supplement_encaisse_par: facturationData.supplement_encaisse_par || (
+        facturationData.supplement_heures_recupere_especes === false ? 'agence' : 'femme_de_menage'
+      ),
+      supplement_heures_recupere_especes: facturationData.supplement_encaisse_par === 'agence'
+        ? false
+        : Boolean(facturationData.supplement_heures_recupere_especes ?? true),
       mode_paiement: facturationData.mode_paiement || d.mode_paiement || '',
       statut_paiement: d.statut_paiement,
       statut_paiement_ui: paymentUiValue,
@@ -1960,6 +2377,8 @@ export default function Dashboard() {
     });
     const initialDuration = Number(formData.duree || d.nb_heures || formData.duration || 4);
     lastRecalculatedDurationRef.current = initialDuration;
+    const initialPeople = Number(formData.nb_intervenants || formData.nb_personnel || formData.numberOfPeople || d.nb_intervenants || 1);
+    lastRecalculatedPeopleRef.current = initialPeople;
     setIsFormExpanded(autoExpand);
     setIsAgencyExpanded(autoExpand);
     setShowPartsSection(false);
@@ -1985,6 +2404,18 @@ export default function Dashboard() {
       recalculatePriceAndSharesForDuration(currentDuree);
     }
   }, [editFormData?.duree, editFormData?.nb_heures, showDetail, isEditing]);
+
+  // Real-time automatic recalculation of pricing, CA, profile parts, agency share and balances when people count changes
+  useEffect(() => {
+    if (!showDetail || !isEditing) return;
+    const currentPeople = Number(editFormData?.nb_intervenants || editFormData?.nb_personnel || 1);
+    if (!currentPeople || currentPeople <= 0) return;
+
+    if (lastRecalculatedPeopleRef.current !== null && lastRecalculatedPeopleRef.current !== currentPeople) {
+      lastRecalculatedPeopleRef.current = currentPeople;
+      recalculatePriceAndSharesForPeople(currentPeople);
+    }
+  }, [editFormData?.nb_intervenants, editFormData?.nb_personnel, showDetail, isEditing]);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -3544,9 +3975,17 @@ export default function Dashboard() {
                             <div className="ws-form-block">
                               <div className="ws-section-header">Nombre de personne</div>
                               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '2rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #f1f5f9', marginTop: '1rem' }}>
-                                <button type="button" onClick={() => setEditFormData({ ...editFormData, nb_personnel: Math.max(1, (editFormData.nb_personnel || 1) - 1) })} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e2e8f0', color: 'var(--primary)', fontSize: '1.5rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>−</button>
-                                <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)', minWidth: '40px', textAlign: 'center' }}>{editFormData.nb_personnel || 1}</span>
-                                <button type="button" onClick={() => setEditFormData({ ...editFormData, nb_personnel: (editFormData.nb_personnel || 1) + 1 })} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e2e8f0', color: 'var(--primary)', fontSize: '1.5rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>+</button>
+                                <button type="button" onClick={() => {
+                                  const currentVal = Number(editFormData.nb_personnel || editFormData.nb_intervenants || 1);
+                                  const nextVal = Math.max(1, currentVal - 1);
+                                  setEditFormData({ ...editFormData, nb_personnel: nextVal, nb_intervenants: nextVal });
+                                }} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e2e8f0', color: 'var(--primary)', fontSize: '1.5rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>−</button>
+                                <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)', minWidth: '40px', textAlign: 'center' }}>{editFormData.nb_personnel || editFormData.nb_intervenants || 1}</span>
+                                <button type="button" onClick={() => {
+                                  const currentVal = Number(editFormData.nb_personnel || editFormData.nb_intervenants || 1);
+                                  const nextVal = currentVal + 1;
+                                  setEditFormData({ ...editFormData, nb_personnel: nextVal, nb_intervenants: nextVal });
+                                }} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e2e8f0', color: 'var(--primary)', fontSize: '1.5rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}>+</button>
                               </div>
                             </div>
 
@@ -4333,175 +4772,458 @@ export default function Dashboard() {
                                 </div>
                               </div>
 
-                          {/* ── Supplément d'heures payé en espèces : bascule Oui / Non ── */}
+                          {/* ── Supplément d'heures : Nouvelle interface exécutive & Message Déléguée ── */}
                           {(() => {
+                            const cleanerCount = Math.max(1, Number(editFormData.nb_intervenants || editFormData.nb_personnel || 1));
                             const hasSupplement = Boolean(editFormData.has_supplement_heures);
-                            const supplementMontant = hasSupplement ? toNumber(editFormData.supplement_heures_montant) : 0;
-                            const isSupplementRecupere = hasSupplement && Boolean(editFormData.supplement_heures_recupere_especes);
+                            const suppHours = toNumber(editFormData.supplement_heures_nombre ?? 0);
+                            const baseServiceRate = getServiceBaseHourlyRate(editFormData.service, selectedDemande);
+                            const suppRate = toNumber(editFormData.supplement_heures_tarif_horaire) || baseServiceRate;
+                            const suppMontant = hasSupplement ? roundMoney(suppHours * suppRate * cleanerCount) : 0;
+                            const encaissePar = editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence');
+                            const currentStatutUi = editFormData.statut_paiement_ui || '';
 
-                            // Base initial amount before the supplement was added:
-                            const baseMontantInitial = toNumber(editFormData.montant_initial) > 0
-                              ? toNumber(editFormData.montant_initial)
-                              : (hasSupplement && supplementMontant > 0 ? Math.max(0, roundMoney(montantTTC - supplementMontant)) : montantTTC);
+                            const parts = asArray<PartRepartitionItem>(editFormData.parts_repartition, []);
+                            const totalParts = parts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                            const isFreeOrCancelled = currentStatutUi === 'intervention_gratuite' || currentStatutUi === 'facturation_annulee' || Boolean(editFormData.facturation_annulee);
+                            const calculatedAgencyShare = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(montantTTC - totalParts));
+                            const effectivePartAgence = isFreeOrCancelled ? 0 : (toNumber(editFormData.part_agence) > 0 ? toNumber(editFormData.part_agence) : calculatedAgencyShare);
 
-                            const calculatedDiff = Math.max(0, roundMoney(montantTTC - baseMontantInitial));
-                            const totalEncaisse = roundMoney(baseMontantInitial + (isSupplementRecupere ? supplementMontant : 0));
+                            // Delegate identification
+                            const delegatePart = parts.find((p: any) => p.is_delegate) || parts[0];
+                            const delegateId = delegatePart?.profile_id;
+                            const delegateObj = allProfils.find((a: any) => a.id === Number(delegateId)) || 
+                                                selectedDemande?.profils_envoyes?.find((a: any) => a.id === Number(delegateId));
+                            const delegateName = delegateObj?.full_name || (delegatePart as any)?.profile_name || (delegateId ? `Intervenante #${delegateId}` : 'la déléguée');
+
+                            const isProfilPaye = currentStatutUi === 'profil_paye_client' || currentStatutUi === 'Profil payé / Client';
+                            const isAgencePayee = currentStatutUi === 'agence_payee_client' || currentStatutUi === 'Agence payée / Client';
+                            const encaisseParFdm = encaissePar === 'femme_de_menage';
+
+                            let recuAgence = 0;
+                            let chezFdm = 0;
+
+                            if (isAgencePayee) {
+                              if (encaissePar === 'agence') {
+                                recuAgence = montantTTC;
+                                chezFdm = 0;
+                              } else {
+                                recuAgence = Math.max(0, roundMoney(montantTTC - suppMontant));
+                                chezFdm = suppMontant;
+                              }
+                            } else if (isProfilPaye) {
+                              if (encaissePar === 'agence') {
+                                recuAgence = suppMontant;
+                                chezFdm = Math.max(0, roundMoney(montantTTC - suppMontant));
+                              } else {
+                                recuAgence = 0;
+                                chezFdm = montantTTC;
+                              }
+                            } else if (currentStatutUi === 'paye' || currentStatutUi === 'A jour' || editFormData.paiement === 'paye') {
+                              recuAgence = montantTTC;
+                              chezFdm = 0;
+                            } else {
+                              if (encaissePar === 'agence') {
+                                recuAgence = suppMontant;
+                                chezFdm = 0;
+                              } else {
+                                recuAgence = 0;
+                                chezFdm = suppMontant;
+                              }
+                            }
+
+                            // Calculate total amount to recover from delegate
+                            let totalARecuperer = 0;
+                            let messageTitle = '';
+                            let messageDetail = '';
+                            let statusTag = '';
+
+                            if (isProfilPaye) {
+                              totalARecuperer = effectivePartAgence;
+                              messageTitle = "Somme totale à récupérer chez la déléguée";
+                              statusTag = "Profil payé / Client";
+                              messageDetail = `Le client a réglé la totalité de la mission (${montantTTC.toFixed(0)} DH) directement sur place à la déléguée (${delegateName}). L'agence doit récupérer sa part (${effectivePartAgence.toFixed(0)} DH) auprès d'elle.`;
+                            } else if (isAgencePayee) {
+                              if (hasSupplement && encaisseParFdm && suppMontant > 0) {
+                                totalARecuperer = suppMontant;
+                                messageTitle = "Somme totale à récupérer chez la déléguée";
+                                statusTag = "Agence payée / Client";
+                                messageDetail = `Le client a payé la prestation de base (${Math.max(0, roundMoney(montantTTC - suppMontant)).toFixed(0)} DH) à l'agence, mais a réglé le supplément d'heures en espèces sur place à la déléguée (${delegateName}).`;
+                              } else {
+                                totalARecuperer = 0;
+                                messageTitle = "Règlement déléguée";
+                                statusTag = "Agence payée / Client";
+                                messageDetail = `La prestation (et tout supplément éventuel) a été réglée directement à l'agence. Rien à récupérer auprès de la déléguée (0 DH).`;
+                              }
+                            } else {
+                              if (hasSupplement && encaisseParFdm && suppMontant > 0) {
+                                totalARecuperer = suppMontant;
+                                messageTitle = "Somme totale à récupérer chez la déléguée";
+                                statusTag = currentStatutUi || "Paiement en attente";
+                                messageDetail = `Le supplément d'heures (${suppMontant.toFixed(0)} DH) a été encaissé en espèces sur place par la déléguée (${delegateName}).`;
+                              } else {
+                                totalARecuperer = 0;
+                                messageTitle = "Règlement déléguée";
+                                statusTag = currentStatutUi || "En attente";
+                                messageDetail = `Aucune somme en espèces n'est à récupérer auprès de la déléguée pour le moment.`;
+                              }
+                            }
 
                             return (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
-                                {/* Contrôle : Supplément payé Oui / Non */}
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>
-                                    Supplément payé ?
-                                  </span>
-                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                                    <label
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        cursor: 'pointer',
-                                        padding: '4px 12px',
-                                        borderRadius: '6px',
-                                        border: !hasSupplement ? '1.5px solid #64748B' : '1px solid #CBD5E1',
-                                        background: !hasSupplement ? '#F1F5F9' : '#FFFFFF',
-                                        color: !hasSupplement ? '#0F172A' : '#64748B',
-                                        fontWeight: !hasSupplement ? 700 : 500,
-                                        fontSize: '12.5px',
-                                        transition: 'all 0.15s ease',
-                                        userSelect: 'none'
-                                      }}
-                                    >
-                                      <input
-                                        type="radio"
-                                        name="has_supplement_heures_toggle"
-                                        checked={!hasSupplement}
-                                        onChange={() => {
-                                          setEditFormData({
-                                            ...editFormData,
-                                            has_supplement_heures: false,
-                                            supplement_heures_montant: 0,
-                                            supplement_heures_recupere_especes: false
-                                          });
-                                        }}
-                                        style={{ accentColor: '#0284C7', cursor: 'pointer' }}
-                                      />
-                                      Non
-                                    </label>
-
-                                    <label
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        cursor: 'pointer',
-                                        padding: '4px 12px',
-                                        borderRadius: '6px',
-                                        border: hasSupplement ? '1.5px solid #0284C7' : '1px solid #CBD5E1',
-                                        background: hasSupplement ? '#E0F2FE' : '#FFFFFF',
-                                        color: hasSupplement ? '#0369A1' : '#64748B',
-                                        fontWeight: hasSupplement ? 700 : 500,
-                                        fontSize: '12.5px',
-                                        transition: 'all 0.15s ease',
-                                        userSelect: 'none'
-                                      }}
-                                    >
-                                      <input
-                                        type="radio"
-                                        name="has_supplement_heures_toggle"
-                                        checked={hasSupplement}
-                                        onChange={() => {
-                                          const defaultSupp = toNumber(editFormData.supplement_heures_montant) > 0
-                                            ? editFormData.supplement_heures_montant
-                                            : (calculatedDiff > 0 ? calculatedDiff : 0);
-
-                                          setEditFormData({
-                                            ...editFormData,
-                                            has_supplement_heures: true,
-                                            supplement_heures_montant: defaultSupp,
-                                            supplement_heures_recupere_especes: true,
-                                            montant_initial: baseMontantInitial,
-                                          });
-                                        }}
-                                        style={{ accentColor: '#0284C7', cursor: 'pointer' }}
-                                      />
-                                      Oui
-                                    </label>
-                                  </div>
-                                </div>
-
-                                {/* Bloc de saisie du supplément : affiché UNIQUEMENT si Oui */}
-                                {hasSupplement && (
-                                  <div style={{ padding: '16px', borderRadius: '10px', border: '1px solid #BAE6FD', background: '#F0F9FF' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0369A1' }}>
-                                        Supplément d'heures payé en espèces
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+                                {/* ── Bloc principal noir : Toggle et saisie ── */}
+                                <div
+                                  style={{
+                                    background: '#0B111E',
+                                    borderRadius: '14px',
+                                    padding: '16px 20px',
+                                    border: '1px solid #1E293B',
+                                    color: '#FFFFFF'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div>
+                                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#FFFFFF', letterSpacing: '-0.2px' }}>
+                                        Y a-t-il un supplément d'heures ?
                                       </div>
-                                      {calculatedDiff > 0 && supplementMontant !== calculatedDiff && (
-                                        <button
-                                          type="button"
-                                          onClick={() => setEditFormData({ ...editFormData, supplement_heures_montant: calculatedDiff })}
-                                          style={{
-                                            background: '#E0F2FE',
-                                            color: '#0369A1',
-                                            border: '1px solid #BAE6FD',
-                                            borderRadius: '6px',
-                                            padding: '3px 8px',
-                                            fontSize: '11px',
-                                            fontWeight: 600,
-                                            cursor: 'pointer'
-                                          }}
-                                        >
-                                          Ajuster à la différence (+{calculatedDiff} DH)
-                                        </button>
-                                      )}
+                                      <div style={{ fontSize: '12px', color: '#94A3B8', marginTop: '2px' }}>
+                                        Heures ajoutées sur place par le client
+                                      </div>
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '16px', alignItems: 'flex-end' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', background: '#172033', padding: '3px', borderRadius: '8px', border: '1px solid #334155' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSupplementToggle(false)}
+                                        style={{
+                                          padding: '6px 16px',
+                                          borderRadius: '6px',
+                                          border: 'none',
+                                          background: !hasSupplement ? '#334155' : 'transparent',
+                                          color: !hasSupplement ? '#FFFFFF' : '#94A3B8',
+                                          fontWeight: !hasSupplement ? 700 : 500,
+                                          fontSize: '13px',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.15s ease'
+                                        }}
+                                      >
+                                        Non
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSupplementToggle(true)}
+                                        style={{
+                                          padding: '6px 16px',
+                                          borderRadius: '6px',
+                                          border: 'none',
+                                          background: hasSupplement ? '#00C853' : 'transparent',
+                                          color: '#FFFFFF',
+                                          fontWeight: hasSupplement ? 700 : 500,
+                                          fontSize: '13px',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.15s ease'
+                                        }}
+                                      >
+                                        Oui
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {hasSupplement && (
+                                    <div
+                                      style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: '1fr 1fr 1.2fr',
+                                        gap: '14px',
+                                        marginTop: '16px',
+                                        paddingTop: '16px',
+                                        borderTop: '1px solid #1E293B'
+                                      }}
+                                    >
                                       <div>
-                                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block' }}>
-                                          Montant du supplément (DH)
+                                        <label style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>
+                                          HEURES SUPPL.
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min={0.5}
+                                          step={0.5}
+                                          value={suppHours || ''}
+                                          onChange={e => handleSupplementChange(toNumber(e.target.value), suppRate)}
+                                          placeholder="0"
+                                          style={{
+                                            width: '100%',
+                                            height: '42px',
+                                            background: '#141E33',
+                                            border: '1px solid #334155',
+                                            borderRadius: '8px',
+                                            color: '#FFFFFF',
+                                            textAlign: 'center',
+                                            fontSize: '15px',
+                                            fontWeight: 700,
+                                            outline: 'none'
+                                          }}
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>
+                                          PRIX / HEURE
                                         </label>
                                         <input
                                           type="number"
                                           min={0}
                                           step="any"
-                                          value={editFormData.supplement_heures_montant ?? 0}
-                                          onChange={e => setEditFormData({ ...editFormData, supplement_heures_montant: e.target.value })}
-                                          className="edit-input"
-                                          style={{ width: '100%', background: 'white' }}
+                                          value={suppRate || ''}
+                                          onChange={e => handleSupplementChange(suppHours, toNumber(e.target.value))}
+                                          placeholder="60"
+                                          style={{
+                                            width: '100%',
+                                            height: '42px',
+                                            background: '#141E33',
+                                            border: '1px solid #334155',
+                                            borderRadius: '8px',
+                                            color: '#FFFFFF',
+                                            textAlign: 'center',
+                                            fontSize: '15px',
+                                            fontWeight: 700,
+                                            outline: 'none'
+                                          }}
                                         />
                                       </div>
+
                                       <div>
-                                        <label
+                                        <label style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', display: 'block' }}>
+                                          MONTANT SUPPL.
+                                        </label>
+                                        <div
                                           style={{
+                                            height: '42px',
+                                            background: 'rgba(5, 150, 105, 0.12)',
+                                            border: '1.5px solid #059669',
+                                            borderRadius: '8px',
+                                            color: '#10B981',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '8px',
-                                            padding: '0 12px',
-                                            height: '38px',
-                                            background: 'white',
-                                            border: '1px solid #CBD5E1',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer',
-                                            userSelect: 'none'
+                                            justifyContent: 'center',
+                                            fontSize: '15px',
+                                            fontWeight: 800,
+                                            gap: '4px'
                                           }}
                                         >
-                                          <input
-                                            type="checkbox"
-                                            checked={isSupplementRecupere}
-                                            onChange={e => setEditFormData({ ...editFormData, supplement_heures_recupere_especes: e.target.checked })}
-                                            style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#0284C7' }}
-                                          />
-                                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>
-                                            Montant récupéré en espèces par le profil
-                                          </span>
-                                        </label>
+                                          <span>{suppMontant.toFixed(0)} DH</span>
+                                          {cleanerCount > 1 && (
+                                            <span style={{ fontSize: '11px', color: '#6EE7B7', fontWeight: 600 }}>
+                                              ({cleanerCount} pers.)
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginTop: '12px', fontSize: '12.5px', color: '#0369A1' }}>
-                                      <span>Montant initial : <strong>{baseMontantInitial.toFixed(2).replace('.', ',')} DH</strong></span>
-                                      <span>Supplément espèces : <strong>{supplementMontant.toFixed(2).replace('.', ',')} DH</strong></span>
-                                      <span>Total encaissé : <strong>{totalEncaisse.toFixed(2).replace('.', ',')} DH</strong></span>
+                                  )}
+                                </div>
+
+                                {/* ── Bloc secondaire noir : Qui encaisse ? ── */}
+                                {hasSupplement && (
+                                  <div
+                                    style={{
+                                      background: '#0B111E',
+                                      borderRadius: '14px',
+                                      padding: '16px 20px',
+                                      border: '1px solid #1E293B',
+                                      maxWidth: '560px',
+                                      margin: '0 auto',
+                                      width: '100%'
+                                    }}
+                                  >
+                                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#FFFFFF', textAlign: 'center', marginBottom: '14px' }}>
+                                      Qui encaisse les {suppMontant.toFixed(0)} DH en espèces ?
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSupplementEncaissementChange('femme_de_menage')}
+                                        style={{
+                                          padding: '12px 14px',
+                                          borderRadius: '10px',
+                                          background: encaissePar === 'femme_de_menage' ? '#0F2744' : '#141E33',
+                                          border: encaissePar === 'femme_de_menage' ? '2px solid #0284C7' : '1px solid #334155',
+                                          cursor: 'pointer',
+                                          textAlign: 'left',
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          gap: '4px',
+                                          transition: 'all 0.15s ease'
+                                        }}
+                                      >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          <UserIcon size={16} color={encaissePar === 'femme_de_menage' ? '#38BDF8' : '#94A3B8'} />
+                                          <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#FFFFFF' }}>
+                                            Femme de ménage
+                                          </span>
+                                        </div>
+                                        <span style={{ fontSize: '11px', color: encaissePar === 'femme_de_menage' ? '#93C5FD' : '#64748B', lineHeight: '1.3' }}>
+                                          Elle garde le cash → créance à réclamer
+                                        </span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSupplementEncaissementChange('agence')}
+                                        style={{
+                                          padding: '12px 14px',
+                                          borderRadius: '10px',
+                                          background: encaissePar === 'agence' ? '#0F2744' : '#141E33',
+                                          border: encaissePar === 'agence' ? '2px solid #0284C7' : '1px solid #334155',
+                                          cursor: 'pointer',
+                                          textAlign: 'left',
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          gap: '4px',
+                                          transition: 'all 0.15s ease'
+                                        }}
+                                      >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          <Building2 size={16} color={encaissePar === 'agence' ? '#38BDF8' : '#94A3B8'} />
+                                          <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#FFFFFF' }}>
+                                            Agence
+                                          </span>
+                                        </div>
+                                        <span style={{ fontSize: '11px', color: encaissePar === 'agence' ? '#93C5FD' : '#64748B', lineHeight: '1.3' }}>
+                                          Cash direct en caisse → rien à réclamer
+                                        </span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* ── Bandeau récapitulatif 3 métriques : Total CA | Reçu agence | Chez la FDM ── */}
+                                {hasSupplement && (
+                                  <div
+                                    style={{
+                                      background: '#0B192C',
+                                      border: '1px solid #1E3A5F',
+                                      borderRadius: '12px',
+                                      padding: '12px 24px',
+                                      display: 'flex',
+                                      justifyContent: 'space-around',
+                                      alignItems: 'center',
+                                      maxWidth: '460px',
+                                      margin: '4px auto 0 auto',
+                                      width: '100%',
+                                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
+                                    }}
+                                  >
+                                    <div style={{ textAlign: 'center' }}>
+                                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#94A3B8', marginBottom: '2px' }}>Total CA</div>
+                                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#FFFFFF' }}>{montantTTC.toFixed(0)} DH</div>
+                                    </div>
+                                    <div style={{ width: '1px', height: '24px', background: '#1E3A5F' }} />
+                                    <div style={{ textAlign: 'center' }}>
+                                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#94A3B8', marginBottom: '2px' }}>Reçu agence</div>
+                                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#FFFFFF' }}>{recuAgence.toFixed(0)} DH</div>
+                                    </div>
+                                    <div style={{ width: '1px', height: '24px', background: '#1E3A5F' }} />
+                                    <div style={{ textAlign: 'center' }}>
+                                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#94A3B8', marginBottom: '2px' }}>Chez la FDM</div>
+                                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#FFFFFF' }}>{chezFdm.toFixed(0)} DH</div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* ── Message exécutif : Somme totale à récupérer chez la déléguée ── */}
+                                {(hasSupplement || isProfilPaye || isAgencePayee) && (
+                                  <div
+                                    style={{
+                                      background: totalARecuperer > 0 ? '#0B1528' : '#0B192C',
+                                      border: totalARecuperer > 0 ? '1.5px solid #0284C7' : '1px solid #1E3A5F',
+                                      borderRadius: '12px',
+                                      padding: '14px 18px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: '16px',
+                                      flexWrap: 'wrap',
+                                      boxShadow: totalARecuperer > 0 ? '0 4px 16px rgba(2, 132, 199, 0.15)' : 'none'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1, minWidth: '240px' }}>
+                                      <div
+                                        style={{
+                                          width: '38px',
+                                          height: '38px',
+                                          borderRadius: '10px',
+                                          background: totalARecuperer > 0 ? 'rgba(2, 132, 199, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          flexShrink: 0,
+                                          marginTop: '2px'
+                                        }}
+                                      >
+                                        {totalARecuperer > 0 ? (
+                                          <Coins size={20} color="#38BDF8" />
+                                        ) : (
+                                          <CheckCircle size={20} color="#10B981" />
+                                        )}
+                                      </div>
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                                          <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.2px' }}>
+                                            {messageTitle}
+                                          </span>
+                                          <span
+                                            style={{
+                                              fontSize: '11px',
+                                              fontWeight: 700,
+                                              padding: '2px 8px',
+                                              borderRadius: '6px',
+                                              background: '#1E293B',
+                                              color: '#F1F5F9',
+                                              border: '1px solid #334155',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '4px'
+                                            }}
+                                          >
+                                            👑 {delegateName}
+                                          </span>
+                                          <span
+                                            style={{
+                                              fontSize: '10.5px',
+                                              fontWeight: 600,
+                                              padding: '2px 7px',
+                                              borderRadius: '5px',
+                                              background: isProfilPaye ? 'rgba(245, 158, 11, 0.15)' : 'rgba(56, 189, 248, 0.15)',
+                                              color: isProfilPaye ? '#FBBF24' : '#38BDF8',
+                                            }}
+                                          >
+                                            {statusTag}
+                                          </span>
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#94A3B8', lineHeight: '1.4' }}>
+                                          {messageDetail}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        textAlign: 'right',
+                                        background: totalARecuperer > 0 ? 'rgba(2, 132, 199, 0.12)' : 'rgba(16, 185, 129, 0.1)',
+                                        border: totalARecuperer > 0 ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(16, 185, 129, 0.25)',
+                                        padding: '8px 16px',
+                                        borderRadius: '10px',
+                                        minWidth: '130px',
+                                        flexShrink: 0
+                                      }}
+                                    >
+                                      <div style={{ fontSize: '10.5px', fontWeight: 700, color: totalARecuperer > 0 ? '#38BDF8' : '#10B981', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                        {totalARecuperer > 0 ? 'À récupérer' : 'Solde déléguée'}
+                                      </div>
+                                      <div style={{ fontSize: '20px', fontWeight: 800, color: totalARecuperer > 0 ? '#38BDF8' : '#10B981' }}>
+                                        {totalARecuperer.toFixed(0)} DH
+                                      </div>
                                     </div>
                                   </div>
                                 )}
@@ -5350,7 +6072,7 @@ export default function Dashboard() {
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
               {commerciaux && commerciaux.length > 0 ? (
                 commerciaux.map(comm => {
-                  const initials = (comm.full_name || `${comm.first_name} ${comm.last_name}`).split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                  const initials = (comm.full_name || `${comm.first_name} ${comm.last_name}`).split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2);
                   return (
                     <button
                       key={comm.id}
@@ -5408,7 +6130,7 @@ export default function Dashboard() {
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
               {operationsOfficers && operationsOfficers.length > 0 ? (
                 operationsOfficers.map(ops => {
-                  const initials = (ops.full_name || `${ops.first_name} ${ops.last_name}`).split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                  const initials = (ops.full_name || `${ops.first_name} ${ops.last_name}`).split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2);
                   return (
                     <button
                       key={ops.id}

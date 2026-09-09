@@ -58,7 +58,8 @@ const navItems = [
     children: [
       { to: '/parametres/profil', label: 'Mon Profil' },
       { to: '/parametres/utilisateurs', label: 'Utilisateurs & Rôles' },
-      { to: '/parametres/jours-feries', label: 'Jours fériés' }
+      { to: '/parametres/jours-feries', label: 'Jours fériés' },
+      { to: '/parametres/site', label: 'Paramètres du site' }
     ]
   },
 ];
@@ -98,7 +99,7 @@ export default function AppLayout() {
         if (child.to === '/seo/blog') {
           return hasPermission(user, 'rediger_blog');
         }
-        if (child.to === '/parametres/utilisateurs' || child.to === '/parametres/jours-feries') {
+        if (child.to === '/parametres/utilisateurs' || child.to === '/parametres/jours-feries' || child.to === '/parametres/site') {
           return hasPermission(user, 'parametres_globaux');
         }
         return true;

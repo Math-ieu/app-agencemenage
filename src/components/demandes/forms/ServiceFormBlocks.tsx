@@ -617,19 +617,43 @@ export const DurationBlock: React.FC<DurationBlockProps> = ({ formData, setFormD
     </div>
 );
 
-export const PeopleBlock: React.FC<DurationBlockProps> = ({ formData, setFormData }) => (
-    <div className="ws-form-block">
-        <div className="ws-section-header">Nombre de personne</div>
-        <div className="flex items-center justify-center gap-4">
-            <div className="ws-counter">
-                <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: Math.max(1, (formData.nb_intervenants || 1) - 1) })} disabled={(formData.nb_intervenants || 1) <= 1}>−</button>
-                <span className="ws-counter-value">{formData.nb_intervenants || 1}</span>
-                <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, nb_intervenants: (formData.nb_intervenants || 1) + 1 })}>+</button>
+export const PeopleBlock: React.FC<DurationBlockProps> = ({ formData, setFormData }) => {
+    const currentCount = Number(formData.nb_intervenants || formData.nb_personnel || 1);
+    const updateCount = (newCount: number) => {
+        const val = Math.max(1, newCount);
+        setFormData({
+            ...formData,
+            nb_intervenants: val,
+            nb_personnel: val
+        });
+    };
+
+    return (
+        <div className="ws-form-block">
+            <div className="ws-section-header">Nombre de personne</div>
+            <div className="flex items-center justify-center gap-4">
+                <div className="ws-counter">
+                    <button 
+                        type="button" 
+                        className="ws-counter-btn" 
+                        onClick={() => updateCount(currentCount - 1)} 
+                        disabled={currentCount <= 1}
+                    >
+                        −
+                    </button>
+                    <span className="ws-counter-value">{currentCount}</span>
+                    <button 
+                        type="button" 
+                        className="ws-counter-btn" 
+                        onClick={() => updateCount(currentCount + 1)}
+                    >
+                        +
+                    </button>
+                </div>
             </div>
-        
         </div>
-    </div>
-);
+    );
+};
 
 export const PlanningBlock: React.FC<FormBlockProps> = ({ formData, setFormData }) => {
     const isAbo = Boolean(formData.frequence && formData.frequence !== 'une fois');

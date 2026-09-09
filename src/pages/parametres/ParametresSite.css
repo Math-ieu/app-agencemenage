@@ -1,0 +1,391 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+ * ParametresSite.css — Styles dédiés pour la page Paramètres du site
+ * Agence Ménage Dashboard
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+.ps-wrapper {
+  width: 100%;
+  min-height: 100vh;
+  background: #f8fafc;
+  padding: 24px 20px 60px 20px;
+  box-sizing: border-box;
+}
+
+.ps-container {
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #0f172a;
+}
+
+/* ── En-tête de page ─────────────────────────────────────────────────────── */
+.ps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #ffffff;
+  padding: 22px 28px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  flex-wrap: wrap;
+}
+
+.ps-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ps-header-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #e6f4f2;
+  border: 1px solid #b2dfdb;
+  color: #175e5c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ps-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.ps-subtitle {
+  font-size: 13.5px;
+  color: #64748b;
+  margin: 3px 0 0 0;
+}
+
+/* ── Boutons d'action ────────────────────────────────────────────────────── */
+.ps-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 22px;
+  background: #175e5c;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(23, 94, 92, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.ps-btn-primary:hover:not(:disabled) {
+  background: #0f403d;
+  box-shadow: 0 4px 14px rgba(23, 94, 92, 0.35);
+  transform: translateY(-1px);
+}
+
+.ps-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ps-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ps-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ps-btn-secondary:hover {
+  background: #1e293b;
+}
+
+/* ── Bannière d'information ───────────────────────────────────────────────── */
+.ps-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  color: #92400e;
+  font-size: 13.5px;
+  line-height: 1.55;
+  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.05);
+}
+
+.ps-notice-icon {
+  color: #d97706;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.ps-notice strong {
+  color: #78350f;
+}
+
+/* ── Cartes de Section ───────────────────────────────────────────────────── */
+.ps-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+}
+
+.ps-card-header {
+  padding: 18px 24px;
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ps-card-header-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #e6f4f2;
+  border: 1px solid #b2dfdb;
+  color: #175e5c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ps-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.ps-card-subtitle {
+  font-size: 12.5px;
+  color: #64748b;
+  margin: 2px 0 0 0;
+}
+
+.ps-card-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Sous-blocs (Bureaux, Lignes de téléphones) ──────────────────────────── */
+.ps-subbox {
+  background: #fafbfc;
+  border: 1px solid #edf2f7;
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ps-subbox-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1e293b;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ps-subbox-header-icon {
+  color: #175e5c;
+}
+
+/* ── Formulaires & Grille ────────────────────────────────────────────────── */
+.ps-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .ps-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .ps-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.ps-form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.ps-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.ps-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 9px;
+  font-size: 14px;
+  color: #0f172a;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+.ps-input:focus {
+  outline: none;
+  border-color: #175e5c;
+  box-shadow: 0 0 0 3px rgba(23, 94, 92, 0.12);
+  background: #ffffff;
+}
+
+.ps-input::placeholder {
+  color: #94a3b8;
+}
+
+.ps-input.font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+}
+
+.ps-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 9px;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #0f172a;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 70px;
+  transition: all 0.15s ease;
+}
+
+.ps-textarea:focus {
+  outline: none;
+  border-color: #175e5c;
+  box-shadow: 0 0 0 3px rgba(23, 94, 92, 0.12);
+  background: #ffffff;
+}
+
+.ps-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+/* ── Tags WhatsApp ───────────────────────────────────────────────────────── */
+.ps-tag-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.ps-tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ps-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.ps-tag-btn-remove {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.ps-tag-btn-remove:hover {
+  color: #ef4444;
+}
+
+/* ── Barre d'action inférieure ───────────────────────────────────────────── */
+.ps-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 20px 0 10px 0;
+}
+
+/* ── Spinner / Loading ───────────────────────────────────────────────────── */
+.ps-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 12px;
+}
+
+.ps-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #175e5c;
+  border-radius: 50%;
+  animation: ps-spin 0.8s linear infinite;
+}
+
+@keyframes ps-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

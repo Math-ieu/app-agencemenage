@@ -325,7 +325,7 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         const baseRate = customRate > 0 ? customRate : 60;
         const est = input.surface ? estimateResources(serviceLower, input) : null;
         const effDuree = est ? est.duration : Math.max(Number(duree) || 0, 2);
-        const effPeople = est ? est.people : Math.max(1, Number(nb_intervenants) || 1);
+        const effPeople = Number(nb_intervenants) > 0 ? Number(nb_intervenants) : (est ? est.people : 1);
         const optionsPerVisit = (produits ? 90 : 0) + (torchons ? 40 : 0);
         const laborPerVisit = effDuree * effPeople * baseRate * multiplier;
 
@@ -367,7 +367,7 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         // Auto-derive from surface if surface is specified (Grand Ménage / Post-Déménagement)
         const est = (isGrand || input.surface) ? estimateResources(serviceLower, input) : null;
         const effDuree = Number(duree) > 0 ? Math.max(Number(duree), minHours) : (est ? est.duration : minHours);
-        const effPeople = Math.max(Number(nb_intervenants) || 1, est ? est.people : 1);
+        const effPeople = Number(nb_intervenants) > 0 ? Number(nb_intervenants) : (est ? est.people : 1);
 
         let totalServicePrice = 0;
 
