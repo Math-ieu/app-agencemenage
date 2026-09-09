@@ -992,6 +992,57 @@ export default function Dashboard() {
     return list.find(d => Number(d.id) === pId) || fallback;
   };
 
+  const computeDuesForPaymentAndSupplement = (
+    statutPaiementUi: string,
+    partAgence: number,
+    totalParts: number,
+    hasSupplement: boolean,
+    suppMontant: number,
+    encaissePar: 'femme_de_menage' | 'agence' | string,
+    isFreeOrCancelled: boolean,
+    profilSeraPaye?: boolean,
+    montantProfilAnnulation?: number
+  ) => {
+    if (isFreeOrCancelled) {
+      return {
+        montant_profil_doit_agence: 0,
+        montant_agence_doit_profil: profilSeraPaye ? (montantProfilAnnulation || 0) : 0,
+      };
+    }
+
+    const isProfilPaye = statutPaiementUi === 'profil_paye_client' || statutPaiementUi === 'Profil payé / Client';
+    const isAgencePayee = statutPaiementUi === 'agence_payee_client' || statutPaiementUi === 'Agence payée / Client';
+
+    if (isProfilPaye) {
+      const dueAgence = (hasSupplement && encaissePar === 'agence')
+        ? Math.max(0, roundMoney(partAgence - suppMontant))
+        : partAgence;
+      return {
+        montant_profil_doit_agence: dueAgence,
+        montant_agence_doit_profil: 0,
+      };
+    }
+
+    if (isAgencePayee) {
+      const dueAgence = (hasSupplement && encaissePar === 'femme_de_menage' && suppMontant > 0)
+        ? suppMontant
+        : 0;
+      return {
+        montant_profil_doit_agence: dueAgence,
+        montant_agence_doit_profil: totalParts,
+      };
+    }
+
+    // Other statuses (e.g. paye, paiement_en_attente)
+    const dueAgence = (hasSupplement && encaissePar === 'femme_de_menage' && suppMontant > 0)
+      ? suppMontant
+      : 0;
+    return {
+      montant_profil_doit_agence: dueAgence,
+      montant_agence_doit_profil: (statutPaiementUi === 'paye' || statutPaiementUi === 'integral') ? totalParts : 0,
+    };
+  };
+
   const updatePartsAndAgency = (newParts: PartRepartitionItem[], overrideTvaActive?: boolean) => {
     setEditFormData((prev: any) => {
       const isFreeOrCancelled = prev.statut_paiement_ui === 'intervention_gratuite' || prev.statut_paiement_ui === 'facturation_annulee' || Boolean(prev.facturation_annulee);
@@ -1062,32 +1113,30 @@ export default function Dashboard() {
         nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(currentMontantTTC - totalParts));
       }
 
+      const dues = computeDuesForPaymentAndSupplement(
+        prev.statut_paiement_ui,
+        nextPartAgence,
+        totalParts,
+        Boolean(prev.has_supplement_heures),
+        toNumber(prev.supplement_heures_montant),
+        prev.supplement_encaisse_par || (prev.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence'),
+        isFreeOrCancelled,
+        nextProfilSeraPaye,
+        nextMontantProfilAnnulation
+      );
+
       const updates: any = {
         ...prev,
         parts_repartition: adjustedParts,
         part_agence: nextPartAgence,
+        montant_profil_annulation: nextMontantProfilAnnulation,
+        profil_sera_paye: nextProfilSeraPaye,
+        montant_profil_doit_agence: dues.montant_profil_doit_agence,
+        montant_agence_doit_profil: dues.montant_agence_doit_profil,
       };
 
       if (overrideTvaActive !== undefined) {
         updates.tva_active = overrideTvaActive;
-      }
-
-      if (isFreeOrCancelled) {
-        updates.montant_profil_annulation = nextMontantProfilAnnulation;
-        updates.profil_sera_paye = nextProfilSeraPaye;
-        updates.montant_agence_doit_profil = nextProfilSeraPaye ? nextMontantProfilAnnulation : 0;
-        updates.montant_profil_doit_agence = 0;
-      } else {
-        if (prev.statut_paiement_ui === 'profil_paye_client') {
-          updates.montant_profil_doit_agence = nextPartAgence;
-          updates.montant_agence_doit_profil = 0;
-        } else if (prev.statut_paiement_ui === 'agence_payee_client') {
-          updates.montant_agence_doit_profil = totalParts;
-          updates.montant_profil_doit_agence = 0;
-        } else {
-          updates.montant_profil_doit_agence = 0;
-          updates.montant_agence_doit_profil = 0;
-        }
       }
 
       return updates;
@@ -1204,25 +1253,12 @@ export default function Dashboard() {
         nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(newMontantTTC - totalParts));
       }
 
-      // 4. Balances due
-      let montantProfilDoitAgence = 0;
-      let montantAgenceDoitProfil = 0;
       let nextMontantProfilAnnulation = current.montant_profil_annulation;
       let nextProfilSeraPaye = current.profil_sera_paye;
 
       if (isFreeOrCancelled) {
         nextMontantProfilAnnulation = totalParts;
         nextProfilSeraPaye = totalParts > 0;
-        montantAgenceDoitProfil = nextProfilSeraPaye ? nextMontantProfilAnnulation : 0;
-        montantProfilDoitAgence = 0;
-      } else {
-        if (current.statut_paiement_ui === 'profil_paye_client') {
-          montantProfilDoitAgence = nextPartAgence;
-          montantAgenceDoitProfil = 0;
-        } else if (current.statut_paiement_ui === 'agence_payee_client') {
-          montantAgenceDoitProfil = totalParts;
-          montantProfilDoitAgence = 0;
-        }
       }
 
       const baseMontantInitial = toNumber(current.montant_initial) > 0
@@ -1239,6 +1275,20 @@ export default function Dashboard() {
         const suppRate = toNumber(current.supplement_heures_tarif_horaire) || getServiceBaseHourlyRate(current.service || selectedDemande?.service, selectedDemande);
         nextSupplementMontant = roundMoney(suppHours * suppRate * peopleCount);
       }
+
+      const dues = computeDuesForPaymentAndSupplement(
+        current.statut_paiement_ui,
+        nextPartAgence,
+        totalParts,
+        nextHasSupplement,
+        nextSupplementMontant,
+        current.supplement_encaisse_par || (nextSupplementRecupere ? 'femme_de_menage' : 'agence'),
+        isFreeOrCancelled,
+        nextProfilSeraPaye,
+        nextMontantProfilAnnulation
+      );
+      const montantProfilDoitAgence = dues.montant_profil_doit_agence;
+      const montantAgenceDoitProfil = dues.montant_agence_doit_profil;
 
       return {
         ...current,
@@ -1415,25 +1465,12 @@ export default function Dashboard() {
         nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(newMontantTTC - totalParts));
       }
 
-      // 4. Balances due
-      let montantProfilDoitAgence = 0;
-      let montantAgenceDoitProfil = 0;
       let nextMontantProfilAnnulation = current.montant_profil_annulation;
       let nextProfilSeraPaye = current.profil_sera_paye;
 
       if (isFreeOrCancelled) {
         nextMontantProfilAnnulation = totalParts;
         nextProfilSeraPaye = totalParts > 0;
-        montantAgenceDoitProfil = nextProfilSeraPaye ? nextMontantProfilAnnulation : 0;
-        montantProfilDoitAgence = 0;
-      } else {
-        if (current.statut_paiement_ui === 'profil_paye_client') {
-          montantProfilDoitAgence = nextPartAgence;
-          montantAgenceDoitProfil = 0;
-        } else if (current.statut_paiement_ui === 'agence_payee_client') {
-          montantAgenceDoitProfil = totalParts;
-          montantProfilDoitAgence = 0;
-        }
       }
 
       const hasSupplement = Boolean(current.has_supplement_heures);
@@ -1444,6 +1481,20 @@ export default function Dashboard() {
       if (hasSupplement && suppHours > 0) {
         updatedSuppMontant = roundMoney(suppHours * suppRate * newPeople);
       }
+
+      const dues = computeDuesForPaymentAndSupplement(
+        current.statut_paiement_ui,
+        nextPartAgence,
+        totalParts,
+        hasSupplement,
+        updatedSuppMontant,
+        current.supplement_encaisse_par || (current.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence'),
+        isFreeOrCancelled,
+        nextProfilSeraPaye,
+        nextMontantProfilAnnulation
+      );
+      const montantProfilDoitAgence = dues.montant_profil_doit_agence;
+      const montantAgenceDoitProfil = dues.montant_agence_doit_profil;
 
       return {
         ...current,
@@ -1505,6 +1556,20 @@ export default function Dashboard() {
 
         const totalParts = updatedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
         const newPartAgence = Math.max(0, roundMoney(newTotalCA - totalParts));
+        const encaissePar = prev.supplement_encaisse_par || 'femme_de_menage';
+        const isFreeOrCancelled = prev.statut_paiement_ui === 'intervention_gratuite' || prev.statut_paiement_ui === 'facturation_annulee' || Boolean(prev.facturation_annulee);
+
+        const dues = computeDuesForPaymentAndSupplement(
+          prev.statut_paiement_ui,
+          newPartAgence,
+          totalParts,
+          true,
+          suppAmount,
+          encaissePar,
+          isFreeOrCancelled,
+          prev.profil_sera_paye,
+          prev.montant_profil_annulation
+        );
 
         return {
           ...prev,
@@ -1516,12 +1581,12 @@ export default function Dashboard() {
           supplement_heures_nombre: suppHours,
           supplement_heures_tarif_horaire: defaultRate,
           supplement_heures_montant: suppAmount,
-          supplement_encaisse_par: prev.supplement_encaisse_par || 'femme_de_menage',
-          supplement_heures_recupere_especes: (prev.supplement_encaisse_par || 'femme_de_menage') === 'femme_de_menage',
+          supplement_encaisse_par: encaissePar,
+          supplement_heures_recupere_especes: encaissePar === 'femme_de_menage',
           parts_repartition: updatedParts,
           part_agence: newPartAgence,
-          montant_agence_doit_profil: prev.statut_paiement_ui === 'agence_payee_client' ? totalParts : prev.montant_agence_doit_profil,
-          montant_profil_doit_agence: prev.statut_paiement_ui === 'profil_paye_client' ? newPartAgence : prev.montant_profil_doit_agence,
+          montant_agence_doit_profil: dues.montant_agence_doit_profil,
+          montant_profil_doit_agence: dues.montant_profil_doit_agence,
         };
       } else {
         if (!prev.has_supplement_heures) return prev;
@@ -1553,6 +1618,19 @@ export default function Dashboard() {
 
         const totalParts = updatedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
         const newPartAgence = Math.max(0, roundMoney(newTotalCA - totalParts));
+        const isFreeOrCancelled = prev.statut_paiement_ui === 'intervention_gratuite' || prev.statut_paiement_ui === 'facturation_annulee' || Boolean(prev.facturation_annulee);
+
+        const dues = computeDuesForPaymentAndSupplement(
+          prev.statut_paiement_ui,
+          newPartAgence,
+          totalParts,
+          false,
+          0,
+          prev.supplement_encaisse_par || 'femme_de_menage',
+          isFreeOrCancelled,
+          prev.profil_sera_paye,
+          prev.montant_profil_annulation
+        );
 
         return {
           ...prev,
@@ -1566,8 +1644,8 @@ export default function Dashboard() {
           supplement_heures_recupere_especes: false,
           parts_repartition: updatedParts,
           part_agence: newPartAgence,
-          montant_agence_doit_profil: prev.statut_paiement_ui === 'agence_payee_client' ? totalParts : prev.montant_agence_doit_profil,
-          montant_profil_doit_agence: prev.statut_paiement_ui === 'profil_paye_client' ? newPartAgence : prev.montant_profil_doit_agence,
+          montant_agence_doit_profil: dues.montant_agence_doit_profil,
+          montant_profil_doit_agence: dues.montant_profil_doit_agence,
         };
       }
     });
@@ -1612,6 +1690,20 @@ export default function Dashboard() {
 
       const totalParts = updatedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
       const newPartAgence = Math.max(0, roundMoney(newTotalCA - totalParts));
+      const encaissePar = prev.supplement_encaisse_par || (prev.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence');
+      const isFreeOrCancelled = prev.statut_paiement_ui === 'intervention_gratuite' || prev.statut_paiement_ui === 'facturation_annulee' || Boolean(prev.facturation_annulee);
+
+      const dues = computeDuesForPaymentAndSupplement(
+        prev.statut_paiement_ui,
+        newPartAgence,
+        totalParts,
+        true,
+        newSuppAmount,
+        encaissePar,
+        isFreeOrCancelled,
+        prev.profil_sera_paye,
+        prev.montant_profil_annulation
+      );
 
       return {
         ...prev,
@@ -1625,18 +1717,41 @@ export default function Dashboard() {
         supplement_heures_montant: newSuppAmount,
         parts_repartition: updatedParts,
         part_agence: newPartAgence,
-        montant_agence_doit_profil: prev.statut_paiement_ui === 'agence_payee_client' ? totalParts : prev.montant_agence_doit_profil,
-        montant_profil_doit_agence: prev.statut_paiement_ui === 'profil_paye_client' ? newPartAgence : prev.montant_profil_doit_agence,
+        montant_agence_doit_profil: dues.montant_agence_doit_profil,
+        montant_profil_doit_agence: dues.montant_profil_doit_agence,
       };
     });
   };
 
   const handleSupplementEncaissementChange = (encaissement: 'femme_de_menage' | 'agence') => {
-    setEditFormData((prev: any) => ({
-      ...prev,
-      supplement_encaisse_par: encaissement,
-      supplement_heures_recupere_especes: encaissement === 'femme_de_menage',
-    }));
+    setEditFormData((prev: any) => {
+      const isFreeOrCancelled = prev.statut_paiement_ui === 'intervention_gratuite' || prev.statut_paiement_ui === 'facturation_annulee' || Boolean(prev.facturation_annulee);
+      const parts = asArray<PartRepartitionItem>(prev.parts_repartition, []);
+      const totalParts = parts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+      const partAgence = toNumber(prev.part_agence);
+      const suppMontant = toNumber(prev.supplement_heures_montant);
+      const hasSupp = Boolean(prev.has_supplement_heures && suppMontant > 0);
+
+      const dues = computeDuesForPaymentAndSupplement(
+        prev.statut_paiement_ui,
+        partAgence,
+        totalParts,
+        hasSupp,
+        suppMontant,
+        encaissement,
+        isFreeOrCancelled,
+        prev.profil_sera_paye,
+        prev.montant_profil_annulation
+      );
+
+      return {
+        ...prev,
+        supplement_encaisse_par: encaissement,
+        supplement_heures_recupere_especes: encaissement === 'femme_de_menage',
+        montant_profil_doit_agence: dues.montant_profil_doit_agence,
+        montant_agence_doit_profil: dues.montant_agence_doit_profil,
+      };
+    });
   };
 
   const handleUpdate = async () => {
@@ -1824,6 +1939,18 @@ export default function Dashboard() {
           ? toNumber((selectedDemande as any).montant_initial)
           : (toNumber(selectedDemande.prix) > 0 ? toNumber(selectedDemande.prix) : montantTTC));
 
+      const dues = computeDuesForPaymentAndSupplement(
+        finalStatutPaiementUi,
+        finalPartAgence,
+        partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0),
+        Boolean(editFormData.has_supplement_heures),
+        toNumber(editFormData.supplement_heures_montant),
+        editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence'),
+        isFreeOrCancelled,
+        Boolean(editFormData.profil_sera_paye),
+        toNumber(editFormData.montant_profil_annulation)
+      );
+
       updateData.formulaire_data = {
         ...(selectedDemande.formulaire_data || {}),
         nom: editFormData.client_name || previousFormData.nom || '',
@@ -1896,12 +2023,8 @@ export default function Dashboard() {
           annulation_raison: editFormData.annulation_raison || '',
           profil_sera_paye: Boolean(editFormData.profil_sera_paye),
           montant_profil_annulation: editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0,
-          montant_agence_doit_profil: finalStatutPaiementUi === 'agence_payee_client'
-            ? partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0)
-            : (editFormData.profil_sera_paye ? toNumber(editFormData.montant_profil_annulation) : 0),
-          montant_profil_doit_agence: finalStatutPaiementUi === 'profil_paye_client'
-            ? finalPartAgence
-            : 0,
+          montant_agence_doit_profil: dues.montant_agence_doit_profil,
+          montant_profil_doit_agence: dues.montant_profil_doit_agence,
           ca_initial: toNumber(editFormData.ca_initial),
         },
         part_agence: finalPartAgence,
@@ -1914,6 +2037,9 @@ export default function Dashboard() {
         supplement_heures_recupere_especes: editFormData.has_supplement_heures ? Boolean(editFormData.supplement_encaisse_par === 'femme_de_menage' || editFormData.supplement_heures_recupere_especes) : false,
         notes: editFormData.note_client || '',
       };
+
+      updateData.montant_profil_doit_agence = dues.montant_profil_doit_agence;
+      updateData.montant_agence_doit_profil = dues.montant_agence_doit_profil;
 
       updateData.montant_initial = baseMontantInitial;
       updateData.avec_produit = Boolean(editFormData.produits || editFormData.avec_produit);
@@ -4390,23 +4516,23 @@ export default function Dashboard() {
                                         // Auto-set encaisse_par based on payment status
                                         if (v === 'agence_payee_client' || v === 'paye' || v === 'commercial_paye_client') updates.encaisse_par = 'agence';
                                         else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
-                                        
+                                        const dues = computeDuesForPaymentAndSupplement(
+                                          v,
+                                          nextPartAgence,
+                                          totalParts,
+                                          Boolean(editFormData.has_supplement_heures),
+                                          toNumber(editFormData.supplement_heures_montant),
+                                          editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence'),
+                                          isFreeOrCancelled,
+                                          nextProfilSeraPaye,
+                                          nextMontantProfilAnnulation
+                                        );
+                                        updates.montant_profil_doit_agence = dues.montant_profil_doit_agence;
+                                        updates.montant_agence_doit_profil = dues.montant_agence_doit_profil;
+
                                         if (isFreeOrCancelled) {
                                           updates.profil_sera_paye = nextProfilSeraPaye;
                                           updates.montant_profil_annulation = nextMontantProfilAnnulation;
-                                          updates.montant_agence_doit_profil = nextProfilSeraPaye ? nextMontantProfilAnnulation : 0;
-                                          updates.montant_profil_doit_agence = 0;
-                                        } else {
-                                          if (updates.statut_paiement_ui === 'profil_paye_client') {
-                                            updates.montant_profil_doit_agence = nextPartAgence;
-                                            updates.montant_agence_doit_profil = 0;
-                                          } else if (updates.statut_paiement_ui === 'agence_payee_client') {
-                                            updates.montant_agence_doit_profil = totalParts;
-                                            updates.montant_profil_doit_agence = 0;
-                                          } else {
-                                            updates.montant_profil_doit_agence = 0;
-                                            updates.montant_agence_doit_profil = 0;
-                                          }
                                         }
                                         
                                         setEditFormData(updates);
@@ -4509,8 +4635,19 @@ export default function Dashboard() {
                                       encaisse_par: 'agence'
                                     };
                                     
-                                    updates.montant_agence_doit_profil = totalParts;
-                                    updates.montant_profil_doit_agence = 0;
+                                    const dues = computeDuesForPaymentAndSupplement(
+                                      v,
+                                      nextPartAgence,
+                                      totalParts,
+                                      Boolean(editFormData.has_supplement_heures),
+                                      toNumber(editFormData.supplement_heures_montant),
+                                      editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence'),
+                                      isFreeOrCancelled,
+                                      false,
+                                      0
+                                    );
+                                    updates.montant_agence_doit_profil = dues.montant_agence_doit_profil;
+                                    updates.montant_profil_doit_agence = dues.montant_profil_doit_agence;
                                     
                                     setEditFormData(updates);
                                     addToast("Statut de paiement modifié en 'Agence payée / Client'", "success");
@@ -4800,21 +4937,26 @@ export default function Dashboard() {
                             const isAgencePayee = currentStatutUi === 'agence_payee_client' || currentStatutUi === 'Agence payée / Client';
                             const encaisseParFdm = encaissePar === 'femme_de_menage';
 
+                            const baseCA = Math.max(0, roundMoney(montantTTC - (hasSupplement ? suppMontant : 0)));
+
                             let recuAgence = 0;
                             let chezFdm = 0;
 
-                            if (isAgencePayee) {
-                              if (encaissePar === 'agence') {
+                            if (isFreeOrCancelled) {
+                              recuAgence = 0;
+                              chezFdm = 0;
+                            } else if (isAgencePayee) {
+                              if (hasSupplement && encaisseParFdm && suppMontant > 0) {
+                                recuAgence = baseCA;
+                                chezFdm = suppMontant;
+                              } else {
                                 recuAgence = montantTTC;
                                 chezFdm = 0;
-                              } else {
-                                recuAgence = Math.max(0, roundMoney(montantTTC - suppMontant));
-                                chezFdm = suppMontant;
                               }
                             } else if (isProfilPaye) {
-                              if (encaissePar === 'agence') {
+                              if (hasSupplement && encaissePar === 'agence' && suppMontant > 0) {
                                 recuAgence = suppMontant;
-                                chezFdm = Math.max(0, roundMoney(montantTTC - suppMontant));
+                                chezFdm = baseCA;
                               } else {
                                 recuAgence = 0;
                                 chezFdm = montantTTC;
@@ -4823,46 +4965,59 @@ export default function Dashboard() {
                               recuAgence = montantTTC;
                               chezFdm = 0;
                             } else {
-                              if (encaissePar === 'agence') {
+                              if (hasSupplement && encaissePar === 'agence' && suppMontant > 0) {
                                 recuAgence = suppMontant;
                                 chezFdm = 0;
-                              } else {
+                              } else if (hasSupplement && encaisseParFdm && suppMontant > 0) {
                                 recuAgence = 0;
                                 chezFdm = suppMontant;
+                              } else {
+                                recuAgence = 0;
+                                chezFdm = 0;
                               }
                             }
 
-                            // Calculate total amount to recover from delegate
-                            let totalARecuperer = 0;
+                            const dues = computeDuesForPaymentAndSupplement(
+                              currentStatutUi,
+                              effectivePartAgence,
+                              totalParts,
+                              hasSupplement,
+                              suppMontant,
+                              encaissePar,
+                              isFreeOrCancelled,
+                              editFormData.profil_sera_paye,
+                              editFormData.montant_profil_annulation
+                            );
+                            const totalARecuperer = dues.montant_profil_doit_agence;
+
                             let messageTitle = '';
                             let messageDetail = '';
                             let statusTag = '';
 
                             if (isProfilPaye) {
-                              totalARecuperer = effectivePartAgence;
-                              messageTitle = "Somme totale à récupérer chez la déléguée";
                               statusTag = "Profil payé / Client";
-                              messageDetail = `Le client a réglé la totalité de la mission (${montantTTC.toFixed(0)} DH) directement sur place à la déléguée (${delegateName}). L'agence doit récupérer sa part (${effectivePartAgence.toFixed(0)} DH) auprès d'elle.`;
-                            } else if (isAgencePayee) {
-                              if (hasSupplement && encaisseParFdm && suppMontant > 0) {
-                                totalARecuperer = suppMontant;
+                              if (hasSupplement && encaissePar === 'agence' && suppMontant > 0) {
                                 messageTitle = "Somme totale à récupérer chez la déléguée";
-                                statusTag = "Agence payée / Client";
-                                messageDetail = `Le client a payé la prestation de base (${Math.max(0, roundMoney(montantTTC - suppMontant)).toFixed(0)} DH) à l'agence, mais a réglé le supplément d'heures en espèces sur place à la déléguée (${delegateName}).`;
+                                messageDetail = `Le client a réglé la prestation de base (${baseCA.toFixed(0)} DH) sur place à la déléguée (${delegateName}), et le supplément d'heures (${suppMontant.toFixed(0)} DH) a été encaissé directement par l'agence. L'agence doit donc récupérer le solde de sa part (${totalARecuperer.toFixed(0)} DH) auprès de la déléguée.`;
                               } else {
-                                totalARecuperer = 0;
+                                messageTitle = "Somme totale à récupérer chez la déléguée";
+                                messageDetail = `Le client a réglé la totalité de la mission (${montantTTC.toFixed(0)} DH${hasSupplement ? ', supplément compris' : ''}) directement sur place à la déléguée (${delegateName}). L'agence doit récupérer sa part (${effectivePartAgence.toFixed(0)} DH) auprès d'elle.`;
+                              }
+                            } else if (isAgencePayee) {
+                              statusTag = "Agence payée / Client";
+                              if (hasSupplement && encaisseParFdm && suppMontant > 0) {
+                                messageTitle = "Somme totale à récupérer chez la déléguée";
+                                messageDetail = `Le client a payé la prestation de base (${baseCA.toFixed(0)} DH) à l'agence, mais a réglé le supplément d'heures (${suppMontant.toFixed(0)} DH) en espèces sur place à la déléguée (${delegateName}). L'agence doit récupérer ces ${suppMontant.toFixed(0)} DH auprès d'elle. Les parts des intervenantes (${totalParts.toFixed(0)} DH) restent dues par l'agence selon la procédure habituelle.`;
+                              } else {
                                 messageTitle = "Règlement déléguée";
-                                statusTag = "Agence payée / Client";
-                                messageDetail = `La prestation (et tout supplément éventuel) a été réglée directement à l'agence. Rien à récupérer auprès de la déléguée (0 DH).`;
+                                messageDetail = `La totalité de la prestation (${montantTTC.toFixed(0)} DH${hasSupplement ? ', supplément inclus' : ''}) a été encaissée directement par l'agence. Rien à récupérer auprès de la déléguée (0 DH). Les parts des intervenantes (${totalParts.toFixed(0)} DH) restent dues par l'agence selon la procédure habituelle.`;
                               }
                             } else {
                               if (hasSupplement && encaisseParFdm && suppMontant > 0) {
-                                totalARecuperer = suppMontant;
                                 messageTitle = "Somme totale à récupérer chez la déléguée";
                                 statusTag = currentStatutUi || "Paiement en attente";
                                 messageDetail = `Le supplément d'heures (${suppMontant.toFixed(0)} DH) a été encaissé en espèces sur place par la déléguée (${delegateName}).`;
                               } else {
-                                totalARecuperer = 0;
                                 messageTitle = "Règlement déléguée";
                                 statusTag = currentStatutUi || "En attente";
                                 messageDetail = `Aucune somme en espèces n'est à récupérer auprès de la déléguée pour le moment.`;
@@ -5346,31 +5501,77 @@ export default function Dashboard() {
                                       {/* Message sous le nom du profil délégué */}
                                       {(() => {
                                         const isDelegate = Boolean(line.is_delegate) || partsRepartition.length === 1;
-                                        const isProfilPayeClient = editFormData.statut_paiement_ui === 'profil_paye_client';
-                                        if (!isProfilPayeClient || !isDelegate) return null;
+                                        if (!isDelegate) return null;
 
                                         const agent = allProfils.find(p => p.id === Number(line.profile_id)) || (selectedDemande.profils_envoyes?.find((p: any) => p.id === Number(line.profile_id)));
                                         const profileName = agent ? (agent.full_name || `${agent.first_name || ''} ${agent.last_name || ''}`.trim() || `Profil #${line.profile_id}`) : (line.profile_id ? `Profil #${line.profile_id}` : 'Le profil');
-                                        const partAgenceVal = toNumber(editFormData.part_agence);
-                                        const isSingleProfile = partsRepartition.length <= 1;
+                                        const isProfilPayeClient = editFormData.statut_paiement_ui === 'profil_paye_client';
+                                        const isAgencePayeeClient = editFormData.statut_paiement_ui === 'agence_payee_client';
 
                                         const hasSupplement = Boolean(editFormData.has_supplement_heures);
                                         const supplementMontant = hasSupplement ? toNumber(editFormData.supplement_heures_montant) : 0;
-                                        const isSupplementRecupere = hasSupplement && Boolean(editFormData.supplement_heures_recupere_especes);
+                                        const encaissePar = editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence');
+
+                                        const dues = computeDuesForPaymentAndSupplement(
+                                          editFormData.statut_paiement_ui,
+                                          toNumber(editFormData.part_agence),
+                                          partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0),
+                                          hasSupplement,
+                                          supplementMontant,
+                                          encaissePar,
+                                          Boolean(editFormData.facturation_annulee || editFormData.statut_paiement_ui === 'facturation_annulee' || editFormData.statut_paiement_ui === 'intervention_gratuite'),
+                                          editFormData.profil_sera_paye,
+                                          editFormData.montant_profil_annulation
+                                        );
+
+                                        const aRecuperer = dues.montant_profil_doit_agence;
+
+                                        if (!isProfilPayeClient && (!isAgencePayeeClient || aRecuperer <= 0)) {
+                                          return null;
+                                        }
+
                                         const baseMontantInitial = toNumber(editFormData.montant_initial) > 0
                                           ? toNumber(editFormData.montant_initial)
                                           : (hasSupplement && supplementMontant > 0 ? Math.max(0, roundMoney(montantTTC - supplementMontant)) : montantTTC);
-                                        const totalEncaisse = roundMoney(baseMontantInitial + (isSupplementRecupere ? supplementMontant : 0));
+
+                                        let montantEncaisseSurPlace = 0;
+                                        if (isProfilPayeClient) {
+                                          montantEncaisseSurPlace = (hasSupplement && encaissePar === 'agence') ? baseMontantInitial : montantTTC;
+                                        } else if (isAgencePayeeClient) {
+                                          montantEncaisseSurPlace = aRecuperer;
+                                        }
 
                                         return (
                                           <div style={{ marginTop: '8px', padding: '8px 12px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', fontSize: '12px', color: '#166534', lineHeight: '1.4' }}>
-                                            <div>
-                                              <strong>{profileName}</strong> a le montant de <strong>{partAgenceVal.toFixed(2).replace('.', ',')} DH</strong> comme part de l’agence.
-                                            </div>
-                                            {isSingleProfile && (
-                                              <div style={{ marginTop: '4px', fontSize: '11.5px', color: '#15803D' }}>
-                                                Montant récupéré : <strong>{totalEncaisse.toFixed(2).replace('.', ',')} DH</strong>
-                                              </div>
+                                            {isProfilPayeClient ? (
+                                              hasSupplement && encaissePar === 'agence' && supplementMontant > 0 ? (
+                                                <>
+                                                  <div>
+                                                    <strong>{profileName}</strong> a encaissé la prestation de base sur place (<strong>{montantEncaisseSurPlace.toFixed(2).replace('.', ',')} DH</strong>).
+                                                  </div>
+                                                  <div style={{ marginTop: '4px', fontSize: '11.5px', color: '#15803D' }}>
+                                                    Solde part agence à reverser : <strong>{aRecuperer.toFixed(2).replace('.', ',')} DH</strong> (déduction faite des {supplementMontant.toFixed(0)} DH de supplément encaissés par l'agence).
+                                                  </div>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <div>
+                                                    <strong>{profileName}</strong> a le montant de <strong>{aRecuperer.toFixed(2).replace('.', ',')} DH</strong> comme part de l’agence.
+                                                  </div>
+                                                  <div style={{ marginTop: '4px', fontSize: '11.5px', color: '#15803D' }}>
+                                                    Montant récupéré sur place : <strong>{montantEncaisseSurPlace.toFixed(2).replace('.', ',')} DH</strong>
+                                                  </div>
+                                                </>
+                                              )
+                                            ) : (
+                                              <>
+                                                <div>
+                                                  <strong>{profileName}</strong> a encaissé le supplément d'heures en espèces sur place (<strong>{supplementMontant.toFixed(2).replace('.', ',')} DH</strong>).
+                                                </div>
+                                                <div style={{ marginTop: '4px', fontSize: '11.5px', color: '#15803D' }}>
+                                                  Montant à reverser à l'agence : <strong>{aRecuperer.toFixed(2).replace('.', ',')} DH</strong>
+                                                </div>
+                                              </>
                                             )}
                                           </div>
                                         );

@@ -435,7 +435,13 @@ const getRowDuesBreakdown = (row: FacturationRow) => {
       hasSupplementNote = true;
     }
   } else if (isDebit) {
-    doitAgence = row.partAgence || 0;
+    if (row.montantProfilDoitAgence !== undefined && Number(row.montantProfilDoitAgence) > 0) {
+      doitAgence = Number(row.montantProfilDoitAgence);
+    } else if (hasSupplement && row.supplementEncaissePar === 'agence') {
+      doitAgence = Math.max(0, (row.partAgence || 0) - supplementMontant);
+    } else {
+      doitAgence = row.partAgence || 0;
+    }
     if (hasSupplement && isFdmCash) {
       hasSupplementNote = true;
     }

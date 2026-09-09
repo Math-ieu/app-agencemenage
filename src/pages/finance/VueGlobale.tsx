@@ -117,6 +117,12 @@ interface FacturationRow {
   originalMission?: any;
   parts_repartition?: any[];
   cao?: boolean | string | number;
+  hasSupplementHeures?: boolean;
+  supplementHeuresNombre?: number;
+  supplementHeuresTarifHoraire?: number;
+  supplementHeuresMontant?: number;
+  supplementEncaissePar?: 'femme_de_menage' | 'agence' | string;
+  supplementHeuresRecupereEspeces?: boolean;
 }
 
 interface ProfileAccount {
@@ -158,6 +164,12 @@ interface MissionApiItem {
   montant_profil_annulation?: string | number;
   montant_agence_doit_profil?: string | number;
   montant_profil_doit_agence?: string | number;
+  has_supplement_heures?: boolean;
+  supplement_heures_nombre?: number;
+  supplement_heures_tarif_horaire?: number;
+  supplement_heures_montant?: number;
+  supplement_encaisse_par?: 'femme_de_menage' | 'agence' | string;
+  supplement_heures_recupere_especes?: boolean;
   demande_detail?: {
     client?: number;
     id?: number;
@@ -341,24 +353,45 @@ const getPartProfilDueFromAgence = (row: FacturationRow): number => {
 };
 
 const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
-  if (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client') {
-    return Number(row.montantProfilDoitAgence || 0);
-  }
-
   if (row.statutPaiementUi === 'facturation_annulee' || row.statut === 'Facturation annulée' || row.statut === 'Intervention annulée' || row.statutPaiementUi === 'intervention_gratuite' || row.statut === 'Intervention gratuite') {
     return 0;
   }
 
-  if (row.encaissePar !== 'Profil') return 0;
+  if (row.montantProfilDoitAgence !== undefined && Number(row.montantProfilDoitAgence) > 0) {
+    return Number(row.montantProfilDoitAgence);
+  }
+
+  const supplementMontant = Number(row.supplementHeuresMontant || 0);
+  const hasSupplement = Boolean(row.hasSupplementHeures && supplementMontant > 0);
+  const isFdmCash = row.supplementEncaissePar === 'femme_de_menage' || (
+    row.supplementEncaissePar !== 'agence' && Boolean(row.supplementHeuresRecupereEspeces)
+  );
+
+  if (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client') {
+    if (hasSupplement && row.supplementEncaissePar === 'agence') {
+      return Math.max(0, row.partAgence - supplementMontant);
+    }
+    return row.partAgence;
+  }
+
+  if (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client') {
+    if (hasSupplement && isFdmCash) {
+      return supplementMontant;
+    }
+    return 0;
+  }
+
+  if (row.encaissePar !== 'Profil') {
+    if (hasSupplement && isFdmCash) {
+      return supplementMontant;
+    }
+    return 0;
+  }
 
   // Si la part agence a été entièrement réglée (statut upgradé de profil_paye_client vers 'paye'),
   // la commission est la totalité de la part agence.
   if (row.reglementInterne === 'Réglé' || row.partAgenceReversee) {
-    return Number(row.montantProfilDoitAgence || row.partAgence || 0);
-  }
-
-  if (row.montantProfilDoitAgence !== undefined && row.montantProfilDoitAgence > 0) {
-    return row.montantProfilDoitAgence;
+    return Number(row.partAgence || 0);
   }
 
   if (row.montant > 0) {
@@ -727,6 +760,23 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     originalMission: item,
     parts_repartition: Array.isArray(facturationData.parts_repartition) && facturationData.parts_repartition.length > 0 ? facturationData.parts_repartition : Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : undefined,
     cao: (demande as any)?.cao || (item?.demande_detail as any)?.cao || (item as any)?.cao,
+    hasSupplementHeures: Boolean(
+      facturationData.has_supplement_heures ??
+      (demande as any)?.has_supplement_heures ??
+      item.has_supplement_heures ??
+      (Number(facturationData.supplement_heures_montant ?? (demande as any)?.supplement_heures_montant ?? item.supplement_heures_montant ?? 0) > 0 ||
+       Boolean(facturationData.supplement_heures_recupere_especes ?? (demande as any)?.supplement_heures_recupere_especes ?? item.supplement_heures_recupere_especes ?? false))
+    ),
+    supplementHeuresNombre: Number(facturationData.supplement_heures_nombre ?? (demande as any)?.supplement_heures_nombre ?? item.supplement_heures_nombre ?? 0),
+    supplementHeuresTarifHoraire: Number(facturationData.supplement_heures_tarif_horaire ?? (demande as any)?.supplement_heures_tarif_horaire ?? item.supplement_heures_tarif_horaire ?? 0),
+    supplementHeuresMontant: Number(facturationData.supplement_heures_montant ?? (demande as any)?.supplement_heures_montant ?? item.supplement_heures_montant ?? 0),
+    supplementEncaissePar: (
+      facturationData.supplement_encaisse_par ||
+      (demande as any)?.supplement_encaisse_par ||
+      item.supplement_encaisse_par ||
+      (facturationData.supplement_heures_recupere_especes === false && (facturationData.has_supplement_heures || item.has_supplement_heures) ? 'agence' : 'femme_de_menage')
+    ),
+    supplementHeuresRecupereEspeces: Boolean(facturationData.supplement_heures_recupere_especes ?? (demande as any)?.supplement_heures_recupere_especes ?? item.supplement_heures_recupere_especes ?? false),
   };
 };
 
@@ -865,6 +915,21 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     originalMission: null,
     parts_repartition: Array.isArray(facturationData.parts_repartition) && facturationData.parts_repartition.length > 0 ? facturationData.parts_repartition : Array.isArray(d_parts_repartition) && d_parts_repartition.length > 0 ? d_parts_repartition : undefined,
     cao: demande?.cao,
+    hasSupplementHeures: Boolean(
+      facturationData.has_supplement_heures ??
+      demande?.has_supplement_heures ??
+      (Number(facturationData.supplement_heures_montant ?? demande?.supplement_heures_montant ?? 0) > 0 ||
+       Boolean(facturationData.supplement_heures_recupere_especes ?? demande?.supplement_heures_recupere_especes ?? false))
+    ),
+    supplementHeuresNombre: Number(facturationData.supplement_heures_nombre ?? demande?.supplement_heures_nombre ?? 0),
+    supplementHeuresTarifHoraire: Number(facturationData.supplement_heures_tarif_horaire ?? demande?.supplement_heures_tarif_horaire ?? 0),
+    supplementHeuresMontant: Number(facturationData.supplement_heures_montant ?? demande?.supplement_heures_montant ?? 0),
+    supplementEncaissePar: (
+      facturationData.supplement_encaisse_par ||
+      demande?.supplement_encaisse_par ||
+      (facturationData.supplement_heures_recupere_especes === false && (facturationData.has_supplement_heures || demande?.has_supplement_heures) ? 'agence' : 'femme_de_menage')
+    ),
+    supplementHeuresRecupereEspeces: Boolean(facturationData.supplement_heures_recupere_especes ?? demande?.supplement_heures_recupere_especes ?? false),
   };
 };
 
@@ -1597,7 +1662,9 @@ export default function VueGlobale() {
       const isDebit = row.statutPaiementUi === 'profil_paye_client' ||
         row.statutPaiementUi === 'Profil payé / Client' ||
         (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
-        (!row.statutPaiementUi && row.encaissePar === 'Profil');
+        (!row.statutPaiementUi && row.encaissePar === 'Profil') ||
+        (Number(row.montantProfilDoitAgence || 0) > 0) ||
+        (Boolean(row.hasSupplementHeures) && (row.supplementEncaissePar === 'femme_de_menage' || Boolean(row.supplementHeuresRecupereEspeces)) && Number(row.supplementHeuresMontant || 0) > 0);
       if (!isDebit) continue;
 
       const totalDue = getPartAgenceDueFromProfil(row);
@@ -2146,7 +2213,9 @@ export default function VueGlobale() {
       const isDebit = row.statutPaiementUi === 'profil_paye_client' ||
         row.statutPaiementUi === 'Profil payé / Client' ||
         (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
-        (!row.statutPaiementUi && row.encaissePar === 'Profil');
+        (!row.statutPaiementUi && row.encaissePar === 'Profil') ||
+        (Number(row.montantProfilDoitAgence || 0) > 0) ||
+        (Boolean(row.hasSupplementHeures) && (row.supplementEncaissePar === 'femme_de_menage' || Boolean(row.supplementHeuresRecupereEspeces)) && Number(row.supplementHeuresMontant || 0) > 0);
       if (!isDebit) continue;
 
       const totalDue = getPartAgenceDueFromProfil(row);
@@ -2247,11 +2316,17 @@ export default function VueGlobale() {
     const addedCommissionMissions = new Set<string>();
 
     for (const row of globalTableRows) {
+      const hasFdmSuppCash = Boolean(row.hasSupplementHeures) &&
+        (row.supplementEncaissePar === 'femme_de_menage' || Boolean(row.supplementHeuresRecupereEspeces)) &&
+        Number(row.supplementHeuresMontant || 0) > 0;
+
       const isDebit =
         row.statutPaiementUi === 'profil_paye_client' ||
         row.statutPaiementUi === 'Profil payé / Client' ||
         (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
-        (!row.statutPaiementUi && row.encaissePar === 'Profil');
+        (!row.statutPaiementUi && row.encaissePar === 'Profil') ||
+        (Number(row.montantProfilDoitAgence || 0) > 0) ||
+        hasFdmSuppCash;
 
       const isCredit =
         row.statutPaiementUi === 'agence_payee_client' ||
@@ -2295,11 +2370,12 @@ export default function VueGlobale() {
               _partProfilDue: null,
               _commission: showCommission ? getCommissionAgenceEncaissee(row) : null,
               _uniqueKey: `${row.missionNo}-${pId}-debit`,
-              _isDebit: isDebit,
-              _isCredit: isCredit
+              _isDebit: true,
+              _isCredit: false
             });
           }
-        } else if (isCredit) {
+        }
+        if (isCredit) {
           const totalDue = getPartProfilDueFromAgence(row);
           const totalPartsAmount = row.parts_repartition.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
           for (let i = 0; i < row.parts_repartition.length; i++) {
@@ -2327,43 +2403,61 @@ export default function VueGlobale() {
               _partProfilDue: portion,
               _commission: showCommission ? getCommissionAgenceEncaissee(row) : null,
               _uniqueKey: `${row.missionNo}-${pId}-credit`,
-              _isDebit: isDebit,
-              _isCredit: isCredit
+              _isDebit: false,
+              _isCredit: true
             });
           }
         }
       } else {
-        const isPaid = isDebit
-          ? (row.partAgenceReversee || row.reglementInterne === 'Réglé')
-          : isCredit
-            ? (row.partProfilVersee || row.reglementInterne === 'Réglé')
-            : true;
-
-        if (!isPaid) {
-          const pName = (row.profil || '').trim();
-          if (!pName || pName === '—' || pName === 'Profil inconnu' || pName === 'Non assigné') continue;
-
-          const partAgenceDue = isDebit ? getPartAgenceDueFromProfil(row) : null;
-          const partProfilDue = isCredit ? getPartProfilDueFromAgence(row) : null;
-
-          if ((isDebit && (partAgenceDue || 0) < 0.01) || (isCredit && (partProfilDue || 0) < 0.01)) {
-            continue;
+        if (isDebit) {
+          const isPaid = row.partAgenceReversee || row.reglementInterne === 'Réglé';
+          if (!isPaid) {
+            const pName = (row.profil || '').trim();
+            if (pName && pName !== '—' && pName !== 'Profil inconnu' && pName !== 'Non assigné') {
+              const partAgenceDue = getPartAgenceDueFromProfil(row);
+              if ((partAgenceDue || 0) >= 0.01) {
+                const showCommission = !addedCommissionMissions.has(row.missionNo);
+                if (showCommission) {
+                  addedCommissionMissions.add(row.missionNo);
+                }
+                result.push({
+                  ...row,
+                  profil: pName,
+                  _partAgenceDue: partAgenceDue,
+                  _partProfilDue: null,
+                  _commission: showCommission ? getCommissionAgenceEncaissee(row) : null,
+                  _uniqueKey: `${row.missionNo}-debit`,
+                  _isDebit: true,
+                  _isCredit: false
+                });
+              }
+            }
           }
-
-          const showCommission = !addedCommissionMissions.has(row.missionNo);
-          if (showCommission) {
-            addedCommissionMissions.add(row.missionNo);
+        }
+        if (isCredit) {
+          const isPaid = row.partProfilVersee || row.reglementInterne === 'Réglé';
+          if (!isPaid) {
+            const pName = (row.profil || '').trim();
+            if (pName && pName !== '—' && pName !== 'Profil inconnu' && pName !== 'Non assigné') {
+              const partProfilDue = getPartProfilDueFromAgence(row);
+              if ((partProfilDue || 0) >= 0.01) {
+                const showCommission = !addedCommissionMissions.has(row.missionNo);
+                if (showCommission) {
+                  addedCommissionMissions.add(row.missionNo);
+                }
+                result.push({
+                  ...row,
+                  profil: pName,
+                  _partAgenceDue: null,
+                  _partProfilDue: partProfilDue,
+                  _commission: showCommission ? getCommissionAgenceEncaissee(row) : null,
+                  _uniqueKey: `${row.missionNo}-credit`,
+                  _isDebit: false,
+                  _isCredit: true
+                });
+              }
+            }
           }
-          result.push({
-            ...row,
-            profil: pName,
-            _partAgenceDue: partAgenceDue,
-            _partProfilDue: partProfilDue,
-            _commission: showCommission ? getCommissionAgenceEncaissee(row) : null,
-            _uniqueKey: row.missionNo,
-            _isDebit: isDebit,
-            _isCredit: isCredit
-          });
         }
       }
     }
