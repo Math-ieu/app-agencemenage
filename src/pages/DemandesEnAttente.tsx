@@ -11,7 +11,7 @@ import {
   RefreshCw, Search, XCircle,
   Calendar,
   FileText, Save, Download, Eye, Plus, ChevronDown, ChevronUp, CheckCircle, Edit, UserPlus, Send,
-  AlertTriangle, UserCheck, CreditCard, X
+  AlertTriangle, UserCheck, CreditCard, X, Building2, Coins, WalletCards
 } from 'lucide-react';
 import { Demande } from '../types';
 import { normalizeFrequence, normalizePayment, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
@@ -147,8 +147,6 @@ export default function DemandesEnAttente() {
   // Payment mode modal states
   const [paymentModeDemande, setPaymentModeDemande] = useState<Demande | any | null>(null);
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<string>('');
-  const [splitVirement, setSplitVirement] = useState<number | ''>('');
-  const [splitEspeces, setSplitEspeces] = useState<number | ''>('');
   const [isSavingPaymentMode, setIsSavingPaymentMode] = useState<boolean>(false);
 
   // Nouveaux états pour le formulaire
@@ -600,10 +598,6 @@ export default function DemandesEnAttente() {
   const openPaymentModeModal = (d: Demande | any) => {
     setPaymentModeDemande(d);
     setSelectedPaymentMode(d.mode_paiement || '');
-    const vir = d.formulaire_data?.montant_virement ?? d.avance_paiement ?? '';
-    const esp = d.formulaire_data?.montant_especes ?? '';
-    setSplitVirement(vir !== '' && vir !== undefined ? Number(vir) : '');
-    setSplitEspeces(esp !== '' && esp !== undefined ? Number(esp) : '');
   };
 
   const handleSavePaymentMode = async () => {
@@ -612,38 +606,22 @@ export default function DemandesEnAttente() {
       addToast("Veuillez choisir un mode de paiement.", 'error');
       return;
     }
-    if (selectedPaymentMode === 'virement_especes') {
-      if ((splitVirement === '' || Number(splitVirement) <= 0) && (splitEspeces === '' || Number(splitEspeces) <= 0)) {
-        addToast("Veuillez renseigner le montant du virement et le montant en espèces.", 'error');
-        return;
-      }
-    }
     try {
       setIsSavingPaymentMode(true);
       const prevForm = paymentModeDemande.formulaire_data || {};
       const prevFact = prevForm.facturation || {};
-      const numVirement = splitVirement === '' ? 0 : Number(splitVirement);
-      const numEspeces = splitEspeces === '' ? 0 : Number(splitEspeces);
 
       const payload: any = {
         mode_paiement: selectedPaymentMode,
         formulaire_data: {
           ...prevForm,
           mode_paiement: selectedPaymentMode,
-          montant_virement: selectedPaymentMode === 'virement_especes' ? numVirement : undefined,
-          montant_especes: selectedPaymentMode === 'virement_especes' ? numEspeces : undefined,
           facturation: {
             ...prevFact,
             mode_paiement: selectedPaymentMode,
-            montant_verse: selectedPaymentMode === 'virement_especes' ? numVirement : prevFact.montant_verse,
-            montant_especes: selectedPaymentMode === 'virement_especes' ? numEspeces : undefined,
           }
         }
       };
-
-      if (selectedPaymentMode === 'virement_especes') {
-        payload.avance_paiement = numVirement;
-      }
 
       await updateDemande(paymentModeDemande.id, payload);
 
@@ -652,7 +630,6 @@ export default function DemandesEnAttente() {
         return {
           ...item,
           mode_paiement: selectedPaymentMode,
-          avance_paiement: payload.avance_paiement !== undefined ? payload.avance_paiement : item.avance_paiement,
           formulaire_data: payload.formulaire_data,
         };
       }));
@@ -2003,17 +1980,16 @@ export default function DemandesEnAttente() {
                 </div>
 
                 {/* Bouton Définir le mode de paiement */}
-                <div className="pt-2">
+                <div className="pending-payment-action">
                   <button
                     type="button"
-                    className="w-full py-2.5 px-3 rounded-lg text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-sm transition-all hover:brightness-110 active:scale-[0.99]"
-                    style={{ backgroundColor: '#0d9488' }}
+                    className={`btn-payment-mode ${d.mode_paiement ? 'is-defined' : 'is-undefined'}`}
                     onClick={() => openPaymentModeModal(d)}
                   >
-                    <CreditCard size={16} />
+                    <CreditCard size={15} />
                     <span>
                       {d.mode_paiement 
-                        ? `Mode paiement : ${d.mode_paiement === 'virement_especes' ? 'Virement / Espèce' : (d.mode_paiement_label || d.mode_paiement)}`
+                        ? `Mode : ${d.mode_paiement === 'virement_especes' ? 'Virement / Espèce' : (d.mode_paiement_label || d.mode_paiement)}`
                         : 'Mode paiement'}
                     </span>
                   </button>
@@ -2176,14 +2152,13 @@ export default function DemandesEnAttente() {
                   <div className="mb-2">
                     <button
                       type="button"
-                      className="w-full py-2.5 px-3 rounded-lg text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-sm transition-all hover:brightness-110 active:scale-[0.99]"
-                      style={{ backgroundColor: '#0d9488' }}
+                      className={`btn-payment-mode ${d.mode_paiement ? 'is-defined' : 'is-undefined'}`}
                       onClick={() => openPaymentModeModal(d)}
                     >
-                      <CreditCard size={16} />
+                      <CreditCard size={15} />
                       <span>
                         {d.mode_paiement 
-                          ? `Mode paiement : ${d.mode_paiement === 'virement_especes' ? 'Virement / Espèce' : (d.mode_paiement_label || d.mode_paiement)}`
+                          ? `Mode : ${d.mode_paiement === 'virement_especes' ? 'Virement / Espèce' : (d.mode_paiement_label || d.mode_paiement)}`
                           : 'Mode paiement'}
                       </span>
                     </button>
@@ -2579,7 +2554,7 @@ export default function DemandesEnAttente() {
                         <option value="">Choisir...</option>
                         <option value="virement">Par virement</option>
                         <option value="especes">En espèces</option>
-                        <option value="virement_especes">Virement / Espèce (en 2 fois)</option>
+                        <option value="virement_especes">Virement / Espèce</option>
                         <option value="carte">Par carte bancaire (solution de paiement en ligne)</option>
                         <option value="cheque">Par chèque</option>
                       </select>
@@ -2988,159 +2963,107 @@ export default function DemandesEnAttente() {
       {/* MODAL: DÉFINIR LE MODE DE PAIEMENT */}
       {paymentModeDemande && (
         <div
-          className="ls-modal-backdrop"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-            backdropFilter: 'blur(4px)',
-            zIndex: 99999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px'
-          }}
+          className="payment-modal-overlay"
           onClick={() => !isSavingPaymentMode && setPaymentModeDemande(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden w-full max-w-lg animate-in fade-in zoom-in-95 duration-150"
+            className="payment-modal-content"
             onClick={e => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-r from-teal-700 to-teal-800 text-white p-5 flex items-center justify-between">
+            {/* Header */}
+            <div className="payment-modal-header">
               <div>
-                <h3 className="text-lg font-bold flex items-center gap-2">
+                <h3>
                   <CreditCard size={20} />
                   Définir le mode de paiement
                 </h3>
-                <p className="text-xs text-teal-100 mt-1">
-                  Demande #{paymentModeDemande.id} • {paymentModeDemande.client_name || 'Client'} • Montant : <strong className="text-white">{paymentModeDemande.prix ? `${paymentModeDemande.prix} MAD` : 'Sur devis'}</strong>
-                </p>
+                <div className="payment-modal-subtitle">
+                  <span>Demande #{paymentModeDemande.id}</span>
+                  <span>•</span>
+                  <span>{paymentModeDemande.client_name || 'Client'}</span>
+                  <span>•</span>
+                  <span>Montant : <strong className="text-white">{paymentModeDemande.prix ? `${paymentModeDemande.prix} MAD` : 'Sur devis'}</strong></span>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => !isSavingPaymentMode && setPaymentModeDemande(null)}
-                className="text-white/80 hover:text-white rounded-full p-1 transition-colors"
+                className="payment-modal-close-btn"
+                title="Fermer"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+            {/* Body */}
+            <div className="payment-modal-body">
+              <div className="payment-modal-section-title">
                 Choisir le mode de paiement
-              </label>
+              </div>
 
-              <div className="grid grid-cols-1 gap-2.5">
+              <div className="payment-options-list">
                 {[
-                  { value: 'virement', label: 'Virement', desc: 'Règlement intégral par virement bancaire' },
-                  { value: 'especes', label: 'Espèces', desc: 'Règlement intégral en espèces' },
+                  { 
+                    value: 'virement', 
+                    label: 'Virement', 
+                    desc: 'Règlement intégral par virement bancaire',
+                    icon: <Building2 size={18} className="text-teal-700" />
+                  },
+                  { 
+                    value: 'especes', 
+                    label: 'Espèces', 
+                    desc: 'Règlement intégral en espèces',
+                    icon: <Coins size={18} className="text-amber-700" />
+                  },
                   { 
                     value: 'virement_especes', 
-                    label: 'Virement / Espèce (en 2 fois)', 
-                    desc: 'Une partie par virement et le reste en espèces récupéré sur place par la FDM' 
+                    label: 'Virement / Espèce', 
+                    desc: 'Une partie par virement et le reste en espèces récupéré sur place par la FDM',
+                    icon: <WalletCards size={18} className="text-teal-700" />
                   },
-                  { value: 'carte', label: 'Carte bancaire', desc: 'Solution de paiement en ligne' },
-                  { value: 'cheque', label: 'Chèque', desc: 'Paiement par chèque bancaire' },
+                  { 
+                    value: 'carte', 
+                    label: 'Carte bancaire', 
+                    desc: 'Solution de paiement en ligne',
+                    icon: <CreditCard size={18} className="text-blue-700" />
+                  },
+                  { 
+                    value: 'cheque', 
+                    label: 'Chèque', 
+                    desc: 'Paiement par chèque bancaire',
+                    icon: <FileText size={18} className="text-slate-700" />
+                  },
                 ].map(opt => {
                   const isSelected = selectedPaymentMode === opt.value;
                   return (
                     <div
                       key={opt.value}
                       onClick={() => setSelectedPaymentMode(opt.value)}
-                      className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
-                        isSelected 
-                          ? 'border-teal-600 bg-teal-50/60 shadow-sm' 
-                          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                      }`}
+                      className={`payment-option-card ${isSelected ? 'selected' : ''}`}
                     >
-                      <input
-                        type="radio"
-                        name="payment_mode_choice"
-                        checked={isSelected}
-                        onChange={() => setSelectedPaymentMode(opt.value)}
-                        className="mt-1 h-4 w-4 text-teal-600 border-slate-300 focus:ring-teal-500"
-                      />
-                      <div className="flex-1">
-                        <div className="font-semibold text-slate-800 text-sm">{opt.label}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{opt.desc}</div>
+                      <div className="payment-radio-circle">
+                        <div className="payment-radio-dot" />
+                      </div>
+                      <div className="payment-option-icon-wrap">
+                        {opt.icon}
+                      </div>
+                      <div className="payment-option-content">
+                        <div className="payment-option-label">{opt.label}</div>
+                        <div className="payment-option-desc">{opt.desc}</div>
                       </div>
                     </div>
                   );
                 })}
               </div>
-
-              {/* Split fields for virement_especes */}
-              {selectedPaymentMode === 'virement_especes' && (
-                <div className="mt-4 p-4 rounded-xl border border-teal-200 bg-teal-50/50 space-y-3">
-                  <div className="flex items-center justify-between text-xs font-semibold text-teal-900 border-b border-teal-100 pb-2">
-                    <span>Répartition des montants</span>
-                    <span>Total prestation : <strong>{paymentModeDemande.prix ? `${paymentModeDemande.prix} MAD` : '—'}</strong></span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">
-                        Montant Virement (MAD) *
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={splitVirement}
-                        onChange={e => {
-                          const val = e.target.value === '' ? '' : Number(e.target.value);
-                          setSplitVirement(val);
-                          const total = Number(paymentModeDemande.prix || 0);
-                          if (total > 0 && val !== '') {
-                            const remain = Math.max(0, total - Number(val));
-                            setSplitEspeces(remain);
-                          }
-                        }}
-                        placeholder="Ex: 100"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 bg-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">
-                        Montant Espèces (MAD) *
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={splitEspeces}
-                        onChange={e => {
-                          const val = e.target.value === '' ? '' : Number(e.target.value);
-                          setSplitEspeces(val);
-                          const total = Number(paymentModeDemande.prix || 0);
-                          if (total > 0 && val !== '') {
-                            const remain = Math.max(0, total - Number(val));
-                            setSplitVirement(remain);
-                          }
-                        }}
-                        placeholder="Ex: 140"
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 bg-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="text-[11px] text-teal-800 bg-teal-100/70 p-2.5 rounded-lg flex items-start gap-1.5">
-                    <span className="font-bold">ℹ️</span>
-                    <span>
-                      La partie en espèces est récupérée directement sur place par le profil délégué (FDM). Elle ne modifie pas le calcul des parts agence.
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+            {/* Footer */}
+            <div className="payment-modal-footer">
               <button
                 type="button"
                 disabled={isSavingPaymentMode}
                 onClick={() => setPaymentModeDemande(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-lg transition-colors"
+                className="payment-modal-cancel-btn"
               >
                 Annuler
               </button>
@@ -3148,7 +3071,7 @@ export default function DemandesEnAttente() {
                 type="button"
                 disabled={isSavingPaymentMode}
                 onClick={handleSavePaymentMode}
-                className="px-5 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
+                className="payment-modal-save-btn"
               >
                 {isSavingPaymentMode ? 'Enregistrement...' : 'Enregistrer le mode de paiement'}
               </button>

@@ -2117,10 +2117,11 @@ export default function Dashboard() {
           montant_ht: montantHT,
           tva_active: tvaActive,
           montant_ttc: montantTTC,
-          montant_initial: baseMontantInitial,
           montant_verse: montantVerse,
           montant_virement: editFormData.mode_paiement === 'virement_especes' ? montantVerse : undefined,
-          montant_especes: editFormData.mode_paiement === 'virement_especes' ? Math.max(0, montantTTC - montantVerse) : undefined,
+          montant_especes: editFormData.mode_paiement === 'virement_especes' 
+            ? (editFormData.montant_especes !== undefined && editFormData.montant_especes !== '' ? toNumber(editFormData.montant_especes) : Math.max(0, montantTTC - montantVerse)) 
+            : undefined,
           montant_profil_doit: toNumber(editFormData.montant_profil_doit),
           facturation_annulee: finalStatutPaiementUi === 'facturation_annulee' || finalStatutPaiementUi === 'intervention_gratuite',
           statut_paiement_ui: finalStatutPaiementUi,
@@ -2517,6 +2518,11 @@ export default function Dashboard() {
       tva_active: tvaActive,
       geste_commercial: d.geste_commercial || null,
       montant_verse: toNumber(facturationData.montant_verse),
+      montant_especes: facturationData.montant_especes ?? d.formulaire_data?.montant_especes ?? (
+        (facturationData.mode_paiement || d.mode_paiement) === 'virement_especes' && (d.prix ? Number(d.prix) : 0) > 0
+          ? Math.max(0, Number(d.prix) - toNumber(facturationData.montant_verse))
+          : ''
+      ),
       montant_profil_doit: toNumber(facturationData.montant_profil_doit),
       facturation_annulee: Boolean(facturationData.facturation_annulee),
       part_agence: initialPartAgence,
@@ -4549,14 +4555,27 @@ export default function Dashboard() {
                             <div style={{ padding: '0 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', height: '38px', fontSize: '14px', fontWeight: 600 }}>{montantTTC.toFixed(2)}</div>
                           </div>
                         </div>
-                        <div className="form-grid-3 gap-4" style={{ marginTop: '16px' }}>
+                        <div className={editFormData.mode_paiement === 'virement_especes' ? "form-grid-4 gap-4" : "form-grid-3 gap-4"} style={{ marginTop: '16px' }}>
                           <div className="form-group">
                             <label>Mode de paiement</label>
-                            <select value={editFormData.mode_paiement} onChange={e => setEditFormData({ ...editFormData, mode_paiement: e.target.value })} className="edit-input">
+                            <select 
+                              value={editFormData.mode_paiement} 
+                              onChange={e => {
+                                const newMode = e.target.value;
+                                const total = toNumber(montantTTC);
+                                let newVerse = editFormData.montant_verse;
+                                let newEspeces = editFormData.montant_especes;
+                                if (newMode === 'virement_especes' && (!newEspeces || newEspeces === '')) {
+                                  newEspeces = total > 0 && newVerse !== '' ? Math.max(0, roundMoney(total - toNumber(newVerse))) : '';
+                                }
+                                setEditFormData({ ...editFormData, mode_paiement: newMode, montant_verse: newVerse, montant_especes: newEspeces });
+                              }} 
+                              className="edit-input"
+                            >
                               <option value="">Choisir...</option>
                               <option value="virement">Par virement</option>
                               <option value="especes">En espèces</option>
-                              <option value="virement_especes">Virement / Espèces</option>
+                              <option value="virement_especes">Virement / Espèce</option>
                               <option value="carte">Par carte bancaire (solution de paiement en ligne)</option>
                               <option value="cheque">Par chèque</option>
                             </select>
@@ -4676,15 +4695,60 @@ export default function Dashboard() {
                                   </>
                                 );
                               })()}
-                          </div>                          <div className="form-group">
-                            <label>Montant versé (MAD)</label>
-                            <input type="number" value={editFormData.montant_verse} onChange={e => setEditFormData({ ...editFormData, montant_verse: e.target.value })} className="edit-input" />
-                            {toNumber(montantTTC) > 0 && (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) > 0 && (
+                          </div>
+                          <div className="form-group">
+                            <label>{editFormData.mode_paiement === 'virement_especes' ? 'Montant versé / Virement (MAD)' : 'Montant versé (MAD)'}</label>
+                            <input 
+                              type="number" 
+                              value={editFormData.montant_verse} 
+                              onChange={e => {
+                                const val = e.target.value;
+                                const total = toNumber(montantTTC);
+                                const nextEspeces = (editFormData.mode_paiement === 'virement_especes' && total > 0 && val !== '')
+                                  ? Math.max(0, roundMoney(total - toNumber(val)))
+                                  : editFormData.montant_especes;
+                                setEditFormData({ 
+                                  ...editFormData, 
+                                  montant_verse: val,
+                                  montant_especes: nextEspeces
+                                });
+                              }} 
+                              className="edit-input" 
+                            />
+                            {editFormData.mode_paiement !== 'virement_especes' && toNumber(montantTTC) > 0 && (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) > 0 && (
                               <p style={{ fontSize: '11px', color: '#EF4444', fontWeight: 600, fontStyle: 'italic', marginTop: '4px' }}>
                                 Reste à payer FDM – Espèces : {((toNumber(montantTTC) - toNumber(editFormData.montant_verse)) % 1 === 0 ? (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) : (toNumber(montantTTC) - toNumber(editFormData.montant_verse)).toFixed(2))} DH
                               </p>
                             )}
                           </div>
+                          {editFormData.mode_paiement === 'virement_especes' && (
+                            <div className="form-group">
+                              <label>Part en espèces (MAD)</label>
+                              <input 
+                                type="number" 
+                                value={editFormData.montant_especes ?? ''} 
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  const total = toNumber(montantTTC);
+                                  const nextVerse = (total > 0 && val !== '')
+                                    ? Math.max(0, roundMoney(total - toNumber(val)))
+                                    : editFormData.montant_verse;
+                                  setEditFormData({ 
+                                    ...editFormData, 
+                                    montant_especes: val,
+                                    montant_verse: nextVerse 
+                                  });
+                                }} 
+                                placeholder="0"
+                                className="edit-input" 
+                              />
+                              {(toNumber(editFormData.montant_especes) > 0 || (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) > 0) && (
+                                <p style={{ fontSize: '11px', color: '#EF4444', fontWeight: 600, fontStyle: 'italic', marginTop: '4px' }}>
+                                  Reste à payer FDM – Espèces : {editFormData.montant_especes !== undefined && editFormData.montant_especes !== '' ? editFormData.montant_especes : Math.max(0, roundMoney(toNumber(montantTTC) - toNumber(editFormData.montant_verse)))} DH
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {currentPaymentStatutUi === 'commercial_paye_client' && (

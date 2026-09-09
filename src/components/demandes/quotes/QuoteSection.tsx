@@ -408,7 +408,7 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
         {demande.mode_paiement === 'virement_especes' && (
           <div style={{ background: "#F0FDFA", border: "1px solid #99F6E4", borderRadius: 8, padding: "10px 14px", marginTop: 12, fontSize: 12 }}>
             <div style={{ fontWeight: 700, color: "#0F766E", marginBottom: 4 }}>
-              Mode de paiement : Virement / Espèce (en 2 fois)
+              Mode de paiement : Virement / Espèce
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", color: "#115E59", marginBottom: 2 }}>
               <span>Part réglée par virement</span>
