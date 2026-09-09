@@ -11,7 +11,7 @@ import {
   RefreshCw, Search, XCircle,
   Calendar,
   FileText, Save, Download, Eye, Plus, ChevronDown, ChevronUp, CheckCircle, Edit, UserPlus, Send,
-  AlertTriangle, UserCheck
+  AlertTriangle, UserCheck, CreditCard, X
 } from 'lucide-react';
 import { Demande } from '../types';
 import { normalizeFrequence, normalizePayment, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
@@ -144,6 +144,13 @@ export default function DemandesEnAttente() {
   const [showAnnulationModal, setShowAnnulationModal] = useState<{ demandeId: number; isSubscription?: boolean } | null>(null);
   const [annulationReason, setAnnulationReason] = useState('');
 
+  // Payment mode modal states
+  const [paymentModeDemande, setPaymentModeDemande] = useState<Demande | any | null>(null);
+  const [selectedPaymentMode, setSelectedPaymentMode] = useState<string>('');
+  const [splitVirement, setSplitVirement] = useState<number | ''>('');
+  const [splitEspeces, setSplitEspeces] = useState<number | ''>('');
+  const [isSavingPaymentMode, setIsSavingPaymentMode] = useState<boolean>(false);
+
   // Nouveaux états pour le formulaire
   const [formData, setFormData] = useState({
     nom: '',
@@ -175,6 +182,8 @@ export default function DemandesEnAttente() {
     torchons: false,
     montant: '',
     mode_paiement: 'virement',
+    montant_virement: '' as string | number,
+    montant_especes: '' as string | number,
     statut_paiement_ui: 'non_confirme',
     heard_about_us: '',
     notes: '',
@@ -588,12 +597,95 @@ export default function DemandesEnAttente() {
     }
   };
 
+  const openPaymentModeModal = (d: Demande | any) => {
+    setPaymentModeDemande(d);
+    setSelectedPaymentMode(d.mode_paiement || '');
+    const vir = d.formulaire_data?.montant_virement ?? d.avance_paiement ?? '';
+    const esp = d.formulaire_data?.montant_especes ?? '';
+    setSplitVirement(vir !== '' && vir !== undefined ? Number(vir) : '');
+    setSplitEspeces(esp !== '' && esp !== undefined ? Number(esp) : '');
+  };
+
+  const handleSavePaymentMode = async () => {
+    if (!paymentModeDemande) return;
+    if (!selectedPaymentMode) {
+      addToast("Veuillez choisir un mode de paiement.", 'error');
+      return;
+    }
+    if (selectedPaymentMode === 'virement_especes') {
+      if ((splitVirement === '' || Number(splitVirement) <= 0) && (splitEspeces === '' || Number(splitEspeces) <= 0)) {
+        addToast("Veuillez renseigner le montant du virement et le montant en espèces.", 'error');
+        return;
+      }
+    }
+    try {
+      setIsSavingPaymentMode(true);
+      const prevForm = paymentModeDemande.formulaire_data || {};
+      const prevFact = prevForm.facturation || {};
+      const numVirement = splitVirement === '' ? 0 : Number(splitVirement);
+      const numEspeces = splitEspeces === '' ? 0 : Number(splitEspeces);
+
+      const payload: any = {
+        mode_paiement: selectedPaymentMode,
+        formulaire_data: {
+          ...prevForm,
+          mode_paiement: selectedPaymentMode,
+          montant_virement: selectedPaymentMode === 'virement_especes' ? numVirement : undefined,
+          montant_especes: selectedPaymentMode === 'virement_especes' ? numEspeces : undefined,
+          facturation: {
+            ...prevFact,
+            mode_paiement: selectedPaymentMode,
+            montant_verse: selectedPaymentMode === 'virement_especes' ? numVirement : prevFact.montant_verse,
+            montant_especes: selectedPaymentMode === 'virement_especes' ? numEspeces : undefined,
+          }
+        }
+      };
+
+      if (selectedPaymentMode === 'virement_especes') {
+        payload.avance_paiement = numVirement;
+      }
+
+      await updateDemande(paymentModeDemande.id, payload);
+
+      setDemandes(prev => prev.map(item => {
+        if (item.id !== paymentModeDemande.id) return item;
+        return {
+          ...item,
+          mode_paiement: selectedPaymentMode,
+          avance_paiement: payload.avance_paiement !== undefined ? payload.avance_paiement : item.avance_paiement,
+          formulaire_data: payload.formulaire_data,
+        };
+      }));
+
+      addToast("Mode de paiement mis à jour avec succès.", "success");
+      setPaymentModeDemande(null);
+    } catch (e: any) {
+      console.error(e);
+      const msg = e?.response?.data?.error || "Erreur lors de la mise à jour du mode de paiement.";
+      addToast(msg, "error");
+    } finally {
+      setIsSavingPaymentMode(false);
+    }
+  };
+
   const handleAction = async (id: number, action: 'valider' | 'nrp' | 'annuler') => {
     if (action === 'valider') {
       const d = demandes.find(x => x.id === id);
       if (!d || !canValidateDemande(user, d)) {
         addToast("Action non autorisée. Votre rôle ne dispose pas de la permission requise pour valider une demande.", 'error');
         return;
+      }
+      if (!d.mode_paiement || !d.mode_paiement.trim()) {
+        addToast("Veuillez définir le mode de paiement.", 'error');
+        return;
+      }
+      if (d.mode_paiement === 'virement_especes') {
+        const virement = Number(d.formulaire_data?.montant_virement ?? d.avance_paiement ?? 0);
+        const especes = Number(d.formulaire_data?.montant_especes ?? (Number(d.prix || 0) - virement));
+        if (virement <= 0 && especes <= 0) {
+          addToast("Veuillez renseigner le montant du virement et le montant en espèces.", 'error');
+          return;
+        }
       }
       const serviceName = (d.service || "").toLowerCase();
       if (serviceName.includes("chantier")) {
@@ -672,7 +764,7 @@ export default function DemandesEnAttente() {
       nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: todayIso, date_demarrage: todayIso, date_debut: todayIso, heure: '',
       scheduling_type: 'fixed', preference_horaire: '', type_habitation: '', frequence: 'une fois', jours_passage: '', jours_intervention: [] as string[], jours_intervention_detail: [] as any[], intervention_nature: 'sinistre', accommodation_state: '', cleanliness_type: '', nb_intervenants: 1,
       surface: 50, details_pieces: '', duree: 4, produits: false, torchons: false,
-      montant: '', mode_paiement: 'virement', statut_paiement_ui: 'non_confirme', heard_about_us: '', notes: '',
+      montant: '', mode_paiement: 'virement', montant_virement: '', montant_especes: '', statut_paiement_ui: 'non_confirme', heard_about_us: '', notes: '',
       service_type: 'flexible', structure_type: '', nb_personnel: 1,
       lieu_garde: 'domicile', age_personne: '', sexe_personne: '',
       mobilite: '', situation_medicale: '', nb_jours: 1,
@@ -777,6 +869,8 @@ export default function DemandesEnAttente() {
       torchons: d.formulaire_data?.torchons || d.formulaire_data?.torchonsEtSerpierres || false,
       montant: d.prix?.toString() || d.formulaire_data?.montant || '',
       mode_paiement: normalizePayment(d.mode_paiement || d.formulaire_data?.mode_paiement || ''),
+      montant_virement: d.formulaire_data?.montant_virement ?? d.avance_paiement ?? '',
+      montant_especes: d.formulaire_data?.montant_especes ?? '',
       statut_paiement_ui: d.formulaire_data?.facturation?.statut_paiement_ui || d.formulaire_data?.statut_paiement_ui || d.statut_paiement_ui || (d.statut_paiement === 'integral' ? 'paye' : d.statut_paiement === 'acompte' ? 'paiement_en_attente' : d.statut_paiement === 'partiel' ? 'paiement_partiel' : 'non_confirme'),
       heard_about_us: d.formulaire_data?.heard_about_us || d.formulaire_data?.comment_connu || d.formulaire_data?.lead_source || '',
       notes: d.formulaire_data?.notes || '',
@@ -904,6 +998,8 @@ export default function DemandesEnAttente() {
       torchons: d.formulaire_data?.torchons || d.formulaire_data?.torchonsEtSerpierres || false,
       montant: d.prix?.toString() || d.formulaire_data?.montant || '',
       mode_paiement: normalizePayment(d.mode_paiement || d.formulaire_data?.mode_paiement || ''),
+      montant_virement: d.formulaire_data?.montant_virement ?? d.avance_paiement ?? '',
+      montant_especes: d.formulaire_data?.montant_especes ?? '',
       statut_paiement_ui: 'non_confirme',
       heard_about_us: d.formulaire_data?.heard_about_us || d.formulaire_data?.comment_connu || d.formulaire_data?.lead_source || '',
       notes: d.formulaire_data?.notes || '',
@@ -1234,6 +1330,7 @@ export default function DemandesEnAttente() {
         is_devis: selectedService === 'Autre service' || isDevisRequired({ service: selectedService, segment: activeSegment, formulaire_data: formData } as any),
         mode_paiement: formData.mode_paiement,
         statut_paiement: paymentOption?.apiValue || 'non_paye',
+        avance_paiement: formData.mode_paiement === 'virement_especes' ? (Number(formData.montant_virement) || 0) : undefined,
         frequency: frequencyValue,
         frequency_label: formData.frequence,
         nb_heures: formData.duree || 4,
@@ -1254,8 +1351,14 @@ export default function DemandesEnAttente() {
           facturation: {
             ...(editingDemande?.formulaire_data?.facturation || {}),
             statut_paiement_ui: formData.statut_paiement_ui,
+            mode_paiement: formData.mode_paiement,
+            montant_verse: formData.mode_paiement === 'virement_especes' ? (Number(formData.montant_virement) || 0) : (editingDemande?.formulaire_data?.facturation?.montant_verse),
+            montant_especes: formData.mode_paiement === 'virement_especes' ? (Number(formData.montant_especes) || 0) : undefined,
           },
           statut_paiement_ui: formData.statut_paiement_ui,
+          mode_paiement: formData.mode_paiement,
+          montant_virement: formData.mode_paiement === 'virement_especes' ? (Number(formData.montant_virement) || 0) : undefined,
+          montant_especes: formData.mode_paiement === 'virement_especes' ? (Number(formData.montant_especes) || 0) : undefined,
           nom: clientDisplayName,
           firstName: activeSegment === 'particulier' ? (formData.nom.split(' ').slice(0, -1).join(' ') || formData.nom) : '',
           lastName: activeSegment === 'particulier' ? (formData.nom.split(' ').slice(-1).join(' ') || formData.nom) : '',
@@ -1861,7 +1964,34 @@ export default function DemandesEnAttente() {
                       </div>
                       <div className="detail-item">
                         <span className="detail-label">Mode :</span>
-                        <span className="detail-value">{d.mode_paiement || '—'}</span>
+                        <span className="detail-value">
+                          {(() => {
+                            if (!d.mode_paiement) return <span className="text-amber-600 font-semibold italic text-xs">Non défini</span>;
+                            if (d.mode_paiement === 'virement_especes') {
+                              const vir = d.formulaire_data?.montant_virement ?? d.avance_paiement;
+                              const esp = d.formulaire_data?.montant_especes ?? (d.prix && vir !== undefined ? Math.max(0, Number(d.prix) - Number(vir)) : undefined);
+                              return (
+                                <span>
+                                  <span className="font-semibold text-teal-800">Virement / Espèce</span>
+                                  {(vir !== undefined || esp !== undefined) && (
+                                    <span className="text-xs text-slate-500 block font-normal">
+                                      (Virement : {vir ?? 0} DH | Espèces : {esp ?? 0} DH)
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            }
+                            const labels: Record<string, string> = {
+                              virement: 'Par virement',
+                              especes: 'En espèces',
+                              carte: 'Carte bancaire',
+                              cheque: 'Par chèque',
+                              agence: "À l'agence",
+                              sur_place: 'Sur place',
+                            };
+                            return labels[d.mode_paiement] || d.mode_paiement_label || d.mode_paiement;
+                          })()}
+                        </span>
                       </div>
                     </div>
                     <div className="self-end" style={{ paddingBottom: '2px' }}>
@@ -1870,6 +2000,23 @@ export default function DemandesEnAttente() {
                       </span>
                     </div>
                   </div>
+                </div>
+
+                {/* Bouton Définir le mode de paiement */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    className="w-full py-2.5 px-3 rounded-lg text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-sm transition-all hover:brightness-110 active:scale-[0.99]"
+                    style={{ backgroundColor: '#0d9488' }}
+                    onClick={() => openPaymentModeModal(d)}
+                  >
+                    <CreditCard size={16} />
+                    <span>
+                      {d.mode_paiement 
+                        ? `Mode paiement : ${d.mode_paiement === 'virement_especes' ? 'Virement / Espèce' : (d.mode_paiement_label || d.mode_paiement)}`
+                        : 'Mode paiement'}
+                    </span>
+                  </button>
                 </div>
 
                 <div className="pt-3 mt-1 flex gap-2">
@@ -1989,7 +2136,20 @@ export default function DemandesEnAttente() {
                     <span className="mobile-detail-label">Montant</span>
                     <span className="mobile-detail-value fw-bold">
                       {d.is_devis ? (d.prix ? `${d.prix} MAD` : 'Sur devis') : (d.prix ? `${d.prix} MAD` : '—')}
-                      {!d.is_devis && d.mode_paiement && <span className="text-xs text-muted fw-normal"> ({d.mode_paiement})</span>}
+                      {d.mode_paiement ? (
+                        <span className="text-xs text-teal-700 block font-normal mt-0.5">
+                          Mode : {d.mode_paiement === 'virement_especes' ? 'Virement / Espèce' : (d.mode_paiement_label || d.mode_paiement)}
+                          {d.mode_paiement === 'virement_especes' && (d.formulaire_data?.montant_virement !== undefined || d.avance_paiement !== undefined) && (
+                            <span className="text-[11px] text-slate-500 block">
+                              (Vir: {d.formulaire_data?.montant_virement ?? d.avance_paiement ?? 0} DH / Esp: {d.formulaire_data?.montant_especes ?? 0} DH)
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-amber-600 block font-normal italic mt-0.5">
+                          Mode : Non défini
+                        </span>
+                      )}
                     </span>
                   </div>
                   {hasPermission(user, 'creer_devis') && (
@@ -2013,6 +2173,21 @@ export default function DemandesEnAttente() {
                 </div>
 
                 <div className="mobile-card-actions">
+                  <div className="mb-2">
+                    <button
+                      type="button"
+                      className="w-full py-2.5 px-3 rounded-lg text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-sm transition-all hover:brightness-110 active:scale-[0.99]"
+                      style={{ backgroundColor: '#0d9488' }}
+                      onClick={() => openPaymentModeModal(d)}
+                    >
+                      <CreditCard size={16} />
+                      <span>
+                        {d.mode_paiement 
+                          ? `Mode paiement : ${d.mode_paiement === 'virement_especes' ? 'Virement / Espèce' : (d.mode_paiement_label || d.mode_paiement)}`
+                          : 'Mode paiement'}
+                      </span>
+                    </button>
+                  </div>
                   {canValidateDemande(user, d) && (
                     <button className="btn btn-validate btn-full mb-2" onClick={() => handleAction(d.id, 'valider')}>
                       <CheckCircle size={18} /> Valider
@@ -2385,14 +2560,78 @@ export default function DemandesEnAttente() {
                     </div>
                     <div className="form-group">
                       <label className="label-teal">Mode de paiement *</label>
-                      <select className="ws-select" required value={formData.mode_paiement} onChange={e => setFormData({ ...formData, mode_paiement: e.target.value })}>
+                      <select 
+                        className="ws-select" 
+                        required 
+                        value={formData.mode_paiement} 
+                        onChange={e => {
+                          const newMode = e.target.value;
+                          const tot = Number(formData.montant || 0);
+                          let virementVal = formData.montant_virement;
+                          let especesVal = formData.montant_especes;
+                          if (newMode === 'virement_especes' && (!virementVal && !especesVal) && tot > 0) {
+                            virementVal = '';
+                            especesVal = '';
+                          }
+                          setFormData({ ...formData, mode_paiement: newMode, montant_virement: virementVal, montant_especes: especesVal });
+                        }}
+                      >
                         <option value="">Choisir...</option>
                         <option value="virement">Par virement</option>
-                        <option value="cheque">Par chèque</option>
                         <option value="especes">En espèces</option>
+                        <option value="virement_especes">Virement / Espèce (en 2 fois)</option>
                         <option value="carte">Par carte bancaire (solution de paiement en ligne)</option>
+                        <option value="cheque">Par chèque</option>
                       </select>
                     </div>
+
+                    {formData.mode_paiement === 'virement_especes' && (
+                      <div className="col-span-full p-4 bg-teal-50/70 border border-teal-200 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between text-xs font-semibold text-teal-900 border-b border-teal-100 pb-2">
+                          <span>Répartition Virement / Espèces</span>
+                          <span>Total : <strong>{formData.montant ? `${formData.montant} MAD` : '—'}</strong></span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs font-semibold text-slate-700 block mb-1">Montant Virement (MAD) *</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={formData.montant_virement || ''}
+                              onChange={e => {
+                                const val = e.target.value === '' ? '' : Number(e.target.value);
+                                const tot = Number(formData.montant || 0);
+                                const remain = (tot > 0 && val !== '') ? Math.max(0, tot - Number(val)) : formData.montant_especes;
+                                setFormData({ ...formData, montant_virement: val, montant_especes: remain });
+                              }}
+                              className="ws-input"
+                              placeholder="Ex: 100"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-slate-700 block mb-1">Montant Espèces (MAD) *</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={formData.montant_especes || ''}
+                              onChange={e => {
+                                const val = e.target.value === '' ? '' : Number(e.target.value);
+                                const tot = Number(formData.montant || 0);
+                                const remain = (tot > 0 && val !== '') ? Math.max(0, tot - Number(val)) : formData.montant_virement;
+                                setFormData({ ...formData, montant_especes: val, montant_virement: remain });
+                              }}
+                              className="ws-input"
+                              placeholder="Ex: 140"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-teal-800 italic">
+                          ℹ️ La partie en espèces est récupérée directement par le profil délégué (FDM) lors de l'intervention.
+                        </p>
+                      </div>
+                    )}
 
                   </div>
                 </div>
@@ -2741,6 +2980,178 @@ export default function DemandesEnAttente() {
                   Confirmer
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DÉFINIR LE MODE DE PAIEMENT */}
+      {paymentModeDemande && (
+        <div
+          className="ls-modal-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+          onClick={() => !isSavingPaymentMode && setPaymentModeDemande(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden w-full max-w-lg animate-in fade-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-teal-700 to-teal-800 text-white p-5 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <CreditCard size={20} />
+                  Définir le mode de paiement
+                </h3>
+                <p className="text-xs text-teal-100 mt-1">
+                  Demande #{paymentModeDemande.id} • {paymentModeDemande.client_name || 'Client'} • Montant : <strong className="text-white">{paymentModeDemande.prix ? `${paymentModeDemande.prix} MAD` : 'Sur devis'}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isSavingPaymentMode && setPaymentModeDemande(null)}
+                className="text-white/80 hover:text-white rounded-full p-1 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                Choisir le mode de paiement
+              </label>
+
+              <div className="grid grid-cols-1 gap-2.5">
+                {[
+                  { value: 'virement', label: 'Virement', desc: 'Règlement intégral par virement bancaire' },
+                  { value: 'especes', label: 'Espèces', desc: 'Règlement intégral en espèces' },
+                  { 
+                    value: 'virement_especes', 
+                    label: 'Virement / Espèce (en 2 fois)', 
+                    desc: 'Une partie par virement et le reste en espèces récupéré sur place par la FDM' 
+                  },
+                  { value: 'carte', label: 'Carte bancaire', desc: 'Solution de paiement en ligne' },
+                  { value: 'cheque', label: 'Chèque', desc: 'Paiement par chèque bancaire' },
+                ].map(opt => {
+                  const isSelected = selectedPaymentMode === opt.value;
+                  return (
+                    <div
+                      key={opt.value}
+                      onClick={() => setSelectedPaymentMode(opt.value)}
+                      className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                        isSelected 
+                          ? 'border-teal-600 bg-teal-50/60 shadow-sm' 
+                          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment_mode_choice"
+                        checked={isSelected}
+                        onChange={() => setSelectedPaymentMode(opt.value)}
+                        className="mt-1 h-4 w-4 text-teal-600 border-slate-300 focus:ring-teal-500"
+                      />
+                      <div className="flex-1">
+                        <div className="font-semibold text-slate-800 text-sm">{opt.label}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">{opt.desc}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Split fields for virement_especes */}
+              {selectedPaymentMode === 'virement_especes' && (
+                <div className="mt-4 p-4 rounded-xl border border-teal-200 bg-teal-50/50 space-y-3">
+                  <div className="flex items-center justify-between text-xs font-semibold text-teal-900 border-b border-teal-100 pb-2">
+                    <span>Répartition des montants</span>
+                    <span>Total prestation : <strong>{paymentModeDemande.prix ? `${paymentModeDemande.prix} MAD` : '—'}</strong></span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">
+                        Montant Virement (MAD) *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={splitVirement}
+                        onChange={e => {
+                          const val = e.target.value === '' ? '' : Number(e.target.value);
+                          setSplitVirement(val);
+                          const total = Number(paymentModeDemande.prix || 0);
+                          if (total > 0 && val !== '') {
+                            const remain = Math.max(0, total - Number(val));
+                            setSplitEspeces(remain);
+                          }
+                        }}
+                        placeholder="Ex: 100"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">
+                        Montant Espèces (MAD) *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={splitEspeces}
+                        onChange={e => {
+                          const val = e.target.value === '' ? '' : Number(e.target.value);
+                          setSplitEspeces(val);
+                          const total = Number(paymentModeDemande.prix || 0);
+                          if (total > 0 && val !== '') {
+                            const remain = Math.max(0, total - Number(val));
+                            setSplitVirement(remain);
+                          }
+                        }}
+                        placeholder="Ex: 140"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-teal-800 bg-teal-100/70 p-2.5 rounded-lg flex items-start gap-1.5">
+                    <span className="font-bold">ℹ️</span>
+                    <span>
+                      La partie en espèces est récupérée directement sur place par le profil délégué (FDM). Elle ne modifie pas le calcul des parts agence.
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={isSavingPaymentMode}
+                onClick={() => setPaymentModeDemande(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 rounded-lg transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isSavingPaymentMode}
+                onClick={handleSavePaymentMode}
+                className="px-5 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
+              >
+                {isSavingPaymentMode ? 'Enregistrement...' : 'Enregistrer le mode de paiement'}
+              </button>
             </div>
           </div>
         </div>

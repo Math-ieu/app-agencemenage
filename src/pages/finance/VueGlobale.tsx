@@ -538,6 +538,7 @@ const modeLabelFromCode = (value?: string): string => {
   if (value === 'virement') return 'Virement';
   if (value === 'cheque') return 'Chèque';
   if (value === 'especes') return 'Espèces';
+  if (value === 'virement_especes') return 'Virement / Espèce';
   if (value === 'carte') return 'Carte Bancaire';
   if (value === 'especes_agence') return "Espèces à l'agence";
   if (value === 'sur_place') return 'Sur place';

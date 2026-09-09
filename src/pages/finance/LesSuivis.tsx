@@ -147,6 +147,7 @@ interface FacturationRow {
   supplementHeuresMontant?: number;
   supplementHeuresRecupereEspeces?: boolean;
   supplementEncaissePar?: 'femme_de_menage' | 'agence' | string;
+  especesRecuperees?: number;
 }
 
 interface AgentApiItem {
@@ -301,6 +302,7 @@ const modeLabelFromCode = (value?: string): string => {
   if (value === 'virement') return 'Virement';
   if (value === 'cheque') return 'Chèque';
   if (value === 'especes') return 'Espèces';
+  if (value === 'virement_especes') return 'Virement / Espèce';
   if (value === 'carte') return 'Carte Bancaire';
   if (value === 'especes_agence') return "Espèces à l'agence";
   if (value === 'sur_place') return 'Sur place';
@@ -507,6 +509,7 @@ const getRowDuesBreakdown = (row: FacturationRow) => {
     agenceDoit,
     hasSupplement,
     supplementMontant,
+    especesRecuperees: Number(row.especesRecuperees || 0),
   };
 };
 
@@ -613,7 +616,8 @@ const generateProfileReceiptPdf = async (
 
     const dateVal = row.date ? formatDateFR(row.date) : '—';
     const suppBadge = b.supplementMontant > 0 ? ` (Supplément : ${b.supplementMontant.toFixed(2)} DH)` : '';
-    const clientVal = `${row.client || '—'}${suppBadge}`;
+    const espBadge = b.especesRecuperees > 0 ? ` (Espèces perçues FDM : ${b.especesRecuperees.toFixed(2)} DH)` : '';
+    const clientVal = `${row.client || '—'}${suppBadge}${espBadge}`;
     const suppLabel = b.supplementMontant > 0
       ? ` (Supplément espèces : ${b.supplementMontant.toFixed(2)} DH)`
       : (b.hasSupplementNote ? ' (Supplément espèces)' : '');
@@ -1110,6 +1114,12 @@ export default function LesSuivis() {
         item.supplement_encaisse_par ||
         (facturationData.supplement_heures_recupere_especes === false && (facturationData.has_supplement_heures || item.has_supplement_heures) ? 'agence' : 'femme_de_menage')
       ),
+      especesRecuperees: Number(
+        facturationData.montant_especes ??
+        demande?.formulaire_data?.facturation?.montant_especes ??
+        demande?.formulaire_data?.montant_especes ??
+        (demande?.mode_paiement === 'virement_especes' ? Math.max(0, Number(demande?.prix || 0) - Number(demande?.avance_paiement || facturationData.montant_verse || 0)) : 0)
+      ),
     };
   }, []);
 
@@ -1274,6 +1284,12 @@ export default function LesSuivis() {
         demande?.formulaire_data?.supplement_encaisse_par ||
         demande?.supplement_encaisse_par ||
         (facturationData.supplement_heures_recupere_especes === false && (facturationData.has_supplement_heures || demande?.has_supplement_heures) ? 'agence' : 'femme_de_menage')
+      ),
+      especesRecuperees: Number(
+        facturationData.montant_especes ??
+        demande?.formulaire_data?.facturation?.montant_especes ??
+        demande?.formulaire_data?.montant_especes ??
+        (demande?.mode_paiement === 'virement_especes' ? Math.max(0, Number(demande?.prix || 0) - Number(demande?.avance_paiement || facturationData.montant_verse || 0)) : 0)
       ),
     };
   }, []);
@@ -4075,6 +4091,11 @@ export default function LesSuivis() {
                                         <span>Supplément : {money(b.supplementMontant)}</span>
                                       </span>
                                     )}
+                                    {b.especesRecuperees > 0 && (
+                                      <span className="ls-dues-supplement-tag" style={{ background: '#fef2f2', color: '#dc2626', borderColor: '#fecaca' }} title="Part espèces perçue directement auprès du client sur place">
+                                        <span>Espèces perçues FDM : {money(b.especesRecuperees)}</span>
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </td>
@@ -4131,11 +4152,23 @@ export default function LesSuivis() {
                               const suppSum = activeDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
                                 return sum + (r.hasSupplementHeures && r.supplementHeuresRecupereEspeces ? Number(r.supplementHeuresMontant || 0) : 0);
                               }, 0);
-                              return suppSum > 0 ? (
-                                <span style={{ display: 'block', fontSize: '0.75rem', color: '#b45309', fontWeight: 600, marginTop: '2px' }}>
-                                  (dont {money(suppSum)} de suppléments espèces)
-                                </span>
-                              ) : null;
+                              const espSum = activeDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
+                                return sum + Number(r.especesRecuperees || 0);
+                              }, 0);
+                              return (
+                                <>
+                                  {suppSum > 0 && (
+                                    <span style={{ display: 'block', fontSize: '0.75rem', color: '#b45309', fontWeight: 600, marginTop: '2px' }}>
+                                      (dont {money(suppSum)} de suppléments espèces)
+                                    </span>
+                                  )}
+                                  {espSum > 0 && (
+                                    <span style={{ display: 'block', fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, marginTop: '2px' }}>
+                                      (dont {money(espSum)} d'espèces perçues sur place)
+                                    </span>
+                                  )}
+                                </>
+                              );
                             })()}
                           </td>
                           <td style={{ textAlign: 'right' }}>

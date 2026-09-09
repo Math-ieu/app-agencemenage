@@ -2119,6 +2119,8 @@ export default function Dashboard() {
           montant_ttc: montantTTC,
           montant_initial: baseMontantInitial,
           montant_verse: montantVerse,
+          montant_virement: editFormData.mode_paiement === 'virement_especes' ? montantVerse : undefined,
+          montant_especes: editFormData.mode_paiement === 'virement_especes' ? Math.max(0, montantTTC - montantVerse) : undefined,
           montant_profil_doit: toNumber(editFormData.montant_profil_doit),
           facturation_annulee: finalStatutPaiementUi === 'facturation_annulee' || finalStatutPaiementUi === 'intervention_gratuite',
           statut_paiement_ui: finalStatutPaiementUi,
@@ -3415,10 +3417,24 @@ export default function Dashboard() {
                                 );
                               }
                             }
+                            const isCancelledOrFree = d.statut_paiement === 'intervention_gratuite' || 
+                              d.statut_paiement === 'facturation_annulee' || 
+                              d.formulaire_data?.facturation?.facturation_annulee;
+                            const verse = Number(d.avance_paiement ?? d.formulaire_data?.facturation?.montant_verse ?? 0);
+                            const totalAmount = Number(d.prix || 0);
+                            const calcReste = d.formulaire_data?.montant_especes ?? 
+                              (d.reste_a_payer !== undefined ? Number(d.reste_a_payer) : Math.max(0, totalAmount - verse));
+                            const resteAPayer = isCancelledOrFree ? 0 : Number(calcReste || 0);
+
                             return (
                               <>
                                 <p className="price-main">{typeof d.prix === 'number' ? d.prix.toLocaleString('fr-FR') : (d.prix || '0')} MAD</p>
                                 <p className="price-sub">{d.is_devis ? 'Prix/devis' : 'Prix/réservation'}</p>
+                                {resteAPayer > 0 && (
+                                  <p style={{ color: '#EF4444', fontSize: '11px', fontWeight: 600, fontStyle: 'italic', margin: 0, marginTop: '2px', lineHeight: '1.2', whiteSpace: 'nowrap' }}>
+                                    Reste à payer FDM – Espèces : {resteAPayer % 1 === 0 ? resteAPayer : resteAPayer.toFixed(2)} DH
+                                  </p>
+                                )}
                               </>
                             );
                           })()}
@@ -3809,7 +3825,22 @@ export default function Dashboard() {
                               return `Abonnement ${subInfo.rank}/${subInfo.total}`;
                             }
                           }
-                          return typeof d.prix === 'number' && d.prix > 0 ? `${d.prix.toLocaleString('fr-FR')} MAD` : (d.prix && d.prix !== '0' ? `${d.prix} MAD` : '—');
+                          const basePrice = typeof d.prix === 'number' && d.prix > 0 ? `${d.prix.toLocaleString('fr-FR')} MAD` : (d.prix && d.prix !== '0' ? `${d.prix} MAD` : '—');
+                          const verse = Number(d.avance_paiement ?? d.formulaire_data?.facturation?.montant_verse ?? 0);
+                          const totalAmount = Number(d.prix || 0);
+                          const calcReste = d.formulaire_data?.montant_especes ?? 
+                            (d.reste_a_payer !== undefined ? Number(d.reste_a_payer) : Math.max(0, totalAmount - verse));
+                          const resteAPayer = Number(calcReste || 0);
+                          return (
+                            <span>
+                              {basePrice}
+                              {resteAPayer > 0 && (
+                                <span style={{ color: '#EF4444', fontSize: '11px', fontWeight: 600, fontStyle: 'italic', display: 'block' }}>
+                                  Reste à payer FDM – Espèces : {resteAPayer % 1 === 0 ? resteAPayer : resteAPayer.toFixed(2)} DH
+                                </span>
+                              )}
+                            </span>
+                          );
                         })()}
                       </span>
                     </div>
@@ -4524,9 +4555,10 @@ export default function Dashboard() {
                             <select value={editFormData.mode_paiement} onChange={e => setEditFormData({ ...editFormData, mode_paiement: e.target.value })} className="edit-input">
                               <option value="">Choisir...</option>
                               <option value="virement">Par virement</option>
-                              <option value="cheque">Par chèque</option>
                               <option value="especes">En espèces</option>
+                              <option value="virement_especes">Virement / Espèces</option>
                               <option value="carte">Par carte bancaire (solution de paiement en ligne)</option>
+                              <option value="cheque">Par chèque</option>
                             </select>
                           </div>
                           <div className="form-group" id="statut-paiement-field">
@@ -4647,8 +4679,10 @@ export default function Dashboard() {
                           </div>                          <div className="form-group">
                             <label>Montant versé (MAD)</label>
                             <input type="number" value={editFormData.montant_verse} onChange={e => setEditFormData({ ...editFormData, montant_verse: e.target.value })} className="edit-input" />
-                            {toNumber(montantTTC) > 0 && toNumber(editFormData.montant_verse) > 0 && (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) > 0 && (
-                              <p style={{ fontSize: '11px', color: '#DC2626', fontWeight: 600, marginTop: '4px' }}>Reste à payer : {(toNumber(montantTTC) - toNumber(editFormData.montant_verse)).toFixed(2)} MAD</p>
+                            {toNumber(montantTTC) > 0 && (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) > 0 && (
+                              <p style={{ fontSize: '11px', color: '#EF4444', fontWeight: 600, fontStyle: 'italic', marginTop: '4px' }}>
+                                Reste à payer FDM – Espèces : {((toNumber(montantTTC) - toNumber(editFormData.montant_verse)) % 1 === 0 ? (toNumber(montantTTC) - toNumber(editFormData.montant_verse)) : (toNumber(montantTTC) - toNumber(editFormData.montant_verse)).toFixed(2))} DH
+                              </p>
                             )}
                           </div>
                         </div>

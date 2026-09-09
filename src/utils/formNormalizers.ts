@@ -65,6 +65,8 @@ export const normalizePayment = (val?: string) => {
   if (!val) return '';
   const s = String(val).toLowerCase();
   if (s === 'non_paye' || s === 'acompte' || s === 'partiel' || s === 'integral') return s;
+  if (s.includes('virement') && (s.includes('espece') || s.includes('espèces'))) return 'virement_especes';
+  if (s === 'virement_especes') return 'virement_especes';
   if (s.includes('virement')) return 'virement';
   if (s.includes('chèque') || s.includes('cheque')) return 'cheque';
   if (s.includes('espèces') || s.includes('especes') || s.includes('espece')) return 'especes';

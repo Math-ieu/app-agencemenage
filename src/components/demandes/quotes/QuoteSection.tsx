@@ -404,6 +404,22 @@ export default function QuoteSection({ demande, onPreview, onSend, formData, set
             </div>
           </div>
         )}
+
+        {demande.mode_paiement === 'virement_especes' && (
+          <div style={{ background: "#F0FDFA", border: "1px solid #99F6E4", borderRadius: 8, padding: "10px 14px", marginTop: 12, fontSize: 12 }}>
+            <div style={{ fontWeight: 700, color: "#0F766E", marginBottom: 4 }}>
+              Mode de paiement : Virement / Espèce (en 2 fois)
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", color: "#115E59", marginBottom: 2 }}>
+              <span>Part réglée par virement</span>
+              <strong>{fmt(demande.formulaire_data?.montant_virement ?? demande.avance_paiement ?? 0)} DH</strong>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", color: "#115E59" }}>
+              <span>Reste en espèces (FDM sur place)</span>
+              <strong>{fmt(demande.formulaire_data?.montant_especes ?? Math.max(0, totalDevis - Number(demande.formulaire_data?.montant_virement ?? demande.avance_paiement ?? 0)))} DH</strong>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
