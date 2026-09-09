@@ -5,6 +5,8 @@ import StickyHorizontalScrollbar from '../../components/common/StickyHorizontalS
 import {
   Calendar,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Eye,
   Pencil,
@@ -19,7 +21,8 @@ import {
   ArrowUpRight,
   User,
   Info,
-  Sparkles
+  Sparkles,
+  Folder
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -39,6 +42,7 @@ import { getDynamicMonthPassagesCount } from '../../utils/pricing';
 import { isFinanceRowVisible, getStatusInfo } from '../../utils/statusUtils';
 import './LesSuivis.css';
 import logoUrl from '../../assets/LOGO-AGENCE-MENAGE.png';
+import signatureUrl from '../../assets/signature.png';
 
 let cachedLogoBase64: string | null = null;
 const loadLogoBase64 = async (): Promise<string | null> => {
@@ -51,6 +55,26 @@ const loadLogoBase64 = async (): Promise<string | null> => {
       reader.onloadend = () => {
         cachedLogoBase64 = reader.result as string;
         resolve(cachedLogoBase64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+};
+
+let cachedSignatureBase64: string | null = null;
+const loadSignatureBase64 = async (): Promise<string | null> => {
+  if (cachedSignatureBase64) return cachedSignatureBase64;
+  try {
+    const response = await fetch(signatureUrl);
+    const blob = await response.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        cachedSignatureBase64 = reader.result as string;
+        resolve(cachedSignatureBase64);
       };
       reader.onerror = reject;
       reader.readAsDataURL(blob);
@@ -151,13 +175,6 @@ const formatDateFR = (value?: string): string => {
   return `${day}/${month}/${year}`;
 };
 
-const formatDateISO = (value?: string): string => {
-  if (!value || value === '—') return '';
-  if (value.includes('-')) return value;
-  const [day, month, year] = value.split('/');
-  if (!year || !month || !day) return '';
-  return `${year}-${month}-${day}`;
-};
 
 /** Formats a date string into e.g. "vendredi 04/09/2026" */
 const formatDateFRWithDay = (value?: string): string => {
@@ -179,19 +196,50 @@ const formatDateFRWithDay = (value?: string): string => {
   return `${weekday} ${day}/${month}/${year}`;
 };
 
-/** Calculates the default weekly cycle from Friday to Thursday for any given reference date */
-const getDefaultWeeklyFridayToThursday = (refDate = new Date()) => {
-  const day = refDate.getDay(); // 0: Sun, 1: Mon, 2: Tue, 3: Wed, 4: Thu, 5: Fri, 6: Sat
-  // Friday is day 5. If today is Fri, diff is 0; Sat: 1; Sun: 2; Mon: 3; Tue: 4; Wed: 5; Thu: 6
+/** Calculates Friday-to-Thursday cycle for a given base date string (YYYY-MM-DD) or Date object, with week offset */
+const getWeekFromFriday = (baseDate?: string | Date, offsetWeeks: number = 0) => {
+  let ref: Date;
+  if (typeof baseDate === 'string' && baseDate) {
+    const clean = baseDate.includes('T') ? baseDate.split('T')[0] : baseDate.split(' ')[0];
+    if (clean.includes('-')) {
+      const [y, m, d] = clean.split('-').map(Number);
+      ref = new Date(y, m - 1, d);
+    } else if (clean.includes('/')) {
+      const [d, m, y] = clean.split('/').map(Number);
+      ref = new Date(y, m - 1, d);
+    } else {
+      ref = new Date();
+    }
+  } else if (baseDate instanceof Date && !isNaN(baseDate.getTime())) {
+    ref = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+  } else {
+    ref = new Date();
+  }
+
+  if (isNaN(ref.getTime())) {
+    ref = new Date();
+  }
+
+  // Friday is day 5. If day is 5 (Fri) -> diff is 0; 6 (Sat) -> 1; 0 (Sun) -> 2; 1 (Mon) -> 3; 2 (Tue) -> 4; 3 (Wed) -> 5; 4 (Thu) -> 6
+  const day = ref.getDay();
   const diffToFriday = day >= 5 ? day - 5 : day + 2;
-  const friday = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() - diffToFriday);
+  const friday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - diffToFriday + (offsetWeeks * 7));
   const thursday = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate() + 6);
+
+  const formatISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
   return {
-    from: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
-    to: `${thursday.getFullYear()}-${String(thursday.getMonth() + 1).padStart(2, '0')}-${String(thursday.getDate()).padStart(2, '0')}`,
+    from: formatISO(friday),
+    to: formatISO(thursday),
     friday,
     thursday,
   };
+};
+
+/** Calculates the default weekly cycle from Friday to Thursday for any given reference date */
+const getDefaultWeeklyFridayToThursday = (refDate = new Date()) => {
+  return getWeekFromFriday(refDate, 0);
 };
 
 const isCreditRow = (row: FacturationRow): boolean => {
@@ -225,15 +273,21 @@ const isDebitRow = (row: FacturationRow): boolean => {
 };
 
 const parseFrenchDate = (value?: string): Date | null => {
-  if (!value) return null;
-  if (value.includes('-')) {
-    const d = new Date(`${value}T00:00:00`);
+  if (!value || value === '—') return null;
+  const clean = value.includes('T') ? value.split('T')[0] : value.split(' ')[0];
+  if (clean.includes('-')) {
+    const [year, month, day] = clean.split('-').map(Number);
+    if (!year || !month || !day) return null;
+    const d = new Date(year, month - 1, day);
     return Number.isNaN(d.getTime()) ? null : d;
   }
-  const [day, month, year] = value.split('/');
-  if (!year || !month || !day) return null;
-  const d = new Date(`${year}-${month}-${day}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (clean.includes('/')) {
+    const [day, month, year] = clean.split('/').map(Number);
+    if (!year || !month || !day) return null;
+    const d = new Date(year, month - 1, day);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 };
 
 const getISODateLocal = (date: Date): string => {
@@ -472,8 +526,11 @@ const generateProfileReceiptPdf = async (
   const pinkColor: [number, number, number] = [190, 18, 60]; // #be123c
   const textDark: [number, number, number] = [30, 41, 59];
 
-  // 1. Logo de l'agence uniquement (sur le reçu en pdf, met juste le logo de l'agence)
-  const logoBase64 = await loadLogoBase64();
+  // 1. Logo et cachet de l'agence
+  const [logoBase64, signatureBase64] = await Promise.all([
+    loadLogoBase64(),
+    loadSignatureBase64()
+  ]);
   if (logoBase64) {
     try {
       doc.addImage(logoBase64, 'PNG', 14, 11, 44, 19.3);
@@ -530,12 +587,23 @@ const generateProfileReceiptPdf = async (
     doc.text(`Tél : ${profile.phone}`, 120, 52);
   }
 
-  // Calculate table rows and totals
+  // Filter rows strictly to the specified week period
+  const periodRows = (profile.rows || []).filter((r) => {
+    if (!dateFromStr && !dateToStr) return true;
+    const rDate = parseFrenchDate(r.date);
+    if (!rDate) return false;
+    const rIso = getISODateLocal(rDate);
+    if (dateFromStr && rIso < dateFromStr) return false;
+    if (dateToStr && rIso > dateToStr) return false;
+    return true;
+  });
+
+  // Calculate table rows and totals for the selected period
   let totalDoitAgence = 0;
   let totalAgenceDoit = 0;
   let totalSupplements = 0;
 
-  const tableRows = profile.rows.map((row) => {
+  const tableRows = periodRows.map((row) => {
     const b = getRowDuesBreakdown(row);
     totalDoitAgence += b.doitAgence;
     totalAgenceDoit += b.agenceDoit;
@@ -544,7 +612,7 @@ const generateProfileReceiptPdf = async (
     }
 
     const dateVal = row.date ? formatDateFR(row.date) : '—';
-    const suppBadge = b.supplementMontant > 0 ? ` (+Supplément : ${b.supplementMontant.toFixed(2)} DH)` : '';
+    const suppBadge = b.supplementMontant > 0 ? ` (Supplément : ${b.supplementMontant.toFixed(2)} DH)` : '';
     const clientVal = `${row.client || '—'}${suppBadge}`;
     const suppLabel = b.supplementMontant > 0
       ? ` (Supplément espèces : ${b.supplementMontant.toFixed(2)} DH)`
@@ -571,7 +639,7 @@ const generateProfileReceiptPdf = async (
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.text(`${profile.rows.length}`, 18, kpiY + 13);
+  doc.text(`${periodRows.length}`, 18, kpiY + 13);
 
   // Box 2: Revenu (Doit à l'agence)
   doc.setFillColor(240, 253, 244);
@@ -702,26 +770,39 @@ const generateProfileReceiptPdf = async (
   doc.setFontSize(11);
   if (netSolde > 0) {
     doc.setTextColor(pinkColor[0], pinkColor[1], pinkColor[2]);
-    doc.text(`Agence doit au profil : +${netSolde.toFixed(2)} DH`, 110, finalY + 23);
+    doc.text(`Agence doit au profil : ${netSolde.toFixed(2)} DH`, 110, finalY + 23);
   } else if (netSolde < 0) {
     doc.setTextColor(greenColor[0], greenColor[1], greenColor[2]);
-    doc.text(`Profil doit à l'agence : +${Math.abs(netSolde).toFixed(2)} DH`, 110, finalY + 23);
+    doc.text(`Profil doit à l'agence : ${Math.abs(netSolde).toFixed(2)} DH`, 110, finalY + 23);
   } else {
     doc.setTextColor(71, 85, 105);
     doc.text('Solde équilibré : 0,00 DH', 110, finalY + 23);
   }
 
   // Signatures
-  const signY = finalY + 36;
+  let signY = finalY + 34;
+  if (signY + 32 > 282) {
+    doc.addPage();
+    signY = 25;
+  }
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(71, 85, 105);
   doc.text("Signature & Cachet de l'Agence", 30, signY);
   doc.text("Signature de l'Intervenante", 130, signY);
 
+  if (signatureBase64) {
+    try {
+      doc.addImage(signatureBase64, 'PNG', 28, signY + 3, 50, 24);
+    } catch {
+      // ignore
+    }
+  }
+
   doc.setDrawColor(203, 213, 225);
-  doc.line(30, signY + 18, 85, signY + 18);
-  doc.line(130, signY + 18, 185, signY + 18);
+  doc.line(30, signY + 28, 85, signY + 28);
+  doc.line(130, signY + 28, 185, signY + 28);
 
   const cleanName = profile.profilName.replace(/[^a-zA-Z0-9_-]/g, '_');
   doc.save(`Recu_${cleanName}_${dateFromStr}_${dateToStr}.pdf`);
@@ -774,6 +855,25 @@ export default function LesSuivis() {
   const [dateFrom, setDateFrom] = useState(defaultWeeklyDates.from);
   const [dateTo, setDateTo] = useState(defaultWeeklyDates.to);
 
+  // Week navigation (Friday to Thursday jumps)
+  const handlePrevWeek = useCallback(() => {
+    const week = getWeekFromFriday(dateFrom || new Date(), -1);
+    setDateFrom(week.from);
+    setDateTo(week.to);
+  }, [dateFrom]);
+
+  const handleNextWeek = useCallback(() => {
+    const week = getWeekFromFriday(dateFrom || new Date(), 1);
+    setDateFrom(week.from);
+    setDateTo(week.to);
+  }, [dateFrom]);
+
+  const handleCurrentWeek = useCallback(() => {
+    const week = getDefaultWeeklyFridayToThursday();
+    setDateFrom(week.from);
+    setDateTo(week.to);
+  }, []);
+
   // New profile dues modals
   const [selectedDuesProfile, setSelectedDuesProfile] = useState<any | null>(null);
   const [settleConfirmProfile, setSettleConfirmProfile] = useState<any | null>(null);
@@ -789,15 +889,8 @@ export default function LesSuivis() {
   const [selectedCommercialName, setSelectedCommercialName] = useState<string | null>(null);
 
   // Modals
-  const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedRow, setSelectedRow] = useState<FacturationRow | null>(null);
-
-  // Edit form states
-  const [editIsPaid, setEditIsPaid] = useState(false);
-  const [editDate, setEditDate] = useState('');
-  const [editRemark, setEditRemark] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
 
   // Mapping functions matching VueGlobale's logic exactly
   const mapMissionToFacturationRow = useCallback((item: any): FacturationRow => {
@@ -1868,9 +1961,10 @@ export default function LesSuivis() {
         if (freqFilter === 'abonnement' && !isSub) return false;
       }
 
-      // Date Range filter
-      const rowDate = parseFrenchDate(row.date);
-      if (rowDate) {
+      // Date Range filter (strict filtering: if date filter is active, rows must have a valid date in range)
+      if (dateFrom || dateTo) {
+        const rowDate = parseFrenchDate(row.date);
+        if (!rowDate) return false;
         const rowIso = getISODateLocal(rowDate);
         if (dateFrom && rowIso < dateFrom) return false;
         if (dateTo && rowIso > dateTo) return false;
@@ -1942,6 +2036,37 @@ export default function LesSuivis() {
 
     return Array.from(map.values()).sort((a, b) => b.nbMissions - a.nbMissions);
   }, [filteredRows]);
+
+  // Dynamically sync selectedDuesProfile with current groupedProfiles (strictly bound to chosen week)
+  const activeDuesProfile = useMemo(() => {
+    if (!selectedDuesProfile) return null;
+    const match = groupedProfiles.find((item) =>
+      (selectedDuesProfile.profilId && item.profilId === selectedDuesProfile.profilId) ||
+      item.profilName === selectedDuesProfile.profilName
+    );
+    if (match) return match;
+    return {
+      profilId: selectedDuesProfile.profilId,
+      profilName: selectedDuesProfile.profilName,
+      phone: selectedDuesProfile.phone,
+      categorie: selectedDuesProfile.categorie,
+      nbMissions: 0,
+      profilDoitAgence: 0,
+      agenceDoitProfil: 0,
+      rows: [],
+    };
+  }, [selectedDuesProfile, groupedProfiles]);
+
+  // Dynamically sync settleConfirmProfile with current groupedProfiles (strictly bound to chosen week)
+  const activeSettleProfile = useMemo(() => {
+    if (!settleConfirmProfile) return null;
+    const match = groupedProfiles.find((item) =>
+      (settleConfirmProfile.profilId && item.profilId === settleConfirmProfile.profilId) ||
+      item.profilName === settleConfirmProfile.profilName
+    );
+    if (match) return match;
+    return settleConfirmProfile;
+  }, [settleConfirmProfile, groupedProfiles]);
 
   const getProfilCategorie = useCallback((
     rowOrItem: { profilId?: number; profil?: string; profilName?: string; categorie?: string } | undefined
@@ -2211,21 +2336,6 @@ export default function LesSuivis() {
     };
   }, [facturationData, selectedCommercialName, periodFilter, commDateFrom, commDateTo]);
 
-  // Open Edit status modal
-  const handleOpenEdit = (row: FacturationRow) => {
-    setSelectedRow(row);
-    const isCredit = isCreditRow(row);
-    const isPaid = isCredit ? (row.partProfilVersee ?? row._partProfilVersee) : (row.partAgenceReversee ?? row._partAgenceReversee);
-    setEditIsPaid(isPaid || false);
-    
-    const dateVal = isCredit
-      ? (row.dateVersementProfil && row.dateVersementProfil !== '—' ? formatDateISO(row.dateVersementProfil) : getISODateLocal(new Date()))
-      : (row.dateRemiseAgence && row.dateRemiseAgence !== '—' ? formatDateISO(row.dateRemiseAgence) : getISODateLocal(new Date()));
-    
-    setEditDate(dateVal);
-    setEditRemark(row.note_commercial && row.note_commercial !== '—' ? row.note_commercial : '');
-    setShowEditModal(true);
-  };
 
   // Open View Details modal
   const handleOpenDetails = (row: FacturationRow) => {
@@ -2233,228 +2343,7 @@ export default function LesSuivis() {
     setShowDetailsModal(true);
   };
 
-  // Save Edit function (marks as Réglé or Non réglé, syncs with backend)
-  const handleSaveEdit = async () => {
-    if (!selectedRow) return;
-    setIsSaving(true);
 
-    try {
-      const isPaid = editIsPaid;
-      const todayIso = editDate || getISODateLocal(new Date());
-      const remark = editRemark;
-
-      const isCancelled =
-        selectedRow.statut === 'Facturation annulée' ||
-        selectedRow.statut === 'Intervention annulée' ||
-        selectedRow.statutPaiementUi === 'facturation_annulee' ||
-        selectedRow.statutPaiementUi === 'Facturation annulée' ||
-        selectedRow.statut === 'Intervention gratuite' ||
-        selectedRow.statutPaiementUi === 'intervention_gratuite';
-
-      const isCrediteur = isCreditRow(selectedRow);
-
-      const isMultiProfile = Boolean(
-        (selectedRow.originalDemande?.profils_envoyes && selectedRow.originalDemande.profils_envoyes.length > 1) ||
-        (selectedRow.parts_repartition && selectedRow.parts_repartition.length > 0)
-      );
-
-      // ─── Credit logic (Agency owes profile) ───
-      if (isCrediteur) {
-        let allPaid = isPaid;
-        let newParts = selectedRow.originalDemande?.formulaire_data?.facturation?.parts_repartition;
-
-        if (selectedRow.demandeId && selectedRow.originalDemande) {
-          const originalFormData = selectedRow.originalDemande.formulaire_data || {};
-          const facturation = originalFormData.facturation || {};
-          const profilsEnvoyes = selectedRow.originalDemande.profils_envoyes;
-
-          if ((!newParts || newParts.length === 0) && profilsEnvoyes && profilsEnvoyes.length > 0) {
-            const count = profilsEnvoyes.length;
-            const totalProfilsAmount = selectedRow.partProfil;
-            const defaultAmount = totalProfilsAmount / count;
-            newParts = profilsEnvoyes.map((p: any, idx: number) => ({
-              profile_id: p.id,
-              profile_name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
-              amount: defaultAmount,
-              is_delegate: idx === 0,
-              part_profil_versee: Number(p.id) === selectedRow.profilId ? isPaid : false,
-              date_versement_profil: Number(p.id) === selectedRow.profilId && isPaid ? todayIso : null,
-              note_commercial: Number(p.id) === selectedRow.profilId ? remark : undefined,
-            }));
-            allPaid = newParts.every((p: any) => p.part_profil_versee);
-          } else if (Array.isArray(facturation.parts_repartition) && facturation.parts_repartition.length > 0 && selectedRow.profilId) {
-            newParts = facturation.parts_repartition.map((p: any) => {
-              if (Number(p.profile_id) === selectedRow.profilId) {
-                return {
-                  ...p,
-                  part_profil_versee: isPaid,
-                  date_versement_profil: isPaid ? todayIso : null,
-                  note_commercial: remark,
-                };
-              }
-              return p;
-            });
-            allPaid = newParts.every((p: any) => p.part_profil_versee);
-          }
-        }
-
-        if (selectedRow.missionId) {
-          const originalFormData = selectedRow.originalDemande?.formulaire_data || {};
-          const facturation = originalFormData.facturation || {};
-
-          await updateMission(selectedRow.missionId, {
-            part_profil_versee: allPaid,
-            date_versement_profil: allPaid ? todayIso : null,
-            paiement_client_statut: isCancelled
-              ? (facturation.statut_paiement_ui === 'intervention_gratuite' || selectedRow.statutPaiementUi === 'intervention_gratuite' || selectedRow.statut === 'Intervention gratuite' ? 'intervention_gratuite' : 'facturation_annulee')
-              : (allPaid ? 'paye' : 'agence_payee_client')
-          });
-        }
-
-        if (selectedRow.demandeId && selectedRow.originalDemande) {
-          const originalFormData = selectedRow.originalDemande.formulaire_data || {};
-          const facturation = originalFormData.facturation || {};
-
-          const updatePayload: any = {
-            formulaire_data: {
-              ...originalFormData,
-              facturation: {
-                ...facturation,
-                parts_repartition: newParts,
-                part_profil_versee: allPaid,
-                date_versement_profil: allPaid ? todayIso : null,
-                statut_paiement_ui: facturation.statut_paiement_ui === 'facturation_annulee'
-                  ? 'facturation_annulee'
-                  : facturation.statut_paiement_ui === 'intervention_gratuite'
-                    ? 'intervention_gratuite'
-                    : (allPaid ? 'paye' : 'agence_payee_client'),
-              }
-            },
-            statut_paiement: allPaid ? 'integral' : 'partiel',
-          };
-
-          if (!isMultiProfile) {
-            updatePayload.note_commercial = remark;
-          }
-
-          await updateDemande(selectedRow.demandeId, updatePayload);
-        }
-      }
-
-      // ─── Debit logic (Profile owes agency) ───
-      else {
-        let allPaid = isPaid;
-        let newParts = selectedRow.originalDemande?.formulaire_data?.facturation?.parts_repartition;
-
-        if (selectedRow.demandeId && selectedRow.originalDemande) {
-          const originalFormData = selectedRow.originalDemande.formulaire_data || {};
-          const facturation = originalFormData.facturation || {};
-          const profilsEnvoyes = selectedRow.originalDemande.profils_envoyes;
-
-          if ((!newParts || newParts.length === 0) && profilsEnvoyes && profilsEnvoyes.length > 0) {
-            const count = profilsEnvoyes.length;
-            const totalProfilsAmount = selectedRow.partProfil;
-            const defaultAmount = totalProfilsAmount / count;
-            newParts = profilsEnvoyes.map((p: any, idx: number) => {
-              const matchesProfil = Number(p.id) === selectedRow.profilId;
-              const updated: any = {
-                profile_id: p.id,
-                profile_name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
-                amount: defaultAmount,
-                is_delegate: idx === 0,
-                part_agence_reversee: matchesProfil ? isPaid : false,
-                date_remise_agence: matchesProfil && isPaid ? todayIso : null,
-                note_commercial: matchesProfil ? remark : undefined,
-              };
-              if (matchesProfil && selectedRow.encaissePar === 'Profil') {
-                updated.part_profil_versee = true;
-                updated.date_versement_profil = todayIso;
-              }
-              return updated;
-            });
-            allPaid = newParts.every((p: any) => p.part_agence_reversee);
-          } else if (Array.isArray(facturation.parts_repartition) && facturation.parts_repartition.length > 0 && selectedRow.profilId) {
-            newParts = facturation.parts_repartition.map((p: any) => {
-              if (Number(p.profile_id) === selectedRow.profilId) {
-                const updated: any = {
-                  ...p,
-                  part_agence_reversee: isPaid,
-                  date_remise_agence: isPaid ? todayIso : null,
-                  note_commercial: remark,
-                };
-                if (selectedRow.encaissePar === 'Profil') {
-                  updated.part_profil_versee = true;
-                  if (!updated.date_versement_profil) {
-                    updated.date_versement_profil = todayIso;
-                  }
-                }
-                return updated;
-              }
-              return p;
-            });
-            allPaid = newParts.every((p: any) => p.part_agence_reversee);
-          }
-        }
-
-        if (selectedRow.missionId) {
-          const originalFormData = selectedRow.originalDemande?.formulaire_data || {};
-          const facturation = originalFormData.facturation || {};
-
-          await updateMission(selectedRow.missionId, {
-            part_agence_reversee: allPaid,
-            date_remise_agence: allPaid ? todayIso : null,
-            paiement_client_statut: isCancelled
-              ? (facturation.statut_paiement_ui === 'intervention_gratuite' || selectedRow.statutPaiementUi === 'intervention_gratuite' || selectedRow.statut === 'Intervention gratuite' ? 'intervention_gratuite' : 'facturation_annulee')
-              : (allPaid ? 'paye' : 'profil_paye_client'),
-            ...(selectedRow.encaissePar === 'Profil' ? {
-              part_profil_versee: true,
-              date_versement_profil: todayIso
-            } : {})
-          });
-        }
-
-        if (selectedRow.demandeId && selectedRow.originalDemande) {
-          const originalFormData = selectedRow.originalDemande.formulaire_data || {};
-          const facturation = originalFormData.facturation || {};
-
-          const updatePayload: any = {
-            formulaire_data: {
-              ...originalFormData,
-              facturation: {
-                ...facturation,
-                parts_repartition: newParts,
-                part_agence_reversee: allPaid,
-                date_remise_agence: allPaid ? todayIso : null,
-                ...(selectedRow.encaissePar === 'Profil' ? {
-                  part_profil_versee: true,
-                  date_versement_profil: facturation.date_versement_profil || todayIso
-                } : {}),
-                statut_paiement_ui: isCancelled
-                  ? (facturation.statut_paiement_ui === 'intervention_gratuite' || selectedRow.statutPaiementUi === 'intervention_gratuite' || selectedRow.statut === 'Intervention gratuite' ? 'intervention_gratuite' : 'facturation_annulee')
-                  : (allPaid ? 'paye' : 'profil_paye_client'),
-              }
-            },
-            statut_paiement: allPaid ? 'integral' : 'partiel',
-          };
-
-          if (!isMultiProfile) {
-            updatePayload.note_commercial = remark;
-          }
-
-          await updateDemande(selectedRow.demandeId, updatePayload);
-        }
-      }
-
-      addToast('Mise à jour enregistrée avec succès', 'success');
-      setShowEditModal(false);
-      await loadData();
-    } catch (e) {
-      console.error(e);
-      addToast("Erreur lors de l'enregistrement de la mise à jour", 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const [isSettlingProfile, setIsSettlingProfile] = useState(false);
 
@@ -2616,8 +2505,8 @@ export default function LesSuivis() {
       const rows = groupedProfiles.map((item) => {
         const solde = item.agenceDoitProfil - item.profilDoitAgence;
         let soldeText = '0,00 DH';
-        if (solde > 0) soldeText = `Profil : +${money(solde)}`;
-        else if (solde < 0) soldeText = `Agence : +${money(Math.abs(solde))}`;
+        if (solde > 0) soldeText = `Profil : ${money(solde)}`;
+        else if (solde < 0) soldeText = `Agence : ${money(Math.abs(solde))}`;
 
         return [
           item.profilName,
@@ -2892,6 +2781,15 @@ export default function LesSuivis() {
                 </div>
 
                 <div className="ls-period-box">
+                  <button
+                    type="button"
+                    className="ls-week-arrow-btn"
+                    title="Semaine précédente (Ven - Jeu)"
+                    aria-label="Semaine précédente"
+                    onClick={handlePrevWeek}
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
                   <span style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: 600 }}>Période:</span>
                   <label>
                     <Calendar size={14} />
@@ -2912,12 +2810,31 @@ export default function LesSuivis() {
                       onChange={(e) => setDateTo(e.target.value)}
                     />
                   </label>
+                  <button
+                    type="button"
+                    className="ls-week-arrow-btn"
+                    title="Semaine suivante (Ven - Jeu)"
+                    aria-label="Semaine suivante"
+                    onClick={handleNextWeek}
+                  >
+                    <ChevronRight size={16} />
+                  </button>
                 </div>
 
                 <button
                   type="button"
                   className={`ls-group-btn ${isGroupedByProfil ? 'active' : ''}`}
-                  onClick={() => setIsGroupedByProfil((prev) => !prev)}
+                  onClick={() => {
+                    setIsGroupedByProfil((prev) => {
+                      const next = !prev;
+                      if (next && (!dateFrom || !dateTo)) {
+                        const w = getDefaultWeeklyFridayToThursday();
+                        setDateFrom(w.from);
+                        setDateTo(w.to);
+                      }
+                      return next;
+                    });
+                  }}
                 >
                   <Users size={15} />
                   <span>Regrouper par profil</span>
@@ -2947,8 +2864,38 @@ export default function LesSuivis() {
                   <div className="ls-group-summary-title">
                     <Users size={16} color="#0f766e" />
                     <span>Récapitulatif par profil ({groupedProfiles.length})</span>
+                    <span className="ls-group-period-badge">
+                      Semaine du {formatDateFRWithDay(dateFrom)} au {formatDateFRWithDay(dateTo)}
+                    </span>
                   </div>
-                  <span className="ls-group-summary-sub">Calcul automatique sur les missions filtrées</span>
+                  <div className="ls-group-week-nav">
+                    <button
+                      type="button"
+                      className="ls-week-nav-btn"
+                      onClick={handlePrevWeek}
+                      title="Semaine précédente (Ven - Jeu)"
+                    >
+                      <ChevronLeft size={14} />
+                      <span>Sem. préc.</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="ls-week-nav-btn today"
+                      onClick={handleCurrentWeek}
+                      title="Revenir à la semaine en cours"
+                    >
+                      Cette semaine
+                    </button>
+                    <button
+                      type="button"
+                      className="ls-week-nav-btn"
+                      onClick={handleNextWeek}
+                      title="Semaine suivante (Ven - Jeu)"
+                    >
+                      <span>Sem. suiv.</span>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -3008,14 +2955,14 @@ export default function LesSuivis() {
                                   if (solde > 0) {
                                     return (
                                       <span className="ls-pill-solde pink">
-                                        Profil : +{money(solde)}
+                                        Profil : {money(solde)}
                                       </span>
                                     );
                                   }
                                   if (solde < 0) {
                                     return (
                                       <span className="ls-pill-solde green">
-                                        Agence : +{money(Math.abs(solde))}
+                                        Agence : {money(Math.abs(solde))}
                                       </span>
                                     );
                                   }
@@ -3028,6 +2975,16 @@ export default function LesSuivis() {
                               </td>
                               <td style={{ textAlign: 'center' }}>
                                 <div className="ls-grouped-actions">
+                                  <button
+                                    type="button"
+                                    className="ls-grouped-btn missions"
+                                    title="Missions"
+                                    aria-label="Missions"
+                                    onClick={() => setSelectedDuesProfile(item)}
+                                  >
+                                    <Folder size={14} />
+                                    <span className="ls-btn-tooltip">Missions</span>
+                                  </button>
                                   <button
                                     type="button"
                                     className="ls-grouped-btn pay"
@@ -3215,16 +3172,6 @@ export default function LesSuivis() {
                             </td>
                             <td>
                               <div className="ls-action-cell">
-                                {hasPermission(user, 'validation_paiements_dus') && (
-                                  <button
-                                    type="button"
-                                    className="ls-action-btn"
-                                    title="Modifier le règlement"
-                                    onClick={() => handleOpenEdit(row)}
-                                  >
-                                    <Pencil size={13} />
-                                  </button>
-                                )}
                                 <button
                                   type="button"
                                   className="ls-action-btn"
@@ -3716,87 +3663,7 @@ export default function LesSuivis() {
             </>
           )}
 
-          {/* ─── MODAL: EDIT REGLEMENT ─── */}
-          {showEditModal && selectedRow && (
-            <div className="ls-modal-backdrop">
-              <div className="ls-modal">
-                <div className="ls-modal-header">
-                  <div>
-                    <h3 className="ls-modal-title">Modifier la mission</h3>
-                    <p className="ls-modal-subtitle">
-                      {selectedRow.profil} · {selectedRow.client}
-                    </p>
-                  </div>
-                  <button className="ls-modal-close" onClick={() => setShowEditModal(false)}>
-                    <X size={18} />
-                  </button>
-                </div>
 
-                <div className="ls-modal-body">
-                  {/* Settle Toggle Switch */}
-                  <div className="ls-form-toggle-row">
-                    <div className="ls-form-toggle-info">
-                      <span className="ls-form-toggle-title">
-                        {isCreditRow(selectedRow) ? 'Règlement FDM' : 'Règlement Agence'}
-                      </span>
-                      <span className="ls-form-toggle-desc">
-                        {isCreditRow(selectedRow)
-                          ? 'Part profil versée à la FDM'
-                          : "Part agence reversée par le profil à l'agence"}
-                      </span>
-                    </div>
-                    <label className="ls-switch">
-                      <input
-                        type="checkbox"
-                        checked={editIsPaid}
-                        onChange={(e) => setEditIsPaid(e.target.checked)}
-                      />
-                      <span className="ls-slider" />
-                    </label>
-                  </div>
-
-                  {/* Payment date picker */}
-                  <div className="ls-form-group">
-                    <label>Date de règlement</label>
-                    <input
-                      type="date"
-                      className="ls-text-input"
-                      value={editDate}
-                      onChange={(e) => setEditDate(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Internal remarks */}
-                  <div className="ls-form-group">
-                    <label>Remarque</label>
-                    <textarea
-                      className="ls-textarea"
-                      placeholder="Note interne..."
-                      value={editRemark}
-                      onChange={(e) => setEditRemark(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="ls-modal-footer">
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => setShowEditModal(false)}
-                    disabled={isSaving}
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleSaveEdit}
-                    disabled={isSaving}
-                  >
-                    {isSaving ? 'Enregistrement...' : 'Enregistrer'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* ─── MODAL: VIEW DETAILS ─── */}
           {showDetailsModal && selectedRow && (
@@ -4015,8 +3882,8 @@ export default function LesSuivis() {
           )}
 
           {/* ─── MODAL: PROFILE DUES & RECEIPT POPUP (Redesigned Executive UI) ─── */}
-          {selectedDuesProfile && (() => {
-            const initials = (selectedDuesProfile.profilName || '')
+          {activeDuesProfile && (() => {
+            const initials = (activeDuesProfile.profilName || '')
               .split(' ')
               .map((n: string) => n[0])
               .filter(Boolean)
@@ -4035,21 +3902,45 @@ export default function LesSuivis() {
                         <div className="ls-dues-profile-badge-row">
                           <span className="ls-dues-profile-badge">INTERVENANTE</span>
                           {(() => {
-                            const cat = getProfilCategorie(selectedDuesProfile);
+                            const cat = getProfilCategorie(activeDuesProfile);
                             return (
                               <span className={`ls-badge-cat ${cat}`}>
                                 {cat === 'interne' ? 'Interne' : 'Externe'}
                               </span>
                             );
                           })()}
-                          {selectedDuesProfile.profilId && (
-                            <span className="ls-dues-profile-id">#{selectedDuesProfile.profilId}</span>
+                          {activeDuesProfile.profilId && (
+                            <span className="ls-dues-profile-id">#{activeDuesProfile.profilId}</span>
                           )}
                         </div>
-                        <h2 className="ls-dues-profile-name">{selectedDuesProfile.profilName}</h2>
+                        <h2 className="ls-dues-profile-name">{activeDuesProfile.profilName}</h2>
                         <div className="ls-dues-period-tag">
+                          <button
+                            type="button"
+                            className="ls-dues-nav-arrow"
+                            title="Semaine précédente (Ven - Jeu)"
+                            aria-label="Semaine précédente"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrevWeek();
+                            }}
+                          >
+                            <ChevronLeft size={14} />
+                          </button>
                           <Calendar size={14} />
                           <span>Semaine du {formatDateFRWithDay(dateFrom)} au {formatDateFRWithDay(dateTo)}</span>
+                          <button
+                            type="button"
+                            className="ls-dues-nav-arrow"
+                            title="Semaine suivante (Ven - Jeu)"
+                            aria-label="Semaine suivante"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNextWeek();
+                            }}
+                          >
+                            <ChevronRight size={14} />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -4057,17 +3948,17 @@ export default function LesSuivis() {
                       <button
                         type="button"
                         className="ls-dues-btn-pay"
-                        onClick={() => setSettleConfirmProfile(selectedDuesProfile)}
-                        title="Régler le paiement total entre l'agence et ce profil"
+                        onClick={() => setSettleConfirmProfile(activeDuesProfile)}
+                        title="Régler le paiement total entre l'agence et ce profil pour cette semaine"
                       >
                         <Pencil size={15} />
                         <span>Régler le paiement</span>
                       </button>
-                      {selectedDuesProfile.profilId && (
+                      {activeDuesProfile.profilId && (
                         <button
                           type="button"
                           className="ls-dues-btn-details"
-                          onClick={() => goToProfilDetails(selectedDuesProfile.profilId)}
+                          onClick={() => goToProfilDetails(activeDuesProfile.profilId)}
                           title="Voir la fiche détaillée du profil"
                         >
                           <Eye size={15} />
@@ -4088,7 +3979,7 @@ export default function LesSuivis() {
                   {/* 3 KPI Bento Cards */}
                   {/* KPI Cards */}
                   {(() => {
-                    const totalSupplementsPeriod = selectedDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
+                    const totalSupplementsPeriod = activeDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
                       return sum + (r.hasSupplementHeures && r.supplementHeuresRecupereEspeces ? Number(r.supplementHeuresMontant || 0) : 0);
                     }, 0);
 
@@ -4101,7 +3992,7 @@ export default function LesSuivis() {
                               <FileText size={16} />
                             </div>
                           </div>
-                          <div className="ls-dues-kpi-value neutral">{selectedDuesProfile.rows.length}</div>
+                          <div className="ls-dues-kpi-value neutral">{activeDuesProfile.rows.length}</div>
                           <div className="ls-dues-kpi-sub">Missions sur la période</div>
                         </div>
 
@@ -4113,7 +4004,7 @@ export default function LesSuivis() {
                             </div>
                           </div>
                           <div className="ls-dues-kpi-value emerald">
-                            {money(selectedDuesProfile.profilDoitAgence)}
+                            {money(activeDuesProfile.profilDoitAgence)}
                           </div>
                           <div className="ls-dues-kpi-sub">
                             Montant dû à l'agence (espèces)
@@ -4133,7 +4024,7 @@ export default function LesSuivis() {
                             </div>
                           </div>
                           <div className="ls-dues-kpi-value rose">
-                            {money(selectedDuesProfile.agenceDoitProfil)}
+                            {money(activeDuesProfile.agenceDoitProfil)}
                           </div>
                           <div className="ls-dues-kpi-sub">Part intervenante à verser</div>
                         </div>
@@ -4153,7 +4044,7 @@ export default function LesSuivis() {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedDuesProfile.rows.map((row: FacturationRow, idx: number) => {
+                        {activeDuesProfile.rows.map((row: FacturationRow, idx: number) => {
                           const b = getRowDuesBreakdown(row);
                           const dateObj = parseFrenchDate(row.date);
                           const dayNumber = dateObj ? dateObj.getDate() : '';
@@ -4181,7 +4072,7 @@ export default function LesSuivis() {
                                     {b.supplementMontant > 0 && (
                                       <span className="ls-dues-supplement-tag" title="Supplément d'heures réglé par le client">
                                         <Sparkles size={11} />
-                                        <span>Supplément : +{money(b.supplementMontant)}</span>
+                                        <span>Supplément : {money(b.supplementMontant)}</span>
                                       </span>
                                     )}
                                   </div>
@@ -4224,7 +4115,7 @@ export default function LesSuivis() {
                             </tr>
                           );
                         })}
-                        {selectedDuesProfile.rows.length === 0 && (
+                        {activeDuesProfile.rows.length === 0 && (
                           <tr>
                             <td colSpan={4} className="ls-dues-empty-row">
                               Aucune mission trouvée pour cette période.
@@ -4237,7 +4128,7 @@ export default function LesSuivis() {
                           <td colSpan={2}>
                             <span className="ls-dues-total-label">Total de la période</span>
                             {(() => {
-                              const suppSum = selectedDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
+                              const suppSum = activeDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
                                 return sum + (r.hasSupplementHeures && r.supplementHeuresRecupereEspeces ? Number(r.supplementHeuresMontant || 0) : 0);
                               }, 0);
                               return suppSum > 0 ? (
@@ -4249,12 +4140,12 @@ export default function LesSuivis() {
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             <span className="ls-dues-total-val green">
-                              {money(selectedDuesProfile.profilDoitAgence)}
+                              {money(activeDuesProfile.profilDoitAgence)}
                             </span>
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             <span className="ls-dues-total-val rose">
-                              {money(selectedDuesProfile.agenceDoitProfil)}
+                              {money(activeDuesProfile.agenceDoitProfil)}
                             </span>
                           </td>
                         </tr>
@@ -4271,7 +4162,7 @@ export default function LesSuivis() {
                     <button
                       type="button"
                       className="ls-dues-pdf-btn"
-                      onClick={() => generateProfileReceiptPdf(selectedDuesProfile, dateFrom, dateTo)}
+                      onClick={() => generateProfileReceiptPdf(activeDuesProfile, dateFrom, dateTo)}
                     >
                       <Download size={16} />
                       <span>Générer le reçu en PDF</span>
@@ -4283,16 +4174,16 @@ export default function LesSuivis() {
           })()}
 
           {/* ─── MODAL: SETTLE CONFIRMATION ─── */}
-          {settleConfirmProfile && (
+          {activeSettleProfile && (
             <div className="ls-modal-backdrop" onClick={() => !isSettlingProfile && setSettleConfirmProfile(null)}>
               <div className="ls-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
                 <div className="ls-modal-header">
                   <div>
                     <h3 className="ls-modal-title">Confirmer le règlement complet</h3>
                     <p className="ls-modal-subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <span>{settleConfirmProfile.profilName}</span>
+                      <span>{activeSettleProfile.profilName}</span>
                       {(() => {
-                        const cat = getProfilCategorie(settleConfirmProfile);
+                        const cat = getProfilCategorie(activeSettleProfile);
                         return (
                           <span className={`ls-badge-cat ${cat}`}>
                             {cat === 'interne' ? 'Interne' : 'Externe'}
@@ -4312,34 +4203,34 @@ export default function LesSuivis() {
                 <div className="ls-modal-body">
                   <p style={{ fontSize: '0.9rem', color: '#334155', lineHeight: '1.5', marginBottom: '1rem' }}>
                     Êtes-vous sûr de vouloir régler la totalité des sommes dues entre l'agence et{' '}
-                    <strong>{settleConfirmProfile.profilName}</strong> pour la période du{' '}
+                    <strong>{activeSettleProfile.profilName}</strong> pour la période du{' '}
                     <strong>{formatDateFR(dateFrom)}</strong> au <strong>{formatDateFR(dateTo)}</strong> ?
                   </p>
                   <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                       <span style={{ color: '#64748b' }}>Agence verse au profil :</span>
-                      <strong style={{ color: '#be123c' }}>{money(settleConfirmProfile.agenceDoitProfil)}</strong>
+                      <strong style={{ color: '#be123c' }}>{money(activeSettleProfile.agenceDoitProfil)}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                       <span style={{ color: '#64748b' }}>Profil remet à l'agence :</span>
-                      <strong style={{ color: '#15803d' }}>{money(settleConfirmProfile.profilDoitAgence)}</strong>
+                      <strong style={{ color: '#15803d' }}>{money(activeSettleProfile.profilDoitAgence)}</strong>
                     </div>
                     <div style={{ borderTop: '1px solid #cbd5e1', paddingTop: '0.6rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 700 }}>
                       <span>Solde net à régler :</span>
                       {(() => {
-                        const net = settleConfirmProfile.agenceDoitProfil - settleConfirmProfile.profilDoitAgence;
+                        const net = activeSettleProfile.agenceDoitProfil - activeSettleProfile.profilDoitAgence;
                         if (net > 0) {
-                          return <span style={{ color: '#be123c' }}>Agence doit : +{money(net)}</span>;
+                          return <span style={{ color: '#be123c' }}>Agence doit : {money(net)}</span>;
                         }
                         if (net < 0) {
-                          return <span style={{ color: '#15803d' }}>Profil doit : +{money(Math.abs(net))}</span>;
+                          return <span style={{ color: '#15803d' }}>Profil doit : {money(Math.abs(net))}</span>;
                         }
                         return <span style={{ color: '#64748b' }}>Équilibré (0,00 DH)</span>;
                       })()}
                     </div>
                   </div>
                   <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.75rem', fontStyle: 'italic' }}>
-                    Cette action mettra à jour le statut de versement pour l'ensemble des {settleConfirmProfile.rows.length} mission(s) de ce profil sur cette période.
+                    Cette action mettra à jour le statut de versement pour l'ensemble des {activeSettleProfile.rows.length} mission(s) de ce profil sur cette période.
                   </p>
                 </div>
                 <div className="ls-modal-footer">
@@ -4354,7 +4245,7 @@ export default function LesSuivis() {
                   <button
                     type="button"
                     className="btn btn-primary"
-                    onClick={() => handleSettleProfileAllDues(settleConfirmProfile)}
+                    onClick={() => handleSettleProfileAllDues(activeSettleProfile)}
                     disabled={isSettlingProfile}
                   >
                     {isSettlingProfile ? 'Règlement en cours...' : 'Confirmer et Régler'}

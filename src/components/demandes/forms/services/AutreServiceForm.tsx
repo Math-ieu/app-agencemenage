@@ -155,8 +155,17 @@ export const AutreServiceForm: React.FC<FormBlockProps> = ({ formData, setFormDa
             <input
               type="number"
               min="1"
-              value={formData.nb_intervenants || 1}
-              onChange={e => setFormData({ ...formData, nb_intervenants: parseInt(e.target.value) || 1 })}
+              value={formData.nb_intervenants || formData.nb_intervenantes || formData.numberOfPeople || formData.nb_personnel || 1}
+              onChange={e => {
+                const val = parseInt(e.target.value) || 1;
+                setFormData({
+                  ...formData,
+                  nb_intervenants: val,
+                  nb_intervenantes: val,
+                  nb_personnel: val,
+                  numberOfPeople: val
+                });
+              }}
               style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }}
             />
           </div>

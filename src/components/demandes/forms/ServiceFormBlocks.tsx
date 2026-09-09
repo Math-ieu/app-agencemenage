@@ -601,30 +601,53 @@ export interface DurationBlockProps extends FormBlockProps {
     estimatedResources?: { duration: number; people: number } | null;
 }
 
-export const DurationBlock: React.FC<DurationBlockProps> = ({ formData, setFormData, minDuree }) => (
-    <div className="ws-form-block">
-        <div className="ws-section-header">Précisez le temps qui vous convient</div>
-        <p style={{ color: '#ef4444', fontSize: '0.65rem', textAlign: 'center', marginBottom: '0.5rem' }}>
-            La durée minimale est de {minDuree} heures
-        </p>
-        <div className="flex items-center justify-center gap-4">
-            <div className="ws-counter">
-                <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: Math.max(minDuree, (formData.duree || minDuree) - 1) })} disabled={(formData.duree || 0) <= minDuree}>−</button>
-                <span className="ws-counter-value">{formData.duree || minDuree} h</span>
-                <button type="button" className="ws-counter-btn" onClick={() => setFormData({ ...formData, duree: (formData.duree || minDuree) + 1 })}>+</button>
+export const DurationBlock: React.FC<DurationBlockProps> = ({ formData, setFormData, minDuree }) => {
+    const updateDuration = (val: number) => {
+        const clamped = Math.max(minDuree, val);
+        setFormData({
+            ...formData,
+            duree: clamped,
+            duration: clamped,
+            nb_heures: clamped,
+            heures: clamped
+        });
+    };
+
+    const currentDuree = Number(formData.duree || formData.duration || formData.nb_heures || formData.heures || minDuree);
+
+    return (
+        <div className="ws-form-block">
+            <div className="ws-section-header">Précisez le temps qui vous convient</div>
+            <p style={{ color: '#ef4444', fontSize: '0.65rem', textAlign: 'center', marginBottom: '0.5rem' }}>
+                La durée minimale est de {minDuree} heures
+            </p>
+            <div className="flex items-center justify-center gap-4">
+                <div className="ws-counter">
+                    <button type="button" className="ws-counter-btn" onClick={() => updateDuration(currentDuree - 1)} disabled={currentDuree <= minDuree}>−</button>
+                    <span className="ws-counter-value">{currentDuree} h</span>
+                    <button type="button" className="ws-counter-btn" onClick={() => updateDuration(currentDuree + 1)}>+</button>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 export const PeopleBlock: React.FC<DurationBlockProps> = ({ formData, setFormData }) => {
-    const currentCount = Number(formData.nb_intervenants || formData.nb_personnel || 1);
+    const currentCount = Number(
+        formData.nb_intervenants || 
+        formData.nb_intervenantes || 
+        formData.numberOfPeople || 
+        formData.nb_personnel || 
+        1
+    );
     const updateCount = (newCount: number) => {
         const val = Math.max(1, newCount);
         setFormData({
             ...formData,
             nb_intervenants: val,
-            nb_personnel: val
+            nb_intervenantes: val,
+            nb_personnel: val,
+            numberOfPeople: val
         });
     };
 

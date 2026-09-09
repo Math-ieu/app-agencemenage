@@ -100,7 +100,7 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
   }));
 
   const [heures, setHeures] = useState(() => data.nb_heures || data.heures || data.duree || data.duration || demande.nb_heures || 3);
-  const [personnes, setPersonnes] = useState(() => data.nb_intervenantes || data.nb_intervenants || data.numberOfPeople || demande.nb_intervenants || 1);
+  const [personnes, setPersonnes] = useState(() => data.nb_intervenantes || data.nb_intervenants || data.numberOfPeople || data.nb_personnel || demande.nb_intervenants || 1);
 
   // frequency state
   const [frequency, setFrequency] = useState(() => {
@@ -140,7 +140,7 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
       promoPct: Number(freshData.code_promo_pct || 0),
     });
     setHeures(freshData.nb_heures || freshData.heures || freshData.duree || freshData.duration || demande.nb_heures || 3);
-    setPersonnes(freshData.nb_intervenantes || freshData.nb_intervenants || freshData.numberOfPeople || demande.nb_intervenants || 1);
+    setPersonnes(freshData.nb_intervenantes || freshData.nb_intervenants || freshData.numberOfPeople || freshData.nb_personnel || demande.nb_intervenants || 1);
 
     const nextFrequency = (() => {
       if (freshData.frequency) return freshData.frequency;
@@ -178,6 +178,7 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
     demande.formulaire_data?.nb_intervenants,
     demande.formulaire_data?.nb_intervenantes,
     demande.formulaire_data?.numberOfPeople,
+    demande.formulaire_data?.nb_personnel,
     demande.formulaire_data?.frequence,
     demande.formulaire_data?.frequency,
     demande.formulaire_data?.subFrequency

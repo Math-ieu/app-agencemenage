@@ -70,7 +70,7 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const data = demande.formulaire_data || {};
   const [hj, setHj] = useState(data.heures_par_jour || 4);
   const [js, setJs] = useState(data.jours_par_semaine ? (data.jours_par_semaine === 7 ? "30" : data.jours_par_semaine === 6 ? "26" : "22") : "22");
-  const [nb, setNb] = useState(data.nb_intervenantes || data.nb_intervenants || data.nb_personnel || 1);
+  const [nb, setNb] = useState(() => data.nb_intervenantes || data.nb_intervenants || data.numberOfPeople || data.nb_personnel || demande.nb_intervenants || 1);
   const [eng, setEng] = useState(data.engagement_mois === 12 ? "0.10" : data.engagement_mois === 6 ? "0.05" : "0");
   const [ferie, setFerie] = useState(Boolean(data.ferie || data.majoration_ferie));
   const [tenue, setTenue] = useState(data.tenue_travail !== undefined ? Boolean(data.tenue_travail) : true);
@@ -80,6 +80,22 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
     const freqVal = data.frequence || demande.frequency_label || "";
     return uiSubFreqMap[freqVal] || "1foisParSemaine";
   });
+
+  // Sync state with props
+  useEffect(() => {
+    const freshData = demande.formulaire_data || {};
+    const freshNb = freshData.nb_intervenantes || freshData.nb_intervenants || freshData.numberOfPeople || freshData.nb_personnel || demande.nb_intervenants;
+    if (freshNb !== undefined && freshNb !== null && freshNb !== "" && !isNaN(Number(freshNb))) {
+      setNb(Number(freshNb));
+    }
+  }, [
+    demande.id,
+    demande.nb_intervenants,
+    demande.formulaire_data?.nb_intervenantes,
+    demande.formulaire_data?.nb_intervenants,
+    demande.formulaire_data?.numberOfPeople,
+    demande.formulaire_data?.nb_personnel
+  ]);
 
   const isAbo = frequency === "subscription";
   const targetCount = isAbo
@@ -173,7 +189,7 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
     }
     onPrestationsChange(prestations, total, {
       heures_par_jour: hj, jours_par_semaine: jsSem, heures_par_mois: hm,
-      nb_intervenantes: nb, nb_intervenants: nb, prix_base: Math.round(base),
+      nb_intervenantes: nb, nb_intervenants: nb, nb_personnel: nb, numberOfPeople: nb, prix_base: Math.round(base),
       reduction: reductionMontant + frequencyDiscountMontant,
       reduction_montant: reductionMontant + frequencyDiscountMontant,
       reduction_pourcentage: engPct + (frequency === "subscription" ? 10 : 0),
@@ -267,7 +283,7 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
   const data = demande.formulaire_data || {};
   const [hj, setHj] = useState(data.heures_par_jour || 4);
   const [js, setJs] = useState(data.jours_par_semaine ? (data.jours_par_semaine === 7 ? "30" : data.jours_par_semaine === 6 ? "26" : "22") : "22");
-  const [nb, setNb] = useState(Math.max(2, data.nb_intervenantes || data.nb_intervenants || data.nb_personnel || 2));
+  const [nb, setNb] = useState(() => Math.max(2, data.nb_intervenantes || data.nb_intervenants || data.numberOfPeople || data.nb_personnel || demande.nb_intervenants || 2));
   const [eng, setEng] = useState(data.engagement_mois === 12 ? "0.10" : data.engagement_mois === 6 ? "0.05" : "0");
   const [ferie, setFerie] = useState(Boolean(data.ferie || data.majoration_ferie));
   const [frequency, setFrequency] = useState(data.frequency || "oneshot");
@@ -276,6 +292,22 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
     const freqVal = data.frequence || demande.frequency_label || "";
     return uiSubFreqMap[freqVal] || "1foisParSemaine";
   });
+
+  // Sync state with props
+  useEffect(() => {
+    const freshData = demande.formulaire_data || {};
+    const freshNb = freshData.nb_intervenantes || freshData.nb_intervenants || freshData.numberOfPeople || freshData.nb_personnel || demande.nb_intervenants;
+    if (freshNb !== undefined && freshNb !== null && freshNb !== "" && !isNaN(Number(freshNb))) {
+      setNb(Math.max(2, Number(freshNb)));
+    }
+  }, [
+    demande.id,
+    demande.nb_intervenants,
+    demande.formulaire_data?.nb_intervenantes,
+    demande.formulaire_data?.nb_intervenants,
+    demande.formulaire_data?.numberOfPeople,
+    demande.formulaire_data?.nb_personnel
+  ]);
 
   const isAbo = frequency === "subscription";
   const targetCount = isAbo
@@ -372,7 +404,7 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
     }
     onPrestationsChange(prestations, total, {
       heures_par_jour: hj, jours_par_semaine: jsSem, heures_par_mois: hm,
-      nb_intervenantes: nbS, nb_intervenants: nbS, prix_base: Math.round(base),
+      nb_intervenantes: nbS, nb_intervenants: nbS, nb_personnel: nbS, numberOfPeople: nbS, prix_base: Math.round(base),
       reduction: reductionMontant + frequencyDiscountMontant,
       reduction_montant: reductionMontant + frequencyDiscountMontant,
       reduction_pourcentage: engPct + (frequency === "subscription" ? 10 : 0),

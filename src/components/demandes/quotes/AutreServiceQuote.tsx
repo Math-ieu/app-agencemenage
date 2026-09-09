@@ -101,7 +101,10 @@ export default function AutreServiceQuote({
   });
 
   const [duree, setDuree] = useState<number | "">(data.duree !== undefined ? Number(data.duree) : "");
-  const [nbIntervenants, setNbIntervenants] = useState<number>(data.nb_intervenants !== undefined ? Number(data.nb_intervenants) : 1);
+  const [nbIntervenants, setNbIntervenants] = useState<number>(() => {
+    const count = data.nb_intervenants ?? data.nb_intervenantes ?? data.numberOfPeople ?? data.nb_personnel ?? demande.nb_intervenants;
+    return count !== undefined && count !== null && count !== "" ? Number(count) : 1;
+  });
   const [description, setDescription] = useState(data.description || "");
   const [amountHt, setAmountHt] = useState<number>(data.amount_ht !== undefined ? Number(data.amount_ht) : (Number(demande.prix) || 0));
   const [vatRate, setVatRate] = useState<number>(data.vat_rate !== undefined ? Number(data.vat_rate) : 20);
@@ -157,7 +160,8 @@ export default function AutreServiceQuote({
     setSubFrequency(nextSubFrequency);
 
     setDuree(freshData.duree !== undefined ? Number(freshData.duree) : "");
-    setNbIntervenants(freshData.nb_intervenants !== undefined ? Number(freshData.nb_intervenants) : 1);
+    const freshNb = freshData.nb_intervenants ?? freshData.nb_intervenantes ?? freshData.numberOfPeople ?? freshData.nb_personnel ?? demande.nb_intervenants;
+    setNbIntervenants(freshNb !== undefined && freshNb !== null && freshNb !== "" ? Number(freshNb) : 1);
     setDescription(freshData.description || "");
     setAmountHt(freshData.amount_ht !== undefined ? Number(freshData.amount_ht) : (Number(demande.prix) || 0));
     setVatRate(freshData.vat_rate !== undefined ? Number(freshData.vat_rate) : 20);
@@ -277,6 +281,9 @@ export default function AutreServiceQuote({
       duree: duree === "" ? undefined : duree,
       duration_unit: "heures",
       nb_intervenants: nbIntervenants,
+      nb_intervenantes: nbIntervenants,
+      nb_personnel: nbIntervenants,
+      numberOfPeople: nbIntervenants,
       description,
       amount_ht: amountHt,
       vat_rate: vatRate,
@@ -509,7 +516,12 @@ export default function AutreServiceQuote({
             onChange={e => {
               const val = parseInt(e.target.value) || 1;
               setNbIntervenants(val);
-              update({ nb_intervenants: val });
+              update({
+                nb_intervenants: val,
+                nb_intervenantes: val,
+                nb_personnel: val,
+                numberOfPeople: val,
+              });
             }}
             disabled={!isLinked}
             style={s.input as any}

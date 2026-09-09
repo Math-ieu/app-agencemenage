@@ -59,9 +59,17 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
 
   const [surface, setSurface] = useState<number | "">(data.surface !== undefined && data.surface !== null && data.surface !== "" ? Number(data.surface) : "");
 
+  const rawExistingPeople = data.nb_intervenantes ?? data.nb_intervenants ?? data.numberOfPeople ?? data.nb_personnel ?? demande.nb_intervenants;
   const initialEst = (surface !== "" && surface > 0) ? estimateResources(service, { surface }) : null;
-  const initialHeures = initialEst ? initialEst.duration : Math.max(minHours, Number(data.duree || data.nb_heures || data.heures || minHours));
-  const initialPersonnes = initialEst ? initialEst.people : Math.max(1, Number(data.nb_intervenants || data.nb_intervenantes || 1));
+  const rawExistingHours = data.duree ?? data.nb_heures ?? data.heures ?? data.duration ?? demande.nb_heures;
+
+  const initialHeures = (rawExistingHours !== undefined && rawExistingHours !== null && rawExistingHours !== "" && !isNaN(Number(rawExistingHours)) && Number(rawExistingHours) > 0)
+    ? Math.max(minHours, Number(rawExistingHours))
+    : (initialEst ? initialEst.duration : minHours);
+
+  const initialPersonnes = (rawExistingPeople !== undefined && rawExistingPeople !== null && rawExistingPeople !== "" && !isNaN(Number(rawExistingPeople)) && Number(rawExistingPeople) > 0)
+    ? Number(rawExistingPeople)
+    : (initialEst ? initialEst.people : 1);
 
   const [heures, setHeures] = useState<number>(initialHeures);
   const [personnes, setPersonnes] = useState<number>(initialPersonnes);
@@ -218,6 +226,61 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
     promoPct: Number(data.code_promo_pct || 0),
   }));
 
+  // Keep state in sync with prop updates (e.g. when modified via modal)
+  useEffect(() => {
+    const freshData = demande.formulaire_data || {};
+    const freshPeople = freshData.nb_intervenantes ?? freshData.nb_intervenants ?? freshData.numberOfPeople ?? freshData.nb_personnel ?? demande.nb_intervenants;
+    if (freshPeople !== undefined && freshPeople !== null && freshPeople !== "" && !isNaN(Number(freshPeople)) && Number(freshPeople) > 0) {
+      setPersonnes(Number(freshPeople));
+    }
+    const freshHours = freshData.duree ?? freshData.nb_heures ?? freshData.heures ?? freshData.duration ?? demande.nb_heures;
+    if (freshHours !== undefined && freshHours !== null && freshHours !== "" && !isNaN(Number(freshHours)) && Number(freshHours) > 0) {
+      setHeures(Math.max(minHours, Number(freshHours)));
+    }
+    if (freshData.surface !== undefined && freshData.surface !== null && freshData.surface !== "") {
+      setSurface(Number(freshData.surface));
+    }
+    if (freshData.produits !== undefined || freshData.torchons !== undefined || freshData.pack_integral !== undefined || freshData.zone_eloignee !== undefined) {
+      setOpts({
+        produits: Boolean(freshData.produits),
+        torchons: Boolean(freshData.torchons),
+        pack: Boolean(freshData.pack_integral),
+        zone: freshData.zone_eloignee !== undefined ? Boolean(freshData.zone_eloignee) : SURCHARGE_CITIES.includes(freshData.ville || freshData.city || demande.client_city || ""),
+      });
+    }
+    if (freshData.reduction_abonnement !== undefined || freshData.remise_etendue_pct !== undefined || freshData.code_promo !== undefined || freshData.code_promo_pct !== undefined) {
+      setRemise({
+        abonnement: freshData.reduction_abonnement ? true : (demande.frequency === "abonnement"),
+        etenduePct: Number(freshData.remise_etendue_pct || 0),
+        promoCode: freshData.code_promo || "",
+        promoPct: Number(freshData.code_promo_pct || 0),
+      });
+    }
+  }, [
+    demande.id,
+    demande.nb_intervenants,
+    demande.nb_heures,
+    demande.frequency,
+    demande.formulaire_data?.nb_intervenants,
+    demande.formulaire_data?.nb_intervenantes,
+    demande.formulaire_data?.numberOfPeople,
+    demande.formulaire_data?.nb_personnel,
+    demande.formulaire_data?.duree,
+    demande.formulaire_data?.nb_heures,
+    demande.formulaire_data?.heures,
+    demande.formulaire_data?.duration,
+    demande.formulaire_data?.surface,
+    demande.formulaire_data?.produits,
+    demande.formulaire_data?.torchons,
+    demande.formulaire_data?.pack_integral,
+    demande.formulaire_data?.zone_eloignee,
+    demande.formulaire_data?.reduction_abonnement,
+    demande.formulaire_data?.remise_etendue_pct,
+    demande.formulaire_data?.code_promo,
+    demande.formulaire_data?.code_promo_pct,
+    minHours,
+  ]);
+
   useEffect(() => {
     if (heures < minHours) setHeures(minHours);
   }, [minHours, heures]);
@@ -284,8 +347,11 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
       nb_heures: heures,
       heures,
       duree: heures,
+      duration: heures,
       nb_intervenants: personnes,
       nb_intervenantes: personnes,
+      nb_personnel: personnes,
+      numberOfPeople: personnes,
       jours_par_semaine: isAbo ? selectedDays.length : 1,
       jours_intervention: selectedDays,
       jours_passage: daysFormatted,

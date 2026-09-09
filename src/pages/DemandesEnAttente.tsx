@@ -271,14 +271,19 @@ export default function DemandesEnAttente() {
 
   // Sync estimated resources dynamically whenever estimatedResources updates
   useEffect(() => {
-    if (estimatedResources) {
+    if (estimatedResources && !editingDemande) {
       setFormData(prev => ({
         ...prev,
         duree: estimatedResources.duration,
-        nb_intervenants: estimatedResources.people
+        duration: estimatedResources.duration,
+        nb_heures: estimatedResources.duration,
+        nb_intervenants: estimatedResources.people,
+        nb_intervenantes: estimatedResources.people,
+        nb_personnel: estimatedResources.people,
+        numberOfPeople: estimatedResources.people,
       }));
     }
-  }, [estimatedResources]);
+  }, [estimatedResources, editingDemande]);
 
   // Sync calculated price to montant automatically whenever calculatedPrice updates
   useEffect(() => {
@@ -764,7 +769,7 @@ export default function DemandesEnAttente() {
       intervention_nature: d.formulaire_data?.interventionNature || d.formulaire_data?.intervention_nature || 'sinistre',
       accommodation_state: (d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
       cleanliness_type: (d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
-      nb_intervenants: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || d.formulaire_data?.numberOfPeople || d.nb_intervenants || 1,
+      nb_intervenants: d.formulaire_data?.nb_intervenantes || d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || d.nb_intervenants || 1,
       surface: d.formulaire_data?.surface || 50,
       details_pieces: d.formulaire_data?.details_pieces || '',
       duree: d.formulaire_data?.duree || d.formulaire_data?.nb_heures || d.nb_heures || 4,
@@ -777,7 +782,7 @@ export default function DemandesEnAttente() {
       notes: d.formulaire_data?.notes || '',
       service_type: d.formulaire_data?.service_type || 'flexible',
       structure_type: normalizeStructure(d.formulaire_data?.structure_type || ''),
-      nb_personnel: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || d.formulaire_data?.numberOfPeople || d.nb_intervenants || 1,
+      nb_personnel: d.formulaire_data?.nb_intervenantes || d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || d.nb_intervenants || 1,
       lieu_garde: d.formulaire_data?.lieu_garde || d.formulaire_data?.careLocation || 'domicile',
       age_personne: d.formulaire_data?.age_personne || d.formulaire_data?.patientAge || '',
       sexe_personne: normalizeSexe(d.formulaire_data?.sexe_personne || d.formulaire_data?.patientGender || ''),
@@ -891,7 +896,7 @@ export default function DemandesEnAttente() {
       intervention_nature: d.formulaire_data?.interventionNature || d.formulaire_data?.intervention_nature || 'sinistre',
       accommodation_state: (d.formulaire_data?.accommodationState || d.formulaire_data?.accommodation_state || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
       cleanliness_type: (d.formulaire_data?.cleanlinessType || d.formulaire_data?.cleanliness_type || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
-      nb_intervenants: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || d.formulaire_data?.numberOfPeople || d.nb_intervenants || 1,
+      nb_intervenants: d.formulaire_data?.nb_intervenantes || d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || d.nb_intervenants || 1,
       surface: d.formulaire_data?.surface || 50,
       details_pieces: d.formulaire_data?.details_pieces || '',
       duree: d.formulaire_data?.duree || d.formulaire_data?.nb_heures || d.nb_heures || 4,
@@ -904,7 +909,7 @@ export default function DemandesEnAttente() {
       notes: d.formulaire_data?.notes || '',
       service_type: d.formulaire_data?.service_type || 'flexible',
       structure_type: normalizeStructure(d.formulaire_data?.structure_type || ''),
-      nb_personnel: d.formulaire_data?.nb_intervenants || d.formulaire_data?.nb_personnel || d.formulaire_data?.numberOfPeople || d.nb_intervenants || 1,
+      nb_personnel: d.formulaire_data?.nb_intervenantes || d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || d.nb_intervenants || 1,
       lieu_garde: d.formulaire_data?.lieu_garde || d.formulaire_data?.careLocation || 'domicile',
       age_personne: d.formulaire_data?.age_personne || d.formulaire_data?.patientAge || '',
       sexe_personne: normalizeSexe(d.formulaire_data?.sexe_personne || d.formulaire_data?.patientGender || ''),
@@ -976,8 +981,7 @@ export default function DemandesEnAttente() {
       ? (formData.custom_service_type || 'Autre service')
       : selectedService;
 
-    const isAuxiliaire = selectedServiceKey.includes('auxiliaire de vie') || selectedService.toLowerCase().includes('auxiliaire');
-    const cleanerCount = isAuxiliaire ? (formData.nb_personnel || 1) : (formData.nb_intervenants || 1);
+    const cleanerCount = formData.nb_intervenants || formData.nb_personnel || 1;
 
     const uiSubFreqMap: Record<string, string> = {
       "1/sem": "1foisParSemaine",
@@ -1039,6 +1043,7 @@ export default function DemandesEnAttente() {
       nb_intervenants: cleanerCount,
       numberOfPeople: cleanerCount,
       nb_intervenantes: cleanerCount,
+      nb_personnel: cleanerCount,
       details_pieces: formData.details_pieces,
       produits: formData.produits,
       torchons: formData.torchons,
@@ -1050,7 +1055,6 @@ export default function DemandesEnAttente() {
       structureType: formData.structure_type,
       service_type: formData.service_type,
       serviceType: formData.service_type,
-      nb_personnel: cleanerCount,
       lieu_garde: formData.lieu_garde,
       careLocation: formData.lieu_garde,
       age_personne: formData.age_personne,
@@ -1190,8 +1194,7 @@ export default function DemandesEnAttente() {
         ? (formData.custom_service_type || 'Autre service')
         : selectedService;
 
-      const isAuxiliaire = selectedServiceKey.includes('auxiliaire de vie') || selectedService.toLowerCase().includes('auxiliaire');
-      const cleanerCount = isAuxiliaire ? (formData.nb_personnel || 1) : (formData.nb_intervenants || 1);
+      const cleanerCount = formData.nb_intervenants || formData.nb_personnel || 1;
 
       const uiSubFreqMap: Record<string, string> = {
         "1/sem": "1foisParSemaine",
@@ -1235,6 +1238,7 @@ export default function DemandesEnAttente() {
         frequency_label: formData.frequence,
         nb_heures: formData.duree || 4,
         nb_intervenants: cleanerCount,
+        nb_personnel: cleanerCount,
         montant_devis: formData.montant || null,
         ...(isRenewal ? { statut: 'en_attente', cao: false, profils_envoyes: [], documents: [] } : {}),
         ...(decodedClientId ? { client: decodedClientId } : {}),
@@ -1281,6 +1285,7 @@ export default function DemandesEnAttente() {
           nb_intervenants: cleanerCount,
           numberOfPeople: cleanerCount,
           nb_intervenantes: cleanerCount,
+          nb_personnel: cleanerCount,
           details_pieces: formData.details_pieces,
           produits: formData.produits,
           torchons: formData.torchons,
@@ -1293,7 +1298,6 @@ export default function DemandesEnAttente() {
           structureType: formData.structure_type,
           service_type: formData.service_type,
           serviceType: formData.service_type,
-          nb_personnel: cleanerCount,
           // Auxiliaire de vie
           lieu_garde: formData.lieu_garde,
           careLocation: formData.lieu_garde,
@@ -1698,7 +1702,7 @@ export default function DemandesEnAttente() {
                           return null;
                         })()}
                         <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.formulaire_data?.duree ? `${d.formulaire_data.duree}h` : (d.formulaire_data?.duration ? `${d.formulaire_data.duration}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—'))}</span></div>
-                        <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || '—'}</span></div>
+                        <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenantes || d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || d.nb_intervenants || '—'}</span></div>
                         {(d.service || '').toLowerCase().includes('auxiliaire') || (d.service || '').toLowerCase().includes('garde') ? (
                           <>
                             <div className="detail-item"><span className="detail-label">Âge / Sexe :</span> <span className="detail-value">{d.formulaire_data?.age_personne || d.formulaire_data?.patientAge ? `${d.formulaire_data?.age_personne || d.formulaire_data?.patientAge} ans` : '—'} / {d.formulaire_data?.sexe_personne || d.formulaire_data?.patientGender || '—'}</span></div>
