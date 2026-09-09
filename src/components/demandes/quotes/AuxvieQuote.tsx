@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { FormulaBox, B, s, ResultBar, fmt, Field } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
 import type { QuotePrestationLine } from "./QuoteSection";
+import JoursInterventionSelector, { getInitialDays, formatDaysSummary, addHoursToTime } from "./JoursInterventionSelector";
 
 interface AuxvieQuoteProps {
   demande: any;
@@ -18,6 +19,9 @@ export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuot
   const [hSemaine, setHSemaine] = useState<number>(data.heures_semaine ?? 24);
   const [hDimanche, setHDimanche] = useState<number>(data.heures_dimanche ?? 0);
   const [semaines, setSemaines] = useState<number>(data.nb_semaines || 4);
+  const [selectedDays, setSelectedDays] = useState(() =>
+    getInitialDays(data, demande, true)
+  );
 
   const [remise, setRemise] = useState<RemiseValue>(() => ({
     abonnement: false,
@@ -35,9 +39,10 @@ export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuot
 
   useEffect(() => {
     if (!onPrestationsChange) return;
+    const daysFormatted = formatDaysSummary(selectedDays);
     const prestations: QuotePrestationLine[] = [
       {
-        designation: `Accompagnement auxiliaire de vie — ${hSemaine}h/sem (lun.–sam.) × ${semaines} sem. × ${WEEKDAY_RATE} DH/h`,
+        designation: `Accompagnement auxiliaire de vie — ${hSemaine}h/sem${daysFormatted ? ` (${daysFormatted})` : " (lun.–sam.)"} × ${semaines} sem. × ${WEEKDAY_RATE} DH/h`,
         montant: Math.round(baseWeek * semaines),
       },
     ];
@@ -57,6 +62,13 @@ export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuot
       heures_dimanche: hDimanche,
       nb_semaines: semaines,
       duree: `${hSemaine + hDimanche}h/sem`,
+      jours_intervention: selectedDays,
+      jours_passage: daysFormatted,
+      jours_intervention_detail: selectedDays.map(j => ({
+        jour: j,
+        heure_debut: data.heure || demande.heure_intervention || '09:00',
+        heure_fin: addHoursToTime(data.heure || demande.heure_intervention || '09:00', Math.round((hSemaine + hDimanche) / Math.max(1, selectedDays.length)) || 4)
+      })),
       reduction: remiseMontant + promoMontant,
       reduction_montant: remiseMontant + promoMontant,
       reduction_pourcentage: remise.etenduePct,
@@ -68,7 +80,7 @@ export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuot
       total_mensuel: total,
       total_mensuel_label: `TOTAL MENSUEL ESTIMÉ (${semaines} semaines)`,
     });
-  }, [hSemaine, hDimanche, semaines, base, remise, remiseMontant, promoMontant, total]);
+  }, [hSemaine, hDimanche, semaines, base, remise, remiseMontant, promoMontant, total, selectedDays]);
 
   return (
     <div className="quote-calculator">
@@ -100,6 +112,11 @@ export default function AuxvieQuote({ demande, onPrestationsChange }: AuxvieQuot
           </ul>
         </div>
       </div>
+      <JoursInterventionSelector
+        selectedDays={selectedDays}
+        onChange={setSelectedDays}
+        isAbo={true}
+      />
       <RemiseSection isAbo={false} segment={demande.segment} montantBase={base} value={remise} onChange={setRemise} />
       <ResultBar
         detail={`${hSemaine}h × ${WEEKDAY_RATE} DH${hDimanche > 0 ? ` + ${hDimanche}h × ${SUNDAY_RATE} DH` : ""} × ${semaines} sem.${remiseMontant > 0 ? ` − ${fmt(remiseMontant)} remise` : ""}${promoMontant > 0 ? ` − ${fmt(promoMontant)} promo` : ""}`}

@@ -3,6 +3,7 @@ import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
 import { SURCHARGE_CITIES } from "../../../utils/pricing";
 import type { QuotePrestationLine } from "./QuoteSection";
+import JoursInterventionSelector, { getInitialDays, formatDaysSummary, addHoursToTime } from "./JoursInterventionSelector";
 
 interface ChantierQuoteProps {
   demande: any;
@@ -23,6 +24,9 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
   const villeConcernee = SURCHARGE_CITIES.includes(data.ville || data.city || demande.client_city || "");
   const [zone, setZone] = useState(data.zone_eloignee !== undefined ? Boolean(data.zone_eloignee) : villeConcernee);
   const [materielMobilise, setMaterielMobilise] = useState(data.materiel_mobilise || "");
+  const [selectedDays, setSelectedDays] = useState(() =>
+    getInitialDays(data, demande, false)
+  );
 
   const MIN = 1500;
   const baseRaw = surface * parseFloat(grattage);
@@ -48,8 +52,9 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
   // Notify parent of prestation changes
   useEffect(() => {
     if (!onPrestationsChange) return;
+    const daysFormatted = formatDaysSummary(selectedDays);
     const prestations: QuotePrestationLine[] = [
-      { designation: `Nettoyage fin de chantier — ${surface} m² (${grattageLabel})`, montant: base },
+      { designation: `Nettoyage fin de chantier — ${surface} m² (${grattageLabel})${daysFormatted ? ` — ${daysFormatted}` : ""}`, montant: base },
     ];
     if (terrasse) {
       prestations.push({ designation: "Terrasse et rooftop (inclus dans forfait)", montant: "Inclus" });
@@ -87,6 +92,13 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
       terrasse_incluse: terrasse,
       zone_eloignee: zone ? 200 : 0,
       prix_base: base,
+      jours_intervention: selectedDays,
+      jours_passage: daysFormatted,
+      jours_intervention_detail: selectedDays.map(j => ({
+        jour: j,
+        heure_debut: data.heure || demande.heure_intervention || '09:00',
+        heure_fin: addHoursToTime(data.heure || demande.heure_intervention || '09:00', 8)
+      })),
       reduction: remiseMontant + promoMontant,
       reduction_montant: remiseMontant + promoMontant,
       reduction_pourcentage: remise.etenduePct,
@@ -95,7 +107,7 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
       code_promo_pct: remise.promoPct,
       materiel_mobilise: materielMobilise,
     });
-  }, [surface, grattage, vitres, surfVitres, dechets, marbre, surfMarbre, terrasse, zone, base, vitresCost, dechetsCost, marbreCost, zoneCost, remise, remiseMontant, promoMontant, total, materielMobilise]);
+  }, [surface, grattage, vitres, surfVitres, dechets, marbre, surfMarbre, terrasse, zone, selectedDays, base, vitresCost, dechetsCost, marbreCost, zoneCost, remise, remiseMontant, promoMontant, total, materielMobilise]);
 
   const detail = `${surface} m² × ${grattage} DH = ${fmt(baseRaw)} DH${baseRaw < MIN ? ` (min ${fmt(MIN)})` : ""}` +
     (vitresCost ? ` + vitres` : "") +
@@ -131,6 +143,12 @@ export default function ChantierQuote({ demande, onPrestationsChange }: Chantier
               <input type="number" value={surfVitres} min={1} onChange={e => setSurfVitres(+e.target.value)} style={s.input as any} />
             </Field>
           )}
+          <JoursInterventionSelector
+            selectedDays={selectedDays}
+            onChange={setSelectedDays}
+            isAbo={false}
+            dateStr={demande.date_intervention || data.date_intervention || data.date || data.schedulingDate}
+          />
         </div>
         <div>
           <Field label="Ramassage de déchets">

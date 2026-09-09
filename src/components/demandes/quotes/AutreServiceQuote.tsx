@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FormulaBox, B, s, ResultBar, fmt, Field } from "./QuoteShared";
 import type { QuotePrestationLine } from "./QuoteSection";
+import JoursInterventionSelector, { getInitialDays, formatDaysSummary, addHoursToTime } from "./JoursInterventionSelector";
 
 const dbSubFreqMap: Record<string, string> = {
   "1foisParSemaine": "1/sem",
@@ -171,6 +172,25 @@ export default function AutreServiceQuote({
     setOptions(freshData.options || DEFAULT_OPTIONS);
   }, [demande.id, externalFormData]);
 
+  const [selectedDays, setSelectedDays] = useState(() =>
+    getInitialDays(data, demande, frequency === "subscription")
+  );
+
+  const handleDaysChange = (newDays: string[]) => {
+    setSelectedDays(newDays);
+    const daysFormatted = formatDaysSummary(newDays);
+    update({
+      jours_intervention: newDays,
+      jours_passage: daysFormatted,
+      jours_par_semaine: frequency === "subscription" ? newDays.length : 1,
+      jours_intervention_detail: newDays.map(j => ({
+        jour: j,
+        heure_debut: data.heure || demande.heure_intervention || '09:00',
+        heure_fin: addHoursToTime(data.heure || demande.heure_intervention || '09:00', Number(duree) || 4)
+      })),
+    });
+  };
+
   // Helper to sync changes up
   const update = (patch: Record<string, any>) => {
     if (externalSetFormData && externalFormData) {
@@ -270,6 +290,14 @@ export default function AutreServiceQuote({
       avance_type: advanceMode,
       avance_pourcentage: advancePercent,
       avance_fixe: advanceAmount,
+      jours_par_semaine: frequency === "subscription" ? selectedDays.length : 1,
+      jours_intervention: selectedDays,
+      jours_passage: formatDaysSummary(selectedDays),
+      jours_intervention_detail: selectedDays.map(j => ({
+        jour: j,
+        heure_debut: data.heure || demande.heure_intervention || '09:00',
+        heure_fin: addHoursToTime(data.heure || demande.heure_intervention || '09:00', Number(duree) || 4)
+      })),
       options,
       is_autre_service: true
     });
@@ -281,6 +309,7 @@ export default function AutreServiceQuote({
     surface,
     frequency,
     subFrequency,
+    selectedDays,
     duree,
     nbIntervenants,
     description,
@@ -377,6 +406,14 @@ export default function AutreServiceQuote({
           </select>
         </Field>
       )}
+
+      <JoursInterventionSelector
+        selectedDays={selectedDays}
+        onChange={handleDaysChange}
+        isAbo={frequency === "subscription"}
+        dateStr={demande.date_intervention || data.date_intervention || data.date || data.schedulingDate}
+        disabled={!isLinked}
+      />
 
       {/* 2. Property & Time details */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

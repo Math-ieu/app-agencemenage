@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { FormulaBox, B, OptRow, ResultBar, fmt } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
 import type { QuotePrestationLine } from "./QuoteSection";
+import JoursInterventionSelector, { getInitialDays, formatDaysSummary, addHoursToTime } from "./JoursInterventionSelector";
 
 const AIRBNB_CONCIERGERIE_PRICES: Record<string, { label: string; price: number; note?: string }> = {
   '1chambre': { label: 'Studio / 1 chambre', price: 130 },
@@ -22,6 +23,32 @@ interface AirbnbQuoteProps {
 
 export default function AirbnbQuote({ demande, onPrestationsChange, formData: externalFormData, setFormData: externalSetFormData, onUpdateDemandeData }: AirbnbQuoteProps) {
   const data = externalFormData || demande.formulaire_data || {};
+
+  const isAbo = Boolean(data.frequency === "subscription" || data.is_abonnement || demande.frequency === "abonnement" || (demande.frequency_label && demande.frequency_label !== "une fois"));
+
+  const [selectedDays, setSelectedDays] = useState(() =>
+    getInitialDays(data, demande, isAbo)
+  );
+
+  useEffect(() => {
+    const freshData = externalFormData || demande.formulaire_data || {};
+    const parsed = getInitialDays(freshData, demande, isAbo);
+    setSelectedDays(parsed);
+  }, [demande.id, externalFormData]);
+
+  const handleDaysChange = (newDays: string[]) => {
+    setSelectedDays(newDays);
+    const daysFormatted = formatDaysSummary(newDays);
+    update({
+      jours_intervention: newDays,
+      jours_passage: daysFormatted,
+      jours_intervention_detail: newDays.map(j => ({
+        jour: j,
+        heure_debut: data.heure || demande.heure_intervention || '11:00',
+        heure_fin: addHoursToTime(data.heure || demande.heure_intervention || '11:00', 3)
+      })),
+    });
+  };
 
   // Read values
   const sizeTier = (data.size_tier || data.sizeTier || '1chambre') as string;
@@ -67,8 +94,9 @@ export default function AirbnbQuote({ demande, onPrestationsChange, formData: ex
 
   useEffect(() => {
     if (!onPrestationsChange) return;
+    const daysFormatted = formatDaysSummary(selectedDays);
     const prestations: QuotePrestationLine[] = [
-      { designation: `Conciergerie Airbnb — ${sizeLabel}`, montant: basePrice },
+      { designation: `Conciergerie Airbnb — ${sizeLabel}${daysFormatted ? ` — ${daysFormatted}` : ""}`, montant: basePrice },
     ];
     if (isFarZone) {
       prestations.push({ designation: "Supplément zone éloignée (périphérie)", montant: 50 });
@@ -103,6 +131,13 @@ export default function AirbnbQuote({ demande, onPrestationsChange, formData: ex
       materiel_fourni: materielFourni,
       linen_sets: linenSets,
       linen_cost: linenCost,
+      jours_intervention: selectedDays,
+      jours_passage: daysFormatted,
+      jours_intervention_detail: selectedDays.map(j => ({
+        jour: j,
+        heure_debut: data.heure || demande.heure_intervention || '11:00',
+        heure_fin: addHoursToTime(data.heure || demande.heure_intervention || '11:00', 3)
+      })),
       reduction: remiseMontant + promoMontant,
       reduction_montant: remiseMontant + promoMontant,
       reduction_pourcentage: remise.etenduePct,
@@ -110,7 +145,7 @@ export default function AirbnbQuote({ demande, onPrestationsChange, formData: ex
       code_promo: remise.promoCode,
       code_promo_pct: remise.promoPct,
     });
-  }, [sizeTier, isFarZone, reassortType, videoApres, materielFourni, linenSets, basePrice, total, remiseMontant, promoMontant]);
+  }, [sizeTier, isFarZone, reassortType, videoApres, materielFourni, linenSets, basePrice, total, remiseMontant, promoMontant, selectedDays]);
 
   const isLinked = !!externalFormData || !!onUpdateDemandeData;
 
@@ -207,6 +242,13 @@ export default function AirbnbQuote({ demande, onPrestationsChange, formData: ex
             style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--c-bord)", background: "transparent", cursor: isLinked ? "pointer" : "default", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
         </div>
       </div>
+
+      <JoursInterventionSelector
+        selectedDays={selectedDays}
+        onChange={handleDaysChange}
+        isAbo={isAbo}
+        dateStr={demande.date_intervention || demande.date || data.date || data.schedulingDate}
+      />
 
       <RemiseSection isAbo={false} segment={demande.segment} montantBase={preRemise} value={remise} onChange={setRemise} />
 

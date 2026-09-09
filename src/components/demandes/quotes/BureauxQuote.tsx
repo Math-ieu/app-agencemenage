@@ -3,6 +3,7 @@ import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
 import { SURCHARGE_CITIES, getDynamicMonthPassagesCount } from "../../../utils/pricing";
 import type { QuotePrestationLine } from "./QuoteSection";
+import JoursInterventionSelector, { getInitialDays, formatDaysSummary, getDefaultDaysForCount, addHoursToTime } from "./JoursInterventionSelector";
 
 const visitsMap: Record<string, number> = {
   "1foisParSemaine": 1,
@@ -190,6 +191,51 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
     }
   }, [minHours, heures]);
 
+  const targetCount = subFrequency.includes("1fois") ? 1
+    : subFrequency.includes("2fois") ? 2
+    : subFrequency.includes("3fois") ? 3
+    : subFrequency.includes("4fois") ? 4
+    : subFrequency.includes("5fois") ? 5
+    : subFrequency.includes("6fois") ? 6
+    : subFrequency.includes("7fois") ? 7
+    : 1;
+
+  const [selectedDays, setSelectedDays] = useState(() =>
+    getInitialDays(data, demande, frequency === "subscription", targetCount)
+  );
+
+  const handleDaysChange = (newDays: string[]) => {
+    setSelectedDays(newDays);
+    if (frequency === "subscription" && newDays.length > 0) {
+      const matchedCadence = `${newDays.length}foisParSemaine`;
+      if (['1foisParSemaine', '2foisParSemaine', '3foisParSemaine', '4foisParSemaine', '5foisParSemaine', '6foisParSemaine', '7foisParSemaine'].includes(matchedCadence)) {
+        setSubFrequency(matchedCadence);
+      }
+    }
+  };
+
+  const handleFrequencyChange = (newFreq: string) => {
+    setFrequency(newFreq);
+    if (newFreq === "subscription") {
+      setSelectedDays(prev => prev.length > 0 ? prev : getDefaultDaysForCount(1));
+    } else {
+      setSelectedDays(prev => prev.slice(0, 1).length > 0 ? prev.slice(0, 1) : ['lundi']);
+    }
+  };
+
+  const handleSubFrequencyChange = (newSub: string) => {
+    setSubFrequency(newSub);
+    const newCount = newSub.includes("1fois") ? 1
+      : newSub.includes("2fois") ? 2
+      : newSub.includes("3fois") ? 3
+      : newSub.includes("4fois") ? 4
+      : newSub.includes("5fois") ? 5
+      : newSub.includes("6fois") ? 6
+      : newSub.includes("7fois") ? 7
+      : 1;
+    setSelectedDays(getDefaultDaysForCount(newCount));
+  };
+
   const isAbo = frequency === "subscription";
   const dynamicPassages = getDynamicMonthPassagesCount(demande);
   const nbPassages = isAbo ? (dynamicPassages > 0 ? dynamicPassages : (visitsMap[subFrequency] * 4)) : 1;
@@ -218,14 +264,16 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
     const prestations: QuotePrestationLine[] = [];
     const dbSubFrequency = dbSubFreqMap[subFrequency] || "1/sem";
 
+    const daysFormatted = formatDaysSummary(selectedDays);
+
     if (isAbo) {
       prestations.push({
-        designation: `Ménage bureaux — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} × ${nbPassages} passages/mois`,
+        designation: `Ménage bureaux — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} × ${nbPassages} passages/mois${daysFormatted ? ` (${daysFormatted})` : ""}`,
         montant: laborTotal,
       });
     } else {
       prestations.push({
-        designation: `Ménage bureaux — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} (prestation ponctuelle)`,
+        designation: `Ménage bureaux — ${heures}h × ${personnes} intervenante${personnes > 1 ? "s" : ""} (prestation ponctuelle${daysFormatted ? ` — ${daysFormatted}` : ""})`,
         montant: laborPerPassage,
       });
     }
@@ -249,6 +297,14 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
       nb_personnel: personnes,
       numberOfPeople: personnes,
       nb_passages_mois: nbPassages,
+      jours_par_semaine: isAbo ? selectedDays.length : 1,
+      jours_intervention: selectedDays,
+      jours_passage: daysFormatted,
+      jours_intervention_detail: selectedDays.map(j => ({
+        jour: j,
+        heure_debut: data.heure || demande.heure_intervention || '09:00',
+        heure_fin: addHoursToTime(data.heure || demande.heure_intervention || '09:00', heures)
+      })),
       reduction: remiseMontant,
       reduction_montant: remiseMontant,
       reduction_pourcentage: remisePct,
@@ -267,7 +323,7 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
       frequency,
       subFrequency
     });
-  }, [heures, personnes, frequency, subFrequency, opts, remise, total, nbPassages, laborPerPassage, laborTotal, remiseMontant, remisePct, total1erMois, onPrestationsChange]);
+  }, [heures, personnes, frequency, subFrequency, selectedDays, opts, remise, total, nbPassages, laborPerPassage, laborTotal, remiseMontant, remisePct, total1erMois, onPrestationsChange]);
 
   return (
     <div className="quote-calculator">
@@ -283,14 +339,14 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
             <input type="number" value={personnes} min={1} max={20} onChange={e => setPersonnes(+e.target.value)} style={s.input as any} />
           </Field>
           <Field label="Fréquence">
-            <select value={frequency} onChange={e => setFrequency(e.target.value)} style={s.input as any}>
+            <select value={frequency} onChange={e => handleFrequencyChange(e.target.value)} style={s.input as any}>
               <option value="oneshot">Une fois</option>
               <option value="subscription">Abonnement (-10%)</option>
             </select>
           </Field>
           {isAbo && (
             <Field label="Cadence d'abonnement">
-              <select value={subFrequency} onChange={e => setSubFrequency(e.target.value)} style={s.input as any}>
+              <select value={subFrequency} onChange={e => handleSubFrequencyChange(e.target.value)} style={s.input as any}>
                 <option value="1foisParSemaine">1 fois par semaine</option>
                 <option value="2foisParSemaine">2 fois par semaine</option>
                 <option value="3foisParSemaine">3 fois par semaine</option>
@@ -305,6 +361,12 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
               </select>
             </Field>
           )}
+          <JoursInterventionSelector
+            selectedDays={selectedDays}
+            onChange={handleDaysChange}
+            isAbo={isAbo}
+            dateStr={demande.date_intervention || data.date_intervention || data.date || data.schedulingDate}
+          />
         </div>
         <div>
           <div style={s.optTitle}>Options (HT)</div>

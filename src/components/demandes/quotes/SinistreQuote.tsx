@@ -3,6 +3,7 @@ import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
 import { SURCHARGE_CITIES } from "../../../utils/pricing";
 import type { QuotePrestationLine } from "./QuoteSection";
+import JoursInterventionSelector, { getInitialDays, formatDaysSummary, addHoursToTime } from "./JoursInterventionSelector";
 
 const TX: Record<string, Record<string, number>> = {
   deau: { leger: 15, moyen: 28, grave: 45 },
@@ -28,6 +29,9 @@ export default function SinistreQuote({ demande, onPrestationsChange }: Sinistre
   });
   const [surface, setSurface] = useState(data.surface || data.surfaceArea || 60);
   const [niveau, setNiveau] = useState(data.niveau || "moyen");
+  const [selectedDays, setSelectedDays] = useState(() =>
+    getInitialDays(data, demande, false)
+  );
   const villeConcernee = SURCHARGE_CITIES.includes(data.ville || data.city || demande.client_city || "");
   const [opts, setOpts] = useState({
     evac: Boolean(data.evacuation || data.evacuation_mobilier),
@@ -55,8 +59,9 @@ export default function SinistreQuote({ demande, onPrestationsChange }: Sinistre
 
   useEffect(() => {
     if (!onPrestationsChange) return;
+    const daysFormatted = formatDaysSummary(selectedDays);
     const prestations: QuotePrestationLine[] = [
-      { designation: `Nettoyage post-sinistre — ${TYPE_LABELS[type]} niveau ${niveau} — ${surface} m²`, montant: base },
+      { designation: `Nettoyage post-sinistre — ${TYPE_LABELS[type]} niveau ${niveau} — ${surface} m²${daysFormatted ? ` — ${daysFormatted}` : ""}`, montant: base },
     ];
     if (opts.evac) prestations.push({ designation: "Évacuation mobilier endommagé", montant: 350 });
     if (opts.rapport) prestations.push({ designation: "Rapport photographique PDF (avant / après par zone)", montant: 150 });
@@ -71,6 +76,13 @@ export default function SinistreQuote({ demande, onPrestationsChange }: Sinistre
       evacuation: opts.evac ? 350 : 0, evacuation_mobilier: opts.evac ? 350 : 0,
       rapport_photo: opts.rapport ? 150 : 0,
       zone_eloignee: opts.zone ? 200 : 0,
+      jours_intervention: selectedDays,
+      jours_passage: daysFormatted,
+      jours_intervention_detail: selectedDays.map(j => ({
+        jour: j,
+        heure_debut: data.heure || demande.heure_intervention || '09:00',
+        heure_fin: addHoursToTime(data.heure || demande.heure_intervention || '09:00', 8)
+      })),
       reduction: remiseMontant + promoMontant,
       reduction_montant: remiseMontant + promoMontant,
       reduction_pourcentage: remise.etenduePct,
@@ -78,7 +90,7 @@ export default function SinistreQuote({ demande, onPrestationsChange }: Sinistre
       code_promo: remise.promoCode,
       code_promo_pct: remise.promoPct,
     });
-  }, [type, surface, niveau, opts, base, remise, remiseMontant, promoMontant, total]);
+  }, [type, surface, niveau, opts, base, remise, remiseMontant, promoMontant, total, selectedDays]);
 
   return (
     <div className="quote-calculator">
@@ -125,6 +137,12 @@ export default function SinistreQuote({ demande, onPrestationsChange }: Sinistre
           </div>
         </div>
       </div>
+      <JoursInterventionSelector
+        selectedDays={selectedDays}
+        onChange={setSelectedDays}
+        isAbo={false}
+        dateStr={demande.date_intervention || demande.date || data.date || data.schedulingDate}
+      />
       <RemiseSection isAbo={false} segment={demande.segment} montantBase={preRemise} value={remise} onChange={setRemise} />
       <ResultBar
         detail={`${surface} m² × ${taux} DH/m²${baseRaw < MIN ? ` → min ${fmt(MIN)}` : ""} = ${fmt(base)} DH + options ${fmt(op)} DH${remiseMontant > 0 ? ` − ${fmt(remiseMontant)} remise` : ""}${promoMontant > 0 ? ` − ${fmt(promoMontant)} promo` : ""}`}

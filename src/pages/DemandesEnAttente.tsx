@@ -1458,6 +1458,13 @@ export default function DemandesEnAttente() {
         }
       };
 
+      if (updatedPatch.jours_intervention && Array.isArray(updatedPatch.jours_intervention)) {
+        payload.planning = {
+          ...(targetDemande.planning || {}),
+          jours_intervention: updatedPatch.jours_intervention
+        };
+      }
+
       if (patch.montant !== undefined) payload.prix = patch.montant;
       else if (patch.prix !== undefined) payload.prix = patch.prix;
 
@@ -1678,6 +1685,18 @@ export default function DemandesEnAttente() {
                           <div className="detail-item"><span className="detail-label">Type de bien :</span> <span className="detail-value">{d.formulaire_data?.type_habitation || d.formulaire_data?.structure_type || '—'}</span></div>
                         )}
                         <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency_label || (d.frequency === 'oneshot' ? 'Une fois' : 'Abonnement')}</span></div>
+                        {(() => {
+                          const days = d.formulaire_data?.jours_passage || (Array.isArray(d.formulaire_data?.jours_intervention) && d.formulaire_data.jours_intervention.length > 0 ? d.formulaire_data.jours_intervention.map((j: string) => j.charAt(0).toUpperCase() + j.slice(1)).join(' + ') : null);
+                          if (days) {
+                            return (
+                              <div className="detail-item">
+                                <span className="detail-label">Jours passage :</span>
+                                <span className="detail-value font-semibold text-slate-700">{days}</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                         <div className="detail-item"><span className="detail-label">Durée / Qte :</span> <span className="detail-value">{d.formulaire_data?.duree ? `${d.formulaire_data.duree}h` : (d.formulaire_data?.duration ? `${d.formulaire_data.duration}h` : (d.formulaire_data?.nb_jours ? `${d.formulaire_data.nb_jours} j` : '—'))}</span></div>
                         <div className="detail-item"><span className="detail-label">Intervenants :</span> <span className="detail-value">{d.formulaire_data?.nb_intervenants || d.formulaire_data?.numberOfPeople || d.formulaire_data?.nb_personnel || '—'}</span></div>
                         {(d.service || '').toLowerCase().includes('auxiliaire') || (d.service || '').toLowerCase().includes('garde') ? (

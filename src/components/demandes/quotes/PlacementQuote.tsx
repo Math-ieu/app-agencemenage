@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
 import type { QuotePrestationLine } from "./QuoteSection";
+import JoursInterventionSelector, { getInitialDays, formatDaysSummary, getDefaultDaysForCount, addHoursToTime } from "./JoursInterventionSelector";
 
 const visitsMap: Record<string, number> = {
   "1foisParSemaine": 1,
@@ -80,6 +81,58 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
     return uiSubFreqMap[freqVal] || "1foisParSemaine";
   });
 
+  const isAbo = frequency === "subscription";
+  const targetCount = isAbo
+    ? (subFrequency.includes("1fois") ? 1
+      : subFrequency.includes("2fois") ? 2
+      : subFrequency.includes("3fois") ? 3
+      : subFrequency.includes("4fois") ? 4
+      : subFrequency.includes("5fois") ? 5
+      : subFrequency.includes("6fois") ? 6
+      : subFrequency.includes("7fois") ? 7
+      : 1)
+    : (js === "30" ? 7 : js === "26" ? 6 : 5);
+
+  const [selectedDays, setSelectedDays] = useState(() =>
+    getInitialDays(data, demande, true, targetCount)
+  );
+
+  const handleDaysChange = (newDays: string[]) => {
+    setSelectedDays(newDays);
+    if (isAbo && newDays.length > 0) {
+      const matchedCadence = `${newDays.length}foisParSemaine`;
+      if (['1foisParSemaine', '2foisParSemaine', '3foisParSemaine', '4foisParSemaine', '5foisParSemaine', '6foisParSemaine', '7foisParSemaine'].includes(matchedCadence)) {
+        setSubFrequency(matchedCadence);
+      }
+    } else if (!isAbo && newDays.length > 0) {
+      if (newDays.length >= 7) setJs("30");
+      else if (newDays.length === 6) setJs("26");
+      else setJs("22");
+    }
+  };
+
+  const handleSubFrequencyChange = (newSub: string) => {
+    setSubFrequency(newSub);
+    const newCount = newSub.includes("1fois") ? 1
+      : newSub.includes("2fois") ? 2
+      : newSub.includes("3fois") ? 3
+      : newSub.includes("4fois") ? 4
+      : newSub.includes("5fois") ? 5
+      : newSub.includes("6fois") ? 6
+      : newSub.includes("7fois") ? 7
+      : 1;
+    setSelectedDays(prev => {
+      if (prev.length === newCount) return prev;
+      return getDefaultDaysForCount(newCount);
+    });
+  };
+
+  const handleJsChange = (newJs: string) => {
+    setJs(newJs);
+    const newCount = newJs === "30" ? 7 : newJs === "26" ? 6 : 5;
+    setSelectedDays(getDefaultDaysForCount(newCount));
+  };
+
   const jm = frequency === "subscription" ? (visitsMap[subFrequency] * 4) : parseFloat(js);
   const hm = hj * jm;
   const base = hm * 32 * nb * (ferie ? 1.20 : 1);
@@ -98,9 +151,10 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
     
     const subFreqObj = PLACEMENT_FREQUENCES.find(f => f.value === subFrequency);
     const subFreqLabel = subFreqObj ? subFreqObj.label.toLowerCase() : "";
+    const daysFormatted = formatDaysSummary(selectedDays);
     const scheduleLabel = frequency === "subscription"
-      ? `${hj}h/j, ${subFreqLabel} (${hm}h/mois)`
-      : `${hj}h/j × ${jsSem}j/sem (${hm}h/mois)`;
+      ? `${hj}h/j, ${subFreqLabel}${daysFormatted ? ` (${daysFormatted})` : ""} (${hm}h/mois)`
+      : `${hj}h/j × ${jsSem}j/sem${daysFormatted ? ` (${daysFormatted})` : ""} (${hm}h/mois)`;
 
     const prestations: QuotePrestationLine[] = [
       { designation: `Mise à disposition — ${nb} intervenante — ${scheduleLabel}`, montant: Math.round(base) },
@@ -128,10 +182,17 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
       service_type: "flexible",
       frequency,
       subFrequency,
+      jours_intervention: selectedDays,
+      jours_passage: daysFormatted,
+      jours_intervention_detail: selectedDays.map(j => ({
+        jour: j,
+        heure_debut: data.heure || demande.heure_intervention || '09:00',
+        heure_fin: addHoursToTime(data.heure || demande.heure_intervention || '09:00', Math.min(8, Math.round(hj)) || 4)
+      })),
       ferie: ferie,
       majoration_ferie: ferie,
     });
-  }, [hj, js, nb, eng, ferie, tenue, base, total, reductionMontant, frequencyDiscountMontant, frequency, subFrequency, tenueCost, hm, jsSem, engLabel, engPct]);
+  }, [hj, js, nb, eng, ferie, tenue, base, total, reductionMontant, frequencyDiscountMontant, frequency, subFrequency, tenueCost, hm, jsSem, engLabel, engPct, selectedDays]);
 
   return (
     <div>
@@ -145,7 +206,7 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
             <input type="number" value={hj} onChange={e => setHj(+e.target.value)} style={s.input as any} />
           </Field>
           <Field label="Jours/mois">
-            <select value={js} onChange={e => setJs(e.target.value)} disabled={frequency === "subscription"} style={{ ...s.input, opacity: frequency === "subscription" ? 0.5 : 1 } as any}>
+            <select value={js} onChange={e => handleJsChange(e.target.value)} disabled={frequency === "subscription"} style={{ ...s.input, opacity: frequency === "subscription" ? 0.5 : 1 } as any}>
               <option value="22">22j (5j/sem)</option>
               <option value="26">26j (6j/sem)</option>
               <option value="30">30j (7j/sem)</option>
@@ -171,7 +232,7 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
           </Field>
           {frequency === "subscription" && (
             <Field label="Cadence d'abonnement">
-              <select value={subFrequency} onChange={e => setSubFrequency(e.target.value)} style={s.input as any}>
+              <select value={subFrequency} onChange={e => handleSubFrequencyChange(e.target.value)} style={s.input as any}>
                 <option value="1foisParSemaine">1 fois par semaine</option>
                 <option value="2foisParSemaine">2 fois par semaine</option>
                 <option value="3foisParSemaine">3 fois par semaine</option>
@@ -190,6 +251,11 @@ function FlexCalc({ demande, onPrestationsChange }: PlacementQuoteProps) {
           <OptRow label="Tenue de travail fournie" note="+200 DH/pers — coût unique facturé au 1er mois" price="+200 DH/pers" checked={tenue} onChange={setTenue} />
         </div>
       </div>
+      <JoursInterventionSelector
+        selectedDays={selectedDays}
+        onChange={handleDaysChange}
+        isAbo={true}
+      />
       <ResultBar
         detail={`${hm.toFixed(0)}h × 32 DH × ${nb} pers${ferie ? " × 1,20" : ""}${frequencyDiscount > 0 ? " × 0,90" : ""}${reduction > 0 ? ` × ${(1 - reduction).toFixed(2)}` : ""}`}
         total={`${fmt(total)} DH`} label="Mensuel HT" />
@@ -211,6 +277,58 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
     return uiSubFreqMap[freqVal] || "1foisParSemaine";
   });
 
+  const isAbo = frequency === "subscription";
+  const targetCount = isAbo
+    ? (subFrequency.includes("1fois") ? 1
+      : subFrequency.includes("2fois") ? 2
+      : subFrequency.includes("3fois") ? 3
+      : subFrequency.includes("4fois") ? 4
+      : subFrequency.includes("5fois") ? 5
+      : subFrequency.includes("6fois") ? 6
+      : subFrequency.includes("7fois") ? 7
+      : 1)
+    : (js === "30" ? 7 : js === "26" ? 6 : 5);
+
+  const [selectedDays, setSelectedDays] = useState(() =>
+    getInitialDays(data, demande, true, targetCount)
+  );
+
+  const handleDaysChange = (newDays: string[]) => {
+    setSelectedDays(newDays);
+    if (isAbo && newDays.length > 0) {
+      const matchedCadence = `${newDays.length}foisParSemaine`;
+      if (['1foisParSemaine', '2foisParSemaine', '3foisParSemaine', '4foisParSemaine', '5foisParSemaine', '6foisParSemaine', '7foisParSemaine'].includes(matchedCadence)) {
+        setSubFrequency(matchedCadence);
+      }
+    } else if (!isAbo && newDays.length > 0) {
+      if (newDays.length >= 7) setJs("30");
+      else if (newDays.length === 6) setJs("26");
+      else setJs("22");
+    }
+  };
+
+  const handleSubFrequencyChange = (newSub: string) => {
+    setSubFrequency(newSub);
+    const newCount = newSub.includes("1fois") ? 1
+      : newSub.includes("2fois") ? 2
+      : newSub.includes("3fois") ? 3
+      : newSub.includes("4fois") ? 4
+      : newSub.includes("5fois") ? 5
+      : newSub.includes("6fois") ? 6
+      : newSub.includes("7fois") ? 7
+      : 1;
+    setSelectedDays(prev => {
+      if (prev.length === newCount) return prev;
+      return getDefaultDaysForCount(newCount);
+    });
+  };
+
+  const handleJsChange = (newJs: string) => {
+    setJs(newJs);
+    const newCount = newJs === "30" ? 7 : newJs === "26" ? 6 : 5;
+    setSelectedDays(getDefaultDaysForCount(newCount));
+  };
+
   const nbS = Math.max(nb, 2);
   const jm = frequency === "subscription" ? (visitsMap[subFrequency] * 4) : parseFloat(js);
   const hm = hj * jm;
@@ -230,9 +348,10 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
 
     const subFreqObj = PLACEMENT_FREQUENCES.find(f => f.value === subFrequency);
     const subFreqLabel = subFreqObj ? subFreqObj.label.toLowerCase() : "";
+    const daysFormatted = formatDaysSummary(selectedDays);
     const scheduleLabel = frequency === "subscription"
-      ? `${hj}h/j, ${subFreqLabel} (${hm}h/mois)`
-      : `${hj}h/j × ${jsSem}j/sem (${hm}h/mois)`;
+      ? `${hj}h/j, ${subFreqLabel}${daysFormatted ? ` (${daysFormatted})` : ""} (${hm}h/mois)`
+      : `${hj}h/j × ${jsSem}j/sem${daysFormatted ? ` (${daysFormatted})` : ""} (${hm}h/mois)`;
 
     const prestations: QuotePrestationLine[] = [
       { designation: `Gestion 360° — ${nbS} intervenante(s) — ${scheduleLabel}`, montant: Math.round(base) },
@@ -261,10 +380,17 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
       service_type: "gestion360",
       frequency,
       subFrequency,
+      jours_intervention: selectedDays,
+      jours_passage: daysFormatted,
+      jours_intervention_detail: selectedDays.map(j => ({
+        jour: j,
+        heure_debut: data.heure || demande.heure_intervention || '09:00',
+        heure_fin: addHoursToTime(data.heure || demande.heure_intervention || '09:00', Math.min(8, Math.round(hj)) || 4)
+      })),
       ferie: ferie,
       majoration_ferie: ferie,
     });
-  }, [hj, js, nb, eng, ferie, base, total, reductionMontant, frequencyDiscountMontant, frequency, subFrequency, superv, hm, jsSem, nbS, engLabel, engPct]);
+  }, [hj, js, nb, eng, ferie, base, total, reductionMontant, frequencyDiscountMontant, frequency, subFrequency, superv, hm, jsSem, nbS, engLabel, engPct, selectedDays]);
 
   return (
     <div>
@@ -278,7 +404,7 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
             <input type="number" value={hj} onChange={e => setHj(+e.target.value)} style={s.input as any} />
           </Field>
           <Field label="Jours/mois">
-            <select value={js} onChange={e => setJs(e.target.value)} disabled={frequency === "subscription"} style={{ ...s.input, opacity: frequency === "subscription" ? 0.5 : 1 } as any}>
+            <select value={js} onChange={e => handleJsChange(e.target.value)} disabled={frequency === "subscription"} style={{ ...s.input, opacity: frequency === "subscription" ? 0.5 : 1 } as any}>
               <option value="22">22j (5j/sem)</option>
               <option value="26">26j (6j/sem)</option>
               <option value="30">30j (7j/sem)</option>
@@ -304,7 +430,7 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
           </Field>
           {frequency === "subscription" && (
             <Field label="Cadence d'abonnement">
-              <select value={subFrequency} onChange={e => setSubFrequency(e.target.value)} style={s.input as any}>
+              <select value={subFrequency} onChange={e => handleSubFrequencyChange(e.target.value)} style={s.input as any}>
                 <option value="1foisParSemaine">1 fois par semaine</option>
                 <option value="2foisParSemaine">2 fois par semaine</option>
                 <option value="3foisParSemaine">3 fois par semaine</option>
@@ -327,6 +453,11 @@ function G360Calc({ demande, onPrestationsChange }: PlacementQuoteProps) {
           </div>
         </div>
       </div>
+      <JoursInterventionSelector
+        selectedDays={selectedDays}
+        onChange={handleDaysChange}
+        isAbo={true}
+      />
       <ResultBar
         detail={`${hm.toFixed(0)}h × 45 DH × ${nbS} pers${ferie ? " × 1,20" : ""}${frequencyDiscount > 0 ? " × 0,90" : ""}${reduction > 0 ? ` × ${(1 - reduction).toFixed(2)}` : ""}`}
         total={`${fmt(total)} DH`} label="Mensuel HT" />
