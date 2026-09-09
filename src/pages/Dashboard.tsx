@@ -309,14 +309,20 @@ export default function Dashboard() {
   const [confirmTermineeModal, setConfirmTermineeModal] = useState<Demande | null>(null);
   const [confirmingFin, setConfirmingFin] = useState<boolean>(false);
 
+  const getParentDemande = (parentId: number | string, fallback: Demande): Demande => {
+    const list = allDemandes.length > 0 ? allDemandes : demandes;
+    const pId = Number(parentId);
+    return list.find(d => Number(d.id) === pId) || fallback;
+  };
+
   const getSubInfo = (d: Demande) => {
     const isSub = d.frequency === 'abonnement' || !!d.parent_demande;
     if (!isSub) return null;
     const parentId = d.parent_demande || d.id;
     if (!parentId) return null;
 
-    const list = allDemandes.length > 0 ? allDemandes : demandes;
-    const parentDemande = list.find(x => Number(x.id) === Number(parentId)) || d;
+    const list: Demande[] = allDemandes.length > 0 ? allDemandes : demandes;
+    const parentDemande = getParentDemande(parentId, d);
 
     const parseFrenchDate = (value?: string): Date | null => {
       if (!value) return null;
@@ -699,30 +705,94 @@ export default function Dashboard() {
   };
 
   const isPartProfilDefined = (d: Demande): boolean => {
-    const parts = (d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || d.formulaire_data?.parts_repartition || []) as any[];
-    const totalParts = Array.isArray(parts) ? parts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) : 0;
-    const singlePart = Number(d.formulaire_data?.facturation?.part_profil ?? d.formulaire_data?.facturation?.montant_agence_doit_profil ?? (d as any).part_profil ?? 0);
-    
+    const facturation = d.formulaire_data?.facturation || {};
+    const statutUi = facturation.statut_paiement_ui || (d as any).statut_paiement_ui || getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
+    if (statutUi === 'facturation_annulee') {
+      return true;
+    }
+
+    let parts = (d.parts_repartition || facturation.parts_repartition || d.formulaire_data?.parts_repartition || []) as any[];
+    if ((!Array.isArray(parts) || parts.length === 0) && d.parent_demande) {
+      const parentD = getParentDemande(d.parent_demande, d);
+      if (parentD && parentD.id !== d.id) {
+        const parentFact = parentD.formulaire_data?.facturation || {};
+        const parentParts = (parentD.parts_repartition || parentFact.parts_repartition || parentD.formulaire_data?.parts_repartition || []) as any[];
+        if (Array.isArray(parentParts) && parentParts.length > 0) {
+          parts = parentParts;
+        }
+      }
+    }
+
+    if (!Array.isArray(parts) || parts.length === 0) {
+      const singlePart = Number(facturation.part_profil ?? facturation.montant_agence_doit_profil ?? (d as any).part_profil ?? 0);
+      return singlePart > 0;
+    }
+
+    // Chaque ligne de part doit avoir un profil sélectionné
+    const hasUnassignedProfile = parts.some(p => !p.profile_id || Number(p.profile_id) <= 0);
+    if (hasUnassignedProfile) return false;
+
     // Si toutes les intervenantes sont internes (amount = 0 légitime), la répartition est valide
-    const hasInterneAssigned = Array.isArray(parts) && parts.length > 0 && parts.every(p => {
+    const allInternes = parts.every(p => {
       const pId = Number(p.profile_id);
-      if (!pId) return false;
       const ag = allProfils.find((a: any) => a.id === pId) || d.profils_envoyes?.find((a: any) => a.id === pId);
       return ag?.categorie === 'interne';
     });
+    if (allInternes) return true;
 
-    return totalParts > 0 || singlePart > 0 || hasInterneAssigned;
+    const totalParts = parts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const singlePart = Number(facturation.part_profil ?? facturation.montant_agence_doit_profil ?? (d as any).part_profil ?? 0);
+
+    return totalParts > 0 || singlePart > 0;
+  };
+
+  const isPaymentNonConfirme = (d: Demande): boolean => {
+    const facturation = d.formulaire_data?.facturation || {};
+    let statutUi = facturation.statut_paiement_ui || (d as any).statut_paiement_ui;
+
+    // Si séance d'abonnement sans statut propre, vérifier le parent
+    if ((!statutUi || statutUi === 'non_confirme') && d.parent_demande) {
+      const parentD = getParentDemande(d.parent_demande, d);
+      if (parentD && parentD.id !== d.id) {
+        const parentFact = parentD.formulaire_data?.facturation || {};
+        const parentStatutUi = parentFact.statut_paiement_ui || (parentD as any).statut_paiement_ui;
+        if (parentStatutUi && parentStatutUi !== 'non_confirme') {
+          statutUi = parentStatutUi;
+        }
+      }
+    }
+
+    if (!statutUi) {
+      statutUi = getPaymentUiValue(d.statut_paiement || 'non_paye', Boolean(facturation.facturation_annulee));
+    }
+
+    return statutUi === 'non_confirme' || statutUi === 'Non confirmé';
   };
 
   const handleConfirmFinPrestation = async (d: Demande) => {
-    if (!isPartProfilDefined(d)) {
-      addToast("Veuillez d'abord définir la part de la femme de ménage dans le détail du besoin.", 'warning');
+    const partsValid = isPartProfilDefined(d);
+    const paymentNonConfirme = isPaymentNonConfirme(d);
+
+    if (!partsValid || paymentNonConfirme) {
+      if (!partsValid && paymentNonConfirme) {
+        addToast("Impossible de terminer la prestation : les parts des intervenantes ne sont pas validées et le statut de paiement est « Non confirmé ».", 'warning');
+      } else if (!partsValid) {
+        addToast("Impossible de terminer la prestation : veuillez d'abord valider les parts des intervenantes dans le détail du besoin.", 'warning');
+      } else {
+        addToast("Impossible de terminer la prestation : le statut de paiement est « Non confirmé ». Veuillez confirmer le statut de paiement dans le détail du besoin.", 'warning');
+      }
       setConfirmTermineeModal(null);
       openDetail(d);
-      setShowPartsSection(true);
-      setTimeout(() => {
-        document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 200);
+      if (!partsValid) {
+        setShowPartsSection(true);
+        setTimeout(() => {
+          document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 250);
+      } else {
+        setTimeout(() => {
+          document.getElementById('statut-paiement-field')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 250);
+      }
       return;
     }
 
@@ -984,12 +1054,6 @@ export default function Dashboard() {
     console.log(`[getSubscriptionDemandes] list is allDemandes: ${allDemandes.length > 0}`);
     console.log(`[getSubscriptionDemandes] filtered items:`, filtered.map(x => ({ id: x.id, parent_demande: x.parent_demande, parts: x.parts_repartition })));
     return filtered;
-  };
-  
-  const getParentDemande = (parentId: number | string, fallback: Demande) => {
-    const list = allDemandes.length > 0 ? allDemandes : demandes;
-    const pId = Number(parentId);
-    return list.find(d => Number(d.id) === pId) || fallback;
   };
 
   const computeDuesForPaymentAndSupplement = (
@@ -1841,15 +1905,35 @@ export default function Dashboard() {
       if (['pres_terminee', 'termine'].includes(editFormData.statut) && !isFreeOrCancelled) {
         const totalParts = partsRepartition.reduce((sum, p) => sum + toNumber(p.amount), 0);
         const singlePart = Number(editFormData.part_profil || editFormData.montant_agence_doit_profil || 0);
-        const hasInterneOnly = partsRepartition.length > 0 && partsRepartition.every(p => {
+        const hasUnassignedProfile = partsRepartition.some(p => !p.profile_id || Number(p.profile_id) <= 0);
+        const hasInterneOnly = partsRepartition.length > 0 && !hasUnassignedProfile && partsRepartition.every(p => {
           const prof = allProfils.find((a: any) => a.id === Number(p.profile_id)) || selectedDemande.profils_envoyes?.find((a: any) => a.id === Number(p.profile_id));
           return prof?.categorie === 'interne';
         });
-        if (totalParts <= 0 && singlePart <= 0 && !hasInterneOnly) {
-          addToast('Veuillez définir la part de la femme de ménage.', 'warning');
+
+        if (hasUnassignedProfile) {
+          addToast("Veuillez sélectionner un profil pour chaque ligne dans la gestion des parts.", 'warning');
           setShowPartsSection(true);
           setTimeout(() => {
             document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 150);
+          return;
+        }
+
+        if (totalParts <= 0 && singlePart <= 0 && !hasInterneOnly) {
+          addToast('Veuillez définir et valider la part de la femme de ménage.', 'warning');
+          setShowPartsSection(true);
+          setTimeout(() => {
+            document.getElementById('gestion-des-parts-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 150);
+          return;
+        }
+
+        const currentPaymentUi = editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee));
+        if (currentPaymentUi === 'non_confirme' || currentPaymentUi === 'Non confirmé') {
+          addToast("Impossible de passer en prestation terminée : le statut de paiement est « Non confirmé ». Veuillez sélectionner un statut de paiement confirmé.", 'warning');
+          setTimeout(() => {
+            document.getElementById('statut-paiement-field')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }, 150);
           return;
         }
@@ -1916,10 +2000,14 @@ export default function Dashboard() {
       }
 
       if (editFormData.statut === 'termine' && selectedDemande.statut !== 'termine') {
-        finalStatutPaiementUi = 'paiement_en_attente';
+        if (!finalStatutPaiementUi || finalStatutPaiementUi === 'non_confirme') {
+          finalStatutPaiementUi = 'paiement_en_attente';
+        }
         triggerSatisfactionWhatsApp = true;
       } else if (editFormData.statut === 'pres_terminee' && selectedDemande.statut !== 'pres_terminee') {
-        finalStatutPaiementUi = 'paiement_en_attente';
+        if (!finalStatutPaiementUi || finalStatutPaiementUi === 'non_confirme') {
+          finalStatutPaiementUi = 'paiement_en_attente';
+        }
       }
 
 
@@ -3391,47 +3479,6 @@ export default function Dashboard() {
 
                               {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande') || hasPermissionWithContext(user, 'confirmation_avant_operation', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
 
-                              {(hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin') || hasPermission(user, 'confirmation_avant_operation')) && (
-                                <>
-                                  <button 
-                                    className="menu-item" 
-                                    style={{ 
-                                       color: '#6366f1',
-                                       opacity: !d.cao ? 0.5 : 1,
-                                       cursor: !d.cao ? 'not-allowed' : 'pointer'
-                                    }} 
-                                    disabled={!d.cao}
-                                    onClick={async () => {
-                                      if (!d.cao) return;
-                                      await updateDemande(d.id, { statut: 'pres_confirmee' });
-                                      addToast('Statut mis à jour : Prestation confirmée', 'success');
-                                      fetchData();
-                                      setActiveMoreMenu(null);
-                                      setMoreMenuCoords(null);
-                                    }}
-                                  >
-                                    <CheckCircle size={16} /> Pres. confirmée
-                                  </button>
-
-                                  <button 
-                                    className="menu-item" 
-                                    style={{ 
-                                       color: '#0ea5e9',
-                                       opacity: !d.cao ? 0.5 : 1,
-                                       cursor: !d.cao ? 'not-allowed' : 'pointer'
-                                    }} 
-                                    disabled={!d.cao}
-                                    onClick={() => {
-                                      setActiveMoreMenu(null);
-                                      setMoreMenuCoords(null);
-                                      setConfirmTermineeModal(d);
-                                    }}
-                                  >
-                                    <CheckCircle size={16} /> Pres. terminée
-                                  </button>
-                                  <div className="menu-divider" />
-                                </>
-                              )}
 
                               {hasPermissionWithContext(user, 'annulation_demande', d) && (
                                 <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
@@ -3622,47 +3669,6 @@ export default function Dashboard() {
 
                               {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande') || hasPermissionWithContext(user, 'confirmation_avant_operation', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
 
-                              {(hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermission(user, 'modifier_demande') || hasPermission(user, 'editer_besoin') || hasPermission(user, 'confirmation_avant_operation')) && (
-                                <>
-                                  <button 
-                                    className="menu-item" 
-                                    style={{ 
-                                       color: '#6366f1',
-                                       opacity: !d.cao ? 0.5 : 1,
-                                       cursor: !d.cao ? 'not-allowed' : 'pointer'
-                                    }} 
-                                    disabled={!d.cao}
-                                    onClick={async () => {
-                                      if (!d.cao) return;
-                                      await updateDemande(d.id, { statut: 'pres_confirmee' });
-                                      addToast('Statut mis à jour : Prestation confirmée', 'success');
-                                      fetchData();
-                                      setActiveMoreMenu(null);
-                                      setMoreMenuCoords(null);
-                                    }}
-                                  >
-                                    <CheckCircle size={16} /> Pres. confirmée
-                                  </button>
-
-                                  <button 
-                                    className="menu-item" 
-                                    style={{ 
-                                       color: '#0ea5e9',
-                                       opacity: !d.cao ? 0.5 : 1,
-                                       cursor: !d.cao ? 'not-allowed' : 'pointer'
-                                    }} 
-                                    disabled={!d.cao}
-                                    onClick={() => {
-                                      setActiveMoreMenu(null);
-                                      setMoreMenuCoords(null);
-                                      setConfirmTermineeModal(d);
-                                    }}
-                                  >
-                                    <CheckCircle size={16} /> Pres. terminée
-                                  </button>
-                                  <div className="menu-divider" />
-                                </>
-                              )}
 
                               {hasPermissionWithContext(user, 'annulation_demande', d) && (
                                 <button className="menu-item" style={{ color: '#ef4444' }} onClick={() => {
@@ -4445,7 +4451,7 @@ export default function Dashboard() {
                               <option value="carte">Par carte bancaire (solution de paiement en ligne)</option>
                             </select>
                           </div>
-                          <div className="form-group">
+                          <div className="form-group" id="statut-paiement-field">
                             <label>Statut de paiement</label>
                             {(() => {
                               const currentPaymentStatutUi = editFormData.statut_paiement_ui || getPaymentUiValue(editFormData.statut_paiement || 'non_paye', Boolean(editFormData.facturation_annulee));
@@ -6943,11 +6949,45 @@ export default function Dashboard() {
 
             {/* Body */}
             <div style={{ padding: '24px' }}>
-              <div style={{ padding: '14px', backgroundColor: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0', marginBottom: '16px' }}>
-                <p style={{ margin: 0, fontSize: '14.5px', fontWeight: 600, color: '#166534', lineHeight: 1.4 }}>
-                  Veuillez vérifier si la prestation est réellement terminée.
-                </p>
-              </div>
+              {(() => {
+                const partsValid = isPartProfilDefined(confirmTermineeModal);
+                const paymentNonConfirme = isPaymentNonConfirme(confirmTermineeModal);
+                const isBlocked = !partsValid || paymentNonConfirme;
+
+                if (!isBlocked) {
+                  return (
+                    <div style={{ padding: '14px', backgroundColor: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0', marginBottom: '16px' }}>
+                      <p style={{ margin: 0, fontSize: '14.5px', fontWeight: 600, color: '#166534', lineHeight: 1.4 }}>
+                        Veuillez vérifier si la prestation est réellement terminée.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{ padding: '14px 16px', backgroundColor: '#fef2f2', borderRadius: '10px', border: '1px solid #fecaca', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: '#991b1b', fontWeight: 700, fontSize: '14px' }}>
+                      <AlertTriangle size={18} color="#dc2626" />
+                      <span>Passation bloquée — Conditions requises :</span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#b91c1c', lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {!partsValid && (
+                        <li>
+                          <strong>Parts non validées :</strong> La répartition des parts des intervenantes n'a pas été renseignée ou validée.
+                        </li>
+                      )}
+                      {paymentNonConfirme && (
+                        <li>
+                          <strong>Statut de paiement non confirmé :</strong> Le paiement est sur « Non confirmé ». Un statut confirmé est exigé.
+                        </li>
+                      )}
+                    </ul>
+                    <p style={{ margin: '10px 0 0', fontSize: '12px', color: '#7f1d1d', fontWeight: 500 }}>
+                      En confirmant, vous serez automatiquement dirigé vers le détail du besoin pour régulariser ces éléments.
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div style={{ fontSize: '13px', color: '#374151', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px', backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                 <div><strong>Client :</strong> {confirmTermineeModal.client_name || confirmTermineeModal.formulaire_data?.nom || (confirmTermineeModal.parent_demande ? getParentDemande(confirmTermineeModal.parent_demande, confirmTermineeModal)?.client_name : '') || '—'}</div>
@@ -6994,26 +7034,38 @@ export default function Dashboard() {
               >
                 Non
               </button>
-              <button
-                type="button"
-                disabled={confirmingFin}
-                onClick={() => handleConfirmFinPrestation(confirmTermineeModal)}
-                style={{
-                  padding: '9px 20px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: confirmingFin ? '#9ca3af' : '#059669',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  fontSize: '14px',
-                  cursor: confirmingFin ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                {confirmingFin ? 'Validation en cours...' : 'Oui, confirmer'}
-              </button>
+              {(() => {
+                const partsValid = isPartProfilDefined(confirmTermineeModal);
+                const paymentNonConfirme = isPaymentNonConfirme(confirmTermineeModal);
+                const isBlocked = !partsValid || paymentNonConfirme;
+
+                return (
+                  <button
+                    type="button"
+                    disabled={confirmingFin}
+                    onClick={() => handleConfirmFinPrestation(confirmTermineeModal)}
+                    style={{
+                      padding: '9px 20px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: confirmingFin ? '#9ca3af' : (isBlocked ? '#ea580c' : '#059669'),
+                      color: '#ffffff',
+                      fontWeight: 700,
+                      fontSize: '14px',
+                      cursor: confirmingFin ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {confirmingFin
+                      ? 'Validation en cours...'
+                      : isBlocked
+                        ? 'Régulariser dans le besoin'
+                        : 'Oui, confirmer'}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
