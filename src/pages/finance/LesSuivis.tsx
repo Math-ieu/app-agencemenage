@@ -66,6 +66,7 @@ interface FacturationRow {
   demandeId?: number;
   clientId?: number;
   profilId?: number;
+  categorie?: 'interne' | 'externe' | string;
   missionNo: string;
   date: string;
   client: string;
@@ -79,7 +80,7 @@ interface FacturationRow {
   partProfil: number;
   encaissePar: 'Agence' | 'Profil';
   paiement: 'non_paye' | 'partiellement_paye' | 'paye';
-  statut: 'Annulé' | 'Facturation annulée' | 'Intervention annulée' | 'Intervention gratuite' | 'Confirmée' | 'Terminée' | 'Payé' | 'En attente';
+  statut: 'Annulé' | 'Facturation annulée' | 'Intervention annulée' | 'Intervention gratuite' | 'Confirmée' | 'Terminée' | 'Payé' | 'A jour' | 'En attente';
   reglementInterne: string;
   montantPaye?: number;
   montantEncaisseProfil?: number;
@@ -130,6 +131,7 @@ interface AgentApiItem {
   last_name?: string;
   city?: string;
   phone?: string;
+  categorie?: 'interne' | 'externe' | string;
 }
 
 const money = (value: number): string => {
@@ -253,7 +255,7 @@ const modeLabelFromCode = (value?: string): string => {
 const getPaymentUiLabel = (uiCode: string | undefined): string => {
   if (!uiCode) return 'Non payé';
   const labels: Record<string, string> = {
-    paye: 'Payé',
+    paye: 'A jour',
     agence_payee_client: 'Agence payée / Client',
     profil_paye_client: 'Profil payé / Client',
     commercial_paye_client: 'Commercial payé / client',
@@ -271,12 +273,12 @@ const getRealPaymentStatusLabel = (row: FacturationRow): string => {
   const statut = row.statut;
   if (statut === 'Facturation annulée' || statut === 'Intervention annulée' || uiVal === 'facturation_annulee' || statut === 'Intervention gratuite' || uiVal === 'intervention_gratuite') {
     if (row.profilSeraPaye && (row.reglementInterne === 'Réglé' || row.partProfilVersee === true)) {
-      return 'Payé';
+      return 'A jour';
     }
     return uiVal === 'intervention_gratuite' || statut === 'Intervention gratuite' ? 'Intervention gratuite' : (statut === 'Intervention annulée' ? 'Intervention annulée' : 'Facturation annulée');
   }
-  if (uiVal === 'paye' || row.paiement === 'paye') {
-    return 'Payé';
+  if (uiVal === 'paye' || row.paiement === 'paye' || statut === 'Payé' || statut === 'A jour') {
+    return 'A jour';
   }
   return getPaymentUiLabel(uiVal);
 };
@@ -290,7 +292,7 @@ const getRealPaymentStatusClass = (row: FacturationRow): string => {
     }
     return uiVal === 'intervention_gratuite' || statut === 'Intervention gratuite' ? 'green' : 'pink';
   }
-  if (uiVal === 'paye' || row.paiement === 'paye') {
+  if (uiVal === 'paye' || row.paiement === 'paye' || statut === 'Payé' || statut === 'A jour') {
     return 'green';
   }
   if (['agence_payee_client', 'profil_paye_client', 'commercial_paye_client', 'paiement_partiel', 'paiement_en_attente'].includes(uiVal || '')) {
@@ -366,6 +368,7 @@ const isRowEncaisseEtValide = (row: FacturationRow): boolean => {
 
   return (
     row.statut === 'Payé' ||
+    row.statut === 'A jour' ||
     row.statutPaiementUi === 'paye' ||
     row.statutPaiementUi === 'integral' ||
     row.paiement === 'paye'
@@ -858,7 +861,7 @@ export default function LesSuivis() {
           : isFacturationAnnulee
             ? 'Facturation annulée'
             : paiement === 'paye'
-              ? 'Payé'
+              ? 'A jour'
               : paiement === 'partiellement_paye'
                 ? 'Confirmée'
                 : missionStatus === 'terminee'
@@ -933,6 +936,7 @@ export default function LesSuivis() {
       demandeId: demande?.id,
       clientId: demande?.client,
       profilId: agent?.id,
+      categorie: agent?.categorie || demande?.profil_detail?.categorie,
       missionNo: `MSN-${String(item.id).padStart(6, '0')}`,
       date: formatDateFR(demande?.date_intervention),
       client: demande?.client_name || '—',
@@ -1081,7 +1085,7 @@ export default function LesSuivis() {
       isGratuit ? 'Intervention gratuite' :
         isInterventionAnnulee ? 'Intervention annulée' :
           isFacturationAnnulee ? 'Facturation annulée' :
-            paiement === 'paye' ? 'Payé' :
+            paiement === 'paye' ? 'A jour' :
               paiement === 'partiellement_paye' ? 'Confirmée' :
                 demande.statut === 'en_attente' ? 'En attente' : 'Confirmée';
 
@@ -1093,6 +1097,7 @@ export default function LesSuivis() {
       demandeId: demande?.id,
       clientId: demande?.client,
       profilId: demande?.profil_id,
+      categorie: demande?.profil_detail?.categorie,
       missionNo: `DEM-${String(demande?.id).padStart(6, '0')}`,
       date: demande?.date_intervention ? formatDateFR(demande.date_intervention) : formatDateFR(demande?.created_at),
       client: demande?.client_name || '—',
@@ -1373,7 +1378,7 @@ export default function LesSuivis() {
                 row.statutPaiementUi = pFact.statut_paiement_ui;
                 if (['paye', 'integral', 'effectue', 'profil_paye_client', 'agence_payee_client'].includes(pFact.statut_paiement_ui)) {
                   row.paiement = 'paye';
-                  row.statut = 'Payé';
+                  row.statut = 'A jour';
                 }
               }
             }
@@ -1531,6 +1536,7 @@ export default function LesSuivis() {
               ...row,
               profilId: pId,
               profil: pName,
+              categorie: agentObj?.categorie || row.categorie,
               partProfil: portion,
               partProfilVersee: isPaid,
               reglementInterne: isPaid ? 'Réglé' : 'Non réglé',
@@ -1560,6 +1566,7 @@ export default function LesSuivis() {
 
           result.push({
             ...row,
+            categorie: row.categorie || agentsList.find((a) => Number(a.id) === Number(row.profilId))?.categorie,
             partProfil: partProfilDue,
             _uniqueKey: `${row.missionNo}-credit`,
             dateVersementProfil: versementDate,
@@ -1602,6 +1609,7 @@ export default function LesSuivis() {
               ...row,
               profilId: pId,
               profil: pName,
+              categorie: agentObj?.categorie || row.categorie,
               partAgence: getPartAgenceDueFromProfil(row),
               partAgenceReversee: isPaid,
               reglementInterne: isPaid ? 'Réglé' : 'Non réglé',
@@ -1631,6 +1639,7 @@ export default function LesSuivis() {
 
           result.push({
             ...row,
+            categorie: row.categorie || agentsList.find((a) => Number(a.id) === Number(row.profilId))?.categorie,
             partAgence: partAgenceDue,
             _uniqueKey: `${row.missionNo}-debit`,
             dateRemiseAgence: remiseDate,
@@ -1790,7 +1799,7 @@ export default function LesSuivis() {
           const isPartiel = uiVal === 'paiement_partiel' || uiVal === 'Paiement partiel' || uiVal === 'partiel' || paiement === 'partiellement_paye';
           if (!isPartiel) return false;
         } else if (statusFilter === 'paye') {
-          const isPaye = statut === 'Payé' || uiVal === 'paye' || uiVal === 'integral' || paiement === 'paye';
+          const isPaye = statut === 'Payé' || statut === 'A jour' || uiVal === 'paye' || uiVal === 'integral' || paiement === 'paye';
           if (!isPaye) return false;
         } else if (statusFilter === 'facturation_annulee') {
           const isAnnule =
@@ -1848,6 +1857,7 @@ export default function LesSuivis() {
       profilId?: number;
       profilName: string;
       phone?: string;
+      categorie?: 'interne' | 'externe' | string;
       nbMissions: number;
       profilDoitAgence: number;
       agenceDoitProfil: number;
@@ -1866,6 +1876,7 @@ export default function LesSuivis() {
           profilId: row.profilId,
           profilName: pName,
           phone: row.phone,
+          categorie: row.categorie,
           nbMissions: 0,
           profilDoitAgence: 0,
           agenceDoitProfil: 0,
@@ -1902,6 +1913,36 @@ export default function LesSuivis() {
 
     return Array.from(map.values()).sort((a, b) => b.nbMissions - a.nbMissions);
   }, [filteredRows]);
+
+  const getProfilCategorie = useCallback((
+    rowOrItem: { profilId?: number; profil?: string; profilName?: string; categorie?: string } | undefined
+  ): 'interne' | 'externe' => {
+    if (!rowOrItem) return 'externe';
+    const directCat = (rowOrItem.categorie || '').toLowerCase();
+    if (directCat === 'interne' || directCat === 'externe') {
+      return directCat as 'interne' | 'externe';
+    }
+    const pId = rowOrItem.profilId;
+    if (pId) {
+      const ag = agentsList.find((a) => Number(a.id) === Number(pId));
+      const agCat = (ag?.categorie || '').toLowerCase();
+      if (agCat === 'interne' || agCat === 'externe') {
+        return agCat as 'interne' | 'externe';
+      }
+    }
+    const pName = (rowOrItem.profil || rowOrItem.profilName || '').trim().toLowerCase();
+    if (pName && pName !== '—' && pName !== 'non assigné') {
+      const ag = agentsList.find((a) => {
+        const fullName = (a.full_name || `${a.first_name || ''} ${a.last_name || ''}`).trim().toLowerCase();
+        return fullName && fullName === pName;
+      });
+      const agCat = (ag?.categorie || '').toLowerCase();
+      if (agCat === 'interne' || agCat === 'externe') {
+        return agCat as 'interne' | 'externe';
+      }
+    }
+    return 'externe';
+  }, [agentsList]);
 
   // Tab 2 Calculations: Commercials Performance
   const commercialPerformance = useMemo(() => {
@@ -2636,7 +2677,7 @@ export default function LesSuivis() {
           }
           return `${row.montant} DH`;
         })(),
-        row.statut,
+        getRealPaymentStatusLabel(row),
         statutEncais,
         reglementLabel,
         freqLabel,
@@ -2797,7 +2838,7 @@ export default function LesSuivis() {
                     <option value="agence_payee_client">Agence payée/client</option>
                     <option value="profil_paye_client">Profil payé/client</option>
                     <option value="paiement_partiel">Paiement partiel</option>
-                    <option value="paye">Payé</option>
+                    <option value="paye">A jour</option>
                     <option value="facturation_annulee">Facturation annulée</option>
                   </select>
                   <ChevronDown size={14} />
@@ -2904,15 +2945,25 @@ export default function LesSuivis() {
                           return (
                             <tr key={item.profilName}>
                               <td>
-                                <button
-                                  type="button"
-                                  className="fg-link-btn"
-                                  onClick={() => setSelectedDuesProfile(item)}
-                                  title="Afficher le décompte et reçu des dûs"
-                                  style={{ fontWeight: 600 }}
-                                >
-                                  {item.profilName}
-                                </button>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    className="fg-link-btn"
+                                    onClick={() => setSelectedDuesProfile(item)}
+                                    title="Afficher le décompte et reçu des dûs"
+                                    style={{ fontWeight: 600 }}
+                                  >
+                                    {item.profilName}
+                                  </button>
+                                  {(() => {
+                                    const cat = getProfilCategorie(item);
+                                    return (
+                                      <span className={`ls-badge-cat ${cat}`}>
+                                        {cat === 'interne' ? 'Interne' : 'Externe'}
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
                               </td>
                               <td>
                                 <span className="ls-badge-count">{item.nbMissions}</span>
@@ -3027,13 +3078,23 @@ export default function LesSuivis() {
                             <td>{row.date || '—'}</td>
                             <td>
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-                                {row.profilId ? (
-                                  <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>
-                                    {row.profil}
-                                  </button>
-                                ) : (
-                                  <span>{row.profil}</span>
-                                )}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  {row.profilId ? (
+                                    <button type="button" className="fg-link-btn" onClick={() => goToProfilDetails(row.profilId)}>
+                                      {row.profil}
+                                    </button>
+                                  ) : (
+                                    <span>{row.profil}</span>
+                                  )}
+                                  {(() => {
+                                    const cat = getProfilCategorie(row);
+                                    return (
+                                      <span className={`ls-badge-cat ${cat}`}>
+                                        {cat === 'interne' ? 'Interne' : 'Externe'}
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
                                 {row.isDelegate && (
                                   <span className="ls-badge-delegate" title="Profil délégué sur la mission">
                                     👑 Délégué
@@ -3732,7 +3793,17 @@ export default function LesSuivis() {
                       </div>
                       <div className="ls-detail-row">
                         <span className="ls-detail-label">Profil (FDM)</span>
-                        <span className="ls-detail-value">{selectedRow.profil || '—'}</span>
+                        <span className="ls-detail-value" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <span>{selectedRow.profil || '—'}</span>
+                          {(() => {
+                            const cat = getProfilCategorie(selectedRow);
+                            return (
+                              <span className={`ls-badge-cat ${cat}`}>
+                                {cat === 'interne' ? 'Interne' : 'Externe'}
+                              </span>
+                            );
+                          })()}
+                        </span>
                       </div>
                       <div className="ls-detail-row">
                         <span className="ls-detail-label">Client</span>
@@ -3934,6 +4005,14 @@ export default function LesSuivis() {
                       <div>
                         <div className="ls-dues-profile-badge-row">
                           <span className="ls-dues-profile-badge">INTERVENANTE</span>
+                          {(() => {
+                            const cat = getProfilCategorie(selectedDuesProfile);
+                            return (
+                              <span className={`ls-badge-cat ${cat}`}>
+                                {cat === 'interne' ? 'Interne' : 'Externe'}
+                              </span>
+                            );
+                          })()}
                           {selectedDuesProfile.profilId && (
                             <span className="ls-dues-profile-id">#{selectedDuesProfile.profilId}</span>
                           )}
@@ -4181,7 +4260,17 @@ export default function LesSuivis() {
                 <div className="ls-modal-header">
                   <div>
                     <h3 className="ls-modal-title">Confirmer le règlement complet</h3>
-                    <p className="ls-modal-subtitle">{settleConfirmProfile.profilName}</p>
+                    <p className="ls-modal-subtitle" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <span>{settleConfirmProfile.profilName}</span>
+                      {(() => {
+                        const cat = getProfilCategorie(settleConfirmProfile);
+                        return (
+                          <span className={`ls-badge-cat ${cat}`}>
+                            {cat === 'interne' ? 'Interne' : 'Externe'}
+                          </span>
+                        );
+                      })()}
+                    </p>
                   </div>
                   <button
                     className="ls-modal-close"
