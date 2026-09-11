@@ -125,6 +125,7 @@ interface FacturationRow {
   supplementHeuresMontant?: number;
   supplementEncaissePar?: 'femme_de_menage' | 'agence' | string;
   supplementHeuresRecupereEspeces?: boolean;
+  especesRecuperees?: number;
 }
 
 interface ProfileAccount {
@@ -369,20 +370,22 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
     return 0;
   }
 
-  const isVirEsp = row.statutPaiementUi === 'paiement_partiel' || row.statutPaiementUi === 'Paiement partiel' || row.modePaiement === 'virement_especes' || (row as any).modePaiementReel === 'Virement / Espèce';
-  if (isVirEsp) {
-    return Number(row.montantProfilDoitAgence || 0);
-  }
-
-  if (row.montantProfilDoitAgence !== undefined && Number(row.montantProfilDoitAgence) > 0) {
-    return Number(row.montantProfilDoitAgence);
-  }
-
   const supplementMontant = Number(row.supplementHeuresMontant || 0);
   const hasSupplement = Boolean(row.hasSupplementHeures && supplementMontant > 0);
   const isFdmCash = row.supplementEncaissePar === 'femme_de_menage' || (
     row.supplementEncaissePar !== 'agence' && Boolean(row.supplementHeuresRecupereEspeces)
   );
+  const suppCash = (hasSupplement && isFdmCash) ? supplementMontant : 0;
+  const especesRecuperees = Number(row.especesRecuperees || 0);
+
+  const isVirEsp = row.statutPaiementUi === 'paiement_partiel' || row.statutPaiementUi === 'Paiement partiel' || row.modePaiement === 'virement_especes' || (row as any).modePaiementReel === 'Virement / Espèce';
+  if (isVirEsp) {
+    return Math.max(Number(row.montantProfilDoitAgence || 0), especesRecuperees + suppCash);
+  }
+
+  if (row.montantProfilDoitAgence !== undefined && Number(row.montantProfilDoitAgence) > 0) {
+    return Number(row.montantProfilDoitAgence);
+  }
 
   if (row.statutPaiementUi === 'profil_paye_client' || row.statutPaiementUi === 'Profil payé / Client') {
     if (hasSupplement && row.supplementEncaissePar === 'agence') {
@@ -419,7 +422,7 @@ const getPartAgenceDueFromProfil = (row: FacturationRow): number => {
   return row.partAgence;
 };
 
-const getCommissionAgenceEncaissee = (row: FacturationRow, _forKpi = false): number => {
+const getCommissionAgenceEncaissee = (row: FacturationRow, forKpi = false): number => {
   const isCanceled = row.statutPaiementUi === 'facturation_annulee' || 
                      row.statutPaiementUi === 'Facturation annulée' || 
                      row.statut === 'Facturation annulée' || 
@@ -429,11 +432,13 @@ const getCommissionAgenceEncaissee = (row: FacturationRow, _forKpi = false): num
                     row.statut === 'Intervention gratuite';
 
   if (isCanceled) {
-    const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement' || row.parentDemandeId;
-    if (isSub) {
-      const interventionCA = row.subscriptionInterventionCA || 0;
-      const profilePart = Number(row.montantProfilAnnulation || row.partProfil || 0);
-      return -(interventionCA + (row.profilSeraPaye ? profilePart : 0));
+    if (forKpi) {
+      const isSub = row.frequency === 'abonnement' || row.originalDemande?.frequency === 'abonnement' || row.parentDemandeId;
+      if (isSub) {
+        const interventionCA = row.subscriptionInterventionCA || 0;
+        const profilePart = Number(row.montantProfilAnnulation || row.partProfil || 0);
+        return -(interventionCA + (row.profilSeraPaye ? profilePart : 0));
+      }
     }
     return row.profilSeraPaye ? -(Number(row.montantProfilAnnulation) || 0) : 0;
   }
@@ -442,28 +447,50 @@ const getCommissionAgenceEncaissee = (row: FacturationRow, _forKpi = false): num
     return 0;
   }
 
-  // If this is a secondary intervention of an subscription, client paid 0.
-  // The commission is simply the negative of the amount due to the profile (our cost).
-  if (row.isSubscriptionSecondary) {
-    const hasProfile = row.profilId || 
-                       (row.parts_repartition && row.parts_repartition.length > 0) || 
-                       (row.profil && row.profil !== '—' && row.profil !== 'Profil inconnu');
-    return hasProfile ? -row.partProfil : 0;
+  // --- LOGIQUE SPÉCIFIQUE AU CALCUL DU KPI GLOBAL (AGRÉGÉ) ---
+  if (forKpi) {
+    if (row.isSubscriptionSecondary) {
+      const hasProfile = row.profilId || 
+                         (row.parts_repartition && row.parts_repartition.length > 0) || 
+                         (row.profil && row.profil !== '—' && row.profil !== 'Profil inconnu');
+      return hasProfile ? -row.partProfil : 0;
+    }
+
+    if (row.isSubscriptionPrimary) {
+      const isPaid = row.paiement === 'paye' ||
+                     row.paiement === 'partiellement_paye' ||
+                     ['paye', 'Payé', 'agence_payee_client', 'Agence payée / Client', 'profil_paye_client', 'Profil payé / Client'].includes(row.statutPaiementUi || '');
+      if (!isPaid) return 0;
+      return Math.max(0, row.montant - row.partProfil);
+    }
   }
 
-  // If this is a primary subscription intervention, we compute the commission dynamically
-  // based on the total subscription price minus this row's profile part (our share for this run).
+  // --- LOGIQUE POUR L'AFFICHAGE DU TABLEAU DÉBIT / CRÉDIT ET LIGNES INDIVIDUELLES ---
+  // Dans le cas d'une intervention d'abonnement, chaque intervention a sa propre part agence
   if (row.isSubscriptionPrimary) {
-    const isPaid = row.paiement === 'paye' ||
-                   row.paiement === 'partiellement_paye' ||
-                   ['paye', 'Payé', 'agence_payee_client', 'Agence payée / Client', 'profil_paye_client', 'Profil payé / Client'].includes(row.statutPaiementUi || '');
-    if (!isPaid) return 0;
-    return Math.max(0, row.montant - row.partProfil);
+    const childPartAgence = Number(
+      row.originalDemande?.formulaire_data?.facturation?.part_agence ??
+      row.originalDemande?.part_agence ??
+      0
+    );
+    if (childPartAgence > 0) return childPartAgence;
+    if (row.subscriptionDenominator && row.subscriptionDenominator > 1 && row.partAgence > 0) {
+      return Math.round((row.partAgence / row.subscriptionDenominator) * 100) / 100;
+    }
+    return Number(row.partAgence || 0);
+  }
+
+  if (row.isSubscriptionSecondary) {
+    if (row.partAgence > 0) return Number(row.partAgence);
+    if (row.subscriptionInterventionCA && row.partProfil !== undefined) {
+      return Math.max(0, row.subscriptionInterventionCA - row.partProfil);
+    }
+    return Number(row.partAgence || 0);
   }
 
   // Agence payée / Client : l'agence a déjà l'argent → commission = partAgence (immédiat)
   if (row.statutPaiementUi === 'agence_payee_client' || row.statutPaiementUi === 'Agence payée / Client') {
-    return row.partAgence;
+    return Number(row.partAgence || 0);
   }
 
   // Profil payé / Client : le profil a l'argent → commission = partAgence (due par le profil)
@@ -471,24 +498,43 @@ const getCommissionAgenceEncaissee = (row: FacturationRow, _forKpi = false): num
     return Number(row.montantProfilDoitAgence || row.partAgence || 0);
   }
 
-  // Payé : le client a payé entièrement (et l'agence ou le profil a encaissé)
-  if (row.statutPaiementUi === 'paye' || row.statutPaiementUi === 'Payé') {
-    return row.partAgence;
+  // Commercial payé / client
+  if (row.statutPaiementUi === 'commercial_paye_client' || row.statutPaiementUi === 'Commercial payé / client') {
+    return Number(row.partAgence || 0);
   }
 
-  // Si le client n'a pas payé, on ne compte pas de commission
-  if (row.paiement !== 'paye') return 0;
+  // Mode Virement / Espèces ou Paiement partiel (ex: Société Atlas Finance)
+  const isVirEsp = row.statutPaiementUi === 'paiement_partiel' || 
+                   row.statutPaiementUi === 'Paiement partiel' || 
+                   row.modePaiement === 'virement_especes' || 
+                   (row as any).modePaiementReel === 'Virement / Espèce';
+  if (isVirEsp) {
+    return Number(row.partAgence || 0);
+  }
 
-  if (row.encaissePar === 'Agence') {
+  // Payé : le client a payé entièrement (et l'agence ou le profil a encaissé)
+  if (row.statutPaiementUi === 'paye' || row.statutPaiementUi === 'Payé' || row.paiement === 'paye') {
+    return Number(row.partAgence || 0);
+  }
+
+  if (row.paiement === 'partiellement_paye' || row.statutPaiementUi === 'paiement_partiel') {
+    return Number(row.partAgence || 0);
+  }
+
+  if (row.encaissePar === 'Agence' && row.statut !== 'En attente') {
     const partProfilDue = getPartProfilDueFromAgence(row);
-    return Math.max(row.montant - partProfilDue, 0);
+    return row.partAgence > 0 ? Number(row.partAgence) : Math.max(row.montant - partProfilDue, 0);
   }
 
   if (row.reglementInterne === 'Réglé') {
-    return getPartAgenceDueFromProfil(row);
+    return Number(row.partAgence || getPartAgenceDueFromProfil(row) || 0);
   }
 
-  return 0;
+  if (row.paiement === 'non_paye' && (row.statutPaiementUi === 'non_paye' || row.statutPaiementUi === 'non_confirme')) {
+    return 0;
+  }
+
+  return Number(row.partAgence || 0);
 };
 
 const getISODateLocal = (date: Date): string => {
@@ -770,7 +816,29 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
     })(),
     montantProfilAnnulation: Number((demande as any)?.montant_profil_annulation || item.montant_profil_annulation || facturationData.montant_profil_annulation || 0) * ratio,
     montantAgenceDoitProfil: Number((demande as any)?.montant_agence_doit_profil || item.montant_agence_doit_profil || facturationData.montant_agence_doit_profil || 0) * ratio,
-    montantProfilDoitAgence: Number((demande as any)?.montant_profil_doit_agence || item.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0) * ratio,
+    montantProfilDoitAgence: (() => {
+      const isVirEsp = rawStatutPaiementUi === 'paiement_partiel' || rawStatutPaiementUi === 'Paiement partiel' || demande?.mode_paiement === 'virement_especes' || facturationData.mode_paiement === 'virement_especes' || (item as any).mode_paiement_reel === 'Virement / Espèce' || (item as any).mode_paiement === 'virement_especes';
+      const esp = Number(
+        facturationData.montant_especes ??
+        (demande as any)?.formulaire_data?.facturation?.montant_especes ??
+        (demande as any)?.formulaire_data?.montant_especes ??
+        (demande as any)?.montant_especes ??
+        (item as any)?.montant_especes ??
+        (isVirEsp
+          ? Math.max(0, Number(demande?.prix || (item as any)?.montant || 0) - Number((demande as any)?.avance_paiement || (demande as any)?.formulaire_data?.montant_virement || facturationData.montant_virement || facturationData.montant_verse || 0))
+          : 0)
+      );
+      const suppMontant = Number(facturationData.supplement_heures_montant ?? (demande as any)?.supplement_heures_montant ?? item.supplement_heures_montant ?? 0);
+      const isFdm = (
+        facturationData.supplement_encaisse_par === 'femme_de_menage' ||
+        (demande as any)?.supplement_encaisse_par === 'femme_de_menage' ||
+        item.supplement_encaisse_par === 'femme_de_menage' ||
+        Boolean(facturationData.supplement_heures_recupere_especes ?? (demande as any)?.supplement_heures_recupere_especes ?? item.supplement_heures_recupere_especes ?? false)
+      );
+      const suppCash = isFdm ? suppMontant : 0;
+      const dbVal = Number((demande as any)?.montant_profil_doit_agence || item.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0);
+      return Math.max(dbVal, isVirEsp ? (esp + suppCash) : 0) * ratio;
+    })(),
     statutPaiementUi: rawStatutPaiementUi,
     tvaActive: Boolean(facturationData.tva_active ?? (demande as any)?.tva_active),
     originalDemande: demande,
@@ -794,6 +862,20 @@ const mapMissionToFacturationRow = (item: MissionApiItem): FacturationRow => {
       (facturationData.supplement_heures_recupere_especes === false && (facturationData.has_supplement_heures || item.has_supplement_heures) ? 'agence' : 'femme_de_menage')
     ),
     supplementHeuresRecupereEspeces: Boolean(facturationData.supplement_heures_recupere_especes ?? (demande as any)?.supplement_heures_recupere_especes ?? item.supplement_heures_recupere_especes ?? false),
+    especesRecuperees: (() => {
+      const isVirEsp = rawStatutPaiementUi === 'paiement_partiel' || rawStatutPaiementUi === 'Paiement partiel' || demande?.mode_paiement === 'virement_especes' || facturationData.mode_paiement === 'virement_especes' || (item as any).mode_paiement_reel === 'Virement / Espèce' || (item as any).mode_paiement === 'virement_especes';
+      const esp = Number(
+        facturationData.montant_especes ??
+        (demande as any)?.formulaire_data?.facturation?.montant_especes ??
+        (demande as any)?.formulaire_data?.montant_especes ??
+        (demande as any)?.montant_especes ??
+        (item as any)?.montant_especes ??
+        (isVirEsp
+          ? Math.max(0, Number(demande?.prix || (item as any)?.montant || 0) - Number((demande as any)?.avance_paiement || (demande as any)?.formulaire_data?.montant_virement || facturationData.montant_virement || facturationData.montant_verse || 0))
+          : 0)
+      );
+      return esp * ratio;
+    })(),
   };
 };
 
@@ -925,7 +1007,27 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
     })(),
     montantProfilAnnulation: Number(demande.montant_profil_annulation || facturationData.montant_profil_annulation || 0),
     montantAgenceDoitProfil: Number(demande.montant_agence_doit_profil || facturationData.montant_agence_doit_profil || 0),
-    montantProfilDoitAgence: Number(demande.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0),
+    montantProfilDoitAgence: (() => {
+      const isVirEsp = rawStatutPaiementUi === 'paiement_partiel' || rawStatutPaiementUi === 'Paiement partiel' || demande?.mode_paiement === 'virement_especes' || facturationData.mode_paiement === 'virement_especes';
+      const esp = Number(
+        facturationData.montant_especes ??
+        demande?.formulaire_data?.facturation?.montant_especes ??
+        demande?.formulaire_data?.montant_especes ??
+        demande?.montant_especes ??
+        (isVirEsp
+          ? Math.max(0, Number(demande?.prix || 0) - Number(demande?.avance_paiement || demande?.formulaire_data?.montant_virement || facturationData.montant_virement || facturationData.montant_verse || 0))
+          : 0)
+      );
+      const suppMontant = Number(facturationData.supplement_heures_montant ?? demande?.supplement_heures_montant ?? 0);
+      const isFdm = (
+        facturationData.supplement_encaisse_par === 'femme_de_menage' ||
+        demande?.supplement_encaisse_par === 'femme_de_menage' ||
+        Boolean(facturationData.supplement_heures_recupere_especes ?? demande?.supplement_heures_recupere_especes ?? false)
+      );
+      const suppCash = isFdm ? suppMontant : 0;
+      const dbVal = Number(demande.montant_profil_doit_agence || facturationData.montant_profil_doit_agence || 0);
+      return Math.max(dbVal, isVirEsp ? (esp + suppCash) : 0);
+    })(),
     statutPaiementUi: rawStatutPaiementUi,
     tvaActive: Boolean(facturationData.tva_active ?? demande?.tva_active),
     originalDemande: demande,
@@ -947,6 +1049,19 @@ const mapDemandeToFacturationRow = (demande: any): FacturationRow => {
       (facturationData.supplement_heures_recupere_especes === false && (facturationData.has_supplement_heures || demande?.has_supplement_heures) ? 'agence' : 'femme_de_menage')
     ),
     supplementHeuresRecupereEspeces: Boolean(facturationData.supplement_heures_recupere_especes ?? demande?.supplement_heures_recupere_especes ?? false),
+    especesRecuperees: (() => {
+      const isVirEsp = rawStatutPaiementUi === 'paiement_partiel' || rawStatutPaiementUi === 'Paiement partiel' || demande?.mode_paiement === 'virement_especes' || facturationData.mode_paiement === 'virement_especes';
+      const esp = Number(
+        facturationData.montant_especes ??
+        demande?.formulaire_data?.facturation?.montant_especes ??
+        demande?.formulaire_data?.montant_especes ??
+        demande?.montant_especes ??
+        (isVirEsp
+          ? Math.max(0, Number(demande?.prix || 0) - Number(demande?.avance_paiement || demande?.formulaire_data?.montant_virement || facturationData.montant_virement || facturationData.montant_verse || 0))
+          : 0)
+      );
+      return esp;
+    })(),
   };
 };
 
@@ -1684,12 +1799,15 @@ export default function VueGlobale() {
       // Exclure immédiatement : ce n'est plus "Agence non payée"
       if (row.reglementInterne === 'Réglé' || row.partAgenceReversee === true) continue;
 
+      const isVirEsp = row.statutPaiementUi === 'paiement_partiel' || row.statutPaiementUi === 'Paiement partiel' || row.modePaiement === 'virement_especes' || (row as any).modePaiementReel === 'Virement / Espèce';
       const isDebit = row.statutPaiementUi === 'profil_paye_client' ||
         row.statutPaiementUi === 'Profil payé / Client' ||
         (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
         (!row.statutPaiementUi && row.encaissePar === 'Profil') ||
+        (isVirEsp && (Number(row.montantProfilDoitAgence || 0) > 0 || Number(row.especesRecuperees || 0) > 0)) ||
         (Number(row.montantProfilDoitAgence || 0) > 0) ||
-        (Boolean(row.hasSupplementHeures) && (row.supplementEncaissePar === 'femme_de_menage' || Boolean(row.supplementHeuresRecupereEspeces)) && Number(row.supplementHeuresMontant || 0) > 0);
+        (Boolean(row.hasSupplementHeures) && (row.supplementEncaissePar === 'femme_de_menage' || Boolean(row.supplementHeuresRecupereEspeces)) && Number(row.supplementHeuresMontant || 0) > 0) ||
+        getPartAgenceDueFromProfil(row) >= 0.01;
       if (!isDebit) continue;
 
       const totalDue = getPartAgenceDueFromProfil(row);
@@ -2079,7 +2197,7 @@ export default function VueGlobale() {
         row.statutPaiementUi === 'Profil payé / Client' ||
         (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
         (!row.statutPaiementUi && row.encaissePar === 'Profil') ||
-        ((row.statutPaiementUi === 'paiement_partiel' || row.statutPaiementUi === 'Paiement partiel' || row.modePaiement === 'virement_especes' || (row as any).modePaiementReel === 'Virement / Espèce') && Number(row.montantProfilDoitAgence || 0) > 0) ||
+        ((row.statutPaiementUi === 'paiement_partiel' || row.statutPaiementUi === 'Paiement partiel' || row.modePaiement === 'virement_especes' || (row as any).modePaiementReel === 'Virement / Espèce') && (Number(row.montantProfilDoitAgence || 0) > 0 || Number(row.especesRecuperees || 0) > 0)) ||
         Number(row.montantProfilDoitAgence || 0) > 0 ||
         hasSupplementFdmCash ||
         getPartAgenceDueFromProfil(row) >= 0.01;
@@ -2198,18 +2316,23 @@ export default function VueGlobale() {
         const pName = (row.profil || '').trim();
         if (!pName || pName === '—' || pName === 'Profil inconnu' || pName === 'Non assigné') continue;
 
+        const isPaid = Boolean(row.partAgenceReversee || row.reglementInterne === 'Réglé');
+        if (debitPaymentFilter === 'Non payé' && isPaid) continue;
+        if (debitPaymentFilter === 'Payé' && !isPaid) continue;
+
         const partAgenceDue = getPartAgenceDueFromProfil(row);
         if (partAgenceDue >= 0.01) {
           result.push({
             ...row,
             _partAgenceDue: partAgenceDue,
+            _partAgenceReversee: isPaid,
             _uniqueKey: row.missionNo
           });
         }
       }
     }
     return result;
-  }, [filteredDebitRows, profileAccountsData]);
+  }, [filteredDebitRows, profileAccountsData, debitPaymentFilter]);
 
   const debitTotal = useMemo(
     () => expandedDebitRows.reduce((sum, row) => sum + (row._partAgenceDue || 0), 0),
@@ -2303,13 +2426,16 @@ export default function VueGlobale() {
         (row.supplementEncaissePar === 'femme_de_menage' || Boolean(row.supplementHeuresRecupereEspeces)) &&
         Number(row.supplementHeuresMontant || 0) > 0;
 
+      const isVirEsp = row.statutPaiementUi === 'paiement_partiel' || row.statutPaiementUi === 'Paiement partiel' || row.modePaiement === 'virement_especes' || (row as any).modePaiementReel === 'Virement / Espèce';
       const isDebit =
         row.statutPaiementUi === 'profil_paye_client' ||
         row.statutPaiementUi === 'Profil payé / Client' ||
         (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
         (!row.statutPaiementUi && row.encaissePar === 'Profil') ||
+        (isVirEsp && (Number(row.montantProfilDoitAgence || 0) > 0 || Number(row.especesRecuperees || 0) > 0)) ||
         (Number(row.montantProfilDoitAgence || 0) > 0) ||
-        hasFdmSuppCash;
+        hasFdmSuppCash ||
+        getPartAgenceDueFromProfil(row) >= 0.01;
 
       const isCredit =
         row.statutPaiementUi === 'agence_payee_client' ||
@@ -2744,7 +2870,7 @@ export default function VueGlobale() {
     }
 
     if (row.demandeId && row.originalDemande) {
-      const newDoitAgence = allPaid ? 0 : Number(facturation.montant_profil_doit_agence || row.montantProfilDoitAgence || 0);
+      const newDoitAgence = allPaid ? 0 : Number((row as any)._partAgenceDue || facturation.montant_profil_doit_agence || row.montantProfilDoitAgence || 0);
       await updateDemande(row.demandeId, {
         montant_profil_doit_agence: newDoitAgence,
         formulaire_data: {
@@ -2771,6 +2897,7 @@ export default function VueGlobale() {
       });
     }
 
+    emitFinanceSync({ source: 'VueGlobale', missionId: row.missionId, demandeId: row.demandeId });
     await loadFinanceData();
   };
 
@@ -2781,6 +2908,7 @@ export default function VueGlobale() {
         row.statutPaiementUi === 'Profil payé / Client' ||
         (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
         (!row.statutPaiementUi && row.encaissePar === 'Profil') ||
+        ((row.statutPaiementUi === 'paiement_partiel' || row.statutPaiementUi === 'Paiement partiel' || row.modePaiement === 'virement_especes' || (row as any).modePaiementReel === 'Virement / Espèce') && (Number(row.montantProfilDoitAgence || 0) > 0 || Number(row.especesRecuperees || 0) > 0)) ||
         Number(row.montantProfilDoitAgence || 0) > 0;
       if (isDebit) {
         const delegate = row.parts_repartition.find((p: any) => p.is_delegate) || row.parts_repartition[0];
@@ -2800,6 +2928,7 @@ export default function VueGlobale() {
       row.statutPaiementUi === 'Profil payé / Client' ||
       (row.statutPaiementUi === 'paye' && row.encaissePar === 'Profil') ||
       (!row.statutPaiementUi && row.encaissePar === 'Profil') ||
+      ((row.statutPaiementUi === 'paiement_partiel' || row.statutPaiementUi === 'Paiement partiel' || row.modePaiement === 'virement_especes' || (row as any).modePaiementReel === 'Virement / Espèce') && (Number(row.montantProfilDoitAgence || 0) > 0 || Number(row.especesRecuperees || 0) > 0)) ||
       Number(row.montantProfilDoitAgence || 0) > 0;
 
     let newParts = row.originalDemande?.formulaire_data?.facturation?.parts_repartition || row.parts_repartition;
@@ -3528,7 +3657,16 @@ export default function VueGlobale() {
                         ) : (row.profil || '—')}
                       </td>
                       <td className="fg-text-red fw-semibold">
-                        {row._isDebit && row._partAgenceDue !== null ? money(row._partAgenceDue) : '—'}
+                        {row._isDebit && row._partAgenceDue !== null ? (
+                          <>
+                            {money(row._partAgenceDue)}
+                            {(row.modePaiement === 'virement_especes' || (row as any).modePaiementReel === 'Virement / Espèce' || row.statutPaiementUi === 'paiement_partiel' || row.statutPaiementUi === 'Paiement partiel') && (
+                              <small style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
+                                Espèces FDM
+                              </small>
+                            )}
+                          </>
+                        ) : '—'}
                       </td>
                       <td className="fg-text-orange fw-semibold">
                         {row._isCredit && row._partProfilDue !== null ? money(row._partProfilDue) : '—'}
@@ -3640,7 +3778,14 @@ export default function VueGlobale() {
                       </td>
                       <td>{row.service}</td>
                       <td><span className="fg-pill fg-pill-blue">{row.segment}</span></td>
-                      <td className="fg-text-red fw-bold">{money(row._partAgenceDue)}</td>
+                      <td className="fg-text-red fw-bold">
+                        {money(row._partAgenceDue)}
+                        {(row.modePaiement === 'virement_especes' || (row as any).modePaiementReel === 'Virement / Espèce' || row.statutPaiementUi === 'paiement_partiel' || row.statutPaiementUi === 'Paiement partiel') && (
+                          <small style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: 500, marginTop: '2px' }}>
+                            Espèces perçues FDM
+                          </small>
+                        )}
+                      </td>
                       <td>{money(row.partProfil)}</td>
                       <td>
                         <label className="fg-select-wrap fg-compact-select">
