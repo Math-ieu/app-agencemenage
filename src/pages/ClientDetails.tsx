@@ -79,6 +79,7 @@ const renderStars = (rating: number) => (
 
 /* ─── Accordion Section ─── */
 interface AccordionProps {
+  id?: string;
   title: string;
   icon: React.ReactNode;
   children: React.ReactNode;
@@ -88,9 +89,9 @@ interface AccordionProps {
   badge?: string | number;
 }
 
-function Accordion({ title, icon, children, isOpen, onToggle, color, badge }: AccordionProps) {
+function Accordion({ id, title, icon, children, isOpen, onToggle, color, badge }: AccordionProps) {
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div id={id} style={{ marginBottom: 16 }}>
       <div
         onClick={onToggle}
         style={{
@@ -1858,82 +1859,122 @@ export default function ClientDetails() {
                             {renderPaymentStatus(latestD)}
                           </Td>
                         <Td center>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
                             <button 
-                              onClick={() => navigate('/demandes', { state: { renewDemandeId: d.id, returnToClient: id } })}
-                              disabled={d.frequency === 'abonnement'}
+                              type="button"
+                              onClick={() => navigate(`/?edit=${d.id}`)}
                               style={{ 
-                                display: 'flex', 
+                                display: 'inline-flex', 
                                 alignItems: 'center', 
-                                gap: 6, 
-                                color: d.frequency === 'abonnement' ? '#cbd5e1' : '#475569', 
+                                gap: 5, 
+                                color: '#037265', 
                                 fontWeight: 600, 
                                 fontSize: 13, 
                                 background: 'none', 
                                 border: 'none', 
-                                cursor: d.frequency === 'abonnement' ? 'not-allowed' : 'pointer' 
+                                cursor: 'pointer',
+                                padding: '2px 4px'
                               }}
+                              title="Modifier / Éditer la demande"
                             >
-                              <RefreshCw size={15} color={d.frequency === 'abonnement' ? '#cbd5e1' : C.teal} /> Renouveler
+                              <Pencil size={15} color="#037265" /> Modifier
                             </button>
-                            {d.frequency === 'abonnement' && (
+                            {d.frequency !== 'abonnement' && (
                               <button 
+                                type="button"
                                 onClick={() => navigate('/demandes', { state: { renewDemandeId: d.id, returnToClient: id } })}
-                                disabled
                                 style={{ 
-                                  display: 'flex', 
+                                  display: 'inline-flex', 
                                   alignItems: 'center', 
-                                  gap: 6, 
-                                  color: '#cbd5e1', 
+                                  gap: 5, 
+                                  color: '#475569', 
                                   fontWeight: 600, 
                                   fontSize: 13, 
                                   background: 'none', 
                                   border: 'none', 
-                                  cursor: 'not-allowed' 
+                                  cursor: 'pointer',
+                                  padding: '2px 4px'
                                 }}
+                                title="Renouveler la demande"
                               >
-                                <RefreshCw size={15} color="#cbd5e1" /> Abonnement
+                                <RefreshCw size={15} color={C.teal} /> Renouveler
+                              </button>
+                            )}
+                            {d.frequency === 'abonnement' && (
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  setOpenSections(prev => ({ ...prev, frequence: true }));
+                                  setTimeout(() => {
+                                    const el = document.getElementById('accordion-frequence');
+                                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                  }, 100);
+                                }}
+                                style={{ 
+                                  display: 'inline-flex', 
+                                  alignItems: 'center', 
+                                  gap: 5, 
+                                  color: '#0f766e', 
+                                  fontWeight: 600, 
+                                  fontSize: 13, 
+                                  background: '#f0fdf4', 
+                                  border: '1px solid #ccfbf1', 
+                                  borderRadius: 6,
+                                  cursor: 'pointer',
+                                  padding: '2px 8px'
+                                }}
+                                title="Accéder à la gestion de l'abonnement"
+                              >
+                                <Clock size={15} color="#0f766e" /> Abonnement
                               </button>
                             )}
                             {(() => {
                               const devisDoc = d.documents?.find(doc => doc.type_document === 'devis') || null;
-                              const isAbonnement = d.frequency === 'abonnement';
                               return (
                                 <>
                                   <button 
+                                    type="button"
                                     onClick={() => setShowDemandDetails(d)}
-                                    disabled={isAbonnement}
                                     style={{ 
                                       background: 'none', 
                                       border: 'none', 
-                                      cursor: isAbonnement ? 'not-allowed' : 'pointer', 
-                                      color: isAbonnement ? '#cbd5e1' : '#64748b' 
+                                      cursor: 'pointer', 
+                                      color: '#64748b',
+                                      padding: '2px 4px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center'
                                     }}
-                                    title={isAbonnement ? "Non disponible pour les abonnements" : "Détails du besoin actuel"}
+                                    title="Détails de la demande"
                                   >
                                     <Eye size={17} />
                                   </button>
-                                  <button 
-                                    onClick={() => {
-                                      if (devisDoc && devisDoc.download_url) {
-                                        const fileName = devisDoc.nom || 'Devis PDF';
-                                        handleDownload(devisDoc.download_url, fileName);
-                                      } else {
-                                        addToast("Aucun devis disponible pour cette demande", "info");
-                                      }
-                                    }}
-                                    disabled={isAbonnement || !devisDoc}
-                                    style={{ 
-                                      background: 'none', 
-                                      border: 'none', 
-                                      cursor: (isAbonnement || !devisDoc) ? 'not-allowed' : 'pointer', 
-                                      color: (isAbonnement || !devisDoc) ? '#cbd5e1' : '#64748b', 
-                                      opacity: devisDoc ? 1 : 0.4 
-                                    }}
-                                    title={isAbonnement ? "Non disponible pour les abonnements" : (devisDoc ? "Télécharger le devis" : "Aucun devis disponible")}
-                                  >
-                                    <FileText size={17} />
-                                  </button>
+                                  {d.frequency !== 'abonnement' && (
+                                    <button 
+                                      type="button"
+                                      onClick={() => {
+                                        if (devisDoc && devisDoc.download_url) {
+                                          const fileName = devisDoc.nom || 'Devis PDF';
+                                          handleDownload(devisDoc.download_url, fileName);
+                                        } else {
+                                          addToast("Aucun devis disponible pour cette demande", "info");
+                                        }
+                                      }}
+                                      disabled={!devisDoc}
+                                      style={{ 
+                                        background: 'none', 
+                                        border: 'none', 
+                                        cursor: devisDoc ? 'pointer' : 'default', 
+                                        color: devisDoc ? '#64748b' : '#cbd5e1', 
+                                        opacity: devisDoc ? 1 : 0.4,
+                                        padding: '2px 4px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center'
+                                      }}
+                                      title={devisDoc ? "Télécharger le devis" : "Aucun devis disponible"}
+                                    >
+                                      <FileText size={17} />
+                                    </button>
+                                  )}
                                 </>
                               );
                             })()}
@@ -2057,7 +2098,7 @@ export default function ClientDetails() {
         )}
 
         {/* ── 4. Type de Fréquence / Gestion de l'abonnement ── */}
-        <Accordion title="Gestion de l'abonnement" icon={<Clock size={18} />} isOpen={openSections.frequence} onToggle={() => toggle('frequence')} color={C.sage}>
+        <Accordion id="accordion-frequence" title="Gestion de l'abonnement" icon={<Clock size={18} />} isOpen={openSections.frequence} onToggle={() => toggle('frequence')} color={C.sage}>
           {latest ? (
             latest.frequency === 'oneshot' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
