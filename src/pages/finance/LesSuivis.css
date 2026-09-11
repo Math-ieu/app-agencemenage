@@ -1985,3 +1985,36 @@
     justify-content: center;
   }
 }
+
+.ls-status-select {
+  padding: 0.35rem 1.6rem 0.35rem 0.65rem !important;
+  border-radius: 9999px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  border: 1px solid transparent !important;
+  appearance: none;
+  -webkit-appearance: none;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.ls-status-select.paid {
+  background-color: #ecfdf5 !important;
+  color: #047857 !important;
+  border-color: #a7f3d0 !important;
+}
+
+.ls-status-select.paid:hover {
+  background-color: #d1fae5 !important;
+}
+
+.ls-status-select.unpaid {
+  background-color: #fff1f2 !important;
+  color: #e11d48 !important;
+  border-color: #fecdd3 !important;
+}
+
+.ls-status-select.unpaid:hover {
+  background-color: #ffe4e6 !important;
+}

@@ -7,6 +7,7 @@ import { useNotificationStore, useAuthStore } from '../store/auth';
 import { useToastStore } from '../store/toast';
 import { checkPermission, hasPermission } from '../utils/permissions';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
+import { emitFinanceSync } from '../utils/paymentSync';
 import {
   RefreshCw, Search, XCircle,
   Calendar,
@@ -19,6 +20,7 @@ import { usePriceCalculator } from '../hooks/usePriceCalculator';
 import { useResourceEstimator } from '../hooks/useResourceEstimator';
 import QuoteSection from '../components/demandes/quotes/QuoteSection';
 import { DynamicServiceForm } from '../components/demandes/forms/DynamicServiceForm';
+import { getStatutPaiementFromMode } from '../utils/paymentRules';
 
 const isDevisRequired = (d: Demande | null) => {
   if (!d) return false;
@@ -629,8 +631,13 @@ export default function DemandesEnAttente() {
       const virAmount = splitVirement === '' ? 0 : Number(splitVirement);
       const espAmount = splitEspeces === '' ? 0 : Number(splitEspeces);
 
+      const initialStatutUi = getStatutPaiementFromMode(selectedPaymentMode);
+      const initialStatutApi = (initialStatutUi === 'paye' || initialStatutUi === 'integral') ? 'integral' : 'partiel';
+
       const payload: any = {
         mode_paiement: selectedPaymentMode,
+        statut_paiement_ui: initialStatutUi,
+        statut_paiement: initialStatutApi,
         ...(selectedPaymentMode === 'virement_especes' ? {
           montant_virement: virAmount,
           montant_especes: espAmount,
@@ -640,6 +647,7 @@ export default function DemandesEnAttente() {
         formulaire_data: {
           ...prevForm,
           mode_paiement: selectedPaymentMode,
+          statut_paiement_ui: initialStatutUi,
           ...(selectedPaymentMode === 'virement_especes' ? {
             montant_virement: virAmount,
             montant_especes: espAmount,
@@ -649,6 +657,8 @@ export default function DemandesEnAttente() {
           facturation: {
             ...prevFact,
             mode_paiement: selectedPaymentMode,
+            statut_paiement_ui: initialStatutUi,
+            statut_paiement: initialStatutApi,
             ...(selectedPaymentMode === 'virement_especes' ? {
               montant_virement: virAmount,
               montant_especes: espAmount,
@@ -667,6 +677,8 @@ export default function DemandesEnAttente() {
         return {
           ...item,
           mode_paiement: selectedPaymentMode,
+          statut_paiement_ui: initialStatutUi,
+          statut_paiement: initialStatutApi,
           ...(selectedPaymentMode === 'virement_especes' ? {
             montant_virement: virAmount,
             montant_especes: espAmount,
@@ -680,6 +692,7 @@ export default function DemandesEnAttente() {
       addToast("Mode de paiement mis à jour avec succès.", "success");
       setPaymentModeDemande(null);
       await fetchDemandes();
+      emitFinanceSync({ source: 'DemandesEnAttente', demandeId: paymentModeDemande.id });
     } catch (e: any) {
       console.error(e);
       const msg = e?.response?.data?.error || "Erreur lors de la mise à jour du mode de paiement.";
@@ -2599,14 +2612,22 @@ export default function DemandesEnAttente() {
                             virementVal = '';
                             especesVal = '';
                           }
-                          setFormData({ ...formData, mode_paiement: newMode, montant_virement: virementVal, montant_especes: especesVal });
+                          const newStatutUi = getStatutPaiementFromMode(newMode);
+                          setFormData({ 
+                            ...formData, 
+                            mode_paiement: newMode, 
+                            statut_paiement_ui: newStatutUi,
+                            montant_virement: virementVal, 
+                            montant_especes: especesVal 
+                          });
                         }}
                       >
                         <option value="">Choisir...</option>
-                        <option value="virement">Par virement</option>
-                        <option value="especes">En espèces</option>
-                        <option value="virement_especes">Virement / Espèce</option>
-                        <option value="carte">Par carte bancaire (solution de paiement en ligne)</option>
+                        <option value="virement_ag">Virement Ag</option>
+                        <option value="virement_com">Virement Com</option>
+                        <option value="virement_especes">Virement / Espèces</option>
+                        <option value="especes">Espèces</option>
+                        <option value="carte">Carte bancaire</option>
                         <option value="cheque">Par chèque</option>
                       </select>
                     </div>
@@ -3055,33 +3076,39 @@ export default function DemandesEnAttente() {
               <div className="payment-options-list">
                 {[
                   { 
-                    value: 'virement', 
-                    label: 'Virement', 
-                    desc: 'Règlement intégral par virement bancaire',
+                    value: 'virement_ag', 
+                    label: 'Virement Ag', 
+                    desc: "Virement bancaire vers l'agence",
                     icon: <Building2 size={18} className="text-teal-700" />
+                  },
+                  { 
+                    value: 'virement_com', 
+                    label: 'Virement Com', 
+                    desc: "Virement bancaire encaissé par le commercial",
+                    icon: <Building2 size={18} className="text-indigo-700" />
+                  },
+                  { 
+                    value: 'virement_especes', 
+                    label: 'Virement / Espèces', 
+                    desc: "Partie virement agence et solde en espèces à la FDM",
+                    icon: <WalletCards size={18} className="text-teal-700" />
                   },
                   { 
                     value: 'especes', 
                     label: 'Espèces', 
-                    desc: 'Règlement intégral en espèces',
+                    desc: "Règlement intégral en espèces au profil",
                     icon: <Coins size={18} className="text-amber-700" />
-                  },
-                  { 
-                    value: 'virement_especes', 
-                    label: 'Virement / Espèce', 
-                    desc: 'Une partie par virement et le reste en espèces récupéré sur place par la FDM',
-                    icon: <WalletCards size={18} className="text-teal-700" />
                   },
                   { 
                     value: 'carte', 
                     label: 'Carte bancaire', 
-                    desc: 'Solution de paiement en ligne',
+                    desc: "Solution de paiement en ligne",
                     icon: <CreditCard size={18} className="text-blue-700" />
                   },
                   { 
                     value: 'cheque', 
-                    label: 'Chèque', 
-                    desc: 'Paiement par chèque bancaire',
+                    label: 'Par chèque', 
+                    desc: "Paiement par chèque bancaire",
                     icon: <FileText size={18} className="text-slate-700" />
                   },
                 ].map(opt => {

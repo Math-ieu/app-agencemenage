@@ -16,6 +16,8 @@ import { checkPermission, hasPermission, hasPermissionWithContext } from '../uti
 import { getDynamicMonthPassagesCount, getDemandeStartDate, getDemandeStartTime, calculateTotalPrice, PricingInput } from '../utils/pricing';
 import { normalizeFrequence, normalizeStructure, normalizeTimePref, normalizeMobilite, normalizeSexe, normalizeQuartier } from '../utils/formNormalizers';
 import { renderStatusBadge, getStatusInfo, formatUserRole } from '../utils/statusUtils';
+import { getStatutPaiementFromMode, getModePaiementFromStatut, computeVirementEspecesDues } from '../utils/paymentRules';
+import { emitFinanceSync, useFinanceSync } from '../utils/paymentSync';
 import { generateDevisPdf } from '../lib/devis/generate-devis';
 import { DynamicServiceForm } from '../components/demandes/forms/DynamicServiceForm';
 // Services qui nécessitent un devis PDF (les autres ont un récapitulatif PNG)
@@ -702,7 +704,7 @@ export default function Dashboard() {
     
     let badgeClass = 'badge-red';
     if (statutUi === 'paye' || statutUi === 'integral' || statutUi === 'intervention_gratuite') badgeClass = 'badge-green';
-    else if (['agence_payee_client', 'profil_paye_client', 'paiement_partiel', 'paiement_en_attente'].includes(statutUi)) badgeClass = 'badge-orange';
+    else if (['agence_payee_client', 'profil_paye_client', 'commercial_paye_client', 'paiement_partiel', 'paiement_en_attente'].includes(statutUi)) badgeClass = 'badge-orange';
     else if (statutUi === 'facturation_annulee') badgeClass = 'badge-red';
     
     return <span className={`badge ${badgeClass}`}>{label}</span>;
@@ -1089,12 +1091,28 @@ export default function Dashboard() {
     encaissePar: 'femme_de_menage' | 'agence' | string,
     isFreeOrCancelled: boolean,
     profilSeraPaye?: boolean,
-    montantProfilAnnulation?: number
+    montantProfilAnnulation?: number,
+    modePaiement?: string,
+    montantEspeces?: number
   ) => {
     if (isFreeOrCancelled) {
       return {
         montant_profil_doit_agence: 0,
         montant_agence_doit_profil: profilSeraPaye ? (montantProfilAnnulation || 0) : 0,
+      };
+    }
+
+    if (statutPaiementUi === 'paiement_partiel' || statutPaiementUi === 'Paiement partiel' || modePaiement === 'virement_especes') {
+      const virEspDues = computeVirementEspecesDues(
+        montantEspeces !== undefined ? Number(montantEspeces) : 0,
+        totalParts,
+        hasSupplement,
+        suppMontant,
+        encaissePar
+      );
+      return {
+        montant_profil_doit_agence: virEspDues.montant_profil_doit_agence,
+        montant_agence_doit_profil: virEspDues.montant_agence_doit_profil,
       };
     }
 
@@ -1121,7 +1139,7 @@ export default function Dashboard() {
       };
     }
 
-    // Other statuses (e.g. paye, paiement_en_attente)
+    // Other statuses (e.g. paye, commercial_paye_client, paiement_en_attente)
     const dueAgence = (hasSupplement && encaissePar === 'femme_de_menage' && suppMontant > 0)
       ? suppMontant
       : 0;
@@ -2267,6 +2285,7 @@ export default function Dashboard() {
       }
 
       await fetchData();
+      emitFinanceSync({ source: 'Dashboard', demandeId: selectedDemande.id });
       closeDetailModal();
       addToast('Mise à jour effectuée avec succès !', 'success');
 
@@ -2690,6 +2709,7 @@ export default function Dashboard() {
   }, [editFormData?.nb_intervenants, editFormData?.nb_personnel, showDetail, isEditing]);
 
   useEffect(() => { fetchData(); }, []);
+  useFinanceSync(fetchData, { ignoreSource: 'Dashboard' });
 
   useEffect(() => {
     // Synchroniser les statuts automatiques du workflow (heures de début / fin)
@@ -4608,15 +4628,43 @@ export default function Dashboard() {
                                     newEspeces = Math.max(0, roundMoney(total - toNumber(newVerse)));
                                   }
                                 }
-                                setEditFormData({ ...editFormData, mode_paiement: newMode, montant_verse: newVerse, montant_especes: newEspeces });
+
+                                const mappedStatut = newMode ? getStatutPaiementFromMode(newMode) : editFormData.statut_paiement_ui;
+                                const parts = editFormData.parts_repartition || [];
+                                const totalParts = parts.reduce((sum: number, p: any) => sum + toNumber(p.amount), 0);
+                                const dues = computeDuesForPaymentAndSupplement(
+                                  mappedStatut,
+                                  toNumber(editFormData.part_agence),
+                                  totalParts,
+                                  Boolean(editFormData.has_supplement_heures),
+                                  toNumber(editFormData.supplement_heures_montant),
+                                  editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence'),
+                                  false,
+                                  editFormData.profil_sera_paye,
+                                  editFormData.montant_profil_annulation,
+                                  newMode,
+                                  newEspeces
+                                );
+
+                                setEditFormData({ 
+                                  ...editFormData, 
+                                  mode_paiement: newMode, 
+                                  statut_paiement_ui: mappedStatut,
+                                  encaisse_par: mappedStatut === 'profil_paye_client' ? 'profil' : 'agence',
+                                  montant_verse: newVerse, 
+                                  montant_especes: newEspeces,
+                                  montant_profil_doit_agence: dues.montant_profil_doit_agence,
+                                  montant_agence_doit_profil: dues.montant_agence_doit_profil,
+                                });
                               }} 
                               className="edit-input"
                             >
                               <option value="">Choisir...</option>
-                              <option value="virement">Par virement</option>
-                              <option value="especes">En espèces</option>
-                              <option value="virement_especes">Virement / Espèce</option>
-                              <option value="carte">Par carte bancaire (solution de paiement en ligne)</option>
+                              <option value="virement_ag">Virement Ag</option>
+                              <option value="virement_com">Virement Com</option>
+                              <option value="virement_especes">Virement / Espèces</option>
+                              <option value="especes">Espèces</option>
+                              <option value="carte">Carte bancaire</option>
                               <option value="cheque">Par chèque</option>
                             </select>
                           </div>
@@ -4642,55 +4690,51 @@ export default function Dashboard() {
                                       onChange={e => {
                                         const v = e.target.value;
                                         const isFreeOrCancelled = v === 'facturation_annulee' || v === 'intervention_gratuite';
-                                         const isSub = editFormData.frequency === 'abonnement' || Boolean(editFormData.parent_demande) || Boolean(selectedDemande?.parent_demande);
-                                         const currentHT = toNumber(editFormData.montant_ht ?? editFormData.prix ?? editFormData.ca_initial);
-                                         const newMontantHT = isFreeOrCancelled ? 0 : currentHT;
-                                         const newTvaActive = isFreeOrCancelled ? false : Boolean(editFormData.tva_active);
-                                         const currentMontantTTC = isFreeOrCancelled ? 0 : roundMoney(newTvaActive ? newMontantHT * 1.2 : newMontantHT);
-                                         
-                                         const parts = editFormData.parts_repartition || [];
-                                         let adjustedParts = [...parts];
-                                         let nextMontantProfilAnnulation = editFormData.montant_profil_annulation;
-                                         let nextProfilSeraPaye = editFormData.profil_sera_paye;
+                                        const nextMode = isFreeOrCancelled 
+                                          ? editFormData.mode_paiement 
+                                          : getModePaiementFromStatut(v, editFormData.mode_paiement);
 
-                                         if (isFreeOrCancelled) {
-                                           const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
-                                           nextMontantProfilAnnulation = totalParts;
-                                           nextProfilSeraPaye = totalParts > 0;
-                                         }
+                                        const isSub = editFormData.frequency === 'abonnement' || Boolean(editFormData.parent_demande) || Boolean(selectedDemande?.parent_demande);
+                                        const currentHT = toNumber(editFormData.montant_ht ?? editFormData.prix ?? editFormData.ca_initial);
+                                        const newMontantHT = isFreeOrCancelled ? 0 : currentHT;
+                                        const newTvaActive = isFreeOrCancelled ? false : Boolean(editFormData.tva_active);
+                                        const currentMontantTTC = isFreeOrCancelled ? 0 : roundMoney(newTvaActive ? newMontantHT * 1.2 : newMontantHT);
+                                        
+                                        const parts = editFormData.parts_repartition || [];
+                                        let adjustedParts = [...parts];
+                                        let nextMontantProfilAnnulation = editFormData.montant_profil_annulation;
+                                        let nextProfilSeraPaye = editFormData.profil_sera_paye;
 
-                                         const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
-                                         let nextPartAgence = 0;
-                                         if (isSub) {
-                                           const parentId = editFormData.parent_demande || selectedDemande?.parent_demande || selectedDemande?.id;
-                                           const parentDemande = getParentDemande(parentId, selectedDemande!);
-                                           const parentPrice = (selectedDemande?.id && Number(selectedDemande.id) === Number(parentId))
-                                             ? currentMontantTTC
-                                             : (parentDemande ? toNumber(parentDemande.prix) : 0);
-                                             
-                                           const subscriptionDemandes = getSubscriptionDemandes(parentId);
-                                           const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande?.id)).reduce((sum, d) => {
-                                             const pList = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
-                                             return sum + pList.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
-                                           }, 0);
-                                           
-                                           nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(parentPrice - (totalParts + otherDemandsProfilesTotal)));
-                                         } else {
-                                           nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(currentMontantTTC - totalParts));
-                                         }
+                                        if (isFreeOrCancelled) {
+                                          const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                                          nextMontantProfilAnnulation = totalParts;
+                                          nextProfilSeraPaye = totalParts > 0;
+                                        }
 
-                                        const updates: any = { 
-                                          ...editFormData, 
-                                          statut_paiement_ui: v, 
-                                          facturation_annulee: isFreeOrCancelled,
-                                          montant_ht: newMontantHT,
-                                          tva_active: newTvaActive,
-                                          parts_repartition: adjustedParts,
-                                          part_agence: nextPartAgence,
-                                        };
-                                        // Auto-set encaisse_par based on payment status
-                                        if (v === 'agence_payee_client' || v === 'paye' || v === 'commercial_paye_client') updates.encaisse_par = 'agence';
-                                        else if (v === 'profil_paye_client') updates.encaisse_par = 'profil';
+                                        const totalParts = adjustedParts.reduce((sum, p) => sum + toNumber(p.amount), 0);
+                                        let nextPartAgence = 0;
+                                        if (isSub) {
+                                          const parentId = editFormData.parent_demande || selectedDemande?.parent_demande || selectedDemande?.id;
+                                          const parentDemande = getParentDemande(parentId, selectedDemande!);
+                                          const parentPrice = (selectedDemande?.id && Number(selectedDemande.id) === Number(parentId))
+                                            ? currentMontantTTC
+                                            : (parentDemande ? toNumber(parentDemande.prix) : 0);
+                                            
+                                          const subscriptionDemandes = getSubscriptionDemandes(parentId);
+                                          const otherDemandsProfilesTotal = subscriptionDemandes.filter(d => Number(d.id) !== Number(selectedDemande?.id)).reduce((sum, d) => {
+                                            const pList = d.parts_repartition || d.formulaire_data?.facturation?.parts_repartition || [];
+                                            return sum + pList.reduce((s: number, p: any) => s + toNumber(p.amount), 0);
+                                          }, 0);
+                                          
+                                          nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(parentPrice - (totalParts + otherDemandsProfilesTotal)));
+                                        } else {
+                                          nextPartAgence = isFreeOrCancelled ? 0 : Math.max(0, roundMoney(currentMontantTTC - totalParts));
+                                        }
+
+                                        let nextEncaissePar = editFormData.encaisse_par;
+                                        if (v === 'agence_payee_client' || v === 'paye' || v === 'commercial_paye_client') nextEncaissePar = 'agence';
+                                        else if (v === 'profil_paye_client') nextEncaissePar = 'profil';
+
                                         const dues = computeDuesForPaymentAndSupplement(
                                           v,
                                           nextPartAgence,
@@ -4700,10 +4744,24 @@ export default function Dashboard() {
                                           editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence'),
                                           isFreeOrCancelled,
                                           nextProfilSeraPaye,
-                                          nextMontantProfilAnnulation
+                                          nextMontantProfilAnnulation,
+                                          nextMode,
+                                          editFormData.montant_especes
                                         );
-                                        updates.montant_profil_doit_agence = dues.montant_profil_doit_agence;
-                                        updates.montant_agence_doit_profil = dues.montant_agence_doit_profil;
+
+                                        const updates: any = { 
+                                          ...editFormData, 
+                                          mode_paiement: nextMode,
+                                          statut_paiement_ui: v, 
+                                          encaisse_par: nextEncaissePar,
+                                          facturation_annulee: isFreeOrCancelled,
+                                          montant_ht: newMontantHT,
+                                          tva_active: newTvaActive,
+                                          parts_repartition: adjustedParts,
+                                          part_agence: nextPartAgence,
+                                          montant_profil_doit_agence: dues.montant_profil_doit_agence,
+                                          montant_agence_doit_profil: dues.montant_agence_doit_profil,
+                                        };
 
                                         if (isFreeOrCancelled) {
                                           updates.profil_sera_paye = nextProfilSeraPaye;
@@ -4848,6 +4906,7 @@ export default function Dashboard() {
 
                                     const updates: any = { 
                                       ...editFormData, 
+                                      mode_paiement: 'virement_ag',
                                       statut_paiement_ui: v, 
                                       facturation_annulee: isFreeOrCancelled,
                                       montant_ht: newMontantHT,
@@ -4866,13 +4925,15 @@ export default function Dashboard() {
                                       editFormData.supplement_encaisse_par || (editFormData.supplement_heures_recupere_especes ? 'femme_de_menage' : 'agence'),
                                       isFreeOrCancelled,
                                       false,
-                                      0
+                                      0,
+                                      'virement_ag',
+                                      toNumber(editFormData.montant_especes)
                                     );
                                     updates.montant_agence_doit_profil = dues.montant_agence_doit_profil;
                                     updates.montant_profil_doit_agence = dues.montant_profil_doit_agence;
                                     
                                     setEditFormData(updates);
-                                    addToast("Statut de paiement modifié en 'Agence payée / Client'", "success");
+                                    addToast("Statut mis à jour : 'Virement Ag - Agence payée / Client'", "success");
                                   }}
                                   style={{
                                     padding: '6px 16px',
@@ -7769,6 +7830,7 @@ export default function Dashboard() {
                       setFacturationAnnuleeReason('');
                       setFacturationAnnuleeProfilPaye(false);
                       fetchData();
+                      emitFinanceSync({ source: 'Dashboard', demandeId: d.id });
                     } catch (err) {
                       addToast("Erreur lors de la mise à jour de la demande", 'error');
                     }

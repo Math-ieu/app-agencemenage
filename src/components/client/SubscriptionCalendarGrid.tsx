@@ -256,27 +256,83 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
               Horaires par jour (début / fin)
             </label>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-              {currentJours.map((jd) => (
-                <div key={jd.jour} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#ffffff' }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', width: 70, flexShrink: 0, textTransform: 'capitalize' }}>
-                    {JOURS_SEMAINE.find((j) => j.value === jd.jour)?.label || jd.jour}
-                  </span>
-                  <input
-                    type="time"
-                    value={jd.heure_debut || '09:00'}
-                    onChange={(e) => handleSetJourHeure(jd.jour, 'heure_debut', e.target.value)}
-                    style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #cbd5e1', outline: 'none', flex: 1 }}
-                  />
-                  <span style={{ fontSize: 12, color: '#94a3b8' }}>→</span>
-                  <input
-                    type="time"
-                    value={jd.heure_fin || '13:00'}
-                    onChange={(e) => handleSetJourHeure(jd.jour, 'heure_fin', e.target.value)}
-                    style={{ padding: '4px 8px', fontSize: 12, borderRadius: 6, border: '1px solid #cbd5e1', outline: 'none', flex: 1 }}
-                  />
-                </div>
-              ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10 }}>
+              {[...currentJours]
+                .sort((a, b) => {
+                  const idxA = JOURS_SEMAINE.findIndex((j) => j.value === a.jour?.toLowerCase());
+                  const idxB = JOURS_SEMAINE.findIndex((j) => j.value === b.jour?.toLowerCase());
+                  return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+                })
+                .map((jd) => {
+                  const dayLabel = JOURS_SEMAINE.find((j) => j.value === jd.jour?.toLowerCase())?.label || jd.jour;
+                  return (
+                    <div
+                      key={jd.jour}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        padding: '8px 12px',
+                        borderRadius: 10,
+                        border: '1px solid #cbd5e1',
+                        background: '#ffffff',
+                        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
+                        minWidth: 0,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: '#0f172a',
+                          minWidth: 70,
+                          flexShrink: 0,
+                          textTransform: 'capitalize',
+                        }}
+                      >
+                        {dayLabel}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <input
+                          type="time"
+                          value={jd.heure_debut || '09:00'}
+                          onChange={(e) => handleSetJourHeure(jd.jour, 'heure_debut', e.target.value)}
+                          style={{
+                            padding: '4px 6px',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1',
+                            outline: 'none',
+                            width: '92px',
+                            backgroundColor: '#f8fafc',
+                            color: '#0f172a',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                        <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>→</span>
+                        <input
+                          type="time"
+                          value={jd.heure_fin || '13:00'}
+                          onChange={(e) => handleSetJourHeure(jd.jour, 'heure_fin', e.target.value)}
+                          style={{
+                            padding: '4px 6px',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1',
+                            outline: 'none',
+                            width: '92px',
+                            backgroundColor: '#f8fafc',
+                            color: '#0f172a',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         )}

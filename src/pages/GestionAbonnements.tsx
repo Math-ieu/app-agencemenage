@@ -14,6 +14,7 @@ import { getInvoiceMonthlyAmount, getDynamicMonthPassagesCount, extractJoursPass
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '../store/auth';
 import { checkPermission, hasPermission } from '../utils/permissions';
+import { emitFinanceSync, useFinanceSync } from '../utils/paymentSync';
 import './GestionAbonnements.css';
 
 interface SubscriptionRow {
@@ -342,10 +343,6 @@ export default function GestionAbonnements() {
   const subsTableWrapRef = useRef<HTMLDivElement>(null);
   const factTableWrapRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
     try {
       const [demandesRes, fetesRes] = await Promise.all([
@@ -361,6 +358,12 @@ export default function GestionAbonnements() {
       console.error('Failed to load demandes for subscriptions:', err);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useFinanceSync(fetchData, { ignoreSource: 'GestionAbonnements' });
 
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const tomorrowStr = useMemo(() => {
@@ -1174,6 +1177,7 @@ export default function GestionAbonnements() {
     try {
       await confirmAbonnementPaiement(demandeId);
       fetchData();
+      emitFinanceSync({ source: 'GestionAbonnements', demandeId });
     } catch (e) {
       console.error('Failed to confirm payment:', e);
     }

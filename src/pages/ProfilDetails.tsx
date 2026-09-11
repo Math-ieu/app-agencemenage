@@ -761,8 +761,21 @@ export default function ProfilDetails() {
         cumulProfil += amount;
       }
 
-      if (encaissePar === 'Agence' && reglementInterne !== 'Réglé' && isPaidOrPartiel && isConfirmed && hasExplicitParts) agenceDoitProfil += amount;
-      else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isDelegate && isPaidOrPartiel && isConfirmed && hasExplicitParts) profilDoitAgence += partAgenceGlobal;
+      const isVirEsp = (demande.mode_paiement === 'virement_especes' || facturation.mode_paiement === 'virement_especes' || rawStatutPaiementUi === 'paiement_partiel');
+      if (isVirEsp && reglementInterne !== 'Réglé' && isConfirmed) {
+        const agenceDoit = Number(sourceData.montant_agence_doit_profil ?? demande.montant_agence_doit_profil ?? facturation.montant_agence_doit_profil ?? 0);
+        const profilDoit = Number(sourceData.montant_profil_doit_agence ?? demande.montant_profil_doit_agence ?? facturation.montant_profil_doit_agence ?? 0);
+        if (agenceDoit > 0) {
+          agenceDoitProfil += agenceDoit;
+        }
+        if (profilDoit > 0 && isDelegate) {
+          profilDoitAgence += profilDoit;
+        }
+      } else if (encaissePar === 'Agence' && reglementInterne !== 'Réglé' && isPaidOrPartiel && isConfirmed && hasExplicitParts) {
+        agenceDoitProfil += amount;
+      } else if (encaissePar === 'Profil' && reglementInterne !== 'Réglé' && isDelegate && isPaidOrPartiel && isConfirmed && hasExplicitParts) {
+        profilDoitAgence += partAgenceGlobal;
+      }
     };
 
     // Traiter les missions
