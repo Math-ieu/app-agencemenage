@@ -16,6 +16,7 @@ import {
   DollarSign,
   X,
   Clock,
+  Check,
   FileText,
   ArrowDownLeft,
   ArrowUpRight,
@@ -578,6 +579,19 @@ const getRowDuesBreakdown = (row: FacturationRow) => {
   };
 };
 
+const isRowDuesSettled = (row: FacturationRow): boolean => {
+  const b = getRowDuesBreakdown(row);
+  const isCreditSettled = b.agenceDoit <= 0 || Boolean(row.partProfilVersee || row._partProfilVersee || row.reglementInterne === 'Réglé');
+  const isDebitSettled = b.doitAgence <= 0 || Boolean(row.partAgenceReversee || row._partAgenceReversee || row.reglementInterne === 'Réglé');
+  return isCreditSettled && isDebitSettled;
+};
+
+const isProfileFullyPaid = (profile: any): boolean => {
+  if (!profile || !profile.rows || profile.rows.length === 0) return false;
+  if ((profile.agenceDoitProfil || 0) > 0.009 || (profile.profilDoitAgence || 0) > 0.009) return false;
+  return profile.rows.every(isRowDuesSettled);
+};
+
 const generateProfileReceiptPdf = async (
   profile: {
     profilName: string;
@@ -652,7 +666,18 @@ const generateProfileReceiptPdf = async (
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(71, 85, 105);
-    doc.text(`Tél : ${profile.phone}`, 120, 52);
+    doc.text(`Tél : ${profile.phone}`, 105, 52);
+  }
+
+  const isPaid = isProfileFullyPaid(profile);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  if (isPaid) {
+    doc.setTextColor(greenColor[0], greenColor[1], greenColor[2]);
+    doc.text('Statut : Payé', 160, 52);
+  } else {
+    doc.setTextColor(pinkColor[0], pinkColor[1], pinkColor[2]);
+    doc.text('Statut : Non payé', 160, 52);
   }
 
   // Filter rows strictly to the specified week period
@@ -686,8 +711,9 @@ const generateProfileReceiptPdf = async (
     const suppLabel = b.hasSupplementNote ? ' (Heure suppl. espèce)' : '';
     const doitAgenceCell = b.doitAgence > 0 ? `${b.doitAgence.toFixed(2)} DH${suppLabel}` : '—';
     const agenceDoitCell = b.agenceDoit > 0 ? `${b.agenceDoit.toFixed(2)} DH` : '—';
+    const statutCell = isRowDuesSettled(row) ? 'Payé' : 'Non payé';
 
-    return [dateVal, clientVal, doitAgenceCell, agenceDoitCell];
+    return [dateVal, clientVal, doitAgenceCell, agenceDoitCell, statutCell];
   });
 
   // Summary KPI Boxes
@@ -746,10 +772,10 @@ const generateProfileReceiptPdf = async (
   autoTable(doc, {
     startY: kpiY + 22,
     margin: { left: 14, right: 14 },
-    head: [['Date', 'Client', "Doit à l'agence", 'Agence doit au profil']],
+    head: [['Date', 'Client', "Doit à l'agence", 'Agence doit au profil', 'Statut']],
     body: tableRows,
     foot: [
-      ['Total', '', `${totalDoitAgence.toFixed(2)} DH`, `${totalAgenceDoit.toFixed(2)} DH`]
+      ['Total', '', `${totalDoitAgence.toFixed(2)} DH`, `${totalAgenceDoit.toFixed(2)} DH`, '']
     ],
     theme: 'grid',
     headStyles: {
@@ -772,15 +798,18 @@ const generateProfileReceiptPdf = async (
       cellPadding: 4,
     },
     columnStyles: {
-      0: { cellWidth: 38 },
-      1: { cellWidth: 56 },
-      2: { cellWidth: 44, halign: 'right' },
-      3: { cellWidth: 44, halign: 'right' },
+      0: { cellWidth: 30 },
+      1: { cellWidth: 54 },
+      2: { cellWidth: 36, halign: 'right' },
+      3: { cellWidth: 36, halign: 'right' },
+      4: { cellWidth: 26, halign: 'center' },
     },
     didParseCell: (data) => {
       if (data.section === 'head') {
         if (data.column.index === 2 || data.column.index === 3) {
           data.cell.styles.halign = 'right';
+        } else if (data.column.index === 4) {
+          data.cell.styles.halign = 'center';
         }
       }
       if (data.section === 'body') {
@@ -792,6 +821,14 @@ const generateProfileReceiptPdf = async (
           data.cell.styles.textColor = [190, 18, 60];
           data.cell.styles.halign = 'right';
           data.cell.styles.fontStyle = 'bold';
+        } else if (data.column.index === 4) {
+          data.cell.styles.halign = 'center';
+          data.cell.styles.fontStyle = 'bold';
+          if (data.cell.raw === 'Payé') {
+            data.cell.styles.textColor = [21, 128, 61];
+          } else {
+            data.cell.styles.textColor = [190, 18, 60];
+          }
         }
       }
       if (data.section === 'foot') {
@@ -3144,6 +3181,7 @@ export default function LesSuivis() {
                           <th>PROFIL DOIT À L'AGENCE</th>
                           <th>AGENCE DOIT AU PROFIL</th>
                           <th>SOLDE FINAL</th>
+                          <th style={{ textAlign: 'center' }}>STATUT</th>
                           <th style={{ textAlign: 'center' }}>ACTIONS</th>
                         </tr>
                       </thead>
@@ -3207,6 +3245,19 @@ export default function LesSuivis() {
                                 })()}
                               </td>
                               <td style={{ textAlign: 'center' }}>
+                                {isProfileFullyPaid(item) ? (
+                                  <span className="ls-status-badge paid">
+                                    <Check size={12} />
+                                    <span>Payé</span>
+                                  </span>
+                                ) : (
+                                  <span className="ls-status-badge unpaid">
+                                    <Clock size={12} />
+                                    <span>Non payé</span>
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
                                 <div className="ls-grouped-actions">
                                   <button
                                     type="button"
@@ -3243,7 +3294,7 @@ export default function LesSuivis() {
                         })}
                         {groupedProfiles.length === 0 && (
                           <tr>
-                            <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                            <td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
                               Aucun profil trouvé pour les filtres sélectionnés.
                             </td>
                           </tr>
@@ -4222,6 +4273,17 @@ export default function LesSuivis() {
                           {activeDuesProfile.profilId && (
                             <span className="ls-dues-profile-id">#{activeDuesProfile.profilId}</span>
                           )}
+                          {isProfileFullyPaid(activeDuesProfile) ? (
+                            <span className="ls-status-badge paid">
+                              <Check size={12} />
+                              <span>Payé</span>
+                            </span>
+                          ) : (
+                            <span className="ls-status-badge unpaid">
+                              <Clock size={12} />
+                              <span>Non payé</span>
+                            </span>
+                          )}
                         </div>
                         <h2 className="ls-dues-profile-name">{activeDuesProfile.profilName}</h2>
                         <div className="ls-dues-period-tag">
@@ -4257,12 +4319,12 @@ export default function LesSuivis() {
                     <div className="ls-dues-header-actions">
                       <button
                         type="button"
-                        className="ls-dues-btn-pay"
+                        className={`ls-dues-btn-pay ${isProfileFullyPaid(activeDuesProfile) ? 'is-paid' : ''}`}
                         onClick={() => setSettleConfirmProfile(activeDuesProfile)}
                         title="Régler le paiement total entre l'agence et ce profil pour cette semaine"
                       >
-                        <Pencil size={15} />
-                        <span>Régler le paiement</span>
+                        {isProfileFullyPaid(activeDuesProfile) ? <Check size={15} /> : <Pencil size={15} />}
+                        <span>{isProfileFullyPaid(activeDuesProfile) ? 'Règlement effectué' : 'Régler le paiement'}</span>
                       </button>
                       {activeDuesProfile.profilId && (
                         <button
@@ -4351,6 +4413,7 @@ export default function LesSuivis() {
                           <th>Client & Prestation</th>
                           <th style={{ textAlign: 'right' }}>Dû à l'agence</th>
                           <th style={{ textAlign: 'right' }}>Agence doit au profil</th>
+                          <th style={{ textAlign: 'center' }}>Statut</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4422,12 +4485,25 @@ export default function LesSuivis() {
                                   <span className="ls-dues-empty-val">—</span>
                                 )}
                               </td>
+                              <td style={{ textAlign: 'center' }}>
+                                {isRowDuesSettled(row) ? (
+                                  <span className="ls-status-badge paid">
+                                    <Check size={11} />
+                                    <span>Payé</span>
+                                  </span>
+                                ) : (
+                                  <span className="ls-status-badge unpaid">
+                                    <Clock size={11} />
+                                    <span>Non payé</span>
+                                  </span>
+                                )}
+                              </td>
                             </tr>
                           );
                         })}
                         {activeDuesProfile.rows.length === 0 && (
                           <tr>
-                            <td colSpan={4} className="ls-dues-empty-row">
+                            <td colSpan={5} className="ls-dues-empty-row">
                               Aucune mission trouvée pour cette période.
                             </td>
                           </tr>
@@ -4470,6 +4546,7 @@ export default function LesSuivis() {
                               {money(activeDuesProfile.agenceDoitProfil)}
                             </span>
                           </td>
+                          <td></td>
                         </tr>
                       </tfoot>
                     </table>
@@ -4512,6 +4589,17 @@ export default function LesSuivis() {
                           </span>
                         );
                       })()}
+                      {isProfileFullyPaid(activeSettleProfile) ? (
+                        <span className="ls-status-badge paid">
+                          <Check size={12} />
+                          <span>Payé</span>
+                        </span>
+                      ) : (
+                        <span className="ls-status-badge unpaid">
+                          <Clock size={12} />
+                          <span>Non payé</span>
+                        </span>
+                      )}
                     </p>
                   </div>
                   <button

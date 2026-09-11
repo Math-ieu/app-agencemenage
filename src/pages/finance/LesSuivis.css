@@ -537,6 +537,31 @@
   color: #be185d;
 }
 
+/* Status badge Payé / Non payé */
+.ls-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.ls-status-badge.paid {
+  background-color: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.ls-status-badge.unpaid {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
 /* Table detail values font styles */
 .ls-val-bold {
   font-weight: 700;
@@ -1577,6 +1602,19 @@
   background: #047857;
   transform: translateY(-1px);
   box-shadow: 0 4px 10px rgba(5, 150, 105, 0.35);
+}
+
+.ls-dues-btn-pay.is-paid {
+  background: #f0fdf4;
+  color: #166534;
+  border-color: #bbf7d0;
+  box-shadow: none;
+}
+
+.ls-dues-btn-pay.is-paid:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+  transform: none;
 }
 
 .ls-dues-btn-details {
