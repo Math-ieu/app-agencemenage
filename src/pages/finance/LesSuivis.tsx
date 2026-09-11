@@ -519,19 +519,27 @@ const getRowDuesBreakdown = (row: FacturationRow) => {
   const isFdmCash = row.supplementEncaissePar === 'femme_de_menage' || (
     row.supplementEncaissePar !== 'agence' && Boolean(row.supplementHeuresRecupereEspeces)
   );
+  const especesRecuperees = Number(row.especesRecuperees || 0);
+  const suppCash = (hasSupplement && isFdmCash) ? supplementMontant : 0;
 
   if (isVirEsp) {
     if (Number(row.montantAgenceDoitProfil || 0) > 0) {
       agenceDoit = Number(row.montantAgenceDoitProfil);
+    } else {
+      agenceDoit = Number(row.partProfil || 0);
     }
-    if (Number(row.montantProfilDoitAgence || 0) > 0) {
-      doitAgence = Number(row.montantProfilDoitAgence);
+    // Les espèces perçues par la FDM sur place + supplément en espèces éventuel
+    doitAgence = Math.max(Number(row.montantProfilDoitAgence || 0), especesRecuperees + suppCash);
+    if (hasSupplement && isFdmCash) {
+      hasSupplementNote = true;
     }
   } else if (isCredit) {
     agenceDoit = Number(row.montantAgenceDoitProfil || row.partProfil || 0);
-    if (row.isDelegate && hasSupplement && isFdmCash) {
-      doitAgence += supplementMontant;
-      hasSupplementNote = true;
+    if (row.isDelegate || !row.parts_repartition || row.parts_repartition.length <= 1) {
+      doitAgence = Math.max(Number(row.montantProfilDoitAgence || 0), especesRecuperees + suppCash);
+      if (hasSupplement && isFdmCash) {
+        hasSupplementNote = true;
+      }
     }
   } else if (isDebit) {
     if (row.montantProfilDoitAgence !== undefined && Number(row.montantProfilDoitAgence) > 0) {
@@ -543,6 +551,20 @@ const getRowDuesBreakdown = (row: FacturationRow) => {
     }
     if (hasSupplement && isFdmCash) {
       hasSupplementNote = true;
+      if (row.montantProfilDoitAgence === undefined || Number(row.montantProfilDoitAgence) === (row.partAgence || 0)) {
+        doitAgence += supplementMontant;
+      }
+    }
+    if (especesRecuperees > 0 && doitAgence === 0) {
+      doitAgence = especesRecuperees + suppCash;
+    }
+  } else {
+    doitAgence = Math.max(Number(row.montantProfilDoitAgence || 0), especesRecuperees + suppCash);
+    if (hasSupplement && isFdmCash) {
+      hasSupplementNote = true;
+    }
+    if (Number(row.montantAgenceDoitProfil || 0) > 0) {
+      agenceDoit = Number(row.montantAgenceDoitProfil);
     }
   }
 
@@ -552,7 +574,7 @@ const getRowDuesBreakdown = (row: FacturationRow) => {
     agenceDoit,
     hasSupplement,
     supplementMontant,
-    especesRecuperees: Number(row.especesRecuperees || 0),
+    especesRecuperees,
   };
 };
 
@@ -661,9 +683,7 @@ const generateProfileReceiptPdf = async (
     const suppBadge = b.supplementMontant > 0 ? ` (Supplément : ${b.supplementMontant.toFixed(2)} DH)` : '';
     const espBadge = b.especesRecuperees > 0 ? ` (Espèces perçues FDM : ${b.especesRecuperees.toFixed(2)} DH)` : '';
     const clientVal = `${row.client || '—'}${suppBadge}${espBadge}`;
-    const suppLabel = b.supplementMontant > 0
-      ? ` (Supplément espèces : ${b.supplementMontant.toFixed(2)} DH)`
-      : (b.hasSupplementNote ? ' (Supplément espèces)' : '');
+    const suppLabel = b.hasSupplementNote ? ' (Heure suppl. espèce)' : '';
     const doitAgenceCell = b.doitAgence > 0 ? `${b.doitAgence.toFixed(2)} DH${suppLabel}` : '—';
     const agenceDoitCell = b.agenceDoit > 0 ? `${b.agenceDoit.toFixed(2)} DH` : '—';
 
@@ -2072,23 +2092,16 @@ export default function LesSuivis() {
       item.rows.push(row);
 
       const b = getRowDuesBreakdown(row);
-      const isCredit = isCreditRow(row);
-      const isDebit = isDebitRow(row);
 
-      if (isCredit) {
-        const isPaid = row.partProfilVersee ?? row._partProfilVersee;
-        if (!isPaid && row.reglementInterne !== 'Réglé') {
+      if (b.agenceDoit > 0) {
+        const isPaid = Boolean(row.partProfilVersee || row._partProfilVersee || row.reglementInterne === 'Réglé');
+        if (!isPaid) {
           item.agenceDoitProfil += b.agenceDoit;
         }
-        if (b.doitAgence > 0) {
-          const isRemitted = row.partAgenceReversee ?? row._partAgenceReversee;
-          if (!isRemitted && row.reglementInterne !== 'Réglé') {
-            item.profilDoitAgence += b.doitAgence;
-          }
-        }
-      } else if (isDebit) {
-        const isPaid = row.partAgenceReversee ?? row._partAgenceReversee;
-        if (!isPaid && row.reglementInterne !== 'Réglé') {
+      }
+      if (b.doitAgence > 0) {
+        const isRemitted = Boolean(row.partAgenceReversee || row._partAgenceReversee || row.reglementInterne === 'Réglé');
+        if (!isRemitted) {
           item.profilDoitAgence += b.doitAgence;
         }
       }
@@ -4277,7 +4290,7 @@ export default function LesSuivis() {
                   {/* KPI Cards */}
                   {(() => {
                     const totalSupplementsPeriod = activeDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
-                      return sum + (r.hasSupplementHeures && r.supplementHeuresRecupereEspeces ? Number(r.supplementHeuresMontant || 0) : 0);
+                      return sum + (r.hasSupplementHeures && (r.supplementHeuresRecupereEspeces || r.supplementEncaissePar === 'femme_de_menage') ? Number(r.supplementHeuresMontant || 0) : 0);
                     }, 0);
 
                     return (
@@ -4307,7 +4320,7 @@ export default function LesSuivis() {
                             Montant dû à l'agence (espèces)
                             {totalSupplementsPeriod > 0 && (
                               <span style={{ display: 'block', color: '#b45309', fontWeight: 600, marginTop: '2px' }}>
-                                dont {money(totalSupplementsPeriod)} de suppléments
+                                dont {money(totalSupplementsPeriod)} d'heures suppl.
                               </span>
                             )}
                           </div>
@@ -4387,14 +4400,9 @@ export default function LesSuivis() {
                                       <ArrowDownLeft size={13} />
                                       {money(b.doitAgence)}
                                     </span>
-                                    {b.hasSupplementNote && b.supplementMontant > 0 && (
+                                    {b.hasSupplementNote && (
                                       <span className="ls-dues-subtext-orange" style={{ fontWeight: 700, display: 'block', marginTop: '2px' }}>
-                                        Supplément espèces : {money(b.supplementMontant)}
-                                      </span>
-                                    )}
-                                    {b.hasSupplementNote && !b.supplementMontant && (
-                                      <span className="ls-dues-subtext-orange">
-                                        Supplément espèces
+                                        Heure suppl. espèce
                                       </span>
                                     )}
                                   </div>
@@ -4431,7 +4439,7 @@ export default function LesSuivis() {
                             <span className="ls-dues-total-label">Total de la période</span>
                             {(() => {
                               const suppSum = activeDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
-                                return sum + (r.hasSupplementHeures && r.supplementHeuresRecupereEspeces ? Number(r.supplementHeuresMontant || 0) : 0);
+                                return sum + (r.hasSupplementHeures && (r.supplementHeuresRecupereEspeces || r.supplementEncaissePar === 'femme_de_menage') ? Number(r.supplementHeuresMontant || 0) : 0);
                               }, 0);
                               const espSum = activeDuesProfile.rows.reduce((sum: number, r: FacturationRow) => {
                                 return sum + Number(r.especesRecuperees || 0);
@@ -4440,7 +4448,7 @@ export default function LesSuivis() {
                                 <>
                                   {suppSum > 0 && (
                                     <span style={{ display: 'block', fontSize: '0.75rem', color: '#b45309', fontWeight: 600, marginTop: '2px' }}>
-                                      (dont {money(suppSum)} de suppléments espèces)
+                                      (dont {money(suppSum)} d'heures suppl. espèces)
                                     </span>
                                   )}
                                   {espSum > 0 && (

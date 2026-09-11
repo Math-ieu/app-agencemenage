@@ -82,9 +82,10 @@ export const areAllProfilesSettled = (
 };
 
 /**
- * Calcul dynamique des montants dus croisés pour « Virement / Espèces »
- * - Si montant_especes > totalParts : la FDM a encaissé plus que sa part -> FDM doit à l'agence (esp - totalParts).
- * - Si montant_especes < totalParts : le client a payé plus par virement -> Agence doit à la FDM (totalParts - esp).
+ * Calcul dynamique des montants dus pour « Virement / Espèces »
+ * - Les espèces perçues sur place par la FDM (montant_especes) sont encaissées par le profil et donc dues à l'agence.
+ * - Tout supplément d'heures perçu en espèces par la FDM s'ajoute au montant dû à l'agence.
+ * - La rémunération de la prestation (totalParts) reste due au profil par l'agence.
  */
 export const computeVirementEspecesDues = (
   montantEspeces: number,
@@ -96,16 +97,10 @@ export const computeVirementEspecesDues = (
   const esp = Math.max(0, Number(montantEspeces) || 0);
   const parts = Math.max(0, Number(totalParts) || 0);
 
-  let doitAgence = 0;
-  let agenceDoit = 0;
+  let doitAgence = esp;
+  let agenceDoit = parts;
 
-  if (esp > parts) {
-    doitAgence = Math.round((esp - parts) * 100) / 100;
-  } else if (esp < parts) {
-    agenceDoit = Math.round((parts - esp) * 100) / 100;
-  }
-
-  // Traitement du supplément éventuel
+  // Traitement du supplément éventuel perçu par la FDM
   if (hasSupplement && suppMontant > 0) {
     if (supplementEncaissePar === 'femme_de_menage') {
       doitAgence = Math.round((doitAgence + suppMontant) * 100) / 100;
@@ -117,3 +112,4 @@ export const computeVirementEspecesDues = (
     montant_agence_doit_profil: agenceDoit,
   };
 };
+
