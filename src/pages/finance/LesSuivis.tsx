@@ -4497,7 +4497,7 @@ export default function LesSuivis() {
 
           {/* ─── MODAL: SETTLE CONFIRMATION ─── */}
           {activeSettleProfile && (
-            <div className="ls-modal-backdrop" onClick={() => !isSettlingProfile && setSettleConfirmProfile(null)}>
+            <div className="ls-modal-backdrop ls-settle-confirm-backdrop" onClick={() => !isSettlingProfile && setSettleConfirmProfile(null)}>
               <div className="ls-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
                 <div className="ls-modal-header">
                   <div>

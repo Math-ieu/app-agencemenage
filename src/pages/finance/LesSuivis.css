@@ -569,7 +569,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 999;
+  z-index: 1100;
+}
+
+.ls-settle-confirm-backdrop {
+  z-index: 1200;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.ls-settle-confirm-backdrop .ls-modal {
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.8);
+  animation: lsModalZoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ls-modal {
