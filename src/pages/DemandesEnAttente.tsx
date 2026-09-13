@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, Component, ErrorInfo, ReactNode } from 'react';
 import { extractJoursPassage, getDemandeStartDate } from '../utils/pricing';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getDemandes, getDemande, validerDemande, annulerDemande, nrpDemande, createDemande, updateDemande, affecterDemande, getUsers, generateDocument, fetchSecureDocBlob, sendWhatsApp, confirmerClient, nouveauClient, uploadDocument } from '../api/client';
@@ -115,6 +115,112 @@ export const formatUserRole = (role?: string) => {
   if (r === 'responsable_operations' || r === 'responsable des opérations') return 'Responsable des Opérations';
   return role || 'Collaborateur';
 };
+
+export const getFormattedJoursPassage = (demande: any): string | null => {
+  if (!demande) return null;
+  const formData = demande?.formulaire_data || {};
+
+  // 1. Array of objects with jour and heure_debut / heure_fin (e.g. from website booking)
+  const detailList = Array.isArray(formData.jours_intervention_detail) && formData.jours_intervention_detail.length > 0
+    ? formData.jours_intervention_detail
+    : (Array.isArray(formData.jours_passage) && formData.jours_passage.length > 0 && typeof formData.jours_passage[0] === 'object'
+        ? formData.jours_passage
+        : (Array.isArray(formData.jours_intervention) && formData.jours_intervention.length > 0 && typeof formData.jours_intervention[0] === 'object'
+            ? formData.jours_intervention
+            : null));
+
+  if (detailList && detailList.length > 0) {
+    const formatted = detailList.map((item: any) => {
+      const jour = typeof item === 'string' ? item : (item?.jour || item?.day || '');
+      const capitalized = jour ? jour.charAt(0).toUpperCase() + jour.slice(1) : '';
+      if (item?.heure_debut && item?.heure_fin) {
+        return `${capitalized} (${item.heure_debut} - ${item.heure_fin})`;
+      } else if (item?.heure_debut) {
+        return `${capitalized} (${item.heure_debut})`;
+      }
+      return capitalized;
+    }).filter(Boolean).join(' + ');
+
+    if (formatted) return formatted;
+  }
+
+  // 2. Clean string
+  if (typeof formData.jours_passage === 'string' && formData.jours_passage.trim()) {
+    return formData.jours_passage.trim();
+  }
+
+  // 3. Array of strings
+  const stringList = Array.isArray(formData.jours_intervention) && formData.jours_intervention.length > 0
+    ? formData.jours_intervention
+    : (Array.isArray(formData.jours_passage) && formData.jours_passage.length > 0
+        ? formData.jours_passage
+        : (Array.isArray(demande?.planning?.jours_intervention) && demande.planning.jours_intervention.length > 0
+            ? demande.planning.jours_intervention
+            : null));
+
+  if (stringList && stringList.length > 0) {
+    const formatted = stringList.map((item: any) => {
+      const j = typeof item === 'string' ? item : (item?.jour || item?.name || '');
+      return j ? j.charAt(0).toUpperCase() + j.slice(1) : '';
+    }).filter(Boolean).join(' + ');
+
+    if (formatted) return formatted;
+  }
+
+  // 4. Safe fallback using extractJoursPassage
+  const parsed = extractJoursPassage(
+    formData.jours_passage ||
+    formData.jours_intervention ||
+    formData.jours_intervention_detail ||
+    demande?.planning?.jours_intervention
+  );
+  if (parsed.length > 0) {
+    return parsed.map((j: string) => j.charAt(0).toUpperCase() + j.slice(1)).join(' + ');
+  }
+
+  return null;
+};
+
+interface ErrorBoundaryProps {
+  demandeId: number;
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class CardErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error(`Erreur d'affichage sur la demande #${this.props.demandeId}:`, error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="pending-card p-4 border border-rose-200 bg-rose-50 rounded-xl text-rose-800 text-sm my-2">
+          <p className="font-bold flex items-center gap-1.5">
+            <AlertTriangle size={16} className="text-rose-600" /> Erreur d'affichage sur la demande #{this.props.demandeId}
+          </p>
+          <p className="text-xs text-rose-600 mt-1">
+            Cette demande contient des données au format inhabituel. Consultez la console développeur pour plus de détails.
+          </p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 
 export default function DemandesEnAttente() {
@@ -1763,7 +1869,8 @@ export default function DemandesEnAttente() {
       ) : (
         <div className="pending-grid">
           {demandes.map((d) => (
-            <div key={d.id} className={`pending-card-container ${getRowClass(d)}`}>
+            <CardErrorBoundary key={d.id} demandeId={d.id}>
+              <div className={`pending-card-container ${getRowClass(d)}`}>
               {/* DESKTOP VERSION */}
               <div className="pending-card desktop-card">
                 <div className="pending-card-header">
@@ -1834,7 +1941,7 @@ export default function DemandesEnAttente() {
                         )}
                         <div className="detail-item"><span className="detail-label">Fréquence :</span> <span className="detail-value">{d.frequency_label || (d.frequency === 'oneshot' ? 'Une fois' : 'Abonnement')}</span></div>
                         {(() => {
-                          const days = d.formulaire_data?.jours_passage || (Array.isArray(d.formulaire_data?.jours_intervention) && d.formulaire_data.jours_intervention.length > 0 ? d.formulaire_data.jours_intervention.map((j: string) => j.charAt(0).toUpperCase() + j.slice(1)).join(' + ') : null);
+                          const days = getFormattedJoursPassage(d);
                           if (days) {
                             return (
                               <div className="detail-item">
@@ -2166,6 +2273,18 @@ export default function DemandesEnAttente() {
                     <span className="mobile-detail-label">Date</span>
                     <span className="mobile-detail-value">{d.date_intervention} {d.heure_intervention}</span>
                   </div>
+                  {(() => {
+                    const days = getFormattedJoursPassage(d);
+                    if (days) {
+                      return (
+                        <div className="mobile-detail-row">
+                          <span className="mobile-detail-label">Jours</span>
+                          <span className="mobile-detail-value font-semibold text-slate-700">{days}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   <div className="mobile-detail-row">
                     <span className="mobile-detail-label">Lieu</span>
                     <span className="mobile-detail-value">
@@ -2256,6 +2375,7 @@ export default function DemandesEnAttente() {
                 </div>
               </div>
             </div>
+          </CardErrorBoundary>
           ))}
         </div>
       )}

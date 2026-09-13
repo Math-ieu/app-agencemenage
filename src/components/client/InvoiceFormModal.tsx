@@ -171,8 +171,8 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         ? latest.planning.jours_intervention
         : selectedDays;
       const joursFormatted = planningJours && planningJours.length > 0
-        ? planningJours.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join(' + ')
-        : (formData.jours_passage || 'Lundi + Jeudi');
+        ? planningJours.map((d: any) => typeof d === 'string' ? d.charAt(0).toUpperCase() + d.slice(1) : (d?.jour ? d.jour.charAt(0).toUpperCase() + d.jour.slice(1) : '')).filter(Boolean).join(' + ')
+        : (typeof formData.jours_passage === 'string' && formData.jours_passage.trim() ? formData.jours_passage.trim() : 'Lundi + Jeudi');
       setInvJoursPassage(joursFormatted);
 
       // ═══════════════════════════════════════════════════════════
