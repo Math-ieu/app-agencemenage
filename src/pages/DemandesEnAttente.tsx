@@ -2293,23 +2293,30 @@ export default function DemandesEnAttente() {
                   </div>
                   <div className="mobile-detail-row mobile-price-row">
                     <span className="mobile-detail-label">Montant</span>
-                    <span className="mobile-detail-value fw-bold">
-                      {d.is_devis ? (d.prix ? `${d.prix} MAD` : 'Sur devis') : (d.prix ? `${d.prix} MAD` : '—')}
-                      {d.mode_paiement ? (
-                        <span className="text-xs text-teal-700 block font-normal mt-0.5">
-                          Mode : {d.mode_paiement === 'virement_especes' ? 'Virement / Espèce' : (d.mode_paiement_label || d.mode_paiement)}
-                          {d.mode_paiement === 'virement_especes' && (d.formulaire_data?.montant_virement !== undefined || d.avance_paiement !== undefined) && (
-                            <span className="text-[11px] text-slate-500 block">
-                              (Vir: {d.formulaire_data?.montant_virement ?? d.avance_paiement ?? 0} DH / Esp: {d.formulaire_data?.montant_especes ?? 0} DH)
-                            </span>
-                          )}
+                    <div className="mobile-detail-value flex flex-col items-end gap-1">
+                      <span className="fw-bold text-slate-900 text-sm">
+                        {d.is_devis ? (d.prix ? `${d.prix} MAD` : 'Sur devis') : (d.prix ? `${d.prix} MAD` : '—')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openPaymentModeModal(d)}
+                        className={`mobile-payment-chip ${d.mode_paiement ? 'is-defined' : 'is-undefined'}`}
+                        title="Modifier le mode de paiement"
+                      >
+                        <CreditCard size={12} />
+                        <span>
+                          {d.mode_paiement 
+                            ? (d.mode_paiement === 'virement_especes' ? 'Virement / Espèce' : (d.mode_paiement_label || d.mode_paiement))
+                            : 'Définir paiement'}
                         </span>
-                      ) : (
-                        <span className="text-xs text-amber-600 block font-normal italic mt-0.5">
-                          Mode : Non défini
+                        <Edit size={10} className="opacity-70" />
+                      </button>
+                      {d.mode_paiement === 'virement_especes' && (d.formulaire_data?.montant_virement !== undefined || d.avance_paiement !== undefined) && (
+                        <span className="text-[10px] text-slate-500 font-normal">
+                          (Vir: {d.formulaire_data?.montant_virement ?? d.avance_paiement ?? 0} DH / Esp: {d.formulaire_data?.montant_especes ?? 0} DH)
                         </span>
                       )}
-                    </span>
+                    </div>
                   </div>
                   {hasPermission(user, 'creer_devis') && (
                     <div className="accordion mt-3">
@@ -2332,20 +2339,6 @@ export default function DemandesEnAttente() {
                 </div>
 
                 <div className="mobile-card-actions">
-                  <div className="mb-2">
-                    <button
-                      type="button"
-                      className={`btn-payment-mode ${d.mode_paiement ? 'is-defined' : 'is-undefined'}`}
-                      onClick={() => openPaymentModeModal(d)}
-                    >
-                      <CreditCard size={15} />
-                      <span>
-                        {d.mode_paiement 
-                          ? `Mode : ${d.mode_paiement === 'virement_especes' ? 'Virement / Espèce' : (d.mode_paiement_label || d.mode_paiement)}`
-                          : 'Mode paiement'}
-                      </span>
-                    </button>
-                  </div>
                   {canValidateDemande(user, d) && (
                     <button className="btn btn-validate btn-full mb-2" onClick={() => handleAction(d.id, 'valider')}>
                       <CheckCircle size={18} /> Valider
