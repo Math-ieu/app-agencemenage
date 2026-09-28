@@ -60,7 +60,7 @@ export const getDemandeStartDate = (demande?: any): string => {
 
     // For child demands (demandes filles d'un abonnement), the date of the intervention is strictly its own date_intervention
     if (demande.parent_demande) {
-        const childDate = demande.date_intervention || fd.date || fd.date_demarrage || fd.date_debut || (demande.created_at ? String(demande.created_at).slice(0, 10) : '');
+        const childDate = demande.date_intervention || fd.date || fd.date_reservation || fd.date_demarrage || fd.date_debut || (demande.created_at ? String(demande.created_at).slice(0, 10) : '');
         if (childDate) {
             const str = String(childDate).trim();
             if (str.includes('T')) return str.split('T')[0];
@@ -69,6 +69,7 @@ export const getDemandeStartDate = (demande?: any): string => {
     }
 
     const rawDate =
+        fd.date_reservation ||
         fd.date_demarrage ||
         fd.date_debut ||
         planning.date_debut ||
@@ -145,6 +146,7 @@ export interface PricingInput {
     torchons: boolean;
     ville: string;
     date: string;
+    date_reservation?: string;
     date_demarrage?: string;
     date_debut?: string;
     jours_passage?: any;
@@ -170,6 +172,7 @@ export interface PricingInput {
     materiel_fourni?: boolean;
     service_linge?: boolean;
     rooms?: any;
+    taux_reduction?: number;
 }
 
 export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' => {
@@ -241,8 +244,8 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
             id: (input as any)?.id,
             formulaire_data: input,
             frequency_label: frequence,
-            date_intervention: input.date_demarrage || input.date_debut || input.date,
-            date_demarrage: input.date_demarrage || input.date_debut || input.date,
+            date_intervention: input.date_reservation || input.date_demarrage || input.date_debut || input.date,
+            date_demarrage: input.date_reservation || input.date_demarrage || input.date_debut || input.date,
             jours_passage: input.jours_passage || input.jours_intervention,
             jours_intervention_detail: input.jours_intervention_detail
         };
@@ -331,7 +334,10 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
 
         if (isSubscription && !isOneShot) {
             const laborMonthly = laborPerVisit * numPassages;
-            const discountAmount = laborMonthly * 0.1; // remise sur la main-d'œuvre uniquement
+            const discountRate = (input.taux_reduction !== undefined && input.taux_reduction !== null)
+                ? (Number(input.taux_reduction) / 100)
+                : 0.1;
+            const discountAmount = laborMonthly * discountRate; // remise sur la main-d'œuvre uniquement
             // Options en ligne flat (une seule fois), conformément au brief
             return Math.round(laborMonthly - discountAmount + optionsPerVisit);
         } else {
@@ -374,7 +380,10 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
         if (isSubscription && !isOneShot) {
             const monthlyHours = effDuree * numPassages;
             const subtotalMonthly = monthlyHours * baseRate * effPeople;
-            const discountAmount = subtotalMonthly * 0.1;
+            const discountRate = (input.taux_reduction !== undefined && input.taux_reduction !== null)
+                ? (Number(input.taux_reduction) / 100)
+                : 0.1;
+            const discountAmount = subtotalMonthly * discountRate;
             totalServicePrice = (subtotalMonthly - discountAmount) * multiplier;
         } else {
             totalServicePrice = effDuree * baseRate * effPeople * multiplier;

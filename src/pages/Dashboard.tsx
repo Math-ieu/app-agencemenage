@@ -2058,7 +2058,7 @@ export default function Dashboard() {
 
       const previousFormData = selectedDemande.formulaire_data || {};
       const previousAdditional = previousFormData.additionalServices || {};
-      const effectiveStartDate = editFormData.date_demarrage || editFormData.date_debut || editFormData.date || editFormData.date_intervention || '';
+      const effectiveStartDate = editFormData.date_reservation || editFormData.date_demarrage || editFormData.date_debut || editFormData.date || editFormData.date_intervention || '';
       if (effectiveStartDate) {
         updateData.date_intervention = effectiveStartDate;
       }
@@ -2114,6 +2114,7 @@ export default function Dashboard() {
         linen_sets: parseInt(editFormData.linen_sets) || 0,
         linenSets: parseInt(editFormData.linen_sets) || 0,
         date: effectiveStartDate || previousFormData.date || '',
+        date_reservation: effectiveStartDate || previousFormData.date_reservation || '',
         date_demarrage: effectiveStartDate || previousFormData.date_demarrage || '',
         date_debut: effectiveStartDate || previousFormData.date_debut || '',
         schedulingDate: effectiveStartDate || previousFormData.schedulingDate || '',
@@ -2604,6 +2605,7 @@ export default function Dashboard() {
       duree: formData.duree || d.nb_heures || formData.duration || '',
       date_intervention: getDemandeStartDate(d),
       date: getDemandeStartDate(d),
+      date_reservation: d.formulaire_data?.date_reservation || getDemandeStartDate(d),
       date_demarrage: getDemandeStartDate(d),
       date_debut: getDemandeStartDate(d),
       heure_intervention: d.heure_intervention || formData.heure || '',

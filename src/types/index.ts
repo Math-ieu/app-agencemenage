@@ -5,6 +5,7 @@ export interface User {
   last_name: string;
   role: string;
   full_name: string;
+  is_superuser?: boolean;
 }
 
 export interface Client {

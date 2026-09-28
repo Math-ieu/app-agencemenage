@@ -269,6 +269,7 @@ export default function DemandesEnAttente() {
     quartier: '',
     adresse: '',
     date: '',
+    date_reservation: '',
     date_demarrage: '',
     date_debut: '',
     heure: '',
@@ -908,7 +909,7 @@ export default function DemandesEnAttente() {
     setWhatsappPhone('');
     const todayIso = new Date().toISOString().slice(0, 10);
     setFormData({
-      nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: todayIso, date_demarrage: todayIso, date_debut: todayIso, heure: '',
+      nom: '', email: '', entity_name: '', contact_person: '', ville: 'Casablanca', quartier: '', adresse: '', date: todayIso, date_reservation: todayIso, date_demarrage: todayIso, date_debut: todayIso, heure: '',
       scheduling_type: 'fixed', preference_horaire: '', type_habitation: '', frequence: 'une fois', jours_passage: '', jours_intervention: [] as string[], jours_intervention_detail: [] as any[], intervention_nature: 'sinistre', accommodation_state: '', cleanliness_type: '', nb_intervenants: 1,
       surface: 50, details_pieces: '', duree: 4, produits: false, torchons: false,
       montant: '', mode_paiement: 'virement', montant_virement: '', montant_especes: '', statut_paiement_ui: 'non_confirme', heard_about_us: '', notes: '',
@@ -995,6 +996,7 @@ export default function DemandesEnAttente() {
       quartier: normalizeQuartier(d.client_neighborhood || d.formulaire_data?.quartier || ''),
       adresse: d.client_address || d.formulaire_data?.adresse || '',
       date: dStartDate,
+      date_reservation: d.formulaire_data?.date_reservation || dStartDate,
       date_demarrage: dStartDate,
       date_debut: dStartDate,
       heure: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime || '',
@@ -1124,6 +1126,7 @@ export default function DemandesEnAttente() {
       quartier: normalizeQuartier(d.client_neighborhood || d.formulaire_data?.quartier || ''),
       adresse: d.client_address || d.formulaire_data?.adresse || '',
       date: dStartDate,
+      date_reservation: d.formulaire_data?.date_reservation || dStartDate,
       date_demarrage: dStartDate,
       date_debut: dStartDate,
       heure: d.heure_intervention || d.formulaire_data?.heure || d.formulaire_data?.fixedTime || '',
@@ -1344,6 +1347,7 @@ export default function DemandesEnAttente() {
       avance_pourcentage: formData.avance_pourcentage,
       avance_fixe: formData.avance_fixe,
       frequence: formData.frequence,
+      date_reservation: formData.date_reservation || formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10),
       date_demarrage: formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10),
       date_debut: formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10),
       date: formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10),

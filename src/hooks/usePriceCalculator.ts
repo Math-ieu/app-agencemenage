@@ -13,9 +13,10 @@ export function usePriceCalculator(formData: any, selectedService: string) {
             produits: formData.produits,
             torchons: formData.torchons,
             ville: formData.ville,
-            date: formData.date,
-            date_demarrage: formData.date_demarrage || formData.date_debut || formData.date,
-            date_debut: formData.date_demarrage || formData.date_debut || formData.date,
+            date: formData.date_reservation || formData.date,
+            date_reservation: formData.date_reservation,
+            date_demarrage: formData.date_reservation || formData.date_demarrage || formData.date_debut || formData.date,
+            date_debut: formData.date_reservation || formData.date_demarrage || formData.date_debut || formData.date,
             jours_passage: formData.jours_passage || formData.jours_intervention,
             jours_intervention: formData.jours_intervention || formData.jours_passage,
             jours_intervention_detail: formData.jours_intervention_detail,
@@ -35,7 +36,8 @@ export function usePriceCalculator(formData: any, selectedService: string) {
             reassort_type: formData.reassort_type,
             video_apres: formData.video_apres,
             materiel_fourni: formData.materiel_fourni,
-            service_linge: formData.service_linge
+            service_linge: formData.service_linge,
+            taux_reduction: formData.taux_reduction !== undefined ? formData.taux_reduction : formData.reduction_pourcentage
         };
 
         const result = calculateTotalPrice(input);
@@ -49,6 +51,7 @@ export function usePriceCalculator(formData: any, selectedService: string) {
         formData.torchons,
         formData.ville,
         formData.date,
+        formData.date_reservation,
         formData.date_demarrage,
         formData.date_debut,
         formData.jours_passage,
@@ -72,7 +75,9 @@ export function usePriceCalculator(formData: any, selectedService: string) {
         formData.reassort_type,
         formData.video_apres,
         formData.materiel_fourni,
-        formData.service_linge
+        formData.service_linge,
+        formData.taux_reduction,
+        formData.reduction_pourcentage
     ]);
 
     return calculatedPrice;

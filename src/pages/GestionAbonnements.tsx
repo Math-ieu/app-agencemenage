@@ -2,11 +2,13 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar, Eye, Pause, Play, Search, ChevronLeft, ChevronRight,
-  Sun, CheckCircle2, Clock, RefreshCw, X, ArrowDownRight, MoreHorizontal, FileText, ExternalLink, Moon, Download
+  Sun, CheckCircle2, Clock, RefreshCw, X, ArrowDownRight, MoreHorizontal, FileText, ExternalLink, Moon, Download,
+  Plus
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { getDemandes, updateDemande, getFetesReligieuses, toggleAbonnementSuspend, confirmAbonnementPaiement, generateDocument, fetchSecureDocBlob } from '../api/client';
 import { SubscriptionCalendarGrid } from '../components/client/SubscriptionCalendarGrid';
+import { CreateOngoingSubscriptionModal } from '../components/client/CreateOngoingSubscriptionModal';
 import StickyHorizontalScrollbar from '../components/common/StickyHorizontalScrollbar';
 import { encodeId } from '../utils/obfuscation';
 import { Demande } from '../types';
@@ -282,6 +284,8 @@ export default function GestionAbonnements() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuthStore();
+  const isAdmin = user?.role?.toLowerCase() === 'admin' || Boolean(user?.is_superuser);
+  const [showAddOngoingSubModal, setShowAddOngoingSubModal] = useState(false);
   const canViewVueEnsemble = hasPermission(user, 'consulter_abonnements');
   const canViewPlanning = hasPermission(user, 'consulter_planning_abonnements');
   const canViewFacturation = hasPermission(user, 'consulter_facturation_abonnements');
@@ -1418,8 +1422,22 @@ export default function GestionAbonnements() {
       <div className="ga-container">
       {/* Top Header & Page Title */}
       <div className="ga-header">
-        <h1 className="ga-title">Gestion Abonnement</h1>
-        <p className="ga-subtitle">Vue centralisée des abonnements, interventions et facturation</p>
+        <div className="ga-header-top">
+          <div>
+            <h1 className="ga-title">Gestion Abonnement</h1>
+            <p className="ga-subtitle">Vue centralisée des abonnements, interventions et facturation</p>
+          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              className="ga-add-sub-btn"
+              onClick={() => setShowAddOngoingSubModal(true)}
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              Ajouter un abonnement en cours
+            </button>
+          )}
+        </div>
 
         {/* Tab Selection Pill Buttons */}
         <div className="ga-tabs-container">
@@ -2358,6 +2376,15 @@ export default function GestionAbonnements() {
           onRefresh={fetchData}
         />
       ) : null}
+
+      {/* Admin: Ajouter un abonnement en cours Modal */}
+      {showAddOngoingSubModal && (
+        <CreateOngoingSubscriptionModal
+          isOpen={showAddOngoingSubModal}
+          onClose={() => setShowAddOngoingSubModal(false)}
+          onSuccess={fetchData}
+        />
+      )}
     </>
   );
 }

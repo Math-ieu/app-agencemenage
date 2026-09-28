@@ -250,15 +250,18 @@ export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData
     const selectedKeys = currentDetail.map(d => d.jour.toLowerCase());
 
     React.useEffect(() => {
-        if (isAbo && !formData.date_demarrage && !formData.date_debut) {
+        if (isAbo) {
             const todayStr = new Date().toISOString().slice(0, 10);
-            const initialDate = formData.date || todayStr;
-            setFormData({
-                ...formData,
-                date_demarrage: initialDate,
-                date_debut: initialDate,
-                date: initialDate
-            });
+            const currentDateVal = formData.date_reservation || formData.date_demarrage || formData.date_debut;
+            if (!currentDateVal) {
+                setFormData({
+                    ...formData,
+                    date_reservation: todayStr,
+                    date_demarrage: todayStr,
+                    date_debut: todayStr,
+                    date: todayStr
+                });
+            }
         }
     }, [isAbo]);
 
@@ -344,13 +347,14 @@ export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData
                         const defaultStart = formData.heure || '09:00';
                         const fallbackDetail = ALL_DAYS.slice(0, 1).map(d => ({ jour: d.key, heure_debut: defaultStart, heure_fin: addHoursToTime(defaultStart, dureeHours) }));
                         const detailToUse = currentDetail.length > 0 ? currentDetail : fallbackDetail;
-                        const startDate = formData.date_demarrage || formData.date_debut || formData.date || todayStr;
+                        const resDate = formData.date_reservation || formData.date_demarrage || formData.date_debut || todayStr;
                         const targetFreq = formData.frequence && formData.frequence !== 'une fois' ? formData.frequence : `${detailToUse.length}/sem`;
                         setFormData({
                             ...formData,
-                            date_demarrage: startDate,
-                            date_debut: startDate,
-                            date: startDate
+                            date_reservation: resDate,
+                            date_demarrage: resDate,
+                            date_debut: resDate,
+                            date: resDate
                         });
                         updateDaysAndFreq(detailToUse, targetFreq);
                     }}
@@ -362,7 +366,6 @@ export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData
             {isAbo && (
                 <div style={{ marginTop: '1.25rem' }}>
                     <div style={{ maxWidth: '380px', margin: '0 auto 1.5rem' }}>
-                        <div className="ws-discount-badge">-10 % de réduction sur l'abonnement</div>
                         <select
                             className="ws-select"
                             value={formData.frequence || '1/sem'}
@@ -484,24 +487,25 @@ export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData
                             })}
                         </div>
 
-                        {/* Date de démarrage de l'abonnement */}
+                        {/* Date de réservation de l'abonnement */}
                         <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
                             <div>
                                 <label style={{ fontWeight: 800, fontSize: '0.8125rem', color: '#034a3e', letterSpacing: '0.05em', textTransform: 'uppercase', display: 'block', marginBottom: '0.25rem' }}>
-                                    DATE DE DÉBUT DE L'ABONNEMENT *
+                                    DATE DE RÉSERVATION *
                                 </label>
                                 <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>
-                                    Date de la première intervention / démarrage du contrat
+                                    Date de réservation
                                 </span>
                             </div>
                             <input
                                 type="date"
                                 required
-                                value={formData.date_demarrage || formData.date_debut || formData.date || new Date().toISOString().slice(0, 10)}
+                                value={formData.date_reservation || formData.date_demarrage || formData.date_debut || new Date().toISOString().slice(0, 10)}
                                 onChange={e => {
                                     const val = e.target.value || new Date().toISOString().slice(0, 10);
                                     setFormData({
                                         ...formData,
+                                        date_reservation: val,
                                         date_demarrage: val,
                                         date_debut: val,
                                         date: val
@@ -766,7 +770,8 @@ export const PlanningBlock: React.FC<FormBlockProps> = ({ formData, setFormData 
                                 ...formData,
                                 date: val,
                                 date_demarrage: val,
-                                date_debut: val
+                                date_debut: val,
+                                date_reservation: val
                             });
                         }}
                         disabled={isAbo}
