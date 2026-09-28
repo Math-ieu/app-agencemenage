@@ -17,9 +17,6 @@ export const calculateSurchargeMultiplier = (
 ): number => {
     if (!dateStr) return 1;
 
-    const date = new Date(dateStr);
-    const isSunday = date.getDay() === 0;
-
     let isEvening = false;
     if (schedulingType === "fixed" && fixedTime) {
         const [hours] = fixedTime.split(":").map(Number);
@@ -33,10 +30,6 @@ export const calculateSurchargeMultiplier = (
 
     if (isEvening) {
         return 1.5;
-    }
-
-    if (isSunday) {
-        return 1.25;
     }
 
     return 1;
