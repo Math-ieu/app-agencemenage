@@ -468,7 +468,7 @@ export const CreateOngoingSubscriptionModal: React.FC<CreateOngoingSubscriptionM
                     Taux de réduction appliqué (%)
                   </label>
                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-                    {[0, 5, 10, 15, 20].map(pct => (
+                    {[0, 5, 10, 15, 20, 25].map(pct => (
                       <button
                         key={pct}
                         type="button"

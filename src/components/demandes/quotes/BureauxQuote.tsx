@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
-import { SURCHARGE_CITIES, getDynamicMonthPassagesCount } from "../../../utils/pricing";
+import { SURCHARGE_CITIES, getDynamicMonthPassagesCount, getSubscriptionDiscountRate } from "../../../utils/pricing";
 import type { QuotePrestationLine } from "./QuoteSection";
 import JoursInterventionSelector, { getInitialDays, formatDaysSummary, getDefaultDaysForCount, addHoursToTime } from "./JoursInterventionSelector";
 
@@ -106,7 +106,7 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
   const [frequency, setFrequency] = useState(() => {
     if (data.frequency) return data.frequency;
     if (data.frequence === "une fois" || data.frequence === "oneshot") return "oneshot";
-    if (data.reduction_abonnement === 10 || (data.frequence && data.frequence !== "une fois")) return "subscription";
+    if (Number(data.reduction_abonnement) > 0 || (data.frequence && data.frequence !== "une fois")) return "subscription";
     if (demande.frequency === "oneshot" || demande.frequency_label === "une fois") return "oneshot";
     if (demande.frequency === "abonnement" || (demande.frequency_label && demande.frequency_label !== "une fois")) return "subscription";
     return "oneshot";
@@ -145,7 +145,7 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
     const nextFrequency = (() => {
       if (freshData.frequency) return freshData.frequency;
       if (freshData.frequence === "une fois" || freshData.frequence === "oneshot") return "oneshot";
-      if (freshData.reduction_abonnement === 10 || (freshData.frequence && freshData.frequence !== "une fois")) return "subscription";
+      if (Number(freshData.reduction_abonnement) > 0 || (freshData.frequence && freshData.frequence !== "une fois")) return "subscription";
       if (demande.frequency === "oneshot" || demande.frequency_label === "une fois") return "oneshot";
       if (demande.frequency === "abonnement" || (demande.frequency_label && demande.frequency_label !== "une fois")) return "subscription";
       return "oneshot";
@@ -247,8 +247,9 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
   const rate = Number(data.tarif_horaire || data.tarif_base || data.rate) || HOURLY_RATE;
   const laborPerPassage = heures * personnes * rate;
   const laborTotal = laborPerPassage * nbPassages;
-  // Remise effective : −10% abonnement ou remise étendue (la plus avantageuse) — via RemiseSection
-  const remisePct = isAbo ? Math.max(remise.abonnement ? 10 : 0, remise.etenduePct) : remise.etenduePct;
+  // Remise effective : selon la grille d'abonnement (0% si < 4h) ou remise étendue (la plus avantageuse)
+  const defaultAboDiscount = Math.round(getSubscriptionDiscountRate(subFrequency, 'menage-bureaux', heures) * 100);
+  const remisePct = isAbo ? Math.max(remise.abonnement ? defaultAboDiscount : 0, remise.etenduePct) : remise.etenduePct;
   const remiseMontant = Math.round(laborTotal * (remisePct / 100));
   const laborAfterDiscount = laborTotal - remiseMontant;
   const pricePerPassage = Math.round(laborPerPassage * (1 - remisePct / 100));
@@ -279,7 +280,7 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
       });
     }
     if (remiseMontant > 0) {
-      const rLabel = isAbo && remise.abonnement && remisePct === 10 ? "Remise abonnement (–10%)" : `Remise (–${remisePct}%)`;
+      const rLabel = isAbo && remise.abonnement && remisePct === defaultAboDiscount ? `Remise abonnement (–${defaultAboDiscount}%)` : `Remise (–${remisePct}%)`;
       prestations.push({ designation: rLabel, montant: -remiseMontant, isReduction: true });
     }
 
@@ -309,7 +310,7 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
       reduction: remiseMontant,
       reduction_montant: remiseMontant,
       reduction_pourcentage: remisePct,
-      reduction_abonnement: isAbo && remise.abonnement ? 10 : 0,
+      reduction_abonnement: isAbo && remise.abonnement ? defaultAboDiscount : 0,
       remise_etendue_pct: remise.etenduePct,
       code_promo: remise.promoCode,
       code_promo_pct: remise.promoPct,

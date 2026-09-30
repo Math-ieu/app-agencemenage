@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
-import { SURCHARGE_CITIES, getDynamicMonthPassagesCount, estimateResources, extractJoursPassage } from "../../../utils/pricing";
+import { SURCHARGE_CITIES, getDynamicMonthPassagesCount, estimateResources, extractJoursPassage, getSubscriptionDiscountRate } from "../../../utils/pricing";
 import type { QuotePrestationLine } from "./QuoteSection";
 
 // Brief Services 02–05 — Ménage standard (60 DH/h, min 4h) & Grand ménage (70 DH/h, min 6h)
@@ -295,9 +295,11 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
   const laborPerPassage = heures * personnes * rate;
   const laborBase = laborPerPassage * nbPassages; // mensuel si abo, sinon par passage
 
-  // Remise effective : −10% abonnement ou remise étendue (la plus avantageuse)
+  // Remise effective : grille abonnement selon fréquence ou remise étendue (la plus avantageuse)
+  const freqKey = `${selectedDays.length}foisParSemaine`;
+  const defaultAboDiscount = Math.round(getSubscriptionDiscountRate(freqKey, isGrand ? 'grand-menage' : 'menage-standard', heures) * 100);
   const remisePct = isAbo
-    ? Math.max(remise.abonnement ? 10 : 0, remise.etenduePct)
+    ? Math.max(remise.abonnement ? defaultAboDiscount : 0, remise.etenduePct)
     : remise.etenduePct;
   const remiseMontant = Math.round(laborBase * (remisePct / 100));
   const laborAfterRemise = laborBase - remiseMontant;
@@ -331,8 +333,8 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
     }
 
     if (remiseMontant > 0) {
-      const rLabel = isAbo && remise.abonnement && remisePct === 10
-        ? "Remise abonnement (–10%)"
+      const rLabel = isAbo && remise.abonnement && remisePct === defaultAboDiscount
+        ? `Remise abonnement (–${defaultAboDiscount}%)`
         : `Remise (–${remisePct}%)`;
       prestations.push({ designation: rLabel, montant: -remiseMontant, isReduction: true });
     }
@@ -368,7 +370,7 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
       reduction: remiseMontant,
       reduction_montant: remiseMontant,
       reduction_pourcentage: remisePct,
-      reduction_abonnement: isAbo && remise.abonnement ? 10 : 0,
+      reduction_abonnement: isAbo && remise.abonnement ? defaultAboDiscount : 0,
       remise_etendue_pct: remise.etenduePct,
       code_promo: remise.promoCode,
       code_promo_pct: remise.promoPct,

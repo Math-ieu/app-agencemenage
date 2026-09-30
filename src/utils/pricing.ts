@@ -36,6 +36,64 @@ export const calculateSurchargeMultiplier = (
 };
 
 /**
+ * Universal Subscription Discount Rate
+ * 1 fois par semaine: 10%
+ * 2 fois par semaine: 15%
+ * 3 fois par semaine: 15%
+ * 4 fois par semaine: 20%
+ * 5 fois par semaine: 20%
+ * 6 fois par semaine: 25%
+ * 7 fois par semaine: 25%
+ * 1 fois par mois: 10%
+ * 2 fois par mois: 10%
+ *
+ * Specific exception for Ménage bureau:
+ * Only the 10% discount is subject to the restriction (< 4h => 0%).
+ * The 10% discount is applied starting from 4 hours of cleaning.
+ * Higher discounts (15%, 20%, 25%) are applied normally.
+ */
+export const getSubscriptionDiscountRate = (
+    subFrequency?: string,
+    service?: string,
+    duration?: number
+): number => {
+    if (!subFrequency) return 0.10;
+
+    const val = subFrequency.toLowerCase().replace(/\s+/g, '').replace(/_/g, '');
+
+    let rate = 0.10;
+
+    // Mensuel (1x/mois, 2x/mois, etc.) => 10%
+    if (val.includes('mois') || val.includes('mensuel')) {
+        rate = 0.10;
+    } else if (val.includes('6fois') || val.includes('6/sem') || val.includes('7fois') || val.includes('7/sem')) {
+        // 6 or 7 fois par semaine => 25%
+        rate = 0.25;
+    } else if (val.includes('4fois') || val.includes('4/sem') || val.includes('5fois') || val.includes('5/sem')) {
+        // 4 or 5 fois par semaine => 20%
+        rate = 0.20;
+    } else if (val.includes('2fois') || val.includes('2/sem') || val.includes('3fois') || val.includes('3/sem')) {
+        // 2 or 3 fois par semaine => 15%
+        rate = 0.15;
+    } else if (val.includes('1fois') || val.includes('1/sem') || val.includes('hebdo')) {
+        // 1 fois par semaine => 10%
+        rate = 0.10;
+    }
+
+    // Règle spécifique Ménage bureau : seule la réduction de 10% nécessite au moins 4h de ménage (non appliquée si < 4h)
+    const isBureau = service && (
+        service.toLowerCase().includes('bureau') ||
+        service.toLowerCase().includes('bureaux')
+    );
+
+    if (isBureau && rate === 0.10 && duration !== undefined && duration < 4) {
+        return 0;
+    }
+
+    return rate;
+};
+
+/**
  * Canonical helper to retrieve the start date of a demand or subscription.
  * Strictly adheres to the priority:
  * 1. formulaire_data.date_demarrage
@@ -329,7 +387,7 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
             const laborMonthly = laborPerVisit * numPassages;
             const discountRate = (input.taux_reduction !== undefined && input.taux_reduction !== null)
                 ? (Number(input.taux_reduction) / 100)
-                : 0.1;
+                : getSubscriptionDiscountRate(frequence, serviceLower, effDuree);
             const discountAmount = laborMonthly * discountRate; // remise sur la main-d'œuvre uniquement
             // Options en ligne flat (une seule fois), conformément au brief
             return Math.round(laborMonthly - discountAmount + optionsPerVisit);
@@ -375,7 +433,7 @@ export const calculateTotalPrice = (input: PricingInput): number | 'Sur devis' =
             const subtotalMonthly = monthlyHours * baseRate * effPeople;
             const discountRate = (input.taux_reduction !== undefined && input.taux_reduction !== null)
                 ? (Number(input.taux_reduction) / 100)
-                : 0.1;
+                : getSubscriptionDiscountRate(frequence, serviceLower, effDuree);
             const discountAmount = subtotalMonthly * discountRate;
             totalServicePrice = (subtotalMonthly - discountAmount) * multiplier;
         } else {
