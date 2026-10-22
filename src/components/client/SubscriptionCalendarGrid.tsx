@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, Clock } from 'lucide-react';
 import { Demande } from '../../types';
 import { createPlanningIntervention, updateDemande, deleteDemande, ajouterHeuresSupplementaires } from '../../api/client';
-import { parseDateRobust, getDemandeStartDate } from '../../utils/pricing';
+import { parseDateRobust, getDemandeStartDate, isMonthlyFrequency, getMonthlyFrequencyCount } from '../../utils/pricing';
 
 export interface DateOverrideItem {
   heure?: string;
@@ -82,7 +82,8 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
 
   const maxJours = React.useMemo(() => {
     const freqStr = (aboFrequence || '').toLowerCase();
-    if (freqStr.includes('1_fois') || freqStr.includes('1/sem') || freqStr.includes('1 fois') || freqStr.includes('1 passage') || freqStr.includes('1/mois') || freqStr.startsWith('1')) return 1;
+    if (isMonthlyFrequency(freqStr)) return 1;
+    if (freqStr.includes('1_fois') || freqStr.includes('1/sem') || freqStr.includes('1 fois') || freqStr.includes('1 passage') || freqStr.startsWith('1')) return 1;
     if (freqStr.includes('2_fois') || freqStr.includes('2/sem') || freqStr.includes('2 fois') || freqStr.includes('2 passage') || freqStr.startsWith('2')) return 2;
     if (freqStr.includes('3_fois') || freqStr.includes('3/sem') || freqStr.includes('3 fois') || freqStr.includes('3 passage') || freqStr.startsWith('3')) return 3;
     if (freqStr.includes('4_fois') || freqStr.includes('4/sem') || freqStr.includes('4 fois') || freqStr.includes('4 passage') || freqStr.startsWith('4')) return 4;
@@ -169,16 +170,22 @@ export const SubscriptionCalendarGrid: React.FC<SubscriptionCalendarGridProps> =
   const interventionSet = new Set<string>();
   const seenMonth = new Set<string>();
 
+  const freqClean = (aboFrequence || '').toLowerCase();
+  const isMonthlyAbo = isMonthlyFrequency(freqClean);
+  const monthlyAboCount = getMonthlyFrequencyCount(freqClean);
+
   for (let d = new Date(start); d <= end; d = addDays(d, 1)) {
     if (!selectedDows.includes(d.getDay())) continue;
-    if (aboFrequence === "bi_hebdomadaire") {
-      const weekNo = Math.floor((d.getTime() - startMs) / (7 * 24 * 3600 * 1000));
-      if (weekNo % 2 !== 0) continue;
-    }
-    if (aboFrequence === "1_fois_mois") {
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDay()}`;
-      if (seenMonth.has(key)) continue;
-      seenMonth.add(key);
+    if (isMonthlyAbo) {
+      if (monthlyAboCount === 1) {
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (seenMonth.has(key)) continue;
+        seenMonth.add(key);
+      } else {
+        // 2 fois par mois (Tous les 15 jours / bi-hebdomadaire)
+        const weekNo = Math.floor((d.getTime() - startMs) / (7 * 24 * 3600 * 1000));
+        if (weekNo % 2 !== 0) continue;
+      }
     }
     interventionSet.add(format(d, "yyyy-MM-dd"));
   }

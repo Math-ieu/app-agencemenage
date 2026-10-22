@@ -94,6 +94,29 @@ export const getSubscriptionDiscountRate = (
 };
 
 /**
+ * Detects if a frequency represents a monthly subscription (1x/mois, 2x/mois, etc.)
+ */
+export const isMonthlyFrequency = (freq?: string | null): boolean => {
+    if (!freq) return false;
+    const str = String(freq).toLowerCase().replace(/\s+/g, '').replace(/_/g, '');
+    return str.includes('mois') || str.includes('month') || str.includes('bihebdomadaire');
+};
+
+/**
+ * Returns the theoretical monthly passages count for existing monthly frequencies:
+ * - 1 fois par mois -> 1
+ * - 2 fois par mois / bi-hebdomadaire / tous les 15j -> 2
+ */
+export const getMonthlyFrequencyCount = (freq?: string | null): number => {
+    if (!freq) return 1;
+    const str = String(freq).toLowerCase().replace(/\s+/g, '').replace(/_/g, '');
+    if (str.includes('2fois') || str.includes('2/mois') || str.includes('2mois') || str.includes('bihebdomadaire')) {
+        return 2;
+    }
+    return 1;
+};
+
+/**
  * Canonical helper to retrieve the start date of a demand or subscription.
  * Strictly adheres to the priority:
  * 1. formulaire_data.date_demarrage
@@ -680,8 +703,11 @@ export const getCleanAboFrequencyLabel = (demande: any, jours: string[] = []): s
     const lower = raw.toLowerCase();
 
     if (!raw || lower.includes('une fois') || lower.includes('oneshot') || lower === 'once') {
+        const subFreq = String((demande?.formulaire_data as any)?.subFrequency || '').toLowerCase();
+        if (subFreq.includes('mois') || subFreq.includes('month') || subFreq.includes('bihebdomadaire')) {
+            return subFreq.includes('2') || subFreq.includes('bihebdomadaire') ? '2 fois / mois' : '1 fois / mois';
+        }
         if (jours.length > 0) return `${jours.length}×/semaine`;
-        const subFreq = String((demande?.formulaire_data as any)?.subFrequency || '');
         if (subFreq.includes('1')) return '1×/semaine';
         if (subFreq.includes('2')) return '2×/semaine';
         if (subFreq.includes('3')) return '3×/semaine';
@@ -690,7 +716,11 @@ export const getCleanAboFrequencyLabel = (demande: any, jours: string[] = []): s
         return 'Abonnement';
     }
 
-    if (lower.includes('/sem') || lower.includes('semaine') || lower.includes('mois')) {
+    if (lower.includes('mois') || lower.includes('month') || lower.includes('bihebdomadaire')) {
+        return (lower.includes('2') || lower.includes('bihebdomadaire')) ? '2 fois / mois' : '1 fois / mois';
+    }
+
+    if (lower.includes('/sem') || lower.includes('semaine')) {
         return raw;
     }
 
@@ -872,10 +902,6 @@ export const getContractBaselinePassages = (demande: any): number => {
         });
         if (found.size > 0) days = Array.from(found);
     }
-    if (days.length > 0) {
-        return days.length * 4;
-    }
-
     const freqStr = String(
         formData.frequence ||
         formData.frequency_label ||
@@ -884,6 +910,11 @@ export const getContractBaselinePassages = (demande: any): number => {
         demande.frequency ||
         ''
     ).toLowerCase().trim();
+
+    // 2. Monthly frequency check (prioritized to prevent days.length * 4 from treating monthly as weekly)
+    if (isMonthlyFrequency(freqStr)) {
+        return getMonthlyFrequencyCount(freqStr);
+    }
 
     // 3. Oneshot / Ponctuel / Une fois check
     if (
@@ -897,9 +928,13 @@ export const getContractBaselinePassages = (demande: any): number => {
         return 1;
     }
 
+    if (days.length > 0) {
+        return days.length * 4;
+    }
+
     // 4. Robust string parsing of frequency (handles "2 fois / semaine", "2 fois par semaine", "2/sem", etc.)
     const weekMatch = freqStr.match(/(\d+)\s*(?:fois|j|x)?\s*(?:\/|par)?\s*(?:semaine|sem|week)/i) ||
-                      freqStr.match(/(\d+)\s*(?:fois|_fois|\/sem)/i);
+                      (!freqStr.includes('mois') && freqStr.match(/(\d+)\s*(?:fois|_fois|\/sem)/i));
     if (weekMatch && weekMatch[1]) {
         const perWeek = Number(weekMatch[1]);
         if (perWeek >= 1 && perWeek <= 7) {
@@ -1193,11 +1228,41 @@ export const getDynamicMonthPassagesCount = (demande: any, allDemandes: any[] = 
         }
     }
 
+    const freqRaw = String(demande.frequency_label || (demande.formulaire_data as any)?.frequence || (demande.formulaire_data as any)?.frequency_label || demande.frequency || '').toLowerCase();
+    const isMonthly = isMonthlyFrequency(freqRaw);
+    const monthlyCount = getMonthlyFrequencyCount(freqRaw);
+
     const passageDatesSet = new Set<string>();
-    for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
-        if (selectedDows.includes(cur.getDay())) {
-            const isoKey = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-            passageDatesSet.add(isoKey);
+    if (isMonthly) {
+        if (monthlyCount === 1) {
+            // 1 fois par mois : strictement 1 passage au maximum dans le mois
+            for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
+                if (selectedDows.includes(cur.getDay())) {
+                    const isoKey = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                    passageDatesSet.add(isoKey);
+                    break;
+                }
+            }
+        } else {
+            // 2 fois par mois (Tous les 15 jours) : passages espacés de 14 jours (max 2 dans le mois)
+            let lastPassageDate: Date | null = null;
+            for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
+                if (selectedDows.includes(cur.getDay())) {
+                    if (!lastPassageDate || (cur.getTime() - lastPassageDate.getTime()) >= (13 * 24 * 3600 * 1000)) {
+                        const isoKey = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                        passageDatesSet.add(isoKey);
+                        lastPassageDate = new Date(cur);
+                        if (passageDatesSet.size >= 2) break;
+                    }
+                }
+            }
+        }
+    } else {
+        for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 1)) {
+            if (selectedDows.includes(cur.getDay())) {
+                const isoKey = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                passageDatesSet.add(isoKey);
+            }
         }
     }
 

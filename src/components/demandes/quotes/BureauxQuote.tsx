@@ -13,10 +13,8 @@ const visitsMap: Record<string, number> = {
   "5foisParSemaine": 5,
   "6foisParSemaine": 6,
   "7foisParSemaine": 7,
-  "3foisParMois": 0.75,
-  "2foisParMois": 0.5,
   "1foisParMois": 0.25,
-  "4foisParMois": 1,
+  "2foisParMois": 0.5,
 };
 
 const dbSubFreqMap: Record<string, string> = {
@@ -29,8 +27,6 @@ const dbSubFreqMap: Record<string, string> = {
   "7foisParSemaine": "7/sem",
   "1foisParMois": "1/mois",
   "2foisParMois": "2/mois",
-  "3foisParMois": "3/mois",
-  "4foisParMois": "4/mois",
 };
 
 const uiSubFreqMap: Record<string, string> = {
@@ -43,8 +39,6 @@ const uiSubFreqMap: Record<string, string> = {
   "7/sem": "7foisParSemaine",
   "1/mois": "1foisParMois",
   "2/mois": "2foisParMois",
-  "3/mois": "3foisParMois",
-  "4/mois": "4foisParMois",
 };
 
 const getCadenceLabel = (val: string) => {
@@ -58,8 +52,6 @@ const getCadenceLabel = (val: string) => {
     case "7foisParSemaine": return "7 fois par semaine";
     case "1foisParMois": return "1 fois par mois";
     case "2foisParMois": return "2 fois par mois";
-    case "3foisParMois": return "3 fois par mois";
-    case "4foisParMois": return "4 fois par mois";
     default: return "";
   }
 };
@@ -358,8 +350,6 @@ export default function BureauxQuote({ demande, onPrestationsChange }: BureauxQu
                 <option value="7foisParSemaine">7 fois par semaine</option>
                 <option value="1foisParMois">1 fois par mois</option>
                 <option value="2foisParMois">2 fois par mois</option>
-                <option value="3foisParMois">3 fois par mois</option>
-                <option value="4foisParMois">4 fois par mois</option>
               </select>
             </Field>
           )}

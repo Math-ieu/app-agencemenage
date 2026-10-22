@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, X, AlertCircle, FileText } from 'lucide-react';
 import { Demande, Client } from '../../types';
 import { updateDemande, generateDocument, getUsers, affecterDemande } from '../../api/client';
-import { getDevisDiscountDetails, extractJoursPassage, getDynamicMonthPassagesCount, getDemandeStartDate, parseDateRobust } from '../../utils/pricing';
+import { getDevisDiscountDetails, extractJoursPassage, getDynamicMonthPassagesCount, getDemandeStartDate, parseDateRobust, isMonthlyFrequency, getMonthlyFrequencyCount } from '../../utils/pricing';
 
 export interface InvoiceFormModalProps {
   show: boolean;
@@ -37,6 +37,10 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
 }) => {
   const formatFrequenceOption = (raw?: string, daysCount?: number): string => {
     const str = String(raw || '').toLowerCase();
+    if (isMonthlyFrequency(str)) {
+      const count = getMonthlyFrequencyCount(str);
+      return count === 2 ? '2 fois / mois' : '1 fois / mois';
+    }
     if (daysCount && daysCount >= 1 && daysCount <= 7) return `${daysCount} fois / semaine`;
     if (str.includes('1')) return '1 fois / semaine';
     if (str.includes('2')) return '2 fois / semaine';
@@ -240,8 +244,14 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       : new Date(new Date().getFullYear(), new Date().getMonth() + activeTabIndex, 1);
 
     // Build a synthetic demande with updated values to compute dynamic passages
-    const freqMatch = invFrequence.match(/(\d+)/);
-    const freqLabel = freqMatch ? `${freqMatch[1]}/sem` : (latest.frequency_label || latest.formulaire_data?.frequence || '2/sem');
+    let freqLabel = '2/sem';
+    if (isMonthlyFrequency(invFrequence)) {
+      const count = getMonthlyFrequencyCount(invFrequence);
+      freqLabel = count === 2 ? '2/mois' : '1/mois';
+    } else {
+      const freqMatch = invFrequence.match(/(\d+)/);
+      freqLabel = freqMatch ? `${freqMatch[1]}/sem` : (latest.frequency_label || latest.formulaire_data?.frequence || '2/sem');
+    }
 
     const syntheticDemande = {
       ...latest,
@@ -370,6 +380,8 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#037265', marginBottom: 4 }}>Type de fréquence</label>
                 <select value={invFrequence} onChange={e => setInvFrequence(e.target.value)} style={{ width: '100%', padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, color: '#0f172a', background: '#f8fafc' }}>
+                  <option value="1 fois / mois">1 fois / mois</option>
+                  <option value="2 fois / mois">2 fois / mois</option>
                   <option value="1 fois / semaine">1 fois / semaine</option>
                   <option value="2 fois / semaine">2 fois / semaine</option>
                   <option value="3 fois / semaine">3 fois / semaine</option>

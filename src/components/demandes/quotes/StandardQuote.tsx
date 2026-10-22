@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { FormulaBox, B, s, OptRow, ResultBar, fmt, Field } from "./QuoteShared";
 import RemiseSection, { type RemiseValue } from "./RemiseSection";
-import { SURCHARGE_CITIES, getDynamicMonthPassagesCount, estimateResources, extractJoursPassage, getSubscriptionDiscountRate } from "../../../utils/pricing";
+import { SURCHARGE_CITIES, getDynamicMonthPassagesCount, estimateResources, extractJoursPassage, getSubscriptionDiscountRate, isMonthlyFrequency, getMonthlyFrequencyCount } from "../../../utils/pricing";
 import type { QuotePrestationLine } from "./QuoteSection";
 
 // Brief Services 02–05 — Ménage standard (60 DH/h, min 4h) & Grand ménage (70 DH/h, min 6h)
@@ -287,7 +287,10 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
 
   const isAbo = frequency === "subscription";
   const dynamicPassages = getDynamicMonthPassagesCount(demande);
-  const nbPassages = isAbo ? (dynamicPassages > 0 ? dynamicPassages : joursSemaine * 4) : 1;
+  const rawFreq = demande.frequency_label || demande.formulaire_data?.frequence || '';
+  const isMonthly = isMonthlyFrequency(rawFreq);
+  const fallbackPassages = isMonthly ? getMonthlyFrequencyCount(rawFreq) : joursSemaine * 4;
+  const nbPassages = isAbo ? (dynamicPassages > 0 ? dynamicPassages : fallbackPassages) : 1;
 
   const optionsTotal = (opts.produits ? OPT_PRODUITS : 0) + (opts.torchons ? OPT_TORCHONS : 0)
     + (opts.pack ? OPT_PACK : 0) + (opts.zone ? OPT_ZONE : 0);
@@ -296,7 +299,7 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
   const laborBase = laborPerPassage * nbPassages; // mensuel si abo, sinon par passage
 
   // Remise effective : grille abonnement selon fréquence ou remise étendue (la plus avantageuse)
-  const freqKey = `${selectedDays.length}foisParSemaine`;
+  const freqKey = isMonthly ? rawFreq : `${selectedDays.length}foisParSemaine`;
   const defaultAboDiscount = Math.round(getSubscriptionDiscountRate(freqKey, isGrand ? 'grand-menage' : 'menage-standard', heures) * 100);
   const remisePct = isAbo
     ? Math.max(remise.abonnement ? defaultAboDiscount : 0, remise.etenduePct)
@@ -354,7 +357,7 @@ export default function StandardQuote({ demande, onPrestationsChange }: Standard
       nb_intervenantes: personnes,
       nb_personnel: personnes,
       numberOfPeople: personnes,
-      jours_par_semaine: isAbo ? selectedDays.length : 1,
+      jours_par_semaine: isAbo ? (isMonthly ? 1 : selectedDays.length) : 1,
       jours_intervention: selectedDays,
       jours_passage: daysFormatted,
       jours_intervention_detail: selectedDays.map(j => ({

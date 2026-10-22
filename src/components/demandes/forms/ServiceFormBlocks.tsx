@@ -1,5 +1,5 @@
 import React from 'react';
-import { extractJoursPassage } from '../../../utils/pricing';
+import { extractJoursPassage, isMonthlyFrequency } from '../../../utils/pricing';
 
 export interface FormBlockProps {
     formData: any;
@@ -187,6 +187,7 @@ export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData
 
     const getTargetCount = (freq: string): number => {
         if (!freq || freq === 'une fois') return 1;
+        if (isMonthlyFrequency(freq)) return 1;
         const match = freq.match(/^(\d+)/);
         return match ? parseInt(match[1], 10) : 1;
     };
@@ -272,7 +273,8 @@ export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData
             return match ? match.label : d.jour;
         }).join(' + ');
 
-        const freqToSet = newFreq || (daysList.length > 0 ? `${daysList.length}/sem` : formData.frequence);
+        const isCurrentMonthly = isMonthlyFrequency(formData.frequence);
+        const freqToSet = newFreq || (daysList.length > 0 ? (isCurrentMonthly ? formData.frequence : `${daysList.length}/sem`) : formData.frequence);
 
         setFormData({
             ...formData,
@@ -280,11 +282,18 @@ export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData
             jours_intervention_detail: newDetail,
             jours_intervention: daysList,
             jours_passage: daysFormattedStr,
-            jours_par_semaine: daysList.length
+            jours_par_semaine: isMonthlyFrequency(freqToSet) ? 1 : daysList.length
         });
     };
 
     const handleToggleDay = (dayKey: string) => {
+        const isMonthly = isMonthlyFrequency(formData.frequence);
+        if (isMonthly) {
+            const defaultStart = formData.heure || '09:00';
+            const defaultEnd = addHoursToTime(defaultStart, dureeHours);
+            updateDaysAndFreq([{ jour: dayKey.toLowerCase(), heure_debut: defaultStart, heure_fin: defaultEnd }], formData.frequence);
+            return;
+        }
         let nextDetail = [...currentDetail];
         const existingIdx = nextDetail.findIndex(d => d.jour.toLowerCase() === dayKey.toLowerCase());
         if (existingIdx >= 0) {
@@ -380,8 +389,6 @@ export const FrequenceBlock: React.FC<FormBlockProps> = ({ formData, setFormData
                             <option value="7/sem">7 fois par semaine</option>
                             <option value="1/mois">1 fois par mois</option>
                             <option value="2/mois">2 fois par mois</option>
-                            <option value="3/mois">3 fois par mois</option>
-                            <option value="4/mois">4 fois par mois</option>
                         </select>
                     </div>
 

@@ -15,7 +15,7 @@ import { SubscriptionCalendarGrid } from './SubscriptionCalendarGrid';
 import { SubscriptionSidebar } from './SubscriptionSidebar';
 import { FacturesReglementsCard } from './FacturesReglementsCard';
 import { InvoiceFormModal } from './InvoiceFormModal';
-import { extractJoursPassage, parseDateRobust, getStatutMoisProchainCalculated, getDemandeStartDate, getCleanAboFrequencyLabel } from '../../utils/pricing';
+import { extractJoursPassage, parseDateRobust, getStatutMoisProchainCalculated, getDemandeStartDate, getCleanAboFrequencyLabel, isMonthlyFrequency, getMonthlyFrequencyCount } from '../../utils/pricing';
 import { useAuthStore } from '../../store/auth';
 import { checkPermission } from '../../utils/permissions';
 
@@ -194,7 +194,8 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
 
     const freqStr = (frequencyLabel || latest?.frequency_label || latest?.formulaire_data?.frequence || '').toLowerCase();
     let maxJours = 5;
-    if (freqStr.includes('1_fois') || freqStr.includes('1/sem') || freqStr.includes('1 fois') || freqStr.includes('1/mois') || freqStr.startsWith('1')) maxJours = 1;
+    if (isMonthlyFrequency(freqStr)) maxJours = 1;
+    else if (freqStr.includes('1_fois') || freqStr.includes('1/sem') || freqStr.includes('1 fois') || freqStr.includes('1/mois') || freqStr.startsWith('1')) maxJours = 1;
     else if (freqStr.includes('2_fois') || freqStr.includes('2/sem') || freqStr.includes('2 fois') || freqStr.startsWith('2')) maxJours = 2;
     else if (freqStr.includes('3_fois') || freqStr.includes('3/sem') || freqStr.includes('3 fois') || freqStr.startsWith('3')) maxJours = 3;
     else if (freqStr.includes('4_fois') || freqStr.includes('4/sem') || freqStr.includes('4 fois') || freqStr.startsWith('4')) maxJours = 4;
@@ -694,10 +695,25 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
       }
     }
 
+    const freqRaw = frequencyLabel || latest?.frequency_label || latest?.formulaire_data?.frequence || '';
+    const isMonthlyAbo = isMonthlyFrequency(freqRaw);
+    const monthlyAboCount = getMonthlyFrequencyCount(freqRaw);
+    const contractStartMs = parsedStart ? parsedStart.getTime() : start.getTime();
+
     const passageDatesSet = new Set<string>();
 
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       if (selectedDows.includes(d.getDay())) {
+        if (isMonthlyAbo) {
+          if (monthlyAboCount === 1) {
+            if (passageDatesSet.size >= 1) break;
+          } else {
+            // 2 fois par mois : espacé de 14 jours par rapport au début
+            const weekNo = Math.floor((d.getTime() - contractStartMs) / (7 * 24 * 3600 * 1000));
+            if (weekNo % 2 !== 0) continue;
+            if (passageDatesSet.size >= 2) break;
+          }
+        }
         const isoKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         passageDatesSet.add(isoKey);
       }
@@ -730,7 +746,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
     });
 
     return passageDatesSet.size;
-  }, [selectedDays, baseDate, dateDebut, dateFin, latest, aboDateOverrides, childDemandes]);
+  }, [selectedDays, baseDate, dateDebut, dateFin, latest, aboDateOverrides, childDemandes, frequencyLabel]);
 
   const monthPassagesPlanifies = useMemo(() => {
     return getPassagesForMonth(activeTabIndex);
@@ -747,6 +763,10 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
   }, [monthPassagesPlanifies, latest?.id]);
 
   const fifthWeekInfo = useMemo(() => {
+    const freqRaw = frequencyLabel || latest?.frequency_label || latest?.formulaire_data?.frequence || '';
+    if (isMonthlyFrequency(freqRaw)) {
+      return { fifthWeekDay: null, fifthWeekDateStr: null, fifthWeekIso: null };
+    }
     const dayCounts: Record<string, { count: number; dates: string[] }> = {};
     for (let day = 1; day <= daysInMonth; day++) {
       const dateObj = new Date(year, month, day);
@@ -771,7 +791,7 @@ export const SubscriptionManagementView: React.FC<SubscriptionManagementViewProp
       }
     }
     return { fifthWeekDay: null, fifthWeekDateStr: null, fifthWeekIso: null };
-  }, [year, month, daysInMonth, selectedDays]);
+  }, [year, month, daysInMonth, selectedDays, frequencyLabel, latest]);
 
   // ── Validation règle métier : activation du mois prochain ──
   const lastActiveTabKey = monthTabs[monthTabs.length - 1]?.id || activeMonthTab;
