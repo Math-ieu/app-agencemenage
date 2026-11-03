@@ -221,7 +221,8 @@ export const sendWhatsApp = (
  */
 export const fetchSecureDocBlob = async (downloadUrl: string): Promise<{ blobUrl: string; mimeType: string }> => {
   const response = await apiClient.get(downloadUrl, { responseType: 'blob' });
-  const mimeType = response.headers['content-type'] || 'application/octet-stream';
+  const contentType = response.headers['content-type'];
+  const mimeType = typeof contentType === 'string' ? contentType : 'application/octet-stream';
   const blobUrl = URL.createObjectURL(response.data);
   return { blobUrl, mimeType };
 };
