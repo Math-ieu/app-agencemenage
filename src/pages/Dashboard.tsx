@@ -187,15 +187,6 @@ const toStartCase = (value: string): string =>
 
 const formatAuditFieldName = (fieldName: string): string => AUDIT_FIELD_LABELS[fieldName] || toStartCase(fieldName);
 
-const abbreviateName = (fullName: string | undefined): string => {
-  if (!fullName) return '—';
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length <= 1) return fullName;
-  const firstName = parts[0];
-  const lastInitial = parts[parts.length - 1][0].toUpperCase();
-  return `${firstName} ${lastInitial}.`;
-};
-
 const getAuditChangedFieldsSummary = (log: AuditLogItem): string | null => {
   const rawChanges = log.extra_data?.changes;
   if (!rawChanges || typeof rawChanges !== 'object') return null;
@@ -302,6 +293,7 @@ export default function Dashboard() {
   const [caoPostponedDate, setCaoPostponedDate] = useState('');
   const [caoPostponedTime, setCaoPostponedTime] = useState('');
   const [caoNote, setCaoNote] = useState('');
+  const [caoContactConfirmed, setCaoContactConfirmed] = useState<'oui' | 'non' | null>(null);
   const [caoMenuOpen, setCaoMenuOpen] = useState(false);
   const [sendingCaoWhatsApp, setSendingCaoWhatsApp] = useState(false);
   const [caoPreviewIndex, setCaoPreviewIndex] = useState(0);
@@ -444,6 +436,30 @@ export default function Dashboard() {
   const [showAssignmentModal, setShowAssignmentModal] = useState<number | null>(null);
   const [showOpsAssignmentModal, setShowOpsAssignmentModal] = useState<number | null>(null);
   const [operationsOfficers, setOperationsOfficers] = useState<User[]>([]);
+  const [readNotesVersion, setReadNotesVersion] = useState(0);
+
+  const markNoteAsRead = (demandeId: number, type: 'commercial' | 'operationnel', noteContent?: string) => {
+    if (!noteContent || !noteContent.trim()) return;
+    try {
+      const key = `note_read_${user?.id || 'default'}_${demandeId}_${type}`;
+      localStorage.setItem(key, noteContent.trim());
+      setReadNotesVersion(v => v + 1);
+    } catch (e) {
+      console.error('Error saving read note state:', e);
+    }
+  };
+
+  const isNoteUnread = (demandeId: number, type: 'commercial' | 'operationnel', noteContent?: string) => {
+    void readNotesVersion;
+    if (!noteContent || !noteContent.trim()) return false;
+    try {
+      const key = `note_read_${user?.id || 'default'}_${demandeId}_${type}`;
+      const stored = localStorage.getItem(key);
+      return stored !== noteContent.trim();
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => {
     if (checkPermission(user, 'affecter_commercial').allowed) {
@@ -904,8 +920,28 @@ export default function Dashboard() {
         // Mark CAO as confirmed (cao = true)
         await confirmerCAO(demande.id);
         // Le statut devient "pres_confirmee" (Prestation confirmée)
-        const updateData: any = { statut: 'pres_confirmee', cao: true, note_operationnel: caoNote || '' };
+        const formattedDate = new Date().toLocaleDateString('fr-FR', {
+          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        const noteHeader = `[${formattedDate}] CAO Confirmé (Contact client : Oui) : ${caoNote.trim()}`;
+        const updatedNotes = demande.note_operationnel ? `${demande.note_operationnel}\n\n${noteHeader}` : noteHeader;
+
+        const updateData: any = {
+          statut: 'pres_confirmee',
+          cao: true,
+          note_operationnel: updatedNotes,
+          formulaire_data: {
+            ...(demande.formulaire_data || {}),
+            cao: {
+              decision: 'confirmed',
+              contact_confirme: true,
+              note_convenue: caoNote.trim(),
+              date_confirmation: new Date().toISOString(),
+            }
+          }
+        };
         await updateDemande(demande.id, updateData);
+        markNoteAsRead(demande.id, 'operationnel', updatedNotes);
 
         addToast('Prestation confirmée avec succès', 'success');
       } else if (status === 'postponed') {
@@ -942,6 +978,7 @@ export default function Dashboard() {
       setCaoPostponedDate('');
       setCaoPostponedTime('');
       setCaoNote('');
+      setCaoContactConfirmed(null);
       setSelectedAgentToAddInCAO('');
       setCaoMenuOpen(false);
       fetchData();
@@ -986,7 +1023,8 @@ export default function Dashboard() {
     setCaoCancelReason('');
     setCaoPostponedDate((demande.date_intervention || '').slice(0, 10));
     setCaoPostponedTime(demande.heure_intervention || '');
-    setCaoNote(demande.note_operationnel || '');
+    setCaoNote(demande.formulaire_data?.cao?.note_convenue || '');
+    setCaoContactConfirmed(demande.formulaire_data?.cao?.contact_confirme ? 'oui' : (demande.cao ? 'oui' : null));
     setCaoMenuOpen(false);
     setCaoPreviewIndex(0);
   };
@@ -998,6 +1036,7 @@ export default function Dashboard() {
     setCaoPostponedDate('');
     setCaoPostponedTime('');
     setCaoNote('');
+    setCaoContactConfirmed(null);
     setCaoMenuOpen(false);
     setCaoPreviewIndex(0);
   };
@@ -3146,8 +3185,8 @@ export default function Dashboard() {
                 <thead>
                   <tr>
                     <th style={{ width: '48px', minWidth: '48px', textAlign: 'center' }}></th>
-                    <th style={{ minWidth: '130px' }}>Com</th>
-                    <th style={{ minWidth: '95px' }}>Ops</th>
+                    <th style={{ minWidth: '140px' }} title="Commercial">Com</th>
+                    <th style={{ minWidth: '140px' }} title="Chargée d'opération">Chargée Opé</th>
                     <th style={{ minWidth: '130px' }}>Date d'interv.</th>
                     <th style={{ minWidth: '290px' }}>Statut besoin</th>
                     <th style={{ minWidth: '180px' }}>Nom du client</th>
@@ -3263,8 +3302,132 @@ export default function Dashboard() {
                           </>
                         )}
                       </td>
-                      <td>{d.commercial_name || d.assigned_to_name || '—'}</td>
-                      <td>{abbreviateName(d.assigned_to_operations_name)}</td>
+                      <td style={{ minWidth: '140px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', minHeight: '28px' }}>
+                          <span
+                            style={{
+                              fontWeight: 500,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              color: '#1e293b'
+                            }}
+                            title={d.commercial_name || d.assigned_to_name || '—'}
+                          >
+                            {d.commercial_name || d.assigned_to_name || '—'}
+                          </span>
+                          {Boolean(d.note_commercial && d.note_commercial.trim()) && (() => {
+                            const isUnread = isNoteUnread(d.id, 'commercial', d.note_commercial);
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markNoteAsRead(d.id, 'commercial', d.note_commercial);
+                                  setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
+                                }}
+                                title={`Note commerciale :\n${d.note_commercial}`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '2px 8px',
+                                  borderRadius: '9999px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  backgroundColor: isUnread ? '#fffbeb' : '#f8fafc',
+                                  color: isUnread ? '#b45309' : '#64748b',
+                                  border: isUnread ? '1px solid #fde68a' : '1px solid #e2e8f0',
+                                  cursor: 'pointer',
+                                  flexShrink: 0,
+                                  boxShadow: isUnread ? '0 1px 2px rgba(245, 158, 11, 0.15)' : 'none',
+                                  transition: 'all 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'translateY(-1px)';
+                                  e.currentTarget.style.boxShadow = isUnread ? '0 4px 6px -1px rgba(245, 158, 11, 0.25)' : '0 2px 4px rgba(0,0,0,0.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'translateY(0)';
+                                  e.currentTarget.style.boxShadow = isUnread ? '0 1px 2px rgba(245, 158, 11, 0.15)' : 'none';
+                                }}
+                              >
+                                {isUnread && (
+                                  <span style={{ position: 'relative', display: 'flex', width: '7px', height: '7px', flexShrink: 0 }}>
+                                    <span className="animate-ping" style={{ position: 'absolute', display: 'inline-flex', width: '100%', height: '100%', borderRadius: '9999px', backgroundColor: '#f59e0b', opacity: 0.75 }} />
+                                    <span style={{ position: 'relative', display: 'inline-flex', width: '7px', height: '7px', borderRadius: '9999px', backgroundColor: '#d97706' }} />
+                                  </span>
+                                )}
+                                <MessageSquare size={12} color={isUnread ? '#d97706' : '#64748b'} />
+                                <span>Note</span>
+                              </button>
+                            );
+                          })()}
+                        </div>
+                      </td>
+                      <td style={{ minWidth: '140px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', minHeight: '28px' }}>
+                          <span
+                            style={{
+                              fontWeight: 500,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              color: '#1e293b'
+                            }}
+                            title={d.assigned_to_operations_name || '—'}
+                          >
+                            {d.assigned_to_operations_name || '—'}
+                          </span>
+                          {Boolean(d.note_operationnel && d.note_operationnel.trim()) && (() => {
+                            const isUnread = isNoteUnread(d.id, 'operationnel', d.note_operationnel);
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markNoteAsRead(d.id, 'operationnel', d.note_operationnel);
+                                  setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
+                                }}
+                                title={`Note opérationnelle :\n${d.note_operationnel}`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '2px 8px',
+                                  borderRadius: '9999px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  backgroundColor: isUnread ? '#f0f9ff' : '#f8fafc',
+                                  color: isUnread ? '#0369a1' : '#64748b',
+                                  border: isUnread ? '1px solid #bae6fd' : '1px solid #e2e8f0',
+                                  cursor: 'pointer',
+                                  flexShrink: 0,
+                                  boxShadow: isUnread ? '0 1px 2px rgba(2, 132, 199, 0.15)' : 'none',
+                                  transition: 'all 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'translateY(-1px)';
+                                  e.currentTarget.style.boxShadow = isUnread ? '0 4px 6px -1px rgba(2, 132, 199, 0.25)' : '0 2px 4px rgba(0,0,0,0.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'translateY(0)';
+                                  e.currentTarget.style.boxShadow = isUnread ? '0 1px 2px rgba(2, 132, 199, 0.15)' : 'none';
+                                }}
+                              >
+                                {isUnread && (
+                                  <span style={{ position: 'relative', display: 'flex', width: '7px', height: '7px', flexShrink: 0 }}>
+                                    <span className="animate-ping" style={{ position: 'absolute', display: 'inline-flex', width: '100%', height: '100%', borderRadius: '9999px', backgroundColor: '#38bdf8', opacity: 0.75 }} />
+                                    <span style={{ position: 'relative', display: 'inline-flex', width: '7px', height: '7px', borderRadius: '9999px', backgroundColor: '#0284c7' }} />
+                                  </span>
+                                )}
+                                <MessageSquare size={12} color={isUnread ? '#0284c7' : '#64748b'} />
+                                <span>Note</span>
+                              </button>
+                            );
+                          })()}
+                        </div>
+                      </td>
                       <td>
                         {(() => {
                           const sd = getDemandeStartDate(d);
@@ -3583,6 +3746,7 @@ export default function Dashboard() {
 
                               {hasPermission(user, 'note_commerciale_dashboard') && (
                                 <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                  markNoteAsRead(d.id, 'commercial', d.note_commercial);
                                   setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
                                   setActiveMoreMenu(null);
                                   setMoreMenuCoords(null);
@@ -3592,6 +3756,7 @@ export default function Dashboard() {
                               )}
                               {hasPermission(user, 'note_operationnelle_dashboard') && (
                                 <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                  markNoteAsRead(d.id, 'operationnel', d.note_operationnel);
                                   setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
                                   setActiveMoreMenu(null);
                                   setMoreMenuCoords(null);
@@ -3600,7 +3765,27 @@ export default function Dashboard() {
                                 </button>
                               )}
 
-                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande') || hasPermissionWithContext(user, 'confirmation_avant_operation', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
+                              {hasPermission(user, 'assigner_charge_operation') && (
+                                <button className="menu-item" style={{ color: '#0f766e' }} onClick={() => {
+                                  setShowOpsAssignmentModal(d.id);
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <UserPlus size={16} /> Affecter chargée d'opération
+                                </button>
+                              )}
+
+                              {checkPermission(user, 'affecter_commercial').allowed && (
+                                <button className="menu-item" style={{ color: '#7c3aed' }} onClick={() => {
+                                  setShowAssignmentModal(d.id);
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <UserPlus size={16} /> Affecter commercial
+                                </button>
+                              )}
+
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande') || hasPermissionWithContext(user, 'confirmation_avant_operation', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation') || checkPermission(user, 'affecter_commercial').allowed) && <div className="menu-divider" />}
 
 
                               {hasPermissionWithContext(user, 'annulation_demande', d) && (
@@ -3773,6 +3958,7 @@ export default function Dashboard() {
 
                               {hasPermission(user, 'note_commerciale_dashboard') && (
                                 <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                  markNoteAsRead(d.id, 'commercial', d.note_commercial);
                                   setShowNoteModal({ demandeId: d.id, type: 'commercial', note: '' });
                                   setActiveMoreMenu(null);
                                   setMoreMenuCoords(null);
@@ -3782,6 +3968,7 @@ export default function Dashboard() {
                               )}
                               {hasPermission(user, 'note_operationnelle_dashboard') && (
                                 <button className="menu-item" style={{ color: '#0d9488' }} onClick={() => {
+                                  markNoteAsRead(d.id, 'operationnel', d.note_operationnel);
                                   setShowNoteModal({ demandeId: d.id, type: 'operationnel', note: '' });
                                   setActiveMoreMenu(null);
                                   setMoreMenuCoords(null);
@@ -3790,7 +3977,27 @@ export default function Dashboard() {
                                 </button>
                               )}
 
-                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande') || hasPermissionWithContext(user, 'confirmation_avant_operation', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard')) && <div className="menu-divider" />}
+                              {hasPermission(user, 'assigner_charge_operation') && (
+                                <button className="menu-item" style={{ color: '#0f766e' }} onClick={() => {
+                                  setShowOpsAssignmentModal(d.id);
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <UserPlus size={16} /> Affecter chargée d'opération
+                                </button>
+                              )}
+
+                              {checkPermission(user, 'affecter_commercial').allowed && (
+                                <button className="menu-item" style={{ color: '#7c3aed' }} onClick={() => {
+                                  setShowAssignmentModal(d.id);
+                                  setActiveMoreMenu(null);
+                                  setMoreMenuCoords(null);
+                                }}>
+                                  <UserPlus size={16} /> Affecter commercial
+                                </button>
+                              )}
+
+                              {(hasPermissionWithContext(user, 'editer_besoin', d) || hasPermissionWithContext(user, 'editer_besoin_agence', d) || hasPermissionWithContext(user, 'editer_besoin_facture', d) || hasPermission(user, 'modifier_demande') || hasPermissionWithContext(user, 'confirmation_avant_operation', d) || hasPermission(user, 'note_commerciale_dashboard') || hasPermission(user, 'note_operationnelle_dashboard') || hasPermission(user, 'assigner_charge_operation') || checkPermission(user, 'affecter_commercial').allowed) && <div className="menu-divider" />}
 
 
                               {hasPermissionWithContext(user, 'annulation_demande', d) && (
@@ -4163,6 +4370,7 @@ export default function Dashboard() {
                       : { note_operationnel: updatedNotes };
                       
                     await updateDemande(showNoteModal.demandeId, payload);
+                    markNoteAsRead(showNoteModal.demandeId, showNoteModal.type, updatedNotes);
                     addToast('Note enregistrée avec succès', 'success');
                     setShowNoteModal(null);
                     fetchData(); // Refresh to update list
@@ -6256,12 +6464,12 @@ export default function Dashboard() {
                         <div className="form-group">
                           <label>Note commercial</label>
                           <textarea value={editFormData.note_commercial} onChange={e => setEditFormData({ ...editFormData, note_commercial: e.target.value })} className="edit-textarea" rows={3} placeholder="Notes du commercial..." />
-                          <button type="button" className="btn btn-outline btn-xs mt-2" style={{ width: 'fit-content', padding: '4px 20px', fontSize: '12px' }} onClick={async () => { try { await updateDemande(selectedDemande.id, { note_commercial: editFormData.note_commercial }); addToast('Note commerciale enregistrée', 'success'); fetchData(); } catch { addToast("Erreur lors de l'enregistrement", 'error'); } }}>Entrer</button>
+                          <button type="button" className="btn btn-outline btn-xs mt-2" style={{ width: 'fit-content', padding: '4px 20px', fontSize: '12px' }} onClick={async () => { try { await updateDemande(selectedDemande.id, { note_commercial: editFormData.note_commercial }); markNoteAsRead(selectedDemande.id, 'commercial', editFormData.note_commercial); addToast('Note commerciale enregistrée', 'success'); fetchData(); } catch { addToast("Erreur lors de l'enregistrement", 'error'); } }}>Entrer</button>
                         </div>
                         <div className="form-group">
                           <label>Note opération</label>
                           <textarea value={editFormData.note_operationnel} onChange={e => setEditFormData({ ...editFormData, note_operationnel: e.target.value })} className="edit-textarea" rows={3} placeholder="Notes opérationnelles..." />
-                          <button type="button" className="btn btn-outline btn-xs mt-2" style={{ width: 'fit-content', padding: '4px 20px', fontSize: '12px' }} onClick={async () => { try { await updateDemande(selectedDemande.id, { note_operationnel: editFormData.note_operationnel }); addToast('Note opérationnelle enregistrée', 'success'); fetchData(); } catch { addToast("Erreur lors de l'enregistrement", 'error'); } }}>Entrer</button>
+                          <button type="button" className="btn btn-outline btn-xs mt-2" style={{ width: 'fit-content', padding: '4px 20px', fontSize: '12px' }} onClick={async () => { try { await updateDemande(selectedDemande.id, { note_operationnel: editFormData.note_operationnel }); markNoteAsRead(selectedDemande.id, 'operationnel', editFormData.note_operationnel); addToast('Note opérationnelle enregistrée', 'success'); fetchData(); } catch { addToast("Erreur lors de l'enregistrement", 'error'); } }}>Entrer</button>
                         </div>
                       </div>
 
@@ -6845,111 +7053,154 @@ export default function Dashboard() {
               )}
 
               {caoDecision === 'confirmed' && (
-                <div style={{ marginTop: '16px', border: '1px solid #bbf7d0', backgroundColor: '#f0fdf4', borderRadius: '10px', padding: '12px' }}>
-                  <p style={{ margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', fontWeight: 700, color: '#065f46' }}>
-                    <CheckCircle size={16} /> Opération confirmée avec le client
-                  </p>
-
-                  <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #d1d5db', padding: '12px', marginBottom: '10px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        Femmes de ménage assignées {showCAOModal.profils_envoyes?.length ? `(${showCAOModal.profils_envoyes.length})` : ''}
-                      </p>
-                    </div>
-
-                    {/* Ajout d'une femme de ménage directement au niveau CAO */}
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center', width: '100%', boxSizing: 'border-box' }}>
-                      <select
-                        value={selectedAgentToAddInCAO}
-                        onChange={(e) => setSelectedAgentToAddInCAO(e.target.value)}
-                        style={{
-                          flex: '1 1 0%',
-                          minWidth: 0,
-                          width: '100%',
-                          padding: '7px 10px',
-                          fontSize: '13px',
-                          borderRadius: '8px',
-                          border: '1px solid #cbd5e1',
-                          backgroundColor: '#ffffff',
-                          color: '#1e293b',
-                          boxSizing: 'border-box',
-                          textOverflow: 'ellipsis',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        <option value="">Sélectionner une femme de ménage...</option>
-                        {allProfils
-                          .filter((p: any) => !p.is_blacklisted && p.statut !== 'blacklist' && !p.is_archived)
-                          .filter((p: any) => !(showCAOModal.profils_envoyes || []).some((item: any) => item.id === p.id))
-                          .map((p: any) => (
-                            <option key={p.id} value={p.id}>
-                              {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`} {p.phone ? `(${p.phone})` : ''}
-                            </option>
-                          ))}
-                      </select>
+                <>
+                  {/* Deuxième validation : Prise de contact pour confirmer avec le client */}
+                  <div style={{ marginTop: '16px', marginBottom: '14px' }}>
+                    <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: '#374151', marginBottom: '8px', textAlign: 'center' }}>
+                      Prise de contact client
+                    </label>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginBottom: '12px' }}>
                       <button
                         type="button"
-                        disabled={!selectedAgentToAddInCAO || isAddingAgentInCAO}
-                        onClick={handleAddAgentInCAO}
+                        onClick={() => setCaoContactConfirmed('oui')}
                         style={{
-                          flexShrink: 0,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '7px 12px',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          backgroundColor: (!selectedAgentToAddInCAO || isAddingAgentInCAO) ? '#9ca3af' : '#059669',
-                          color: '#ffffff',
-                          border: 'none',
-                          borderRadius: '8px',
-                          cursor: (!selectedAgentToAddInCAO || isAddingAgentInCAO) ? 'not-allowed' : 'pointer',
-                          whiteSpace: 'nowrap',
-                          boxSizing: 'border-box'
+                          width: '52px',
+                          height: '52px',
+                          borderRadius: '9999px',
+                          backgroundColor: caoContactConfirmed === 'oui' ? '#059669' : '#ffffff',
+                          color: caoContactConfirmed === 'oui' ? '#ffffff' : '#059669',
+                          border: caoContactConfirmed === 'oui' ? '2.5px solid #059669' : '2px solid #a7f3d0',
+                          fontSize: '15px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          boxShadow: caoContactConfirmed === 'oui' ? '0 4px 12px rgba(5, 150, 105, 0.35)' : 'none',
+                          transform: caoContactConfirmed === 'oui' ? 'scale(1.05)' : 'scale(1)',
+                          transition: 'all 0.15s ease',
                         }}
                       >
-                        <UserPlus size={15} /> {isAddingAgentInCAO ? 'Ajout...' : 'Ajouter'}
+                        Oui
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCaoContactConfirmed('non')}
+                        style={{
+                          width: '52px',
+                          height: '52px',
+                          borderRadius: '9999px',
+                          backgroundColor: caoContactConfirmed === 'non' ? '#ef4444' : '#ffffff',
+                          color: caoContactConfirmed === 'non' ? '#ffffff' : '#ef4444',
+                          border: caoContactConfirmed === 'non' ? '2.5px solid #ef4444' : '2px solid #fecaca',
+                          fontSize: '15px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          boxShadow: caoContactConfirmed === 'non' ? '0 4px 12px rgba(239, 68, 68, 0.35)' : 'none',
+                          transform: caoContactConfirmed === 'non' ? 'scale(1.05)' : 'scale(1)',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        Non
                       </button>
                     </div>
 
-                    {showCAOModal.profils_envoyes?.length ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {showCAOModal.profils_envoyes.map((p: any) => {
-                          const pName = p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`;
-                          return (
-                            <div
-                              key={p.id}
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                padding: '8px 12px',
-                                background: '#f8fafc',
-                                borderRadius: '8px',
-                                border: '1px solid #e2e8f0',
-                              }}
-                            >
-                              <div>
-                                <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>{pName}</p>
-                                <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>Tel : {p.phone || '—'}</p>
-                              </div>
-                              {hasPermission(user, 'retirer_profil_demande') && (
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    const perm = checkPermission(user, 'retirer_profil_demande');
-                                    if (!perm.allowed) {
-                                      addToast(perm.message || 'Action non autorisée', 'error');
-                                      return;
-                                    }
-                                    try {
-                                      await removeProfilFromDemande(showCAOModal.id, p.id);
-                                      addToast(`Femme de ménage (${pName}) retirée de la demande`, 'success');
+                    <textarea
+                      rows={3}
+                      value={caoNote}
+                      onChange={(e) => setCaoNote(e.target.value)}
+                      placeholder="Notez ce qui a été convenu avec le client."
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px',
+                        border: '1px solid #1e293b',
+                        borderRadius: '8px',
+                        fontSize: '13.5px',
+                        color: '#1f2937',
+                        backgroundColor: '#f8fafc',
+                        resize: 'vertical',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        minHeight: '68px',
+                        lineHeight: 1.5,
+                      }}
+                    />
+
+                    {caoContactConfirmed === 'non' && (
+                      <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#ef4444', fontWeight: 600 }}>
+                        La prise de contact n'étant pas confirmée, le bouton Valider reste désactivé.
+                      </p>
+                    )}
+                    {caoContactConfirmed === 'oui' && !caoNote.trim() && (
+                      <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#d97706', fontWeight: 600 }}>
+                        Veuillez obligatoirement noter ce qui a été convenu avec le client pour activer le bouton Valider.
+                      </p>
+                    )}
+                    {caoContactConfirmed === 'oui' && caoNote.trim() && (
+                      <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#059669', fontWeight: 600 }}>
+                        ✓ Prise de contact confirmée. Vous pouvez maintenant valider l'opération.
+                      </p>
+                    )}
+                  </div>
+
+                  <div style={{ marginTop: '16px', border: '1px solid #bbf7d0', backgroundColor: '#f0fdf4', borderRadius: '10px', padding: '12px' }}>
+                    <p style={{ margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', fontWeight: 700, color: '#065f46' }}>
+                      <CheckCircle size={16} /> Opération confirmée avec le client
+                    </p>
+
+                    <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px solid #d1d5db', padding: '12px', marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          Femmes de ménage assignées {showCAOModal.profils_envoyes?.length ? `(${showCAOModal.profils_envoyes.length})` : ''}
+                        </p>
+                      </div>
+
+                      {/* 1. Afficher les femmes de ménage assignées en tête */}
+                      {showCAOModal.profils_envoyes?.length ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                          {showCAOModal.profils_envoyes.map((p: any) => {
+                            const pName = p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`;
+                            return (
+                              <div
+                                key={p.id}
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  padding: '8px 12px',
+                                  background: '#f8fafc',
+                                  borderRadius: '8px',
+                                  border: '1px solid #e2e8f0',
+                                }}
+                              >
+                                <div>
+                                  <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>{pName}</p>
+                                  <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>Tel : {p.phone || '—'}</p>
+                                </div>
+                                {hasPermission(user, 'retirer_profil_demande') && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const perm = checkPermission(user, 'retirer_profil_demande');
+                                      if (!perm.allowed) {
+                                        addToast(perm.message || 'Action non autorisée', 'error');
+                                        return;
+                                      }
                                       try {
-                                        const freshRes = await getDemande(showCAOModal.id);
-                                        if (freshRes.data) {
-                                          setShowCAOModal(freshRes.data as Demande);
-                                        } else {
+                                        await removeProfilFromDemande(showCAOModal.id, p.id);
+                                        addToast(`Femme de ménage (${pName}) retirée de la demande`, 'success');
+                                        try {
+                                          const freshRes = await getDemande(showCAOModal.id);
+                                          if (freshRes.data) {
+                                            setShowCAOModal(freshRes.data as Demande);
+                                          } else {
+                                            setShowCAOModal(prev => {
+                                              if (!prev) return null;
+                                              return {
+                                                ...prev,
+                                                profils_envoyes: (prev.profils_envoyes || []).filter((item: any) => item.id !== p.id),
+                                                profil_share_links: (prev.profil_share_links || []).filter((item: any) => item.agent_id !== p.id)
+                                              };
+                                            });
+                                          }
+                                        } catch {
                                           setShowCAOModal(prev => {
                                             if (!prev) return null;
                                             return {
@@ -6959,199 +7210,224 @@ export default function Dashboard() {
                                             };
                                           });
                                         }
-                                      } catch {
-                                        setShowCAOModal(prev => {
-                                          if (!prev) return null;
-                                          return {
-                                            ...prev,
-                                            profils_envoyes: (prev.profils_envoyes || []).filter((item: any) => item.id !== p.id),
-                                            profil_share_links: (prev.profil_share_links || []).filter((item: any) => item.agent_id !== p.id)
-                                          };
-                                        });
+                                        await fetchData();
+                                      } catch (err) {
+                                        console.error("Erreur retrait profil CAO:", err);
+                                        addToast("Erreur lors du retrait du profil", "error");
                                       }
-                                      await fetchData();
-                                    } catch (err) {
-                                      console.error("Erreur retrait profil CAO:", err);
-                                      addToast("Erreur lors du retrait du profil", "error");
-                                    }
-                                  }}
-                                  title="Retirer ce profil de la demande"
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    padding: '5px 10px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    color: '#ef4444',
-                                    background: '#fef2f2',
-                                    border: '1px solid #fca5a5',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease'
-                                  }}
-                                >
-                                  <UserMinus size={14} /> Retirer
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
+                                    }}
+                                    title="Retirer ce profil de la demande"
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      padding: '5px 10px',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      color: '#ef4444',
+                                      background: '#fef2f2',
+                                      border: '1px solid #fca5a5',
+                                      borderRadius: '6px',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <UserMinus size={14} /> Retirer
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#64748b', fontStyle: 'italic' }}>
+                          Aucun candidat assigné. Affectez un profil pour préparer la suite opérationnelle.
+                        </p>
+                      )}
+
+                      {/* 2. Ajout d'une femme de ménage directement au niveau CAO (en dessous) */}
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', boxSizing: 'border-box' }}>
+                        <select
+                          value={selectedAgentToAddInCAO}
+                          onChange={(e) => setSelectedAgentToAddInCAO(e.target.value)}
+                          style={{
+                            flex: '1 1 0%',
+                            minWidth: 0,
+                            width: '100%',
+                            padding: '7px 10px',
+                            fontSize: '13px',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            backgroundColor: '#ffffff',
+                            color: '#1e293b',
+                            boxSizing: 'border-box',
+                            textOverflow: 'ellipsis',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          <option value="">Sélectionner une femme de ménage...</option>
+                          {allProfils
+                            .filter((p: any) => !p.is_blacklisted && p.statut !== 'blacklist' && !p.is_archived)
+                            .filter((p: any) => !(showCAOModal.profils_envoyes || []).some((item: any) => item.id === p.id))
+                            .map((p: any) => (
+                              <option key={p.id} value={p.id}>
+                                {p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || `Profil #${p.id}`} {p.phone ? `(${p.phone})` : ''}
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!selectedAgentToAddInCAO || isAddingAgentInCAO}
+                          onClick={handleAddAgentInCAO}
+                          style={{
+                            flexShrink: 0,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '7px 12px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            backgroundColor: (!selectedAgentToAddInCAO || isAddingAgentInCAO) ? '#9ca3af' : '#059669',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: (!selectedAgentToAddInCAO || isAddingAgentInCAO) ? 'not-allowed' : 'pointer',
+                            whiteSpace: 'nowrap',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          <UserPlus size={15} /> {isAddingAgentInCAO ? 'Ajout...' : 'Ajouter'}
+                        </button>
                       </div>
-                    ) : (
-                      <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontStyle: 'italic' }}>
-                        Aucun candidat assigné. Affectez un profil pour préparer la suite opérationnelle.
-                      </p>
-                    )}
-                  </div>
+                    </div>
 
-                  {(() => {
-                    const links = getCaoProfileLinks(showCAOModal);
+                    {(() => {
+                      const links = getCaoProfileLinks(showCAOModal);
 
-                    if (!links.length) {
+                      if (!links.length) {
+                        return (
+                          <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px dashed #cbd5e1', padding: '10px 12px', marginBottom: '10px', fontSize: '13px', color: '#6b7280' }}>
+                            Aucun lien profil disponible. Assignez au moins un profil à la demande.
+                          </div>
+                        );
+                      }
+
+                      const currentIndex = Math.min(caoPreviewIndex, links.length - 1);
+                      const item = links[currentIndex];
+
                       return (
-                        <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px dashed #cbd5e1', padding: '10px 12px', marginBottom: '10px', fontSize: '13px', color: '#6b7280' }}>
-                          Aucun lien profil disponible. Assignez au moins un profil à la demande.
+                        <div style={{ marginBottom: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <button
+                              onClick={() => setCaoPreviewIndex((prev) => Math.max(prev - 1, 0))}
+                              disabled={currentIndex === 0}
+                              style={{
+                                border: '1px solid #d1d5db',
+                                backgroundColor: currentIndex === 0 ? '#f3f4f6' : '#ffffff',
+                                color: '#374151',
+                                borderRadius: '8px',
+                                width: '34px',
+                                height: '34px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
+                              }}
+                            >
+                              <ChevronLeft size={16} />
+                            </button>
+
+                            <span style={{ fontSize: '12px', color: '#4b5563', fontWeight: 600 }}>
+                              Aperçu {currentIndex + 1}/{links.length}
+                            </span>
+
+                            <button
+                              onClick={() => setCaoPreviewIndex((prev) => Math.min(prev + 1, links.length - 1))}
+                              disabled={currentIndex >= links.length - 1}
+                              style={{
+                                border: '1px solid #d1d5db',
+                                backgroundColor: currentIndex >= links.length - 1 ? '#f3f4f6' : '#ffffff',
+                                color: '#374151',
+                                borderRadius: '8px',
+                                width: '34px',
+                                height: '34px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: currentIndex >= links.length - 1 ? 'not-allowed' : 'pointer',
+                              }}
+                            >
+                              <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+                            </button>
+                          </div>
+
+                          <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px dashed #cbd5e1', padding: '10px 12px' }}>
+                            <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              Aperçu du message - {item.agent_name}
+                            </p>
+                            <div style={{ marginTop: '8px', fontSize: '13px', color: '#1f2937', lineHeight: 1.55, whiteSpace: 'pre-line' }}>
+                              {`Bonjour ${showCAOModal.client_name || showCAOModal.formulaire_data?.nom || 'Client'},\n\n`}
+                              {`Dans le cadre de votre réservation de ménage, nous avons le plaisir de vous transmettre le profil de ${item.agent_name || 'la candidate'} qui assurera l'intervention chez vous. Nous vous invitons à cliquer sur le lien suivant pour consulter plus de détails.\n\n`}
+                              {item.link}
+                              {`\n\nCordialement,\nL'équipe Agence Ménage`}
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '10px' }}>
+                              <button
+                                onClick={() => window.open(item.link, '_blank')}
+                                style={{
+                                  width: '100%',
+                                  border: '1px solid #d1d5db',
+                                  backgroundColor: '#ffffff',
+                                  color: '#065f46',
+                                  borderRadius: '8px',
+                                  padding: '9px 10px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Voir la fiche profil en ligne
+                              </button>
+                              <button
+                                onClick={() => copyText(item.link, `Lien profil copié (${item.agent_name})`)}
+                                style={{
+                                  width: '100%',
+                                  border: '1px solid #059669',
+                                  backgroundColor: '#059669',
+                                  color: '#ffffff',
+                                  borderRadius: '8px',
+                                  padding: '9px 10px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Copier le lien profil
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       );
-                    }
+                    })()}
 
-                    const currentIndex = Math.min(caoPreviewIndex, links.length - 1);
-                    const item = links[currentIndex];
-
-                    return (
-                      <div style={{ marginBottom: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <button
-                            onClick={() => setCaoPreviewIndex((prev) => Math.max(prev - 1, 0))}
-                            disabled={currentIndex === 0}
-                            style={{
-                              border: '1px solid #d1d5db',
-                              backgroundColor: currentIndex === 0 ? '#f3f4f6' : '#ffffff',
-                              color: '#374151',
-                              borderRadius: '8px',
-                              width: '34px',
-                              height: '34px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
-                            }}
-                          >
-                            <ChevronLeft size={16} />
-                          </button>
-
-                          <span style={{ fontSize: '12px', color: '#4b5563', fontWeight: 600 }}>
-                            Aperçu {currentIndex + 1}/{links.length}
-                          </span>
-
-                          <button
-                            onClick={() => setCaoPreviewIndex((prev) => Math.min(prev + 1, links.length - 1))}
-                            disabled={currentIndex >= links.length - 1}
-                            style={{
-                              border: '1px solid #d1d5db',
-                              backgroundColor: currentIndex >= links.length - 1 ? '#f3f4f6' : '#ffffff',
-                              color: '#374151',
-                              borderRadius: '8px',
-                              width: '34px',
-                              height: '34px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: currentIndex >= links.length - 1 ? 'not-allowed' : 'pointer',
-                            }}
-                          >
-                            <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
-                          </button>
-                        </div>
-
-                        <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', border: '1px dashed #cbd5e1', padding: '10px 12px' }}>
-                          <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                            Aperçu du message - {item.agent_name}
-                          </p>
-                          <div style={{ marginTop: '8px', fontSize: '13px', color: '#1f2937', lineHeight: 1.55, whiteSpace: 'pre-line' }}>
-                            {`Bonjour ${showCAOModal.client_name || showCAOModal.formulaire_data?.nom || 'Client'},\n\n`}
-                            {`Dans le cadre de votre réservation de ménage, nous avons le plaisir de vous transmettre le profil de ${item.agent_name || 'la candidate'} qui assurera l'intervention chez vous. Nous vous invitons à cliquer sur le lien suivant pour consulter plus de détails.\n\n`}
-                            {item.link}
-                            {`\n\nCordialement,\nL'équipe Agence Ménage`}
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '10px' }}>
-                            <button
-                              onClick={() => window.open(item.link, '_blank')}
-                              style={{
-                                width: '100%',
-                                border: '1px solid #d1d5db',
-                                backgroundColor: '#ffffff',
-                                color: '#065f46',
-                                borderRadius: '8px',
-                                padding: '9px 10px',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              Voir la fiche profil en ligne
-                            </button>
-                            <button
-                              onClick={() => copyText(item.link, `Lien profil copié (${item.agent_name})`)}
-                              style={{
-                                width: '100%',
-                                border: '1px solid #059669',
-                                backgroundColor: '#059669',
-                                color: '#ffffff',
-                                borderRadius: '8px',
-                                padding: '9px 10px',
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              Copier le lien profil
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  <button
-                    disabled={sendingCaoWhatsApp || !showCAOModal.profils_envoyes?.length}
-                    onClick={() => handleSendCaoWhatsApp(showCAOModal)}
-                    style={{
-                      width: '100%',
-                      marginTop: '10px',
-                      border: '1px solid #059669',
-                      backgroundColor: sendingCaoWhatsApp ? '#6ee7b7' : '#059669',
-                      color: '#ffffff',
-                      borderRadius: '8px',
-                      padding: '10px 12px',
-                      fontWeight: 700,
-                      cursor: sendingCaoWhatsApp || !showCAOModal.profils_envoyes?.length ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {sendingCaoWhatsApp ? 'Envoi en cours...' : 'Envoyer la candidature via WhatsApp'}
-                  </button>
-
-                  <div style={{ marginTop: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: '#166534', marginBottom: '8px' }}>
-                      Note opérationnelle
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={caoNote}
-                      onChange={(e) => setCaoNote(e.target.value)}
-                      placeholder="Ajouter une note pour le service opération..."
+                    <button
+                      disabled={sendingCaoWhatsApp || !showCAOModal.profils_envoyes?.length}
+                      onClick={() => handleSendCaoWhatsApp(showCAOModal)}
                       style={{
                         width: '100%',
+                        marginTop: '10px',
+                        border: '1px solid #059669',
+                        backgroundColor: sendingCaoWhatsApp ? '#6ee7b7' : '#059669',
+                        color: '#ffffff',
+                        borderRadius: '8px',
                         padding: '10px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '10px',
-                        fontSize: '14px',
-                        color: '#1f2937',
-                        resize: 'vertical',
+                        fontWeight: 700,
+                        cursor: sendingCaoWhatsApp || !showCAOModal.profils_envoyes?.length ? 'not-allowed' : 'pointer',
                       }}
-                    />
+                    >
+                      {sendingCaoWhatsApp ? 'Envoi en cours...' : 'Envoyer la candidature via WhatsApp'}
+                    </button>
                   </div>
-                </div>
+                </>
               )}
             </div>
 
@@ -7166,29 +7442,40 @@ export default function Dashboard() {
               >
                 Annuler
               </button>
-              <button
-                disabled={!caoDecision || (caoDecision === 'postponed' && !caoPostponedDate) || (caoDecision === 'cancelled' && !caoCancelReason.trim())}
-                onClick={() => handleCAOUpdate(showCAOModal, caoDecision!)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '9px 22px', borderRadius: '8px', border: 'none',
-                  backgroundColor: (!caoDecision || (caoDecision === 'postponed' && !caoPostponedDate) || (caoDecision === 'cancelled' && !caoCancelReason.trim())) ? '#d1d5db' : '#0d9488',
-                  color: '#ffffff', fontWeight: 700, fontSize: '14px',
-                  cursor: (!caoDecision || (caoDecision === 'postponed' && !caoPostponedDate) || (caoDecision === 'cancelled' && !caoCancelReason.trim())) ? 'not-allowed' : 'pointer', transition: 'background 0.2s',
-                }}
-                onMouseEnter={e => {
-                  if (caoDecision && !(caoDecision === 'postponed' && !caoPostponedDate) && !(caoDecision === 'cancelled' && !caoCancelReason.trim())) {
-                    e.currentTarget.style.backgroundColor = '#0f766e';
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (caoDecision && !(caoDecision === 'postponed' && !caoPostponedDate) && !(caoDecision === 'cancelled' && !caoCancelReason.trim())) {
-                    e.currentTarget.style.backgroundColor = '#0d9488';
-                  }
-                }}
-              >
-                <Check size={16} /> Valider
-              </button>
+              {(() => {
+                const isCAOConfirmedValid = caoContactConfirmed === 'oui' && caoNote.trim().length > 0;
+                const isSubmitDisabled =
+                  !caoDecision ||
+                  (caoDecision === 'confirmed' && !isCAOConfirmedValid) ||
+                  (caoDecision === 'postponed' && !caoPostponedDate) ||
+                  (caoDecision === 'cancelled' && !caoCancelReason.trim());
+
+                return (
+                  <button
+                    disabled={isSubmitDisabled}
+                    onClick={() => handleCAOUpdate(showCAOModal, caoDecision!)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '9px 22px', borderRadius: '8px', border: 'none',
+                      backgroundColor: isSubmitDisabled ? '#d1d5db' : '#0d9488',
+                      color: '#ffffff', fontWeight: 700, fontSize: '14px',
+                      cursor: isSubmitDisabled ? 'not-allowed' : 'pointer', transition: 'background 0.2s',
+                    }}
+                    onMouseEnter={e => {
+                      if (!isSubmitDisabled) {
+                        e.currentTarget.style.backgroundColor = '#0f766e';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isSubmitDisabled) {
+                        e.currentTarget.style.backgroundColor = '#0d9488';
+                      }
+                    }}
+                  >
+                    <Check size={16} /> Valider
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>

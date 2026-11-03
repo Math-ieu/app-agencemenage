@@ -26,6 +26,8 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 const TYPES = [
@@ -67,6 +69,7 @@ interface Fete {
   jours_avant: number;
   jours_apres: number;
   actif: boolean;
+  majoration_pourcentage?: number;
   debut_suspension?: string;
   fin_suspension?: string;
 }
@@ -114,6 +117,7 @@ export default function JoursFeries() {
     jours_avant: 1,
     jours_apres: 2,
     actif: true,
+    majoration_pourcentage: 0,
   });
 
   const load = async (year: number) => {
@@ -175,6 +179,7 @@ export default function JoursFeries() {
         jours_avant: f.jours_avant,
         jours_apres: f.jours_apres,
         actif: f.actif,
+        majoration_pourcentage: Number(f.majoration_pourcentage) || 0,
       };
       const res = f.id
         ? await updateFeteReligieuse(f.id, payload)
@@ -248,9 +253,10 @@ export default function JoursFeries() {
       type: "",
       date: "",
       annee,
-      jours_avant: 1,
-      jours_apres: 2,
+      jours_avant: 0,
+      jours_apres: 0,
       actif: true,
+      majoration_pourcentage: 0,
     };
     setCustomRows((prev) => [...prev, newRow]);
   };
@@ -295,6 +301,7 @@ export default function JoursFeries() {
         jours_avant: f.jours_avant,
         jours_apres: f.jours_apres,
         actif: f.actif,
+        majoration_pourcentage: Number(f.majoration_pourcentage) || 0,
       };
       const res = f.id
         ? await updateFeteReligieuse(f.id, payload)
@@ -363,25 +370,40 @@ export default function JoursFeries() {
     }
   };
 
-  const years = [
-    currentYear - 1,
-    currentYear,
-    currentYear + 1,
-    currentYear + 2,
-  ];
+  // Plage dynamique d'années disponibles (du passé proche jusqu'à +20 ans dans le futur)
+  const baseStart = Math.min(currentYear - 2, annee - 2);
+  const baseEnd = Math.max(currentYear + 20, annee + 5);
+  const yearOptions: number[] = [];
+  for (let y = baseStart; y <= baseEnd; y++) {
+    yearOptions.push(y);
+  }
+
+  // Pilules de sélection rapide centrées dynamiquement autour de l'année sélectionnée
+  const quickPills: number[] = [];
+  for (let y = annee - 2; y <= annee + 2; y++) {
+    if (y >= 2020) quickPills.push(y);
+  }
 
   const totalConfigured =
     Object.values(rows).filter((r) => r.date && r.actif).length +
     customRows.filter((r) => r.date && r.actif).length;
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "clamp(1.25rem, 3vw, 2rem) clamp(0.75rem, 3vw, 1.25rem) 4rem" }}>
+    <div
+      style={{
+        maxWidth: 1400,
+        width: "100%",
+        margin: "0 auto",
+        padding: "clamp(1.5rem, 3vw, 2.5rem) clamp(1rem, 3vw, 2.5rem) 5rem",
+        boxSizing: "border-box",
+      }}
+    >
       {/* Page Title & Year Selector Header */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "flex-start",
+          alignItems: "center",
           flexWrap: "wrap",
           gap: "1.5rem",
           marginBottom: "2rem",
@@ -426,49 +448,171 @@ export default function JoursFeries() {
               <span
                 style={{ fontSize: "0.875rem", color: "#64748b", fontWeight: 500 }}
               >
-                Gestion des périodes de suspension et automatismes d'envoi aux commerciaux
+                Gestion des périodes de suspension, majorations tarifaires et alertes pour toute année future
               </span>
             </div>
           </div>
         </div>
 
-        {/* Year Segmented Selector Buttons */}
+        {/* Global Year Navigator (Toutes les années à venir) */}
         <div
           style={{
-            background: "#ffffff",
-            border: "1px solid #cbd5e1",
-            borderRadius: "10px",
-            padding: "0.25rem",
             display: "flex",
-            gap: "0.25rem",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+            alignItems: "center",
+            gap: "0.5rem",
+            flexWrap: "wrap",
+            background: "#ffffff",
+            padding: "0.4rem 0.5rem",
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
           }}
         >
-          {years.map((y) => {
-            const isSelected = annee === y;
-            return (
-              <button
-                key={y}
-                onClick={() => setAnnee(y)}
-                style={{
-                  padding: "0.5rem 1rem",
-                  fontSize: "0.875rem",
-                  fontWeight: isSelected ? 700 : 500,
-                  borderRadius: "8px",
-                  border: "none",
-                  background: isSelected ? "#0d9488" : "transparent",
-                  color: isSelected ? "#ffffff" : "#475569",
-                  cursor: "pointer",
-                  transition: "all 0.15s ease",
-                  boxShadow: isSelected
-                    ? "0 2px 6px rgba(13, 148, 136, 0.3)"
-                    : "none",
-                }}
-              >
-                {y}
-              </button>
-            );
-          })}
+          {/* Bouton Année Précédente */}
+          <button
+            onClick={() => setAnnee((prev) => Math.max(2020, prev - 1))}
+            title={`Année précédente (${annee - 1})`}
+            style={{
+              width: "34px",
+              height: "34px",
+              borderRadius: "8px",
+              background: "#f8fafc",
+              border: "1px solid #cbd5e1",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#334155",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#e2e8f0";
+              e.currentTarget.style.color = "#0f172a";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#f8fafc";
+              e.currentTarget.style.color = "#334155";
+            }}
+          >
+            <ChevronLeft size={18} />
+          </button>
+
+          {/* Pilules dynamiques autour de l'année sélectionnée */}
+          <div
+            style={{
+              display: "flex",
+              gap: "0.25rem",
+            }}
+          >
+            {quickPills.map((y) => {
+              const isSelected = annee === y;
+              return (
+                <button
+                  key={y}
+                  onClick={() => setAnnee(y)}
+                  style={{
+                    padding: "0.4rem 0.75rem",
+                    fontSize: "0.85rem",
+                    fontWeight: isSelected ? 700 : 500,
+                    borderRadius: "7px",
+                    border: "none",
+                    background: isSelected ? "#0d9488" : "transparent",
+                    color: isSelected ? "#ffffff" : "#475569",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    boxShadow: isSelected
+                      ? "0 2px 6px rgba(13, 148, 136, 0.3)"
+                      : "none",
+                  }}
+                >
+                  {y}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Bouton Année Suivante */}
+          <button
+            onClick={() => setAnnee((prev) => prev + 1)}
+            title={`Année suivante (${annee + 1})`}
+            style={{
+              width: "34px",
+              height: "34px",
+              borderRadius: "8px",
+              background: "#f8fafc",
+              border: "1px solid #cbd5e1",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#334155",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#e2e8f0";
+              e.currentTarget.style.color = "#0f172a";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#f8fafc";
+              e.currentTarget.style.color = "#334155";
+            }}
+          >
+            <ChevronRight size={18} />
+          </button>
+
+          <div style={{ width: "1px", height: "24px", background: "#e2e8f0", margin: "0 0.2rem" }} />
+
+          {/* Sélecteur déroulant complet (toutes les années à venir) */}
+          <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+            <select
+              value={annee}
+              onChange={(e) => setAnnee(Number(e.target.value))}
+              style={{
+                padding: "0.45rem 2.2rem 0.45rem 0.75rem",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                fontWeight: 700,
+                fontSize: "0.825rem",
+                color: "#0f172a",
+                cursor: "pointer",
+                outline: "none",
+                appearance: "none",
+              }}
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y} {y === currentYear ? "(En cours)" : ""}
+                </option>
+              ))}
+            </select>
+            <Calendar
+              size={13}
+              color="#64748b"
+              style={{ position: "absolute", right: "0.65rem", pointerEvents: "none" }}
+            />
+          </div>
+
+          {/* Bouton retour rapide à l'année actuelle si différent */}
+          {annee !== currentYear && (
+            <button
+              onClick={() => setAnnee(currentYear)}
+              style={{
+                padding: "0.4rem 0.65rem",
+                fontSize: "0.775rem",
+                fontWeight: 600,
+                borderRadius: "8px",
+                border: "1px solid #99f6e4",
+                background: "#f0fdfa",
+                color: "#0d9488",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+              title={`Revenir immédiatement à l'année en cours (${currentYear})`}
+            >
+              ↺ Année {currentYear}
+            </button>
+          )}
         </div>
       </div>
 
@@ -768,7 +912,7 @@ export default function JoursFeries() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                      gridTemplateColumns: "minmax(180px, 1.5fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr) auto",
                       gap: "1.25rem",
                       alignItems: "end",
                     }}
@@ -854,6 +998,42 @@ export default function JoursFeries() {
                         value={f.jours_apres}
                         onChange={(e) =>
                           setField(t.value, { jours_apres: Math.max(0, +e.target.value) })
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "0.55rem 0.75rem",
+                          fontSize: "0.875rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          background: "#ffffff",
+                          color: "#0f172a",
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.775rem",
+                          fontWeight: 600,
+                          color: "#475569",
+                          marginBottom: "0.35rem",
+                        }}
+                      >
+                        Majoration %
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={200}
+                        placeholder="0"
+                        value={f.majoration_pourcentage ?? 0}
+                        onChange={(e) =>
+                          setField(t.value, {
+                            majoration_pourcentage: Math.max(0, +e.target.value),
+                          })
                         }
                         style={{
                           width: "100%",
@@ -984,6 +1164,22 @@ export default function JoursFeries() {
                         <strong style={{ color: "#92400e" }}>
                           {fmtDate(finDateIso)}
                         </strong>
+                        {Number(f.majoration_pourcentage) > 0 ? (
+                          <span
+                            style={{
+                              marginLeft: "0.5rem",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              padding: "0.15rem 0.5rem",
+                              borderRadius: "12px",
+                              background: "#fef3c7",
+                              color: "#92400e",
+                              border: "1px solid #fde68a",
+                            }}
+                          >
+                            +{f.majoration_pourcentage}% de majoration
+                          </span>
+                        ) : null}
                       </div>
 
                       <div style={{ fontSize: "0.775rem", color: "#a16207" }}>
@@ -1131,8 +1327,8 @@ export default function JoursFeries() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                      gap: "1rem",
+                      gridTemplateColumns: "minmax(220px, 2fr) minmax(160px, 1.3fr) minmax(110px, 0.9fr) minmax(110px, 0.9fr) minmax(120px, 1fr) auto",
+                      gap: "1.25rem",
                       alignItems: "end",
                     }}
                   >
@@ -1269,6 +1465,42 @@ export default function JoursFeries() {
                       />
                     </div>
 
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.775rem",
+                          fontWeight: 600,
+                          color: "#475569",
+                          marginBottom: "0.35rem",
+                        }}
+                      >
+                        Majoration %
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={200}
+                        placeholder="0"
+                        value={f.majoration_pourcentage ?? 0}
+                        onChange={(e) =>
+                          setCustomField(idx, {
+                            majoration_pourcentage: Math.max(0, +e.target.value),
+                          })
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "0.55rem 0.75rem",
+                          fontSize: "0.875rem",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          background: "#ffffff",
+                          color: "#0f172a",
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+
                     <div style={{ display: "flex", gap: "0.5rem" }}>
                       <button
                         onClick={() => saveCustomRow(idx)}
@@ -1356,6 +1588,21 @@ export default function JoursFeries() {
                       <span>
                         Période suspendue : <strong>{fmtDate(debutDateIso)}</strong> ➜ <strong>{fmtDate(finDateIso)}</strong>
                       </span>
+                      {Number(f.majoration_pourcentage) > 0 ? (
+                        <span
+                          style={{
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            padding: "0.2rem 0.55rem",
+                            borderRadius: "12px",
+                            background: "#fef3c7",
+                            color: "#92400e",
+                            border: "1px solid #fde68a",
+                          }}
+                        >
+                          +{f.majoration_pourcentage}% de majoration
+                        </span>
+                      ) : null}
                       <label
                         style={{
                           cursor: "pointer",

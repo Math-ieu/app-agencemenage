@@ -13,10 +13,12 @@ export const calculateSurchargeMultiplier = (
     dateStr: string,
     schedulingType: string,
     fixedTime: string,
-    preferenceHoraire: string
+    preferenceHoraire: string,
+    holidayMultiplier?: number
 ): number => {
     if (!dateStr) return 1;
 
+    let multiplier = 1;
     let isEvening = false;
     if (schedulingType === "fixed" && fixedTime) {
         const [hours] = fixedTime.split(":").map(Number);
@@ -29,10 +31,13 @@ export const calculateSurchargeMultiplier = (
     }
 
     if (isEvening) {
-        return 1.5;
+        multiplier += 0.5;
+    }
+    if (holidayMultiplier && holidayMultiplier > 1) {
+        multiplier += (holidayMultiplier - 1);
     }
 
-    return 1;
+    return multiplier;
 };
 
 /**
